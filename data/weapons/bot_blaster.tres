@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"bot_blaster"
+display_name = "Dummy Blaster"
+damage = 8
+fire_interval = 0.9
+spread_deg = 4.0
+projectile_speed = 450.0
+projectile_range = 650.0
+projectile_radius = 6.0
+energy_cost = 0
+knockback = 30.0
+color = Color(1, 0.35, 0.5, 1)

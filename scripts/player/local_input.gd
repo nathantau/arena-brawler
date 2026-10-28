@@ -1,0 +1,68 @@
+class_name LocalInput
+extends PlayerController
+## Builds InputFrames from touch controls or keyboard/mouse, and computes auto-aim
+## client-side (the resulting aim_vec is what gets sent to the server).
+
+var touch: TouchControls
+var arena: Arena
+var auto_target: Player
+
+var _frame := InputFrame.new()
+var _query := PhysicsRayQueryParameters2D.new()
+var _candidates: Array[Player] = []
+var _positions := PackedVector2Array()
+var _space: PhysicsDirectSpaceState2D
+var _origin: Vector2 = Vector2.ZERO
+var _is_visible_cb: Callable = _is_visible
+
+
+func get_input(player: Player, _delta: float) -> InputFrame:
+	_frame.seq += 1
+	var touch_on: bool = touch != null and touch.visible
+
+	var move: Vector2 = Input.get_vector(&"move_left", &"move_right", &"move_up", &"move_down")
+	if touch_on and touch.move_vec != Vector2.ZERO:
+		move = touch.move_vec
+	_frame.move_vec = move
+
+	var fire_mouse: bool = not touch_on and Input.is_action_pressed(&"fire_mouse")
+	var fire_auto: bool = Input.is_action_pressed(&"fire_auto") or (touch_on and touch.attack_held)
+	_frame.fire = fire_mouse or fire_auto
+	_frame.skill = Input.is_action_pressed(&"skill") or (touch_on and touch.skill_held)
+	_frame.swap = Input.is_action_pressed(&"swap") or (touch_on and touch.swap_held)
+
+	_update_auto_target(player)
+	var aim := Vector2.ZERO
+	if fire_mouse:
+		aim = player.get_global_mouse_position() - player.global_position
+	elif touch_on and touch.attack_aim != Vector2.ZERO:
+		aim = touch.attack_aim
+	elif auto_target != null:
+		aim = auto_target.global_position - player.global_position
+	_frame.aim_vec = aim.normalized() if aim != Vector2.ZERO else Vector2.ZERO
+
+	if Input.is_action_just_pressed(&"dev_cycle_weapon") or (touch_on and touch.consume_dev_cycle()):
+		arena.dev_cycle_weapon(player)
+	return _frame
+
+
+func _update_auto_target(player: Player) -> void:
+	_candidates.clear()
+	_positions.clear()
+	for p: Player in arena.players:
+		if p != player and not p.dead:
+			_candidates.append(p)
+			_positions.append(p.global_position)
+	_space = player.get_world_2d().direct_space_state
+	_origin = player.global_position
+	var idx: int = AutoAim.pick_nearest(_origin, _positions, Constants.AUTO_AIM_RANGE, _is_visible_cb)
+	var new_target: Player = _candidates[idx] if idx >= 0 else null
+	if auto_target != null and auto_target != new_target:
+		auto_target.targeted = false
+	auto_target = new_target
+	if auto_target != null:
+		auto_target.targeted = true
+
+
+func _is_visible(i: int) -> bool:
+	return AutoAim.has_line_of_sight(_space, _query, _origin, _positions[i])

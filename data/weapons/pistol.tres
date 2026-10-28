@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"pistol"
+display_name = "Pocket Blaster"
+damage = 12
+fire_interval = 0.28
+spread_deg = 3.0
+projectile_speed = 950.0
+projectile_range = 700.0
+projectile_radius = 4.0
+energy_cost = 0
+crit_chance = 0.1
+knockback = 40.0
+color = Color(1, 0.92, 0.45, 1)
