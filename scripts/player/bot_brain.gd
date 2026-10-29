@@ -1,7 +1,7 @@
 class_name BotBrain
 extends PlayerController
-## M1 dummy AI: wanders, and when it sees the local player it strafes at a preferred
-## distance and fires with some aim error. Uses its own seeded RNG.
+## Dummy AI: wanders, and when it sees an enemy it strafes at a preferred distance and
+## fires with some aim error. Uses its own seeded RNG.
 
 var arena: Arena
 var rng := RandomNumberGenerator.new()
@@ -30,19 +30,32 @@ func get_input(player: Player, delta: float) -> InputFrame:
 	_frame.aim_vec = Vector2.ZERO
 	_frame.fire = false
 
-	var target: Player = arena.local_player
-	if target != null and not target.dead:
+	var target: Player = _nearest_visible_enemy(player)
+	if target != null:
 		var to: Vector2 = target.global_position - player.global_position
 		var dist: float = to.length()
-		var space: PhysicsDirectSpaceState2D = player.get_world_2d().direct_space_state
-		if dist > 0.0 and dist < Constants.BOT_SIGHT_RANGE \
-				and AutoAim.has_line_of_sight(space, _query, player.global_position, target.global_position):
-			var dir: Vector2 = to / dist
-			var radial: Vector2 = dir if dist > Constants.BOT_PREFERRED_DISTANCE else -dir
-			var strafe: Vector2 = dir.orthogonal() * _strafe_sign
-			var move: Vector2 = radial * Constants.BOT_RADIAL_WEIGHT + strafe * Constants.BOT_STRAFE_WEIGHT
-			_frame.move_vec = move.normalized() * Constants.BOT_MOVE_SCALE
-			var err: float = deg_to_rad(Constants.BOT_AIM_ERROR_DEG)
-			_frame.aim_vec = dir.rotated(rng.randf_range(-err, err))
-			_frame.fire = true
+		var dir: Vector2 = to / dist
+		var radial: Vector2 = dir if dist > Constants.BOT_PREFERRED_DISTANCE else -dir
+		var strafe: Vector2 = dir.orthogonal() * _strafe_sign
+		var move: Vector2 = radial * Constants.BOT_RADIAL_WEIGHT + strafe * Constants.BOT_STRAFE_WEIGHT
+		_frame.move_vec = move.normalized() * Constants.BOT_MOVE_SCALE
+		var err: float = deg_to_rad(Constants.BOT_AIM_ERROR_DEG)
+		_frame.aim_vec = dir.rotated(rng.randf_range(-err, err))
+		_frame.fire = true
 	return _frame
+
+
+## Bots only hunt non-bot players so they don't just shoot each other.
+func _nearest_visible_enemy(player: Player) -> Player:
+	var space: PhysicsDirectSpaceState2D = player.get_world_2d().direct_space_state
+	var best: Player = null
+	var best_dist_sq: float = Constants.BOT_SIGHT_RANGE * Constants.BOT_SIGHT_RANGE
+	for p: Player in arena.players:
+		if p == player or p.dead or p.controller is BotBrain:
+			continue
+		var d: float = player.global_position.distance_squared_to(p.global_position)
+		if d > 0.0 and d < best_dist_sq \
+				and AutoAim.has_line_of_sight(space, _query, player.global_position, p.global_position):
+			best = p
+			best_dist_sq = d
+	return best

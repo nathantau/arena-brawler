@@ -67,9 +67,13 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 7. **M7 – Android build** + device testing.
 
 ## Commands
-- Run client: `godot --path . `
+- Run client (menu: offline vs bots / join by IP): `godot --path . `
+- Skip the menu: `godot --path . -- --offline` or `godot --path . -- --connect 192.168.1.20:7777`
 - Run client with touch controls on desktop (mouse emulates touch): `godot --path . -- --touch`
-- Run headless server: `godot --path . --headless -- --server --port 7777`
+- Run headless server: `godot --path . --headless -- --server --port 7777` (add `--bots N` for server-side bots)
+- Net debugging: add `--net-debug` (prints server/client net stats every second, logs reconciliation corrections);
+  `--autopilot` makes a client drive + fire on its own, e.g. two headless autopilot clients for soak tests:
+  `godot --path . --headless --quit-after 4000 -- --connect 127.0.0.1:7777 --autopilot --net-debug`
 - Tests: `godot --path . --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit`
 - iOS export: `godot --path . --headless --export-release "iOS" build/ios/ArenaBrawler.xcodeproj`
 
@@ -79,9 +83,29 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
     auto-aim to nearest visible enemy with target ring; Pocket Blaster (free), Buzzsaw SMG, Scattercannon;
     energy; HP + armor regen; dash with i-frames; 3 dummy bots; kill/death tally; respawn at safest spawn; one arena ("Pit").
   - Sim lives in pure classes (`PlayerStats`, `WeaponState`, `Loadout`, `DashSkill`, `MovementSim`, `CombatRules`, `AutoAim`)
-    driven by `Player.simulate(InputFrame, delta)` with a per-player seeded RNG, ready for server + prediction in M2.
+    driven by `Player.simulate(InputFrame, delta)`.
   - Projectiles: fixed 512-slot pool, raycast per step, one `_draw` for all bullets.
-  - 56 GUT tests passing.
   - Temporary M1 shortcuts: arena is an ASCII layout (`scripts/arena/arena_layouts.gd`) rather than a TileMap; no pickups yet,
     so energy only refills on respawn; dev weapon cycling via `R` / the "W" touch button (remove once pickups land in M3).
-- [ ] M2 not started
+- [x] **M2 – Networking** (2026-10-28). Verified: headless server + 2 autopilot clients on loopback, with hits, a kill,
+  respawn and matching scoreboards on both clients; 0 px prediction error when nobody is getting hit.
+  - **Tick model:** sim runs at a fixed 60 Hz on server and client (every InputFrame = one `PHYSICS_DT` step, which is
+    what `move_and_slide` uses anyway). "Server tick 30 Hz" = the *network* tick: snapshots go out every 2nd frame;
+    clients send inputs every 2nd frame (each packet re-sends the last 6 for loss tolerance).
+  - **Server** (`net/server.gd`): one `NetInputQueue` per peer, credit-limited (1 input/frame, up to 8 banked to catch up
+    after hitches, so no speed hacks and no dropped inputs); owns damage, kills, respawns. Channels: snapshots and shots
+    unreliable_ordered, join/leave/kill reliable.
+  - **Client** (`net/client.gd`): predicts own player, reconciles = apply server state for the last acked seq + replay
+    unacked inputs (`simulate(..., replay=true)` changes state but spawns nothing); corrections ≤ 64 px are
+    smoothed via `visual_offset`. Others are interpolated 6 ticks (100 ms) behind (`SnapshotBuffer` + `RenderClock`).
+  - **Shots:** per-shot seed = f(match_seed, owner, seq), so a shot event is a single message and every peer rebuilds the
+    exact same pellets/crit. Client projectile pools are cosmetic; server sends hit events keyed by
+    (owner, seq, pellet) to remove the matching bullet + flash the victim.
+  - Players don't collide with each other (walls only), which keeps prediction exact.
+  - All RPCs live on `NetSession` at `/root/Main/Session` (Godot requires the same path + RPC list on all peers).
+  - Known M2 limitations: no lag compensation, so with real latency you'll sometimes see your bullet hit an
+    interpolated (100 ms old) enemy that the server counts as a miss, and remote players' bullets appear
+    from where they actually are, a little ahead of their drawn body. Knockback/damage on yourself shows up
+    as a small smoothed correction. No server Dockerfile yet (planned for M5).
+  - 82 GUT tests passing (incl. replay-matches-server determinism against walls, input queue anti-speed-hack).
+- [ ] M3 not started

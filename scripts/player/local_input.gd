@@ -6,6 +6,8 @@ extends PlayerController
 var touch: TouchControls
 var arena: Arena
 var auto_target: Player
+## Dev/test: drive in circles and fire continuously (--autopilot).
+var autopilot: bool = false
 
 var _frame := InputFrame.new()
 var _query := PhysicsRayQueryParameters2D.new()
@@ -30,8 +32,9 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 	_frame.fire = fire_mouse or fire_auto
 	_frame.skill = Input.is_action_pressed(&"skill") or (touch_on and touch.skill_held)
 	_frame.swap = Input.is_action_pressed(&"swap") or (touch_on and touch.swap_held)
-
 	_update_auto_target(player)
+	if autopilot:
+		_drive_autopilot(player)
 	var aim := Vector2.ZERO
 	if fire_mouse:
 		aim = player.get_global_mouse_position() - player.global_position
@@ -66,3 +69,35 @@ func _update_auto_target(player: Player) -> void:
 
 func _is_visible(i: int) -> bool:
 	return AutoAim.has_line_of_sight(_space, _query, _origin, _positions[i])
+
+
+## Circle-strafe and fire when a target is visible, otherwise walk toward the nearest enemy.
+func _drive_autopilot(player: Player) -> void:
+	_frame.fire = auto_target != null
+	if auto_target != null:
+		_frame.move_vec = Vector2.RIGHT.rotated(_frame.seq * Constants.AUTOPILOT_TURN_PER_FRAME)
+		return
+	var nearest: Vector2 = Vector2.ZERO
+	var best: float = INF
+	for p: Vector2 in _positions:
+		var d: float = player.global_position.distance_squared_to(p)
+		if d < best:
+			best = d
+			nearest = p
+	if best == INF:
+		_frame.move_vec = Vector2.ZERO
+		return
+	# Greedy obstacle steering: the open direction most aligned with the enemy.
+	var desired: Vector2 = (nearest - player.global_position).normalized()
+	var origin: Vector2 = player.global_position
+	var best_dir: Vector2 = desired
+	var best_score: float = -INF
+	for i: int in Constants.AUTOPILOT_STEER_DIRECTIONS:
+		var d: Vector2 = Vector2.RIGHT.rotated(TAU * i / Constants.AUTOPILOT_STEER_DIRECTIONS)
+		if not AutoAim.has_line_of_sight(_space, _query, origin, origin + d * Constants.AUTOPILOT_PROBE_DISTANCE):
+			continue
+		var score: float = d.dot(desired)
+		if score > best_score:
+			best_score = score
+			best_dir = d
+	_frame.move_vec = best_dir

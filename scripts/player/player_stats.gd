@@ -11,7 +11,8 @@ var armor: int
 var energy: int
 var time_since_damage: float = 0.0
 var invulnerable_time: float = 0.0
-var _armor_regen_accum: float = 0.0
+## Fractional armor regen carried between ticks.
+var regen_accum: float = 0.0
 
 
 func _init(
@@ -31,7 +32,7 @@ func reset() -> void:
 	energy = max_energy
 	time_since_damage = Constants.ARMOR_REGEN_DELAY
 	invulnerable_time = 0.0
-	_armor_regen_accum = 0.0
+	regen_accum = 0.0
 
 
 func is_dead() -> bool:
@@ -51,7 +52,7 @@ func apply_damage(amount: int) -> int:
 	var to_hp: int = mini(hp, amount - absorbed)
 	hp -= to_hp
 	time_since_damage = 0.0
-	_armor_regen_accum = 0.0
+	regen_accum = 0.0
 	return absorbed + to_hp
 
 
@@ -65,11 +66,11 @@ func tick(delta: float) -> void:
 		return
 	# Only the part of this tick past the delay counts toward regen.
 	var regen_time: float = time_since_damage - maxf(before, Constants.ARMOR_REGEN_DELAY)
-	_armor_regen_accum += Constants.ARMOR_REGEN_PER_SEC * regen_time
-	var whole: int = int(_armor_regen_accum)
+	regen_accum += Constants.ARMOR_REGEN_PER_SEC * regen_time
+	var whole: int = int(regen_accum)
 	if whole > 0:
 		armor = mini(max_armor, armor + whole)
-		_armor_regen_accum -= whole
+		regen_accum -= whole
 
 
 func try_spend_energy(cost: int) -> bool:

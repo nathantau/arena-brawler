@@ -29,7 +29,10 @@ const COLOR_COOLDOWN: Color = Color(0, 0, 0, 0.55)
 const COLOR_AIM: Color = Color(1, 0.4, 0.4, 0.8)
 const NO_FINGER: int = -1
 
+const TOUCH_FLAG: String = "--touch"
+
 var player: Player
+var show_dev_button: bool = true
 var move_vec: Vector2 = Vector2.ZERO
 var attack_held: bool = false
 ## Zero unless the attack finger has been dragged past the deadzone.
@@ -49,6 +52,16 @@ var _swap_finger: int = NO_FINGER
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## On for mobile/touchscreens, or desktop with --touch (mouse then emulates touch).
+static func should_enable() -> bool:
+	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
+		return true
+	if OS.get_cmdline_user_args().has(TOUCH_FLAG):
+		Input.emulate_touch_from_mouse = true
+		return true
+	return false
 
 
 func consume_dev_cycle() -> bool:
@@ -102,7 +115,7 @@ func _on_press(finger: int, p: Vector2) -> void:
 	elif _swap_finger == NO_FINGER and _hits(p, _swap_center(), SWAP_RADIUS):
 		_swap_finger = finger
 		swap_held = true
-	elif _hits(p, _dev_center(), DEV_RADIUS):
+	elif show_dev_button and _hits(p, _dev_center(), DEV_RADIUS):
 		_dev_cycle_requested = true
 	elif _joy_finger == NO_FINGER and p.x < size.x * JOYSTICK_ZONE_FRACTION:
 		_joy_finger = finger
@@ -182,9 +195,10 @@ func _draw() -> void:
 	_label(font, wc, "SWAP")
 
 	# Dev weapon cycle
-	var dc: Vector2 = _dev_center()
-	draw_arc(dc, DEV_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
-	_label(font, dc, "W")
+	if show_dev_button:
+		var dc: Vector2 = _dev_center()
+		draw_arc(dc, DEV_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
+		_label(font, dc, "W")
 
 
 func _label(font: Font, center: Vector2, text: String) -> void:

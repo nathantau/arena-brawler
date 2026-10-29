@@ -1,67 +1,111 @@
 class_name Arena
 extends Node2D
-## M1 local sandbox: builds the map, one local player and dummy bots, camera and UI.
+## The game world: map, players, projectiles, scoring and respawns. Same class in every mode:
+## OFFLINE (local sandbox), SERVER (authoritative, headless) and CLIENT (predicted view).
 
-const WEAPON_CATALOG_PATHS: Array[String] = [
-	"res://data/weapons/pistol.tres",
-	"res://data/weapons/smg.tres",
-	"res://data/weapons/shotgun.tres",
+signal kill_registered(killer_id: int, victim_id: int)
+signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName)
+signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2)
+
+enum Mode { OFFLINE, SERVER, CLIENT }
+
+const DEFAULT_LOADOUT: Array[StringName] = [&"pistol", &"shotgun"]
+const BOT_LOADOUT: Array[StringName] = [&"bot_blaster"]
+## Dev-only weapon cycling order (offline, until pickups exist).
+const DEV_CYCLE_WEAPONS: Array[StringName] = [&"pistol", &"smg", &"shotgun"]
+const PLAYER_COLORS: Array[Color] = [
+	Color(0.35, 0.75, 1.0), Color(0.95, 0.45, 0.4), Color(0.75, 0.5, 0.95),
+	Color(0.5, 0.9, 0.45), Color(1.0, 0.8, 0.3), Color(0.3, 0.9, 0.85),
 ]
-const BOT_WEAPON_PATH: String = "res://data/weapons/bot_blaster.tres"
-const LOCAL_PLAYER_ID: int = 1
-const LOCAL_COLOR: Color = Color(0.35, 0.75, 1.0)
-const BOT_COLORS: Array[Color] = [Color(0.95, 0.45, 0.4), Color(0.75, 0.5, 0.95), Color(0.5, 0.9, 0.45)]
 const FLOOR_COLOR: Color = Color(0.13, 0.14, 0.17)
 const FLOOR_GRID_COLOR: Color = Color(0.16, 0.17, 0.21)
 const WALL_COLOR: Color = Color(0.32, 0.34, 0.42)
 const WALL_TOP_COLOR: Color = Color(0.42, 0.45, 0.55)
 const WALL_TOP_INSET: float = 4.0
 const GRID_LINE_WIDTH: float = 1.0
-const TOUCH_FLAG: String = "--touch"
+const PROJECTILE_Z: int = 1
 
+var mode: Mode
+var match_seed: int
 var map: ArenaMap
 var players: Array[Player] = []
 var local_player: Player
 var projectiles: ProjectilePool
-var weapon_catalog: Array[WeaponData] = []
+var catalog: WeaponCatalog
 var scores := ScoreBoard.new()
 var camera: Camera2D
+var hud: Hud
 
-var _local_input: LocalInput
+var _by_id: Dictionary[int, Player] = {}
 var _threats := PackedVector2Array()
 
 
-func _ready() -> void:
-	InputSetup.ensure_actions()
-	for path: String in WEAPON_CATALOG_PATHS:
-		weapon_catalog.append(load(path) as WeaponData)
+func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MATCH_SEED) -> void:
+	mode = p_mode
+	match_seed = p_match_seed
+	name = "Arena"
+	catalog = WeaponCatalog.load_all()
 	map = ArenaMap.parse(ArenaLayouts.PIT, Constants.TILE_SIZE)
-	_build_walls()
-
 	projectiles = ProjectilePool.new()
 	projectiles.name = "Projectiles"
+	projectiles.authoritative = mode != Mode.CLIENT
+	projectiles.z_index = PROJECTILE_Z
 
-	var ui := CanvasLayer.new()
-	ui.name = "UI"
-	var touch := TouchControls.new()
-	touch.visible = _touch_enabled()
-	var hud := Hud.new()
 
-	_local_input = LocalInput.new()
-	_local_input.arena = self
-	_local_input.touch = touch
-	var local_loadout: Array[WeaponData] = [weapon_catalog[0], weapon_catalog[2]]
-	local_player = _spawn_player(LOCAL_PLAYER_ID, LOCAL_COLOR, local_loadout, _local_input)
-	local_player.is_local = true
+func _ready() -> void:
+	_build_walls()
+	add_child(projectiles)
+	projectiles.player_hit.connect(player_hit.emit)
 
-	var bot_weapon: WeaponData = load(BOT_WEAPON_PATH) as WeaponData
-	var bot_loadout: Array[WeaponData] = [bot_weapon]
-	for i: int in Constants.BOT_COUNT:
-		var id: int = LOCAL_PLAYER_ID + 1 + i
-		var brain := BotBrain.new(self, Constants.DEFAULT_MATCH_SEED + id)
-		_spawn_player(id, BOT_COLORS[i % BOT_COLORS.size()], bot_loadout, brain)
 
-	add_child(projectiles)  # after players so bullets draw on top
+func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl: PlayerController) -> Player:
+	var p := Player.new()
+	p.name = "Player%d" % id
+	var color: Color = PLAYER_COLORS[color_index % PLAYER_COLORS.size()]
+	p.setup(id, color_index, color, catalog.resolve(loadout_ids), ctrl, projectiles, match_seed)
+	add_child(p)
+	p.global_position = _pick_spawn_for(p)
+	p.died.connect(_on_player_died)
+	p.shot_fired.connect(_on_player_shot)
+	players.append(p)
+	_by_id[id] = p
+	return p
+
+
+func add_bot(id: int, color_index: int) -> Player:
+	return add_player(id, color_index, BOT_LOADOUT, BotBrain.new(self, match_seed + id))
+
+
+func remove_player(id: int) -> void:
+	var p: Player = _by_id.get(id)
+	if p == null:
+		return
+	_by_id.erase(id)
+	players.erase(p)
+	if p == local_player:
+		local_player = null
+	p.queue_free()
+
+
+func get_player(id: int) -> Player:
+	return _by_id.get(id)
+
+
+## Lowest palette index not used by a current player.
+func free_color_index() -> int:
+	var used: Array[int] = []
+	for p: Player in players:
+		used.append(p.color_index)
+	var i: int = 0
+	while used.has(i):
+		i += 1
+	return i
+
+
+## Camera + HUD + touch controls for the player this device controls.
+func attach_local_view(p: Player, input: LocalInput) -> void:
+	local_player = p
+	p.is_local = true
 
 	camera = Camera2D.new()
 	camera.position_smoothing_enabled = true
@@ -71,46 +115,40 @@ func _ready() -> void:
 	camera.limit_right = int(map.size.x)
 	camera.limit_bottom = int(map.size.y)
 	add_child(camera)
-	camera.global_position = local_player.global_position
+	camera.global_position = p.global_position
 	camera.reset_smoothing()
 
-	touch.player = local_player
-	hud.player = local_player
+	var ui := CanvasLayer.new()
+	ui.name = "UI"
+	hud = Hud.new()
+	hud.player = p
 	hud.scores = scores
+	var touch := TouchControls.new()
+	touch.player = p
+	touch.show_dev_button = mode == Mode.OFFLINE
+	touch.visible = TouchControls.should_enable()
 	add_child(ui)
 	ui.add_child(hud)
 	ui.add_child(touch)
 
-
-func _touch_enabled() -> bool:
-	if OS.has_feature("mobile") or DisplayServer.is_touchscreen_available():
-		return true
-	if OS.get_cmdline_user_args().has(TOUCH_FLAG):
-		Input.emulate_touch_from_mouse = true
-		return true
-	return false
-
-
-func _spawn_player(id: int, color: Color, weapons: Array[WeaponData], ctrl: PlayerController) -> Player:
-	var p := Player.new()
-	p.name = "Player%d" % id
-	p.setup(id, color, weapons, ctrl, projectiles, Constants.DEFAULT_MATCH_SEED * id)
-	add_child(p)
-	p.global_position = map.spawns[(id - 1) % map.spawns.size()]
-	p.died.connect(_on_player_died)
-	players.append(p)
-	return p
+	input.arena = self
+	input.touch = touch
 
 
 func _physics_process(delta: float) -> void:
+	if mode != Mode.CLIENT:
+		_tick_respawns(delta)
+	if camera != null and local_player != null and not local_player.dead:
+		camera.global_position = local_player.global_position + local_player.facing * Constants.CAMERA_LOOKAHEAD
+
+
+func _tick_respawns(delta: float) -> void:
 	for p: Player in players:
 		if not p.dead:
 			continue
 		p.respawn_timer -= delta
 		if p.respawn_timer <= 0.0:
 			p.respawn(_pick_spawn_for(p))
-	if local_player != null and not local_player.dead:
-		camera.global_position = local_player.global_position + local_player.facing * Constants.CAMERA_LOOKAHEAD
 
 
 func _pick_spawn_for(who: Player) -> Vector2:
@@ -123,13 +161,20 @@ func _pick_spawn_for(who: Player) -> Vector2:
 
 func _on_player_died(victim: Player, killer_id: int) -> void:
 	scores.register_kill(killer_id, victim.player_id)
+	kill_registered.emit(killer_id, victim.player_id)
 
 
-## Dev-only (M1, no pickups yet): cycle the active slot through the weapon catalog.
+func _on_player_shot(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
+	shot_fired.emit(shooter.player_id, seq, origin, facing, weapon_id)
+
+
+## Dev-only (offline, no pickups yet): cycle the active slot through DEV_CYCLE_WEAPONS.
 func dev_cycle_weapon(p: Player) -> void:
-	var current: WeaponData = p.loadout.active().data
-	var idx: int = weapon_catalog.find(current)
-	p.loadout.replace_active(weapon_catalog[(idx + 1) % weapon_catalog.size()])
+	if mode != Mode.OFFLINE:
+		return
+	var idx: int = DEV_CYCLE_WEAPONS.find(p.loadout.active().data.id)
+	var next: WeaponData = catalog.get_weapon(DEV_CYCLE_WEAPONS[(idx + 1) % DEV_CYCLE_WEAPONS.size()])
+	p.loadout.replace_active(next)
 
 
 func _build_walls() -> void:

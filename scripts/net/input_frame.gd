@@ -2,7 +2,12 @@ class_name InputFrame
 extends RefCounted
 ## The only thing a client is allowed to send: {seq, move_vec, aim_vec, fire, skill, swap}.
 ## Buttons are held states; the simulation derives press edges itself so a dropped
-## packet can't eat a dash.
+## packet can't eat a dash. Wire format: [seq, move_vec, aim_vec, flags].
+
+const FLAG_FIRE: int = 1
+const FLAG_SKILL: int = 2
+const FLAG_SWAP: int = 4
+const WIRE_SIZE: int = 4
 
 var seq: int = 0
 var move_vec: Vector2 = Vector2.ZERO
@@ -14,6 +19,7 @@ var swap: bool = false
 
 ## Clamp untrusted values into legal ranges (server must call this on received input).
 func sanitize() -> void:
+	seq = maxi(seq, 0)
 	if not move_vec.is_finite():
 		move_vec = Vector2.ZERO
 	if not aim_vec.is_finite():
@@ -22,17 +28,35 @@ func sanitize() -> void:
 	aim_vec = aim_vec.normalized() if aim_vec.length_squared() > 0.0 else Vector2.ZERO
 
 
-func to_dict() -> Dictionary:
-	return {"seq": seq, "move": move_vec, "aim": aim_vec, "fire": fire, "skill": skill, "swap": swap}
+func copy_from(other: InputFrame) -> void:
+	seq = other.seq
+	move_vec = other.move_vec
+	aim_vec = other.aim_vec
+	fire = other.fire
+	skill = other.skill
+	swap = other.swap
 
 
-static func from_dict(d: Dictionary) -> InputFrame:
+func to_array() -> Array:
+	var flags: int = (FLAG_FIRE if fire else 0) | (FLAG_SKILL if skill else 0) | (FLAG_SWAP if swap else 0)
+	return [seq, move_vec, aim_vec, flags]
+
+
+## Parses untrusted wire data. Returns null if malformed.
+static func from_array(data: Variant) -> InputFrame:
+	if not data is Array:
+		return null
+	var a: Array = data
+	if a.size() != WIRE_SIZE or typeof(a[0]) != TYPE_INT or not a[1] is Vector2 \
+			or not a[2] is Vector2 or typeof(a[3]) != TYPE_INT:
+		return null
 	var f := InputFrame.new()
-	f.seq = int(d.get("seq", 0))
-	f.move_vec = d.get("move", Vector2.ZERO) if d.get("move") is Vector2 else Vector2.ZERO
-	f.aim_vec = d.get("aim", Vector2.ZERO) if d.get("aim") is Vector2 else Vector2.ZERO
-	f.fire = bool(d.get("fire", false))
-	f.skill = bool(d.get("skill", false))
-	f.swap = bool(d.get("swap", false))
+	f.seq = a[0]
+	f.move_vec = a[1]
+	f.aim_vec = a[2]
+	var flags: int = a[3]
+	f.fire = flags & FLAG_FIRE != 0
+	f.skill = flags & FLAG_SKILL != 0
+	f.swap = flags & FLAG_SWAP != 0
 	f.sanitize()
 	return f

@@ -17,6 +17,8 @@ const COLOR_DIM: Color = Color(1, 1, 1, 0.5)
 
 var player: Player
 var scores: ScoreBoard
+## Free-form line under the kill counter (e.g. ping when online).
+var status_text: String = ""
 
 
 func _ready() -> void:
@@ -53,6 +55,10 @@ func _draw() -> void:
 
 	var kd: String = "Kills %d   Deaths %d" % [scores.kills_of(player.player_id), scores.deaths_of(player.player_id)]
 	draw_string(font, Vector2(0.0, MARGIN.y + BIG_FONT_SIZE), kd, HORIZONTAL_ALIGNMENT_CENTER, size.x, BIG_FONT_SIZE, COLOR_TEXT)
+
+	if status_text != "":
+		draw_string(font, Vector2(0.0, MARGIN.y + BIG_FONT_SIZE + FONT_SIZE + TEXT_PAD * 2.0), status_text,
+			HORIZONTAL_ALIGNMENT_CENTER, size.x, FONT_SIZE, COLOR_DIM)
 
 	if player.dead:
 		var msg: String = "Respawning in %.1f" % maxf(0.0, player.respawn_timer)

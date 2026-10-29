@@ -4,6 +4,13 @@ extends RefCounted
 ## through a caller-provided seeded RNG.
 
 
+## Deterministic per-shot RNG seed so client prediction, the server and every observer
+## reproduce the same crit roll and pellet spread from just (owner, seq). Factors keep the
+## products well inside int64 for 31-bit ids/seqs.
+static func shot_seed(match_seed: int, owner_id: int, seq: int) -> int:
+	return (match_seed * 73856093) ^ (owner_id * 19349663) ^ (seq * 83492791)
+
+
 static func roll_crit(weapon: WeaponData, rng: RandomNumberGenerator) -> bool:
 	if weapon.crit_chance <= 0.0:
 		return false

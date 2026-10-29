@@ -63,3 +63,42 @@ const CAMERA_SMOOTHING: float = 10.0
 
 # --- Match (seed for shared sim RNG) ---
 const DEFAULT_MATCH_SEED: int = 1337
+const BOT_ID_BASE: int = 10
+
+# --- Simulation timing ---
+## Fixed sim step on both client and server; every InputFrame advances the sim by exactly this.
+const PHYSICS_FPS: int = 60
+const PHYSICS_DT: float = 1.0 / PHYSICS_FPS
+
+# --- Networking ---
+const DEFAULT_PORT: int = 7777
+const MAX_CLIENTS: int = 4
+const NET_CHANNEL_COUNT: int = 5
+## Network tick = PHYSICS_FPS / SNAPSHOT_INTERVAL_TICKS = 30 Hz.
+const SNAPSHOT_INTERVAL_TICKS: int = 2
+const INPUT_SEND_INTERVAL_TICKS: int = 2
+## Each input packet re-sends this many recent frames so a few lost packets cost nothing.
+const INPUT_REDUNDANCY: int = 6
+## Reject input packets carrying more frames than this.
+const INPUT_BATCH_MAX: int = 16
+## Server-side per-player input buffer; beyond this the oldest frames are dropped.
+const INPUT_BUFFER_MAX: int = 16
+## Max inputs the server may bank to catch up after a hitch (~133 ms). Bounds speed-hacking.
+const INPUT_CATCHUP_MAX: float = 8.0
+## Client keeps unacked inputs for replay. 3 s at 60 Hz.
+const INPUT_HISTORY_MAX: int = 180
+## ~100 ms interpolation delay for remote entities.
+const INTERP_DELAY_TICKS: float = 6.0
+const INTERP_BUFFER_SIZE: int = 32
+const CLOCK_SNAP_TICKS: float = 30.0
+const CLOCK_CORRECTION: float = 0.05
+## Snapshot-to-snapshot jumps larger than this are teleports (respawn): no lerp.
+const TELEPORT_DISTANCE: float = 200.0
+## Reconciliation errors up to this are smoothed visually; larger ones snap.
+const CORRECTION_SMOOTH_MAX: float = 64.0
+const CORRECTION_DECAY: float = 15.0
+const SERVER_MAX_FPS: int = 60
+const NET_DEBUG_INTERVAL: float = 1.0
+const AUTOPILOT_TURN_PER_FRAME: float = 0.03
+const AUTOPILOT_STEER_DIRECTIONS: int = 16
+const AUTOPILOT_PROBE_DISTANCE: float = 70.0

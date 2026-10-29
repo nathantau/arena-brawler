@@ -71,11 +71,3 @@ func test_input_frame_sanitize() -> void:
 	f.move_vec = Vector2(NAN, 1)
 	f.sanitize()
 	assert_eq(f.move_vec, Vector2.ZERO)
-
-
-func test_input_frame_roundtrip_rejects_bad_types() -> void:
-	var f := InputFrame.from_dict({"seq": 5, "move": "evil", "aim": Vector2(2, 0), "fire": true})
-	assert_eq(f.seq, 5)
-	assert_eq(f.move_vec, Vector2.ZERO)
-	assert_eq(f.aim_vec, Vector2.RIGHT)
-	assert_true(f.fire)
