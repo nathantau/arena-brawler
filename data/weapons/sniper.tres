@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"sniper"
+display_name = "Needle Rifle"
+damage = 45
+fire_interval = 1.1
+spread_deg = 0.0
+projectile_speed = 2200.0
+projectile_range = 1300.0
+projectile_radius = 3.0
+energy_cost = 12
+crit_chance = 0.25
+crit_multiplier = 1.5
+knockback = 120.0
+color = Color(0.55, 0.95, 1, 1)
+screen_shake = 0.3
+sfx = &"shot_sniper"

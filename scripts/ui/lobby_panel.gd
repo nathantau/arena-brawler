@@ -1,13 +1,14 @@
 class_name LobbyPanel
 extends PanelContainer
-## Lobby overlay (top-right, so warm-up play stays visible): roster with ready state, the
-## mode, why the match can't start yet, and Mode / Ready buttons. Rebuilt on match_updated.
+## Lobby overlay (top-right, so warm-up play stays visible): roster with characters and ready
+## state, mode + arena, why the match can't start yet, and Mode / Arena / Character / Ready
+## buttons. Rebuilt on match_updated.
 
 const MARGIN: float = 16.0
-const PANEL_WIDTH: float = 300.0
+const PANEL_WIDTH: float = 330.0
 const TITLE_FONT_SIZE: int = 20
 const FONT_SIZE: int = 15
-const BUTTON_MIN_SIZE: Vector2 = Vector2(130, 48)
+const BUTTON_MIN_SIZE: Vector2 = Vector2(150, 44)
 const SPACING: int = 6
 const COLOR_BG: Color = Color(0, 0, 0, 0.6)
 const COLOR_DIM: Color = Color(1, 1, 1, 0.55)
@@ -22,6 +23,8 @@ var _rules: Label
 var _rows: VBoxContainer
 var _blocker: Label
 var _mode_button: Button
+var _arena_button: Button
+var _character_button: Button
 var _ready_button: Button
 
 
@@ -44,11 +47,20 @@ func _ready() -> void:
 	_blocker = _label(box, FONT_SIZE, COLOR_BLOCKER)
 	_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", SPACING)
+	var buttons := GridContainer.new()
+	buttons.columns = 2
+	buttons.add_theme_constant_override("h_separation", SPACING)
+	buttons.add_theme_constant_override("v_separation", SPACING)
 	box.add_child(buttons)
 	_mode_button = _button(buttons)
 	_mode_button.pressed.connect(_on_mode_pressed)
+	_arena_button = _button(buttons)
+	_arena_button.pressed.connect(func() -> void:
+		arena.arena_requested.emit((arena.match_state.arena_index + 1) % ArenaLayouts.count()))
+	_character_button = _button(buttons)
+	_character_button.pressed.connect(func() -> void:
+		if arena.local_player != null:
+			arena.character_requested.emit(arena.characters.next_after(arena.local_player.character.id).id))
 	_ready_button = _button(buttons)
 	_ready_button.pressed.connect(_on_ready_pressed)
 
@@ -61,7 +73,7 @@ func _refresh() -> void:
 	visible = st.phase == MatchState.Phase.LOBBY
 	if not visible:
 		return
-	_title.text = "LOBBY · %s" % MatchRules.MODE_NAMES[st.mode]
+	_title.text = "LOBBY · %s · %s" % [MatchRules.MODE_NAMES[st.mode], ArenaLayouts.NAMES[st.arena_index]]
 	_rules.text = "First to %d kills · %d:%02d" % [MatchRules.kill_target(st.mode),
 		int(st.time_limit) / 60, int(st.time_limit) % 60]
 	for child: Node in _rows.get_children():
@@ -78,9 +90,13 @@ func _refresh() -> void:
 			tag = "not ready"
 		var you: String = " (you)" if p == arena.local_player else ""
 		var row := _label(_rows, FONT_SIZE, p.display_color)
-		row.text = "● %s%s — %s" % [arena.player_name(p.player_id), you, tag]
+		row.text = "● %s%s (%s) — %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
 	_blocker.text = st.blocker
 	_mode_button.text = "Mode: %s" % ("Duel" if st.mode == MatchRules.Mode.DUEL else "FFA")
+	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
+	if arena.local_player != null:
+		_character_button.text = "%s (%s)" % [arena.local_player.character.display_name,
+			arena.local_player.character.skill_name]
 	_ready_button.text = "Unready" if _is_ready() else "Ready"
 	_ready_button.add_theme_color_override("font_color", Color.WHITE if _is_ready() else COLOR_READY)
 

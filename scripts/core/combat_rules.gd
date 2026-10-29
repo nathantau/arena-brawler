@@ -38,3 +38,18 @@ static func shot_directions(aim: Vector2, weapon: WeaponData, rng: RandomNumberG
 			angle += rng.randf_range(-jitter, jitter)
 		dirs.append(base.rotated(angle))
 	return dirs
+
+
+## Blast damage at `dist` from the centre: full at 0, `edge_scale` of it at the edge.
+static func splash_damage(base: int, dist: float, radius: float, edge_scale: float) -> int:
+	if radius <= 0.0 or dist > radius:
+		return 0
+	return roundi(base * lerpf(1.0, edge_scale, clampf(dist / radius, 0.0, 1.0)))
+
+
+## True if `to` lies inside the swing arc centred on `facing` (full angle `arc_deg`).
+static func in_arc(origin: Vector2, facing: Vector2, to: Vector2, arc_deg: float) -> bool:
+	var d: Vector2 = to - origin
+	if d.length_squared() == 0.0:
+		return true
+	return absf(facing.angle_to(d)) <= deg_to_rad(arc_deg) * 0.5

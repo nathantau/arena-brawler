@@ -72,6 +72,7 @@ func _is_visible(i: int) -> bool:
 ## Circle-strafe and fire when a target is visible, otherwise walk toward the nearest enemy.
 func _drive_autopilot(player: Player) -> void:
 	_frame.fire = auto_target != null
+	_frame.skill = auto_target != null and _frame.seq % Constants.AUTOPILOT_SKILL_EVERY_FRAMES == 0
 	if auto_target != null:
 		_frame.move_vec = Vector2.RIGHT.rotated(_frame.seq * Constants.AUTOPILOT_TURN_PER_FRAME)
 		return

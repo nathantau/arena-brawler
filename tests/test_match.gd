@@ -69,6 +69,7 @@ func test_state_roundtrip() -> void:
 	var a := MatchState.new()
 	a.phase = MatchState.Phase.RESULTS
 	a.mode = MatchRules.Mode.DUEL
+	a.arena_index = 1
 	a.time_left = 4.5
 	a.time_limit = 60.0
 	a.participants = [1, 10]
@@ -80,6 +81,7 @@ func test_state_roundtrip() -> void:
 	assert_true(b.apply_array(a.to_array()))
 	assert_eq(b.phase, MatchState.Phase.RESULTS)
 	assert_eq(b.mode, MatchRules.Mode.DUEL)
+	assert_eq(b.arena_index, 1)
 	assert_eq(b.time_left, 4.5)
 	assert_eq(b.time_limit, 60.0)
 	assert_eq(b.participants, [1, 10] as Array[int])
@@ -94,6 +96,9 @@ func test_state_rejects_malformed() -> void:
 	var bad: Array = MatchState.new().to_array()
 	bad[MatchState.Field.PHASE] = 99
 	assert_false(s.apply_array(bad))
+	bad = MatchState.new().to_array()
+	bad[MatchState.Field.ARENA] = ArenaLayouts.count()
+	assert_false(s.apply_array(bad), "unknown arena")
 	bad = MatchState.new().to_array()
 	bad[MatchState.Field.PARTICIPANTS] = "nope"
 	assert_false(s.apply_array(bad))

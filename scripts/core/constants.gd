@@ -5,20 +5,26 @@ extends RefCounted
 # --- Physics layers (bit values) ---
 const LAYER_WALLS: int = 1
 const LAYER_PLAYERS: int = 2
+## Warden barriers: only projectiles collide with them.
+const LAYER_SHIELDS: int = 4
+## Destructible crates. They also sit on LAYER_WALLS so movement and line of sight treat
+## them as walls; this extra bit lets projectiles tell them apart.
+const LAYER_CRATES: int = 8
 
 # --- Arena ---
 const TILE_SIZE: float = 48.0
+const CRATE_HP: int = 60
 
 # --- Player movement ---
+## Per-character move speed, HP etc. live in data/characters/*.tres.
 const PLAYER_RADIUS: float = 18.0
-const PLAYER_MOVE_SPEED: float = 270.0
 const PLAYER_ACCEL: float = 2600.0
 const PLAYER_DECEL: float = 2200.0
 ## Used when above normal max speed (after dash / knockback) so overspeed bleeds off fast.
 const PLAYER_OVERSPEED_DECEL: float = 6000.0
 const INPUT_DEADZONE: float = 0.15
 
-# --- Player stats ---
+# --- Player stats (defaults; characters override) ---
 const PLAYER_MAX_HP: int = 100
 const PLAYER_MAX_ARMOR: int = 50
 const PLAYER_MAX_ENERGY: int = 200
@@ -28,11 +34,11 @@ const RESPAWN_DELAY: float = 2.0
 const RESPAWN_IFRAME_TIME: float = 1.0
 const LOADOUT_SLOTS: int = 2
 
-# --- Dash skill ---
-const DASH_SPEED: float = 950.0
-const DASH_DURATION: float = 0.16
-const DASH_IFRAME_TIME: float = 0.22
-const DASH_COOLDOWN: float = 1.8
+# --- Skills (per-character tunables are in data/characters/*.tres) ---
+const SHIELD_THICKNESS: float = 10.0
+## Pellet index offset for the second gun's volley while dual-wielding, so every pellet of
+## both volleys has a distinct (owner, seq, pellet) key.
+const DUAL_PELLET_OFFSET: int = 64
 
 # --- Aiming ---
 const AUTO_AIM_RANGE: float = 560.0
@@ -41,6 +47,10 @@ const MUZZLE_OFFSET: float = 6.0
 
 # --- Projectiles ---
 const PROJECTILE_POOL_SIZE: int = 512
+## A reflected projectile flies at least this long after a sword swing.
+const REFLECT_MIN_LIFE: float = 0.6
+## Nudge off a wall after a bounce so the next raycast doesn't start inside it.
+const BOUNCE_EPSILON: float = 0.5
 ## How many invulnerable/owner bodies a single projectile step may pass through.
 const PROJECTILE_MAX_PASS_THROUGH: int = 3
 
@@ -54,10 +64,13 @@ const BOT_RADIAL_WEIGHT: float = 0.6
 const BOT_STRAFE_WEIGHT: float = 0.8
 const BOT_AIM_ERROR_DEG: float = 10.0
 const BOT_SIGHT_RANGE: float = 600.0
+const BOT_SKILL_CHANCE_PER_SEC: float = 0.4
 
 # --- Feedback ---
 const HIT_FLASH_TIME: float = 0.08
 const HAPTIC_HIT_MS: int = 30
+const HAPTIC_KILL_MS: int = 60
+const HAPTIC_EXPLOSION_MS: int = 45
 const CAMERA_LOOKAHEAD: float = 60.0
 const CAMERA_SMOOTHING: float = 10.0
 
@@ -126,3 +139,4 @@ const NET_DEBUG_INTERVAL: float = 1.0
 const AUTOPILOT_TURN_PER_FRAME: float = 0.03
 const AUTOPILOT_STEER_DIRECTIONS: int = 16
 const AUTOPILOT_PROBE_DISTANCE: float = 70.0
+const AUTOPILOT_SKILL_EVERY_FRAMES: int = 150

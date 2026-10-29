@@ -72,7 +72,9 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - Run client with touch controls on desktop (mouse emulates touch): `godot --path . -- --touch`
 - Run headless server: `godot --path . --headless -- --server --port 7777` (add `--bots N` for server-side bots)
 - Match options (server / offline): `--mode duel|ffa` (starting mode; players can switch it in the lobby),
-  `--time-limit S` (shorter matches for testing)
+  `--arena N` (0 = Pit, 1 = Foundry), `--time-limit S` (shorter matches for testing)
+- Pick a character (client / offline): `--character flicker|warden|twinshot`
+- Render frames to check visuals without a screen: `godot --path . --write-movie /tmp/f.png --fixed-fps 30 --quit-after 300 -- --offline --autopilot --touch`
 - Net debugging: add `--net-debug` (prints server/client net stats every second, logs reconciliation corrections);
   `--autopilot` makes a client drive + fire on its own, e.g. two headless autopilot clients for soak tests:
   `godot --path . --headless --quit-after 4000 -- --connect 127.0.0.1:7777 --autopilot --net-debug`
@@ -140,4 +142,29 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
     pickups too and only ever target humans; no rematch vote / host role — anyone can toggle the mode.
   - 109 GUT tests passing (match rules/flow, state sync validation, pickup effects + loadout rules, frozen input,
     countdown seating/benching).
-- [ ] M4 not started
+- [x] **M4 – Content** (2026-10-29). Verified: 132 GUT tests; server + Warden/Twinshot autopilot clients + bots on
+  Foundry with kills, pickups, skills and match cycles and no errors; offline frames rendered and checked.
+  - **8 weapons** (`data/weapons/*.tres`, all data-driven via new `WeaponData` fields `kind`, splash, bounce, drag,
+    melee): Pocket Blaster (free sidearm), Buzzsaw SMG, Scattercannon, Needle Rifle (sniper), Boomtube (rocket,
+    splash), Prism Lance (hitscan beam), Arc Blade (sword: arc hit + reflects enemy projectiles), Hopper (bouncing
+    grenade, fuse + splash). Splash: linear falloff, needs line of sight, no self-damage (keeps prediction simple).
+  - `ProjectilePool` handles all three kinds. Each pellet keeps its (owner, seq, pellet) key; `attacker_id` changes
+    when reflected so server hit events still match the client's cosmetic copy.
+  - **3 characters** (`data/characters/*.tres`, `CharacterData` + `CharacterSkill` replacing `DashSkill`):
+    Flicker (Dash, i-frames), Warden (Barrier: a wall on `LAYER_SHIELDS` that stops enemy projectiles, 3 s),
+    Twinshot (Dual wield: every shot fires a second offset volley for 4 s; pellet keys offset by 64). Characters
+    differ in HP/armor/energy/speed. Skill state + character id are in snapshots, so others' barriers and dual guns
+    show on every client and replay is exact (tested for all three). Picked in the lobby (`rpc_select_character`).
+  - **2 arenas**: Pit and Foundry (`ArenaLayouts`, 180°-symmetric, tested). Chosen in the lobby (`MatchState.arena_index`,
+    `rpc_request_arena`); switching rebuilds walls/crates/pickups and respawns everyone.
+  - **Destructible crates** (`C` in layouts, `arena/crate.gd`): block movement + sight (on LAYER_WALLS), 60 hp,
+    damaged by bullets/beams/blades/blasts, reset each match; hp mirrored to clients via `rpc_crates`.
+  - **Juice** (local view only, never on the server): `fx/effects.gd` (pooled particles, damage numbers with crits,
+    beam lines, sword arcs, blast rings), camera shake (trauma model: own heavy shots, getting hit, nearby blasts),
+    haptics (hit, kill, nearby blast), character emblems, dual-gun / barrier visuals. `fx/sfx.gd` synthesizes all
+    sounds at startup from a small recipe table (no audio assets), distance-attenuated.
+  - Bots get varied characters and use their skill occasionally; autopilot uses its skill every 2.5 s.
+  - Known M4 limitations: crates are still part of the ASCII layouts (no TileMap yet); bots don't pick weapons
+    deliberately or use melee well; damage from blasts/knockback on yourself shows as a smoothed correction
+    (up to ~50 px with rockets); SFX are placeholder synth blips — real sounds/art later; balance is untuned.
+- [ ] M5 not started

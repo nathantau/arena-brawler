@@ -1,0 +1,215 @@
+class_name Effects
+extends Node2D
+## Cosmetic-only effects in world space: particle bursts, damage numbers, beam lines, sword
+## swings and blast rings. Fixed-size pools, one _draw for everything, no per-frame
+## allocation. Uses its own RNG (never the shared sim's).
+
+const PARTICLE_POOL: int = 384
+const NUMBER_POOL: int = 40
+const BEAM_POOL: int = 32
+const SWING_POOL: int = 16
+const RING_POOL: int = 24
+const PARTICLE_DRAG: float = 6.0
+const NUMBER_TIME: float = 0.7
+const NUMBER_RISE: float = 50.0
+const NUMBER_FONT_SIZE: int = 16
+const NUMBER_CRIT_FONT_SIZE: int = 22
+const NUMBER_SPREAD_PX: float = 10.0
+const COLOR_NUMBER: Color = Color(1, 1, 1)
+const COLOR_NUMBER_CRIT: Color = Color(1, 0.85, 0.2)
+const BEAM_TIME: float = 0.07
+const BEAM_CORE_COLOR: Color = Color(1, 1, 1, 0.9)
+const BEAM_CORE_SCALE: float = 0.4
+const SWING_TIME: float = 0.14
+const SWING_WIDTH: float = 10.0
+const SWING_SEGMENTS: int = 12
+const RING_TIME: float = 0.3
+const RING_WIDTH: float = 4.0
+const RING_SEGMENTS: int = 32
+const BLAST_FILL_ALPHA: float = 0.35
+
+
+class Particle:
+	var life: float = 0.0
+	var max_life: float = 1.0
+	var pos: Vector2 = Vector2.ZERO
+	var vel: Vector2 = Vector2.ZERO
+	var size: float = 2.0
+	var color: Color = Color.WHITE
+
+
+class DamageNumber:
+	var life: float = 0.0
+	var pos: Vector2 = Vector2.ZERO
+	var text: String = ""
+	var crit: bool = false
+
+
+class Beam:
+	var life: float = 0.0
+	var from: Vector2 = Vector2.ZERO
+	var to: Vector2 = Vector2.ZERO
+	var width: float = 1.0
+	var color: Color = Color.WHITE
+
+
+class Swing:
+	var life: float = 0.0
+	var origin: Vector2 = Vector2.ZERO
+	var angle: float = 0.0
+	var radius: float = 0.0
+	var arc: float = 0.0
+	var color: Color = Color.WHITE
+
+
+class Ring:
+	var life: float = 0.0
+	var pos: Vector2 = Vector2.ZERO
+	var radius: float = 0.0
+	var color: Color = Color.WHITE
+
+
+var _particles: Array[Particle] = []
+var _numbers: Array[DamageNumber] = []
+var _beams: Array[Beam] = []
+var _swings: Array[Swing] = []
+var _rings: Array[Ring] = []
+var _pc: int = 0
+var _nc: int = 0
+var _bc: int = 0
+var _sc: int = 0
+var _rc: int = 0
+var _rng := RandomNumberGenerator.new()
+
+
+func _ready() -> void:
+	for i: int in PARTICLE_POOL:
+		_particles.append(Particle.new())
+	for i: int in NUMBER_POOL:
+		_numbers.append(DamageNumber.new())
+	for i: int in BEAM_POOL:
+		_beams.append(Beam.new())
+	for i: int in SWING_POOL:
+		_swings.append(Swing.new())
+	for i: int in RING_POOL:
+		_rings.append(Ring.new())
+
+
+## `dir` zero = all directions, else a cone of `spread` radians around it.
+func burst(at: Vector2, color: Color, count: int, speed: float, size: float, life: float,
+		dir: Vector2 = Vector2.ZERO, spread: float = TAU) -> void:
+	for i: int in count:
+		var p: Particle = _particles[_pc]
+		_pc = (_pc + 1) % _particles.size()
+		var angle: float = _rng.randf() * TAU if dir == Vector2.ZERO \
+			else dir.angle() + _rng.randf_range(-spread, spread) * 0.5
+		p.pos = at
+		p.vel = Vector2.RIGHT.rotated(angle) * speed * _rng.randf_range(0.4, 1.0)
+		p.max_life = life * _rng.randf_range(0.6, 1.0)
+		p.life = p.max_life
+		p.size = size * _rng.randf_range(0.6, 1.0)
+		p.color = color
+
+
+func damage_number(at: Vector2, amount: int, crit: bool) -> void:
+	var n: DamageNumber = _numbers[_nc]
+	_nc = (_nc + 1) % _numbers.size()
+	n.life = NUMBER_TIME
+	n.pos = at + Vector2(_rng.randf_range(-NUMBER_SPREAD_PX, NUMBER_SPREAD_PX), -NUMBER_SPREAD_PX)
+	n.text = str(amount)
+	n.crit = crit
+
+
+func beam(from: Vector2, to: Vector2, color: Color, width: float) -> void:
+	var b: Beam = _beams[_bc]
+	_bc = (_bc + 1) % _beams.size()
+	b.life = BEAM_TIME
+	b.from = from
+	b.to = to
+	b.width = width
+	b.color = color
+
+
+func swing(origin: Vector2, facing: Vector2, radius: float, arc_deg: float, color: Color) -> void:
+	var s: Swing = _swings[_sc]
+	_sc = (_sc + 1) % _swings.size()
+	s.life = SWING_TIME
+	s.origin = origin
+	s.angle = facing.angle()
+	s.radius = radius
+	s.arc = deg_to_rad(arc_deg)
+	s.color = color
+
+
+func ring(at: Vector2, radius: float, color: Color) -> void:
+	var r: Ring = _rings[_rc]
+	_rc = (_rc + 1) % _rings.size()
+	r.life = RING_TIME
+	r.pos = at
+	r.radius = radius
+	r.color = color
+
+
+func _process(delta: float) -> void:
+	var damp: float = exp(-PARTICLE_DRAG * delta)
+	for p: Particle in _particles:
+		if p.life > 0.0:
+			p.life -= delta
+			p.pos += p.vel * delta
+			p.vel *= damp
+	for n: DamageNumber in _numbers:
+		if n.life > 0.0:
+			n.life -= delta
+			n.pos.y -= NUMBER_RISE * delta
+	for b: Beam in _beams:
+		b.life -= delta
+	for s: Swing in _swings:
+		s.life -= delta
+	for r: Ring in _rings:
+		r.life -= delta
+	queue_redraw()
+
+
+func _draw() -> void:
+	for r: Ring in _rings:
+		if r.life <= 0.0:
+			continue
+		var t: float = 1.0 - r.life / RING_TIME
+		var fill: Color = r.color
+		fill.a = BLAST_FILL_ALPHA * (1.0 - t)
+		draw_circle(r.pos, r.radius * lerpf(0.5, 1.0, t), fill)
+		var edge: Color = r.color
+		edge.a = 1.0 - t
+		draw_arc(r.pos, r.radius * lerpf(0.6, 1.1, t), 0.0, TAU, RING_SEGMENTS, edge, RING_WIDTH)
+	for s: Swing in _swings:
+		if s.life <= 0.0:
+			continue
+		var c: Color = s.color
+		c.a = s.life / SWING_TIME
+		draw_arc(s.origin, s.radius, s.angle - s.arc * 0.5, s.angle + s.arc * 0.5, SWING_SEGMENTS, c, SWING_WIDTH)
+	for b: Beam in _beams:
+		if b.life <= 0.0:
+			continue
+		var a: float = b.life / BEAM_TIME
+		var c2: Color = b.color
+		c2.a = a
+		draw_line(b.from, b.to, c2, b.width)
+		var core: Color = BEAM_CORE_COLOR
+		core.a *= a
+		draw_line(b.from, b.to, core, b.width * BEAM_CORE_SCALE)
+	for p: Particle in _particles:
+		if p.life <= 0.0:
+			continue
+		var pc: Color = p.color
+		pc.a = p.life / p.max_life
+		draw_rect(Rect2(p.pos - Vector2(p.size, p.size) * 0.5, Vector2(p.size, p.size)), pc)
+	var font: Font = ThemeDB.fallback_font
+	for n: DamageNumber in _numbers:
+		if n.life <= 0.0:
+			continue
+		var nc: Color = COLOR_NUMBER_CRIT if n.crit else COLOR_NUMBER
+		nc.a = clampf(n.life / NUMBER_TIME * 2.0, 0.0, 1.0)
+		draw_string_outline(font, n.pos, n.text, HORIZONTAL_ALIGNMENT_CENTER, -1,
+			NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE, 4, Color(0, 0, 0, nc.a))
+		draw_string(font, n.pos, n.text, HORIZONTAL_ALIGNMENT_CENTER, -1,
+			NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE, nc)

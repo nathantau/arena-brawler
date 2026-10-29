@@ -29,8 +29,10 @@ func start_server(arena: Arena, port: int, bot_count: int, debug: bool) -> Error
 	return server.start(port, bot_count)
 
 
-func start_client(world_parent: Node, host: String, port: int, autopilot: bool, debug: bool) -> Error:
+func start_client(world_parent: Node, host: String, port: int, autopilot: bool, debug: bool,
+		character: StringName = &"") -> Error:
 	client = NetClient.new(self, world_parent, autopilot, debug)
+	client.wanted_character = character
 	return client.start(host, port)
 
 
@@ -77,6 +79,18 @@ func rpc_request_mode(mode: int) -> void:
 		server.on_request_mode(multiplayer.get_remote_sender_id(), mode)
 
 
+@rpc("any_peer", "call_remote", "reliable", CH_EVENTS)
+func rpc_request_arena(index: int) -> void:
+	if server != null:
+		server.on_request_arena(multiplayer.get_remote_sender_id(), index)
+
+
+@rpc("any_peer", "call_remote", "reliable", CH_EVENTS)
+func rpc_select_character(id: StringName) -> void:
+	if server != null:
+		server.on_select_character(multiplayer.get_remote_sender_id(), id)
+
+
 # --- server -> client -------------------------------------------------------
 
 @rpc("authority", "call_remote", "reliable", CH_EVENTS)
@@ -104,6 +118,12 @@ func rpc_pickups(states: Array) -> void:
 
 
 @rpc("authority", "call_remote", "reliable", CH_EVENTS)
+func rpc_crates(hp: PackedInt32Array) -> void:
+	if client != null:
+		client.on_crates(hp)
+
+
+@rpc("authority", "call_remote", "reliable", CH_EVENTS)
 func rpc_player_left(id: int) -> void:
 	if client != null:
 		client.on_player_left(id)
@@ -122,9 +142,9 @@ func rpc_snapshot(tick: int, states: Array) -> void:
 
 
 @rpc("authority", "call_remote", "unreliable_ordered", CH_SHOTS)
-func rpc_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
+func rpc_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool) -> void:
 	if client != null:
-		client.on_shot(owner_id, seq, origin, facing, weapon_id)
+		client.on_shot(owner_id, seq, origin, facing, weapon_id, dual)
 
 
 @rpc("authority", "call_remote", "unreliable_ordered", CH_SHOTS)

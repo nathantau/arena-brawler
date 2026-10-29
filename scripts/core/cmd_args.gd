@@ -9,6 +9,8 @@ extends RefCounted
 ##   --touch                          show touch controls on desktop
 ##   --mode duel|ffa                  (server / offline) starting match mode, default ffa
 ##   --time-limit S                   (server / offline) match length in seconds (dev/testing)
+##   --arena N                        (server / offline) starting arena index (ArenaLayouts.NAMES)
+##   --character ID                   (client / offline) pick a character, e.g. warden
 
 var server: bool = false
 var port: int = Constants.DEFAULT_PORT
@@ -20,6 +22,8 @@ var autopilot: bool = false
 var net_debug: bool = false
 var match_mode: MatchRules.Mode = MatchRules.Mode.FFA
 var time_limit: float = Constants.MATCH_TIME_LIMIT
+var arena_index: int = 0
+var character: StringName = &""
 
 
 static func parse(args: PackedStringArray) -> CmdArgs:
@@ -50,6 +54,12 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				a.net_debug = true
 			"--mode":
 				a.match_mode = MatchRules.Mode.DUEL if next == "duel" else MatchRules.Mode.FFA
+				i += 1
+			"--character":
+				a.character = StringName(next)
+				i += 1
+			"--arena":
+				a.arena_index = clampi(next.to_int(), 0, ArenaLayouts.count() - 1)
 				i += 1
 			"--time-limit":
 				if next.is_valid_float() and next.to_float() > 0.0:

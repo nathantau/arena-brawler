@@ -155,7 +155,7 @@ func _on_release(finger: int) -> void:
 
 func _process(_delta: float) -> void:
 	# Skill cooldown sweep changes every frame.
-	if visible and player != null and not player.dash.is_ready():
+	if visible and player != null and not player.skill.is_ready():
 		queue_redraw()
 
 
@@ -178,11 +178,11 @@ func _draw() -> void:
 	# Skill + cooldown sweep
 	var sc: Vector2 = _skill_center()
 	draw_circle(sc, SKILL_RADIUS, COLOR_ACTIVE if skill_held else COLOR_IDLE)
-	if player != null and not player.dash.is_ready():
-		var frac: float = player.dash.cooldown_fraction()
+	if player != null and not player.skill.is_ready():
+		var frac: float = 1.0 if player.skill.is_active() else player.skill.cooldown_fraction()
 		draw_arc(sc, SKILL_RADIUS * 0.5, -PI * 0.5, -PI * 0.5 + TAU * frac, SEGMENTS, COLOR_COOLDOWN, SKILL_RADIUS)
 	draw_arc(sc, SKILL_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
-	_label(font, sc, "DASH")
+	_label(font, sc, player.character.skill_name.to_upper() if player != null else "SKILL")
 
 	# Swap
 	var wc: Vector2 = _swap_center()

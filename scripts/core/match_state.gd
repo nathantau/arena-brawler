@@ -4,12 +4,14 @@ extends RefCounted
 ## sends it whole, reliably, on every change; clients only count time_left down for display.
 
 enum Phase { LOBBY, COUNTDOWN, PLAYING, RESULTS }
-enum Field { PHASE, MODE, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, COUNT }
+enum Field { PHASE, MODE, ARENA, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, COUNT }
 ## One results row: [id, kills, deaths].
 enum ResultField { ID, KILLS, DEATHS, COUNT }
 
 var phase: Phase = Phase.LOBBY
 var mode: MatchRules.Mode = MatchRules.Mode.FFA
+## Index into ArenaLayouts.
+var arena_index: int = 0
 ## Seconds left in the current phase (countdown / match clock / results screen). 0 in LOBBY.
 var time_left: float = 0.0
 var time_limit: float = Constants.MATCH_TIME_LIMIT
@@ -48,6 +50,7 @@ func to_array() -> Array:
 	a.resize(Field.COUNT)
 	a[Field.PHASE] = phase
 	a[Field.MODE] = mode
+	a[Field.ARENA] = arena_index
 	a[Field.TIME_LEFT] = time_left
 	a[Field.TIME_LIMIT] = time_limit
 	a[Field.PARTICIPANTS] = PackedInt32Array(participants)
@@ -62,6 +65,7 @@ func to_array() -> Array:
 func apply_array(a: Array) -> bool:
 	if a.size() != Field.COUNT \
 			or typeof(a[Field.PHASE]) != TYPE_INT or typeof(a[Field.MODE]) != TYPE_INT \
+			or typeof(a[Field.ARENA]) != TYPE_INT \
 			or typeof(a[Field.TIME_LEFT]) != TYPE_FLOAT or typeof(a[Field.TIME_LIMIT]) != TYPE_FLOAT \
 			or typeof(a[Field.PARTICIPANTS]) != TYPE_PACKED_INT32_ARRAY \
 			or typeof(a[Field.READY]) != TYPE_PACKED_INT32_ARRAY \
@@ -70,10 +74,12 @@ func apply_array(a: Array) -> bool:
 		return false
 	var p: int = a[Field.PHASE]
 	var m: int = a[Field.MODE]
-	if p < 0 or p >= Phase.size() or not MatchRules.is_valid_mode(m):
+	var arena: int = a[Field.ARENA]
+	if p < 0 or p >= Phase.size() or not MatchRules.is_valid_mode(m) or arena < 0 or arena >= ArenaLayouts.count():
 		return false
 	phase = p as Phase
 	mode = m as MatchRules.Mode
+	arena_index = arena
 	time_left = a[Field.TIME_LEFT]
 	time_limit = a[Field.TIME_LIMIT]
 	participants = _ints(a[Field.PARTICIPANTS])

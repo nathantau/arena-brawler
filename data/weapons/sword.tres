@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"sword"
+display_name = "Arc Blade"
+kind = 2
+damage = 34
+fire_interval = 0.45
+energy_cost = 0
+crit_chance = 0.15
+knockback = 220.0
+color = Color(0.85, 0.95, 1, 1)
+screen_shake = 0.12
+sfx = &"swing"
+melee_range = 70.0
+melee_arc_deg = 140.0
+reflects = true

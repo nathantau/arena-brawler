@@ -2,23 +2,37 @@ extends GutTest
 
 
 func test_layout_rows_are_rectangular() -> void:
-	var width: int = ArenaLayouts.PIT[0].length()
-	for row: String in ArenaLayouts.PIT:
-		assert_eq(row.length(), width, row)
+	for i: int in ArenaLayouts.count():
+		var rows: Array[String] = ArenaLayouts.get_layout(i)
+		var width: int = rows[0].length()
+		for row: String in rows:
+			assert_eq(row.length(), width, "%s: %s" % [ArenaLayouts.NAMES[i], row])
 
 
 func test_layout_is_enclosed() -> void:
-	var rows: Array[String] = ArenaLayouts.PIT
-	assert_eq(rows[0], "#".repeat(rows[0].length()))
-	assert_eq(rows[rows.size() - 1], "#".repeat(rows[0].length()))
-	for row: String in rows:
-		assert_eq(row[0], "#")
-		assert_eq(row[row.length() - 1], "#")
+	for i: int in ArenaLayouts.count():
+		var rows: Array[String] = ArenaLayouts.get_layout(i)
+		assert_eq(rows[0], "#".repeat(rows[0].length()))
+		assert_eq(rows[rows.size() - 1], "#".repeat(rows[0].length()))
+		for row: String in rows:
+			assert_eq(row[0], "#")
+			assert_eq(row[row.length() - 1], "#")
 
 
-func test_layout_has_spawns_for_ffa() -> void:
-	var map := ArenaMap.parse(ArenaLayouts.PIT, Constants.TILE_SIZE)
-	assert_true(map.spawns.size() >= 4)
+func test_layout_has_spawns_for_ffa_and_is_symmetric() -> void:
+	for i: int in ArenaLayouts.count():
+		var rows: Array[String] = ArenaLayouts.get_layout(i)
+		var map := ArenaMap.parse(rows, Constants.TILE_SIZE)
+		assert_true(map.spawns.size() >= Constants.FFA_MAX_PLAYERS, ArenaLayouts.NAMES[i])
+		for y: int in rows.size():
+			for x: int in rows[y].length():
+				assert_eq(rows[y][x], rows[rows.size() - 1 - y][rows[y].length() - 1 - x],
+					"%s not 180° symmetric at %d,%d" % [ArenaLayouts.NAMES[i], x, y])
+
+
+func test_second_arena_has_crates() -> void:
+	assert_eq(ArenaLayouts.count(), 2)
+	assert_true(ArenaMap.parse(ArenaLayouts.FOUNDRY, Constants.TILE_SIZE).crate_spots.size() > 0)
 
 
 func test_parse_merges_wall_runs_and_finds_spawns() -> void:

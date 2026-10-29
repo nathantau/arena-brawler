@@ -7,6 +7,7 @@ const WALL_X: float = 400.0
 var world: Node2D
 var pool: ProjectilePool
 var catalog: WeaponCatalog
+var characters: CharacterCatalog
 
 
 func before_each() -> void:
@@ -24,12 +25,13 @@ func before_each() -> void:
 	pool = ProjectilePool.new()
 	world.add_child(pool)
 	catalog = WeaponCatalog.load_all()
+	characters = CharacterCatalog.load_all()
 
 
-func _player(id: int) -> Player:
+func _player(id: int, character: StringName = &"flicker") -> Player:
 	var p := Player.new()
 	var loadout: Array[WeaponData] = catalog.resolve([&"pistol", &"smg"] as Array[StringName])
-	p.setup(id, 0, Color.WHITE, loadout, null, pool, 7)
+	p.setup(id, 0, Color.WHITE, loadout, null, pool, 7, characters.get_character(character))
 	world.add_child(p)
 	return p
 
@@ -51,8 +53,13 @@ func _inputs(n: int) -> Array[InputFrame]:
 
 func test_replay_from_captured_state_matches() -> void:
 	await wait_physics_frames(2)  # let the wall register in the physics space
-	var a: Player = _player(1)
-	var b: Player = _player(2)
+	for character: StringName in [&"flicker", &"warden", &"twinshot"]:
+		await _check_replay(character)
+
+
+func _check_replay(character: StringName) -> void:
+	var a: Player = _player(1, character)
+	var b: Player = _player(2, character)
 	var inputs: Array[InputFrame] = _inputs(90)
 	var snapshot: Array = []
 	for i: int in inputs.size():
@@ -60,16 +67,20 @@ func test_replay_from_captured_state_matches() -> void:
 		if i == 39:
 			snapshot = a.capture_state()
 	# b = "client": adopt the state the server had after input 40, replay 41..90.
-	assert_true(b.apply_state(snapshot, catalog))
+	assert_true(b.apply_state(snapshot, catalog, characters))
 	for i: int in range(40, inputs.size()):
 		b.simulate(inputs[i], Constants.PHYSICS_DT, true)
 	assert_almost_eq(b.global_position.x, a.global_position.x, 0.01)
 	assert_almost_eq(b.global_position.y, a.global_position.y, 0.01)
 	assert_eq(b.stats.energy, a.stats.energy)
 	assert_eq(b.loadout.active_index, a.loadout.active_index)
-	assert_almost_eq(b.dash.cooldown_remaining, a.dash.cooldown_remaining, 0.0001)
+	assert_almost_eq(b.skill.cooldown_remaining, a.skill.cooldown_remaining, 0.0001)
 	assert_eq(b.last_input_seq, a.last_input_seq)
 	assert_true(a.global_position.x < WALL_X, "walls stopped the player")
+	assert_eq(b.skill.anchor, a.skill.anchor, String(character))
+	a.queue_free()
+	b.queue_free()
+	await wait_physics_frames(1)
 
 
 func test_state_roundtrip() -> void:
@@ -78,11 +89,11 @@ func test_state_roundtrip() -> void:
 	a.velocity = Vector2(5, 6)
 	a.stats.apply_damage(70)
 	a.stats.energy = 33
-	a.dash.try_activate(Vector2.LEFT, a.stats)
+	a.skill.try_activate(Vector2.LEFT, a.global_position, a.stats)
 	a.loadout.swap()
 	a.last_input_seq = 77
 	var b: Player = _player(2)
-	b.apply_state(a.capture_state(), catalog)
+	b.apply_state(a.capture_state(), catalog, characters)
 	assert_eq(b.capture_state().slice(1), a.capture_state().slice(1), "everything but the id")
 
 

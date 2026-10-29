@@ -16,3 +16,5 @@ energy_cost = 1
 crit_chance = 0.05
 knockback = 15.0
 color = Color(0.45, 1, 0.75, 1)
+sfx = &"shot_light"
+screen_shake = 0.04

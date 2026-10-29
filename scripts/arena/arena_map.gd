@@ -6,11 +6,13 @@ const WALL_CHAR: String = "#"
 const SPAWN_CHAR: String = "S"
 const ENERGY_CHAR: String = "E"
 const WEAPON_CHAR: String = "W"
+const CRATE_CHAR: String = "C"
 
 var walls: Array[Rect2] = []
 var spawns: PackedVector2Array = PackedVector2Array()
 var energy_spots: PackedVector2Array = PackedVector2Array()
 var weapon_spots: PackedVector2Array = PackedVector2Array()
+var crate_spots: PackedVector2Array = PackedVector2Array()
 var size: Vector2 = Vector2.ZERO
 
 
@@ -36,6 +38,8 @@ static func parse(rows: Array[String], tile: float) -> ArenaMap:
 				map.energy_spots.append(center)
 			elif c == WEAPON_CHAR:
 				map.weapon_spots.append(center)
+			elif c == CRATE_CHAR:
+				map.crate_spots.append(center)
 			x += 1
 	map.size = Vector2(width * tile, rows.size() * tile)
 	return map

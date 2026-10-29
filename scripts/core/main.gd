@@ -32,6 +32,7 @@ func _ready() -> void:
 func _start_server() -> void:
 	Engine.max_fps = Constants.SERVER_MAX_FPS
 	_server_arena = Arena.new(Arena.Mode.SERVER, randi(), args.match_mode, args.time_limit)
+	_server_arena.match_state.arena_index = args.arena_index
 	add_child(_server_arena)
 	var err: Error = session.start_server(_server_arena, args.port, args.bots, args.net_debug)
 	if err != OK:
@@ -44,6 +45,7 @@ func _start_offline() -> void:
 	if _offline_arena != null:
 		_offline_arena.queue_free()
 	_offline_arena = Arena.new(Arena.Mode.OFFLINE, Constants.DEFAULT_MATCH_SEED, args.match_mode, args.time_limit)
+	_offline_arena.match_state.arena_index = args.arena_index
 	add_child(_offline_arena)
 	var input := LocalInput.new()
 	input.autopilot = args.autopilot
@@ -51,12 +53,14 @@ func _start_offline() -> void:
 	_offline_arena.attach_local_view(me, input)
 	for i: int in Constants.BOT_COUNT:
 		_offline_arena.add_bot(Constants.BOT_ID_BASE + i, _offline_arena.free_color_index())
+	if args.character != &"":
+		_offline_arena.select_character(me, args.character)
 	if args.autopilot:
 		_offline_arena.referee.set_ready(me.player_id, true)
 
 
 func _join(host: String, port: int) -> void:
-	var err: Error = session.start_client(self, host, port, args.autopilot, args.net_debug)
+	var err: Error = session.start_client(self, host, port, args.autopilot, args.net_debug, args.character)
 	if err != OK:
 		_on_client_disconnected("Could not start client: %s" % error_string(err))
 		return

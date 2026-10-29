@@ -29,6 +29,7 @@ func get_input(player: Player, delta: float) -> InputFrame:
 	_frame.move_vec = _wander_dir * Constants.BOT_MOVE_SCALE
 	_frame.aim_vec = Vector2.ZERO
 	_frame.fire = false
+	_frame.skill = false
 
 	var target: Player = _nearest_visible_enemy(player)
 	if target != null:
@@ -42,6 +43,8 @@ func get_input(player: Player, delta: float) -> InputFrame:
 		var err: float = deg_to_rad(Constants.BOT_AIM_ERROR_DEG)
 		_frame.aim_vec = dir.rotated(rng.randf_range(-err, err))
 		_frame.fire = true
+		# Skills are edge-triggered: a one-frame press now and then.
+		_frame.skill = rng.randf() < Constants.BOT_SKILL_CHANCE_PER_SEC * delta
 	return _frame
 
 

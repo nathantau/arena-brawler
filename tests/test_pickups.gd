@@ -82,7 +82,7 @@ func test_pickup_collected_then_respawns() -> void:
 		if s.kind == PickupField.Kind.WEAPON:
 			spot = s
 			break
-	assert_has(Arena.PICKUP_WEAPONS, spot.weapon_id)
+	assert_has(arena.catalog.pickup_ids(), spot.weapon_id)
 	p.global_position = spot.pos
 	arena.pickups.tick(Constants.PHYSICS_DT, arena.players)
 	assert_false(spot.available)
@@ -98,7 +98,7 @@ func test_pickup_state_mirrors_to_client_field() -> void:
 	var mirror := PickupField.new()
 	mirror.authoritative = false
 	add_child_autofree(mirror)
-	mirror.setup(arena.map, arena.catalog, Arena.PICKUP_WEAPONS, 0)
+	mirror.setup(arena.map, arena.catalog, arena.catalog.pickup_ids(), 0)
 	mirror.apply_array(arena.pickups.to_array())
 	for i: int in mirror.spots.size():
 		assert_eq(mirror.spots[i].available, arena.pickups.spots[i].available)
@@ -146,3 +146,39 @@ func test_duel_countdown_seats_two_and_benches_the_rest() -> void:
 	assert_true(arena.get_player(Constants.BOT_ID_BASE + 2).dead)
 	assert_eq(arena.scores.deaths_of(Constants.BOT_ID_BASE + 1), 0, "sitting out isn't a death")
 	assert_ne(me.global_position, arena.get_player(Constants.BOT_ID_BASE).global_position)
+
+
+func test_lobby_arena_switch_rebuilds_and_respawns() -> void:
+	var arena := _arena()
+	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	assert_eq(arena.crates.crates.size(), 0, "Pit has no crates")
+	arena.referee.set_arena(1)
+	assert_eq(arena.layout_index, 1)
+	assert_true(arena.crates.crates.size() > 0)
+	assert_true(p.dead, "off the field until respawned on the new map")
+	await wait_physics_frames(2)
+	assert_false(p.dead)
+	assert_true(arena.map.spawns.has(p.global_position))
+
+
+func test_character_pick_only_in_lobby() -> void:
+	var arena := _arena()
+	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	arena.select_character(p, &"warden")
+	assert_eq(p.character.id, &"warden")
+	arena.match_state.phase = MatchState.Phase.PLAYING
+	arena.select_character(p, &"twinshot")
+	assert_eq(p.character.id, &"warden")
+
+
+func test_crates_reset_at_countdown() -> void:
+	var arena := _arena(MatchRules.Mode.DUEL)
+	arena.referee.set_arena(1)
+	arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	arena.add_bot(Constants.BOT_ID_BASE, 1)
+	var crate: Crate = arena.crates.crates[0]
+	crate.take_damage(Constants.CRATE_HP)
+	assert_false(crate.is_intact())
+	arena.referee.set_ready(1, true)
+	arena.referee.tick(Constants.PHYSICS_DT, [1] as Array[int], [Constants.BOT_ID_BASE] as Array[int], arena.scores)
+	assert_true(crate.is_intact())

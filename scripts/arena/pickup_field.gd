@@ -6,6 +6,8 @@ extends Node2D
 ## are identical on every peer and never go over the wire.
 
 signal changed
+## Cosmetic: a pickup was taken (authoritative: on collection; clients: when the server says so).
+signal collected(at: Vector2, kind: Kind)
 
 enum Kind { ENERGY, WEAPON }
 ## Wire format per spot: [available, weapon_id].
@@ -49,6 +51,7 @@ func setup(map: ArenaMap, catalog: WeaponCatalog, weapon_pool: Array[StringName]
 	_catalog = catalog
 	_weapon_pool = weapon_pool
 	_seed = p_seed
+	spots.clear()
 	for pos: Vector2 in map.energy_spots:
 		_add_spot(Kind.ENERGY, pos)
 	for pos: Vector2 in map.weapon_spots:
@@ -107,6 +110,7 @@ func tick(delta: float, players: Array[Player]) -> void:
 				s.available = false
 				s.timer = respawn_time(s.kind)
 				dirty = true
+				collected.emit(s.pos, s.kind)
 				break
 	if dirty:
 		changed.emit()
@@ -126,6 +130,8 @@ func apply_array(a: Array) -> void:
 			continue
 		var r: Array = row
 		if typeof(r[Field.AVAILABLE]) == TYPE_BOOL:
+			if spots[i].available and not r[Field.AVAILABLE]:
+				collected.emit(spots[i].pos, spots[i].kind)
 			spots[i].available = r[Field.AVAILABLE]
 		if typeof(r[Field.WEAPON_ID]) == TYPE_STRING_NAME:
 			spots[i].weapon_id = r[Field.WEAPON_ID]

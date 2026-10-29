@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/character_data.gd" id="1_cd"]
+
+[resource]
+script = ExtResource("1_cd")
+id = &"warden"
+display_name = "Warden"
+skill_name = "Barrier"
+max_hp = 120
+max_armor = 60
+max_energy = 180
+move_speed = 245.0
+skill = 1
+skill_cooldown = 7.0
+skill_duration = 3.0
+shield_width = 110.0
+shield_distance = 44.0

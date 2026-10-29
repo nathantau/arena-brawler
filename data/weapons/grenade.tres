@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"grenade"
+display_name = "Hopper"
+damage = 45
+fire_interval = 0.9
+spread_deg = 3.0
+projectile_speed = 620.0
+projectile_range = 620.0
+projectile_radius = 7.0
+energy_cost = 10
+knockback = 240.0
+color = Color(0.6, 1, 0.35, 1)
+screen_shake = 0.15
+sfx = &"shot_launcher"
+splash_radius = 85.0
+splash_edge_scale = 0.4
+bounces = 4
+bounce_damping = 0.7
+drag = 1.2

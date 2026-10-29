@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"laser"
+display_name = "Prism Lance"
+kind = 1
+damage = 5
+fire_interval = 0.08
+projectile_range = 520.0
+projectile_radius = 3.0
+energy_cost = 2
+knockback = 8.0
+color = Color(0.95, 0.4, 1, 1)
+screen_shake = 0.02
+sfx = &"laser"

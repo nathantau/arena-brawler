@@ -10,6 +10,8 @@ var local_id: int = 0
 var local_player: Player
 var autopilot: bool = false
 var debug: bool = false
+## Requested from the server on joining (--character).
+var wanted_character: StringName = &""
 
 var _history := InputHistory.new()
 var _clock := RenderClock.new()
@@ -82,11 +84,17 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 		session.rpc_set_ready.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, is_ready))
 	arena.mode_requested.connect(func(mode: MatchRules.Mode) -> void:
 		session.rpc_request_mode.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, mode))
+	arena.arena_requested.connect(func(index: int) -> void:
+		session.rpc_request_arena.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, index))
+	arena.character_requested.connect(func(id: StringName) -> void:
+		session.rpc_select_character.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, id))
 	for entry: Array in roster:
 		_add_player(entry[0], entry[1], entry[2])
 		arena.scores.kills[entry[0]] = entry[3]
 		arena.scores.deaths[entry[0]] = entry[4]
 	print("[client] joined as %d (%d players)" % [local_id, arena.players.size()])
+	if wanted_character != &"":
+		arena.character_requested.emit(wanted_character)
 	if autopilot:
 		arena.ready_requested.emit(true)
 
@@ -113,6 +121,11 @@ func on_pickups(states: Array) -> void:
 		arena.pickups.apply_array(states)
 
 
+func on_crates(hp: PackedInt32Array) -> void:
+	if arena != null:
+		arena.crates.apply_array(hp)
+
+
 func on_player_left(id: int) -> void:
 	if arena != null:
 		arena.remove_player(id)
@@ -121,7 +134,7 @@ func on_player_left(id: int) -> void:
 
 func on_kill(killer_id: int, victim_id: int) -> void:
 	if arena != null:
-		arena.scores.register_kill(killer_id, victim_id)
+		arena.report_kill(killer_id, victim_id)
 		if debug:
 			print("[client %d] kill: %d -> %d (my k/d %d/%d)" % [local_id, killer_id, victim_id,
 				arena.scores.kills_of(local_id), arena.scores.deaths_of(local_id)])
@@ -143,25 +156,26 @@ func on_snapshot(tick: int, states: Array) -> void:
 	_has_pending = true
 
 
-func on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
+func on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool) -> void:
 	if arena == null:
 		return
 	var weapon: WeaponData = arena.catalog.get_weapon(weapon_id)
-	if weapon == null:
-		return
-	arena.projectiles.fire_shot(owner_id, seq, origin, facing, weapon, arena.match_seed)
 	var shooter: Player = arena.get_player(owner_id)
-	if shooter != null:
-		shooter.play_recoil()
+	if weapon == null or shooter == null:
+		return
+	arena.projectiles.fire_shot(owner_id, seq, origin, facing, weapon, arena.match_seed, dual,
+		shooter.character.dual_offset)
+	shooter.play_recoil()
 
 
-func on_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, _damage: int, _crit: bool, at: Vector2) -> void:
+func on_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
 	if arena == null:
 		return
 	arena.projectiles.kill_shot(owner_id, shot_seq, pellet, at)
 	var victim: Player = arena.get_player(victim_id)
 	if victim != null:
 		victim.flash()
+	arena.report_hit(victim_id, damage, crit, at)
 
 
 # --- per frame --------------------------------------------------------------
@@ -198,7 +212,7 @@ func _apply_snapshot(states: Array) -> void:
 		if p == local_player:
 			_reconcile(state)
 		else:
-			p.apply_state(state, arena.catalog)
+			p.apply_state(state, arena.catalog, arena.characters)
 
 
 ## Rewind the local player to the server's state for the last input it processed, then
@@ -208,7 +222,7 @@ func _reconcile(state: Array) -> void:
 	var acked: int = state[Player.StateField.LAST_INPUT_SEQ]
 	_history.ack(acked)
 	var before: Vector2 = local_player.global_position
-	local_player.apply_state(state, arena.catalog)
+	local_player.apply_state(state, arena.catalog, arena.characters)
 	for i: int in _history.count():
 		local_player.simulate(_history.at(i), Constants.PHYSICS_DT, true)
 	var error: Vector2 = before - local_player.global_position

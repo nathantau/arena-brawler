@@ -19,6 +19,13 @@ func set_mode(mode: MatchRules.Mode) -> void:
 	changed.emit()
 
 
+func set_arena(index: int) -> void:
+	if state.phase != MatchState.Phase.LOBBY or index == state.arena_index or index < 0 or index >= ArenaLayouts.count():
+		return
+	state.arena_index = index
+	changed.emit()
+
+
 func set_ready(id: int, is_ready: bool) -> void:
 	if state.phase != MatchState.Phase.LOBBY or state.ready.has(id) == is_ready:
 		return

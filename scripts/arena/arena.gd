@@ -1,8 +1,9 @@
 class_name Arena
 extends Node2D
-## The game world: map, players, projectiles, pickups, scoring, respawns and the match loop.
-## Same class in every mode: OFFLINE (local vs bots), SERVER (authoritative, headless) and
-## CLIENT (predicted view; match state and pickups mirrored from the server).
+## The game world: map, players, projectiles, pickups, crates, scoring, respawns and the
+## match loop. Same class in every mode: OFFLINE (local vs bots), SERVER (authoritative,
+## headless) and CLIENT (predicted view; match state, pickups and crates mirrored from the
+## server). Effects, sound and camera shake exist only where there's a local view.
 
 signal kill_registered(killer_id: int, victim_id: int)
 ## Match state or roster changed (UI refresh; the server re-broadcasts the state).
@@ -11,15 +12,19 @@ signal match_updated
 ## the MatchController; online the client forwards them to the server.
 signal ready_requested(is_ready: bool)
 signal mode_requested(mode: MatchRules.Mode)
-signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName)
+signal arena_requested(index: int)
+signal character_requested(id: StringName)
+signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool)
+## Authoritative damage (offline / server).
 signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2)
+## Cosmetic: damage landed, on every peer (authoritative from player_hit, clients from the server).
+signal hit_landed(victim_id: int, damage: int, crit: bool, at: Vector2)
 
 enum Mode { OFFLINE, SERVER, CLIENT }
 
 ## Everyone starts with just the free sidearm; better guns come from pickups.
 const DEFAULT_LOADOUT: Array[StringName] = [&"pistol"]
 const BOT_LOADOUT: Array[StringName] = [&"bot_blaster"]
-const PICKUP_WEAPONS: Array[StringName] = [&"smg", &"shotgun"]
 const PLAYER_COLORS: Array[Color] = [
 	Color(0.35, 0.75, 1.0), Color(0.95, 0.45, 0.4), Color(0.75, 0.5, 0.95),
 	Color(0.5, 0.9, 0.45), Color(1.0, 0.8, 0.3), Color(0.3, 0.9, 0.85),
@@ -33,6 +38,29 @@ const WALL_TOP_COLOR: Color = Color(0.42, 0.45, 0.55)
 const WALL_TOP_INSET: float = 4.0
 const GRID_LINE_WIDTH: float = 1.0
 const PROJECTILE_Z: int = 1
+const EFFECTS_Z: int = 2
+## Camera shake: offset = SHAKE_MAX_OFFSET * trauma², trauma decays per second.
+const SHAKE_MAX_OFFSET: float = 14.0
+const SHAKE_DECAY: float = 2.5
+const SHAKE_HURT_PER_DAMAGE: float = 0.012
+const SHAKE_EXPLOSION: float = 0.6
+const SHAKE_EXPLOSION_RANGE: float = 500.0
+const HAPTIC_EXPLOSION_RANGE: float = 200.0
+const BURST_HIT_COUNT: int = 6
+const BURST_HIT_SPEED: float = 220.0
+const BURST_DEATH_COUNT: int = 28
+const BURST_DEATH_SPEED: float = 320.0
+const BURST_EXPLOSION_COUNT: int = 30
+const BURST_CRATE_COUNT: int = 16
+const BURST_PICKUP_COUNT: int = 12
+const BURST_SKILL_COUNT: int = 10
+const BURST_MUZZLE_COUNT: int = 4
+const BURST_MUZZLE_SPEED: float = 260.0
+const BURST_MUZZLE_SPREAD: float = 0.8
+const PARTICLE_SIZE: float = 4.0
+const PARTICLE_LIFE: float = 0.35
+const CRATE_DEBRIS_COLOR: Color = Color(0.55, 0.4, 0.25)
+const BEAM_WIDTH_SCALE: float = 2.0
 
 var mode: Mode
 var match_seed: int
@@ -41,18 +69,26 @@ var players: Array[Player] = []
 var local_player: Player
 var projectiles: ProjectilePool
 var pickups: PickupField
+var crates: CrateField
+var layout_index: int = -1
 ## Runs the match (null on clients, where the server does); match_state is always set.
 var referee: MatchController
 var match_state: MatchState
 var catalog: WeaponCatalog
+var characters: CharacterCatalog
 var scores := ScoreBoard.new()
 var camera: Camera2D
 var hud: Hud
+var effects: Effects
+var sfx: Sfx
 
 var _by_id: Dictionary[int, Player] = {}
 var _threats := PackedVector2Array()
 var _human_ids: Array[int] = []
 var _bot_ids: Array[int] = []
+var _walls: StaticBody2D
+var _trauma: float = 0.0
+var _shake_rng := RandomNumberGenerator.new()
 
 
 func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MATCH_SEED,
@@ -61,7 +97,7 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 	match_seed = p_match_seed
 	name = "Arena"
 	catalog = WeaponCatalog.load_all()
-	map = ArenaMap.parse(ArenaLayouts.PIT, Constants.TILE_SIZE)
+	characters = CharacterCatalog.load_all()
 	projectiles = ProjectilePool.new()
 	projectiles.name = "Projectiles"
 	projectiles.authoritative = mode != Mode.CLIENT
@@ -69,7 +105,8 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 	pickups = PickupField.new()
 	pickups.name = "Pickups"
 	pickups.authoritative = mode != Mode.CLIENT
-	pickups.setup(map, catalog, PICKUP_WEAPONS, match_seed)
+	crates = CrateField.new()
+	crates.name = "Crates"
 	if mode == Mode.CLIENT:
 		match_state = MatchState.new()
 	else:
@@ -77,19 +114,40 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 		match_state = referee.state
 		match_state.mode = match_mode
 		match_state.time_limit = time_limit
-		referee.changed.connect(match_updated.emit)
+		referee.changed.connect(_on_referee_changed)
 		referee.phase_changed.connect(_on_phase_changed)
 		ready_requested.connect(func(is_ready: bool) -> void:
 			if local_player != null:
 				referee.set_ready(local_player.player_id, is_ready))
 		mode_requested.connect(referee.set_mode)
+		arena_requested.connect(referee.set_arena)
+		character_requested.connect(func(id: StringName) -> void:
+			if local_player != null:
+				select_character(local_player, id))
 
 
 func _ready() -> void:
-	_build_walls()
+	add_child(crates)
 	add_child(pickups)
 	add_child(projectiles)
-	projectiles.player_hit.connect(player_hit.emit)
+	projectiles.player_hit.connect(_on_projectile_hit)
+	_load_layout(match_state.arena_index)
+
+
+## Build walls, crates and pickups for a layout. Authoritative callers then respawn players.
+func _load_layout(index: int) -> void:
+	layout_index = index
+	map = ArenaMap.parse(ArenaLayouts.get_layout(index), Constants.TILE_SIZE)
+	if _walls != null:
+		remove_child(_walls)
+		_walls.queue_free()
+	_build_walls()
+	crates.setup(map)
+	pickups.setup(map, catalog, catalog.pickup_ids(), match_seed)
+	projectiles.clear()
+	if camera != null:
+		_set_camera_limits()
+	queue_redraw()
 
 
 func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl: PlayerController,
@@ -98,7 +156,10 @@ func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl:
 	p.name = "Player%d" % id
 	p.is_bot = is_bot
 	var color: Color = PLAYER_COLORS[color_index % PLAYER_COLORS.size()]
-	p.setup(id, color_index, color, catalog.resolve(loadout_ids), ctrl, projectiles, match_seed)
+	var character: CharacterData = characters.default_character()
+	if is_bot:
+		character = characters.ordered[id % characters.ordered.size()]
+	p.setup(id, color_index, color, catalog.resolve(loadout_ids), ctrl, projectiles, match_seed, character)
 	add_child(p)
 	p.global_position = _pick_spawn_for(p)
 	p.frozen = match_state.inputs_locked()
@@ -106,6 +167,7 @@ func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl:
 		p.sit_out()
 	p.died.connect(_on_player_died)
 	p.shot_fired.connect(_on_player_shot)
+	p.skill_used.connect(_on_skill_used)
 	players.append(p)
 	_by_id[id] = p
 	if is_bot:
@@ -153,14 +215,36 @@ func player_color(id: int) -> Color:
 	return p.display_color if p != null else Color.GRAY
 
 
+## Lobby only (authoritative): switch a player's character. Takes effect immediately.
+func select_character(p: Player, id: StringName) -> void:
+	var c: CharacterData = characters.get_character(id)
+	if c == null or c == p.character or match_state.phase != MatchState.Phase.LOBBY:
+		return
+	p.set_character(c)
+	match_updated.emit()
+
+
 ## Client: adopt the server's match state, running phase side effects on a phase change.
 func apply_match_state(a: Array) -> void:
 	var before: MatchState.Phase = match_state.phase
 	if not match_state.apply_array(a):
 		return
+	if match_state.arena_index != layout_index:
+		_load_layout(match_state.arena_index)
 	if match_state.phase != before:
 		_on_phase_changed(match_state.phase)
 	match_updated.emit()
+
+
+## Client: the server reported damage (cosmetic only).
+func report_hit(victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
+	hit_landed.emit(victim_id, damage, crit, at)
+
+
+## Client: the server reported a kill.
+func report_kill(killer_id: int, victim_id: int) -> void:
+	scores.register_kill(killer_id, victim_id)
+	kill_registered.emit(killer_id, victim_id)
 
 
 ## Lowest palette index not used by a current player.
@@ -182,10 +266,7 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	camera = Camera2D.new()
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = Constants.CAMERA_SMOOTHING
-	camera.limit_left = 0
-	camera.limit_top = 0
-	camera.limit_right = int(map.size.x)
-	camera.limit_bottom = int(map.size.y)
+	_set_camera_limits()
 	add_child(camera)
 	camera.global_position = p.global_position
 	camera.reset_smoothing()
@@ -212,6 +293,107 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 
 	input.arena = self
 	input.touch = touch
+	_attach_effects()
+
+
+func _set_camera_limits() -> void:
+	camera.limit_left = 0
+	camera.limit_top = 0
+	camera.limit_right = int(map.size.x)
+	camera.limit_bottom = int(map.size.y)
+
+
+func add_shake(amount: float) -> void:
+	_trauma = clampf(_trauma + amount, 0.0, 1.0)
+
+
+func _attach_effects() -> void:
+	effects = Effects.new()
+	effects.name = "Effects"
+	effects.z_index = EFFECTS_Z
+	add_child(effects)
+	sfx = Sfx.new()
+	sfx.name = "Sfx"
+	sfx.listener = local_player
+	add_child(sfx)
+	projectiles.shot_spawned.connect(_fx_shot)
+	projectiles.beam_drawn.connect(func(from: Vector2, to: Vector2, w: WeaponData) -> void:
+		effects.beam(from, to, w.color, w.projectile_radius * BEAM_WIDTH_SCALE))
+	projectiles.swung.connect(func(origin: Vector2, facing: Vector2, w: WeaponData) -> void:
+		effects.swing(origin, facing, w.melee_range, w.melee_arc_deg, w.color))
+	projectiles.exploded.connect(_fx_explosion)
+	hit_landed.connect(_fx_hit)
+	kill_registered.connect(_fx_kill)
+	pickups.collected.connect(func(at: Vector2, _kind: PickupField.Kind) -> void:
+		effects.burst(at, Color.WHITE, BURST_PICKUP_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE, PARTICLE_LIFE)
+		sfx.play(&"pickup", at))
+	crates.destroyed.connect(func(at: Vector2) -> void:
+		effects.burst(at, CRATE_DEBRIS_COLOR, BURST_CRATE_COUNT, BURST_DEATH_SPEED, PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 1.5)
+		sfx.play(&"crate", at))
+
+
+func _fx_shot(owner_id: int, origin: Vector2, facing: Vector2, w: WeaponData) -> void:
+	var muzzle: Vector2 = origin + facing * (Constants.PLAYER_RADIUS + Constants.MUZZLE_OFFSET)
+	effects.burst(muzzle, w.color, BURST_MUZZLE_COUNT, BURST_MUZZLE_SPEED, PARTICLE_SIZE * 0.6, PARTICLE_LIFE * 0.4,
+		facing, BURST_MUZZLE_SPREAD)
+	sfx.play(w.sfx, origin)
+	if local_player != null and owner_id == local_player.player_id:
+		add_shake(w.screen_shake)
+
+
+func _fx_explosion(at: Vector2, radius: float, color: Color) -> void:
+	effects.ring(at, radius, color)
+	effects.burst(at, color, BURST_EXPLOSION_COUNT, BURST_DEATH_SPEED, PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 1.5)
+	sfx.play(&"explosion", at)
+	if local_player != null:
+		var d: float = local_player.global_position.distance_to(at)
+		add_shake(SHAKE_EXPLOSION * clampf(1.0 - d / SHAKE_EXPLOSION_RANGE, 0.0, 1.0))
+		if d < HAPTIC_EXPLOSION_RANGE:
+			Input.vibrate_handheld(Constants.HAPTIC_EXPLOSION_MS)
+
+
+func _fx_hit(victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
+	var victim: Player = get_player(victim_id)
+	var color: Color = victim.display_color if victim != null else Color.WHITE
+	effects.burst(at, color, BURST_HIT_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE, PARTICLE_LIFE)
+	effects.damage_number(at, damage, crit)
+	if victim != null and victim == local_player:
+		sfx.play(&"hurt")
+		add_shake(SHAKE_HURT_PER_DAMAGE * damage)
+	else:
+		sfx.play(&"crit" if crit else &"hit", at)
+
+
+func _fx_kill(killer_id: int, victim_id: int) -> void:
+	var victim: Player = get_player(victim_id)
+	if victim != null:
+		effects.burst(victim.global_position, victim.display_color, BURST_DEATH_COUNT, BURST_DEATH_SPEED,
+			PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 2.0)
+		sfx.play(&"death", victim.global_position)
+	if local_player != null and killer_id == local_player.player_id:
+		Input.vibrate_handheld(Constants.HAPTIC_KILL_MS)
+
+
+func _on_skill_used(user: Player) -> void:
+	if effects == null:
+		return
+	effects.burst(user.global_position, user.display_color, BURST_SKILL_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE,
+		PARTICLE_LIFE)
+	match user.character.skill:
+		CharacterData.SkillKind.DASH:
+			sfx.play(&"dash", user.global_position)
+		CharacterData.SkillKind.SHIELD:
+			sfx.play(&"shield", user.global_position)
+		CharacterData.SkillKind.DUAL_WIELD:
+			sfx.play(&"dual", user.global_position)
+
+
+func _process(delta: float) -> void:
+	if camera == null:
+		return
+	_trauma = maxf(0.0, _trauma - SHAKE_DECAY * delta)
+	var amount: float = _trauma * _trauma * SHAKE_MAX_OFFSET
+	camera.offset = Vector2(_shake_rng.randf_range(-1.0, 1.0), _shake_rng.randf_range(-1.0, 1.0)) * amount
 
 
 func _physics_process(delta: float) -> void:
@@ -244,9 +426,18 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 			projectiles.clear()
 			if mode != Mode.CLIENT:
 				pickups.reset()
+				crates.reset()
 				_place_participants()
 		MatchState.Phase.RESULTS:
 			projectiles.clear()
+	if sfx != null:
+		match phase:
+			MatchState.Phase.COUNTDOWN:
+				sfx.play(&"countdown")
+			MatchState.Phase.PLAYING:
+				sfx.play(&"go")
+			MatchState.Phase.RESULTS:
+				sfx.play(&"results")
 	var locked: bool = match_state.inputs_locked()
 	for p: Player in players:
 		p.frozen = locked
@@ -271,17 +462,34 @@ func _pick_spawn_for(who: Player) -> Vector2:
 	return ArenaMap.pick_spawn(map.spawns, _threats)
 
 
+## Authoritative: re-broadcast, and switch layout (everyone respawns) if the lobby picked another.
+func _on_referee_changed() -> void:
+	if match_state.arena_index != layout_index:
+		_load_layout(match_state.arena_index)
+		for p: Player in players:
+			p.sit_out()
+	match_updated.emit()
+
+
+func _on_projectile_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool,
+		at: Vector2) -> void:
+	player_hit.emit(owner_id, shot_seq, pellet, victim_id, damage, crit, at)
+	hit_landed.emit(victim_id, damage, crit, at)
+
+
 func _on_player_died(victim: Player, killer_id: int) -> void:
 	scores.register_kill(killer_id, victim.player_id)
 	kill_registered.emit(killer_id, victim.player_id)
 
 
-func _on_player_shot(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
-	shot_fired.emit(shooter.player_id, seq, origin, facing, weapon_id)
+func _on_player_shot(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName,
+		dual: bool) -> void:
+	shot_fired.emit(shooter.player_id, seq, origin, facing, weapon_id, dual)
 
 
 func _build_walls() -> void:
 	var body := StaticBody2D.new()
+	_walls = body
 	body.name = "Walls"
 	body.collision_layer = Constants.LAYER_WALLS
 	body.collision_mask = 0

@@ -34,6 +34,7 @@ func start(port: int, bot_count: int) -> Error:
 	arena.player_hit.connect(_on_hit)
 	arena.match_updated.connect(_on_match_updated)
 	arena.pickups.changed.connect(_on_pickups_changed)
+	arena.crates.changed.connect(_on_crates_changed)
 	for i: int in bot_count:
 		arena.add_bot(Constants.BOT_ID_BASE + i, arena.free_color_index())
 	print("[server] listening on UDP %d (seed %d, %d bots, %s)" % [port, arena.match_seed, bot_count,
@@ -79,6 +80,17 @@ func on_request_mode(peer_id: int, mode: int) -> void:
 		arena.referee.set_mode(mode as MatchRules.Mode)
 
 
+func on_request_arena(peer_id: int, index: int) -> void:
+	if _queues.has(peer_id):
+		arena.referee.set_arena(index)
+
+
+func on_select_character(peer_id: int, id: StringName) -> void:
+	var p: Player = arena.get_player(peer_id)
+	if p != null:
+		arena.select_character(p, id)
+
+
 func _on_peer_connected(id: int) -> void:
 	NetSession.disable_throttle((session.multiplayer.multiplayer_peer as ENetMultiplayerPeer).get_peer(id))
 	var queue := NetInputQueue.new()
@@ -87,6 +99,7 @@ func _on_peer_connected(id: int) -> void:
 	session.rpc_welcome.rpc_id(id, id, arena.match_seed, tick, _roster())
 	session.rpc_match_state.rpc_id(id, arena.match_state.to_array())
 	session.rpc_pickups.rpc_id(id, arena.pickups.to_array())
+	session.rpc_crates.rpc_id(id, arena.crates.to_array())
 	for peer: int in session.multiplayer.get_peers():
 		if peer != id:
 			session.rpc_player_joined.rpc_id(peer, id, p.color_index, false)
@@ -107,11 +120,11 @@ func _roster() -> Array:
 	return roster
 
 
-func _on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
+func _on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool) -> void:
 	# The shooter already predicted this shot locally.
 	for peer: int in session.multiplayer.get_peers():
 		if peer != owner_id:
-			session.rpc_shot.rpc_id(peer, owner_id, seq, origin, facing, weapon_id)
+			session.rpc_shot.rpc_id(peer, owner_id, seq, origin, facing, weapon_id, dual)
 
 
 func _on_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
@@ -138,6 +151,11 @@ func _on_pickups_changed() -> void:
 			if s.available:
 				available += 1
 		print("[server] pickups %d/%d available" % [available, arena.pickups.spots.size()])
+
+
+func _on_crates_changed() -> void:
+	if not session.multiplayer.get_peers().is_empty():
+		session.rpc_crates.rpc(arena.crates.to_array())
 
 
 func _on_kill(killer_id: int, victim_id: int) -> void:

@@ -53,8 +53,15 @@ func _draw() -> void:
 		draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, COLOR_TEXT if active else COLOR_DIM)
 		pos.y += FONT_SIZE + TEXT_PAD
 
-	var dash_text: String = "Dash ready" if player.dash.is_ready() else "Dash %.1fs" % player.dash.cooldown_remaining
-	draw_string(font, pos, dash_text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, COLOR_TEXT if player.dash.is_ready() else COLOR_DIM)
+	var sk: CharacterSkill = player.skill
+	var skill_text: String
+	if sk.is_active():
+		skill_text = "%s active %.1fs" % [player.character.skill_name, sk.active_remaining]
+	elif sk.is_ready():
+		skill_text = "%s ready" % player.character.skill_name
+	else:
+		skill_text = "%s %.1fs" % [player.character.skill_name, sk.cooldown_remaining]
+	draw_string(font, pos, skill_text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, COLOR_TEXT if sk.is_ready() else COLOR_DIM)
 
 	var kd: String = "Kills %d   Deaths %d" % [scores.kills_of(player.player_id), scores.deaths_of(player.player_id)]
 	draw_string(font, Vector2(0.0, MARGIN.y + BIG_FONT_SIZE), kd, HORIZONTAL_ALIGNMENT_CENTER, size.x, BIG_FONT_SIZE, COLOR_TEXT)

@@ -5,13 +5,15 @@ extends CharacterBody2D
 ## Players collide with walls only (not each other), which keeps prediction exact.
 
 signal died(victim: Player, killer_id: int)
-signal shot_fired(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName)
+signal shot_fired(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool)
+## Predicted/authoritative skill activation (not emitted during replay). For effects/SFX.
+signal skill_used(user: Player)
 
 ## Layout of capture_state() / apply_state() arrays sent in snapshots.
 enum StateField {
 	ID, POSITION, VELOCITY, FACING,
 	HP, ARMOR, ENERGY, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
-	DASH_COOLDOWN, DASH_ACTIVE, DASH_DIRECTION,
+	CHARACTER, SKILL_COOLDOWN, SKILL_ACTIVE, SKILL_DIRECTION, SKILL_ANCHOR,
 	ACTIVE_SLOT, WEAPON_IDS, WEAPON_COOLDOWNS,
 	PREV_SKILL, PREV_SWAP, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ,
 	COUNT,
@@ -35,6 +37,10 @@ const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
 const COLOR_ARMOR: Color = Color(0.7, 0.75, 0.85)
 const COLOR_BAR_BG: Color = Color(0, 0, 0, 0.5)
 const COLOR_TARGET: Color = Color(1, 0.3, 0.3, 0.9)
+## Small emblem inside the body so characters are told apart at a glance.
+const EMBLEM_SIZE: float = 6.0
+const EMBLEM_DARKEN: float = 0.45
+const DUAL_GLOW_WIDTH: float = 3.0
 
 var player_id: int = 0
 var color_index: int = 0
@@ -43,11 +49,12 @@ var is_local: bool = false
 var is_bot: bool = false
 ## Countdown / results screen: inputs are ignored (timers still run).
 var frozen: bool = false
+var character: CharacterData
 var stats := PlayerStats.new()
 var loadout: Loadout
 ## Loadout restored on every respawn (pickups are lost on death).
 var default_weapons: Array[WeaponData] = []
-var dash := DashSkill.new()
+var skill := CharacterSkill.new()
 var facing: Vector2 = Vector2.RIGHT
 ## Null for client-side remote players (they are positioned by interpolation).
 var controller: PlayerController
@@ -62,6 +69,7 @@ var targeted: bool = false
 var visual_offset: Vector2 = Vector2.ZERO
 
 var _shape: CollisionShape2D
+var _shield := ShieldWall.new()
 var _prev_skill: bool = false
 var _prev_swap: bool = false
 var _hit_flash: float = 0.0
@@ -69,7 +77,7 @@ var _recoil: float = 0.0
 
 
 func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData], ctrl: PlayerController,
-		pool: ProjectilePool, p_match_seed: int) -> void:
+		pool: ProjectilePool, p_match_seed: int, p_character: CharacterData) -> void:
 	player_id = id
 	color_index = p_color_index
 	display_color = color
@@ -86,6 +94,18 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	_shape = CollisionShape2D.new()
 	_shape.shape = circle
 	add_child(_shape)
+	_shield.owner_id = id
+	_shield.color = color
+	add_child(_shield)
+	set_character(p_character)
+
+
+## Switch character (lobby pick or a snapshot saying so): new stat maxes, fresh skill.
+func set_character(data: CharacterData) -> void:
+	character = data
+	stats = PlayerStats.new(data.max_hp, data.max_armor, data.max_energy)
+	skill = CharacterSkill.new(data)
+	_shield.sync(skill, dead)
 
 
 func _physics_process(delta: float) -> void:
@@ -111,33 +131,44 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if dead:
 		return
 	stats.tick(delta)
-	dash.tick(delta)
+	skill.tick(delta)
 	loadout.tick(delta)
 	if frozen:
 		# Keep edge state current so a button held through the countdown doesn't fire on release.
 		_prev_swap = input.swap
 		_prev_skill = input.skill
 		velocity = Vector2.ZERO
+		_shield.sync(skill, dead)
 		return
 
 	if input.swap and not _prev_swap:
 		loadout.swap()
 	if input.skill and not _prev_skill:
-		var dash_dir: Vector2 = input.move_vec if input.move_vec.length() > Constants.INPUT_DEADZONE else facing
-		dash.try_activate(dash_dir, stats)
+		if skill.try_activate(_skill_direction(input), global_position, stats) and not replay:
+			skill_used.emit(self)
 	_prev_swap = input.swap
 	_prev_skill = input.skill
 
-	velocity = MovementSim.step_velocity(velocity, input.move_vec, dash, delta)
+	velocity = MovementSim.step_velocity(velocity, input.move_vec, skill, character.move_speed, delta)
 	move_and_slide()
+	_shield.sync(skill, dead)
 
 	if input.aim_vec.length_squared() > 0.0:
 		facing = input.aim_vec.normalized()
 	elif input.move_vec.length() > Constants.INPUT_DEADZONE:
 		facing = input.move_vec.normalized()
 
-	if input.fire and not dash.is_active():
+	if input.fire and not skill.is_dashing():
 		_try_fire(input.seq, replay)
+
+
+## Dash goes where you're moving (else where you face); the barrier goes where you aim.
+func _skill_direction(input: InputFrame) -> Vector2:
+	if character.skill == CharacterData.SkillKind.DASH and input.move_vec.length() > Constants.INPUT_DEADZONE:
+		return input.move_vec
+	if input.aim_vec.length_squared() > 0.0:
+		return input.aim_vec
+	return facing
 
 
 func _try_fire(seq: int, replay: bool) -> void:
@@ -145,9 +176,10 @@ func _try_fire(seq: int, replay: bool) -> void:
 	if not weapon.try_fire(stats) or replay:
 		return
 	var origin: Vector2 = global_position
-	projectiles.fire_shot(player_id, seq, origin, facing, weapon.data, match_seed)
+	var dual: bool = skill.is_dual_wielding()
+	projectiles.fire_shot(player_id, seq, origin, facing, weapon.data, match_seed, dual, character.dual_offset)
 	play_recoil()
-	shot_fired.emit(self, seq, origin, facing, weapon.data.id)
+	shot_fired.emit(self, seq, origin, facing, weapon.data.id, dual)
 
 
 func play_recoil() -> void:
@@ -188,7 +220,7 @@ func respawn(at: Vector2) -> void:
 	velocity = Vector2.ZERO
 	stats.reset()
 	stats.invulnerable_time = Constants.RESPAWN_IFRAME_TIME
-	dash.reset()
+	skill.reset()
 	loadout = Loadout.new(default_weapons)
 	_set_dead(false)
 
@@ -207,6 +239,7 @@ func _set_dead(value: bool) -> void:
 	dead = value
 	visible = not value
 	_shape.set_deferred("disabled", value)
+	_shield.sync(skill, dead)
 
 
 func capture_state() -> Array:
@@ -222,9 +255,11 @@ func capture_state() -> Array:
 	s[StateField.TIME_SINCE_DAMAGE] = stats.time_since_damage
 	s[StateField.REGEN_ACCUM] = stats.regen_accum
 	s[StateField.INVULNERABLE] = stats.invulnerable_time
-	s[StateField.DASH_COOLDOWN] = dash.cooldown_remaining
-	s[StateField.DASH_ACTIVE] = dash.active_remaining
-	s[StateField.DASH_DIRECTION] = dash.direction
+	s[StateField.CHARACTER] = character.id
+	s[StateField.SKILL_COOLDOWN] = skill.cooldown_remaining
+	s[StateField.SKILL_ACTIVE] = skill.active_remaining
+	s[StateField.SKILL_DIRECTION] = skill.direction
+	s[StateField.SKILL_ANCHOR] = skill.anchor
 	s[StateField.ACTIVE_SLOT] = loadout.active_index
 	s[StateField.WEAPON_IDS] = loadout.weapon_ids()
 	s[StateField.WEAPON_COOLDOWNS] = loadout.cooldowns()
@@ -238,9 +273,13 @@ func capture_state() -> Array:
 
 ## Adopt authoritative state from the server. Snapshots only come from the server
 ## (authority RPC), so this checks shape, not trust.
-func apply_state(s: Array, catalog: WeaponCatalog) -> bool:
+func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog) -> bool:
 	if s.size() != StateField.COUNT:
 		return false
+	if s[StateField.CHARACTER] != character.id:
+		var c: CharacterData = characters.get_character(s[StateField.CHARACTER])
+		if c != null:
+			set_character(c)
 	global_position = s[StateField.POSITION]
 	velocity = s[StateField.VELOCITY]
 	facing = s[StateField.FACING]
@@ -250,15 +289,17 @@ func apply_state(s: Array, catalog: WeaponCatalog) -> bool:
 	stats.time_since_damage = s[StateField.TIME_SINCE_DAMAGE]
 	stats.regen_accum = s[StateField.REGEN_ACCUM]
 	stats.invulnerable_time = s[StateField.INVULNERABLE]
-	dash.cooldown_remaining = s[StateField.DASH_COOLDOWN]
-	dash.active_remaining = s[StateField.DASH_ACTIVE]
-	dash.direction = s[StateField.DASH_DIRECTION]
+	skill.cooldown_remaining = s[StateField.SKILL_COOLDOWN]
+	skill.active_remaining = s[StateField.SKILL_ACTIVE]
+	skill.direction = s[StateField.SKILL_DIRECTION]
+	skill.anchor = s[StateField.SKILL_ANCHOR]
 	loadout.sync(s[StateField.WEAPON_IDS], s[StateField.WEAPON_COOLDOWNS], s[StateField.ACTIVE_SLOT], catalog)
 	_prev_skill = s[StateField.PREV_SKILL]
 	_prev_swap = s[StateField.PREV_SWAP]
 	respawn_timer = s[StateField.RESPAWN_TIMER]
 	last_input_seq = s[StateField.LAST_INPUT_SEQ]
 	_set_dead(s[StateField.DEAD])
+	_shield.sync(skill, dead)
 	return true
 
 
@@ -271,13 +312,39 @@ func _draw() -> void:
 	var recoil_px: float = GUN_RECOIL_PX * (_recoil / RECOIL_TIME)
 	var gun_start: Vector2 = facing * (r * 0.5 - recoil_px)
 	var gun_end: Vector2 = facing * (r + GUN_LENGTH - recoil_px)
-	draw_line(gun_start, gun_end, loadout.active().data.color, GUN_WIDTH)
+	var gun_color: Color = loadout.active().data.color
+	if skill.is_dual_wielding():
+		var side: Vector2 = facing.orthogonal() * character.dual_offset
+		draw_line(gun_start + side, gun_end + side, gun_color, GUN_WIDTH)
+		draw_line(gun_start - side, gun_end - side, gun_color, GUN_WIDTH)
+	else:
+		draw_line(gun_start, gun_end, gun_color, GUN_WIDTH)
 	draw_circle(Vector2.ZERO, r, body)
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, CIRCLE_SEGMENTS, display_color.darkened(OUTLINE_DARKEN), OUTLINE_WIDTH)
+	if skill.is_dual_wielding():
+		draw_arc(Vector2.ZERO, r + OUTLINE_WIDTH, 0.0, TAU, CIRCLE_SEGMENTS, gun_color, DUAL_GLOW_WIDTH)
+	_draw_emblem(body.darkened(EMBLEM_DARKEN))
 	if targeted:
 		draw_arc(Vector2.ZERO, r + TARGET_RING_PAD, 0.0, TAU, CIRCLE_SEGMENTS, COLOR_TARGET, TARGET_RING_WIDTH)
 	if not is_local:
 		_draw_bars(r)
+
+
+func _draw_emblem(c: Color) -> void:
+	var e: float = EMBLEM_SIZE
+	match character.skill:
+		CharacterData.SkillKind.DASH:
+			var tip: Vector2 = facing * e
+			var back: Vector2 = -facing * e * 0.5
+			var side: Vector2 = facing.orthogonal() * e * 0.7
+			draw_line(back + side, tip, c, OUTLINE_WIDTH)
+			draw_line(back - side, tip, c, OUTLINE_WIDTH)
+		CharacterData.SkillKind.SHIELD:
+			draw_rect(Rect2(Vector2(-e, -e) * 0.7, Vector2(e, e) * 1.4), c, false, OUTLINE_WIDTH)
+		CharacterData.SkillKind.DUAL_WIELD:
+			var side2: Vector2 = facing.orthogonal() * e * 0.6
+			draw_circle(side2, e * 0.35, c)
+			draw_circle(-side2, e * 0.35, c)
 
 
 func _draw_bars(r: float) -> void:
