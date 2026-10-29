@@ -1,12 +1,16 @@
 class_name ArenaMap
 extends RefCounted
-## Parsed arena layout: wall rects (merged per horizontal run) and spawn points.
+## Parsed arena layout: wall rects (merged per horizontal run), spawn points and pickup spots.
 
 const WALL_CHAR: String = "#"
 const SPAWN_CHAR: String = "S"
+const ENERGY_CHAR: String = "E"
+const WEAPON_CHAR: String = "W"
 
 var walls: Array[Rect2] = []
 var spawns: PackedVector2Array = PackedVector2Array()
+var energy_spots: PackedVector2Array = PackedVector2Array()
+var weapon_spots: PackedVector2Array = PackedVector2Array()
 var size: Vector2 = Vector2.ZERO
 
 
@@ -25,8 +29,13 @@ static func parse(rows: Array[String], tile: float) -> ArenaMap:
 					x += 1
 				map.walls.append(Rect2(start * tile, y * tile, (x - start) * tile, tile))
 				continue
+			var center := Vector2((x + 0.5) * tile, (y + 0.5) * tile)
 			if c == SPAWN_CHAR:
-				map.spawns.append(Vector2((x + 0.5) * tile, (y + 0.5) * tile))
+				map.spawns.append(center)
+			elif c == ENERGY_CHAR:
+				map.energy_spots.append(center)
+			elif c == WEAPON_CHAR:
+				map.weapon_spots.append(center)
 			x += 1
 	map.size = Vector2(width * tile, rows.size() * tile)
 	return map

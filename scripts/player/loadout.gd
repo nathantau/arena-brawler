@@ -20,9 +20,21 @@ func swap() -> void:
 		active_index = (active_index + 1) % slots.size()
 
 
-## Replace the weapon in the active slot (pickups; dev weapon cycling for now).
-func replace_active(weapon: WeaponData) -> void:
-	slots[active_index] = WeaponState.new(weapon)
+## Weapon pickup. Fills an empty slot, otherwise replaces the active weapon, except that the
+## sidearm (slot 0, the free pistol) is never replaced: then the last slot is. The new weapon
+## becomes active. Returns false (pickup stays on the floor) if it's already carried.
+func give(weapon: WeaponData) -> bool:
+	for slot: WeaponState in slots:
+		if slot.data.id == weapon.id:
+			return false
+	if slots.size() < Constants.LOADOUT_SLOTS:
+		slots.append(WeaponState.new(weapon))
+		active_index = slots.size() - 1
+		return true
+	var target: int = active_index if active_index != Constants.SIDEARM_SLOT else slots.size() - 1
+	slots[target] = WeaponState.new(weapon)
+	active_index = target
+	return true
 
 
 func tick(delta: float) -> void:

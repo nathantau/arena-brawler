@@ -31,7 +31,7 @@ func _ready() -> void:
 
 func _start_server() -> void:
 	Engine.max_fps = Constants.SERVER_MAX_FPS
-	_server_arena = Arena.new(Arena.Mode.SERVER, randi())
+	_server_arena = Arena.new(Arena.Mode.SERVER, randi(), args.match_mode, args.time_limit)
 	add_child(_server_arena)
 	var err: Error = session.start_server(_server_arena, args.port, args.bots, args.net_debug)
 	if err != OK:
@@ -41,7 +41,9 @@ func _start_server() -> void:
 
 func _start_offline() -> void:
 	_hide_menu()
-	_offline_arena = Arena.new(Arena.Mode.OFFLINE)
+	if _offline_arena != null:
+		_offline_arena.queue_free()
+	_offline_arena = Arena.new(Arena.Mode.OFFLINE, Constants.DEFAULT_MATCH_SEED, args.match_mode, args.time_limit)
 	add_child(_offline_arena)
 	var input := LocalInput.new()
 	input.autopilot = args.autopilot
@@ -49,6 +51,8 @@ func _start_offline() -> void:
 	_offline_arena.attach_local_view(me, input)
 	for i: int in Constants.BOT_COUNT:
 		_offline_arena.add_bot(Constants.BOT_ID_BASE + i, _offline_arena.free_color_index())
+	if args.autopilot:
+		_offline_arena.referee.set_ready(me.player_id, true)
 
 
 func _join(host: String, port: int) -> void:

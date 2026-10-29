@@ -61,9 +61,25 @@ const HAPTIC_HIT_MS: int = 30
 const CAMERA_LOOKAHEAD: float = 60.0
 const CAMERA_SMOOTHING: float = 10.0
 
-# --- Match (seed for shared sim RNG) ---
+# --- Match ---
 const DEFAULT_MATCH_SEED: int = 1337
 const BOT_ID_BASE: int = 10
+const MATCH_MIN_PLAYERS: int = 2
+const DUEL_PLAYERS: int = 2
+const FFA_MAX_PLAYERS: int = 4
+const DUEL_KILL_TARGET: int = 5
+const FFA_KILL_TARGET: int = 10
+const MATCH_TIME_LIMIT: float = 180.0
+const MATCH_COUNTDOWN: float = 3.0
+const MATCH_RESULTS_TIME: float = 10.0
+
+# --- Pickups ---
+const PICKUP_RADIUS: float = 16.0
+const ENERGY_PICKUP_AMOUNT: int = 80
+const ENERGY_PICKUP_RESPAWN: float = 12.0
+const WEAPON_PICKUP_RESPAWN: float = 18.0
+## Loadout slot 0 is the free sidearm; weapon pickups never replace it.
+const SIDEARM_SLOT: int = 0
 
 # --- Simulation timing ---
 ## Fixed sim step on both client and server; every InputFrame advances the sim by exactly this.
@@ -73,7 +89,15 @@ const PHYSICS_DT: float = 1.0 / PHYSICS_FPS
 # --- Networking ---
 const DEFAULT_PORT: int = 7777
 const MAX_CLIENTS: int = 4
+## Channel count is set by the client only: Godot 4.7's create_server() passes its channel
+## argument into ENet's *incoming bandwidth* slot, so the server would advertise ~7 B/s and
+## clients would throttle away most of their unreliable input packets.
 const NET_CHANNEL_COUNT: int = 5
+## ENet's packet throttle also drops unreliable packets on RTT jitter. Inputs carry their own
+## redundancy and snapshots are stateless, so deceleration 0 keeps it at "send everything".
+const ENET_THROTTLE_INTERVAL_MS: int = 5000
+const ENET_THROTTLE_ACCELERATION: int = 2
+const ENET_THROTTLE_DECELERATION: int = 0
 ## Network tick = PHYSICS_FPS / SNAPSHOT_INTERVAL_TICKS = 30 Hz.
 const SNAPSHOT_INTERVAL_TICKS: int = 2
 const INPUT_SEND_INTERVAL_TICKS: int = 2

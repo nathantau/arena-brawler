@@ -244,3 +244,12 @@ func test_cmd_args() -> void:
 	assert_true(c.autopilot)
 	assert_eq(CmdArgs.parse_address("myhost"), ["myhost", Constants.DEFAULT_PORT])
 	assert_eq(CmdArgs.parse_address("myhost:abc"), ["myhost", Constants.DEFAULT_PORT])
+
+
+func test_cmd_args_match_options() -> void:
+	var a := CmdArgs.parse(PackedStringArray(["--server", "--mode", "duel", "--time-limit", "45"]))
+	assert_eq(a.match_mode, MatchRules.Mode.DUEL)
+	assert_eq(a.time_limit, 45.0)
+	var d := CmdArgs.parse(PackedStringArray(["--time-limit", "-3"]))
+	assert_eq(d.match_mode, MatchRules.Mode.FFA)
+	assert_eq(d.time_limit, Constants.MATCH_TIME_LIMIT)

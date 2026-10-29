@@ -1,6 +1,6 @@
 class_name MainMenu
 extends Control
-## Dev menu until the M3 lobby: play offline vs bots, or join a server by IP.
+## Main menu: play offline vs bots, or join a server by IP (direct connect until matchmaking in M6).
 
 signal offline_pressed
 signal join_pressed(address: String)
@@ -19,14 +19,14 @@ var _join: Button
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = COLOR_BG
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", SPACING)

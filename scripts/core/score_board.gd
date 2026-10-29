@@ -18,3 +18,8 @@ func kills_of(player_id: int) -> int:
 
 func deaths_of(player_id: int) -> int:
 	return deaths.get(player_id, 0)
+
+
+func reset() -> void:
+	kills.clear()
+	deaths.clear()

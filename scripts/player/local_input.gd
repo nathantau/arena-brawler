@@ -44,8 +44,6 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 		aim = auto_target.global_position - player.global_position
 	_frame.aim_vec = aim.normalized() if aim != Vector2.ZERO else Vector2.ZERO
 
-	if Input.is_action_just_pressed(&"dev_cycle_weapon") or (touch_on and touch.consume_dev_cycle()):
-		arena.dev_cycle_weapon(player)
 	return _frame
 
 

@@ -22,7 +22,8 @@ func _init(p_session: NetSession, p_arena: Arena, p_debug: bool) -> void:
 
 func start(port: int, bot_count: int) -> Error:
 	var peer := ENetMultiplayerPeer.new()
-	var err: Error = peer.create_server(port, Constants.MAX_CLIENTS, Constants.NET_CHANNEL_COUNT)
+	# No channel count here: see Constants.NET_CHANNEL_COUNT (clients request the channels).
+	var err: Error = peer.create_server(port, Constants.MAX_CLIENTS)
 	if err != OK:
 		return err
 	session.multiplayer.multiplayer_peer = peer
@@ -31,9 +32,12 @@ func start(port: int, bot_count: int) -> Error:
 	arena.kill_registered.connect(_on_kill)
 	arena.shot_fired.connect(_on_shot)
 	arena.player_hit.connect(_on_hit)
+	arena.match_updated.connect(_on_match_updated)
+	arena.pickups.changed.connect(_on_pickups_changed)
 	for i: int in bot_count:
 		arena.add_bot(Constants.BOT_ID_BASE + i, arena.free_color_index())
-	print("[server] listening on UDP %d (seed %d, %d bots)" % [port, arena.match_seed, bot_count])
+	print("[server] listening on UDP %d (seed %d, %d bots, %s)" % [port, arena.match_seed, bot_count,
+		MatchRules.MODE_NAMES[arena.match_state.mode]])
 	return OK
 
 
@@ -64,14 +68,28 @@ func on_inputs(peer_id: int, batch: Array) -> void:
 			queue.push(frame)
 
 
+func on_set_ready(peer_id: int, is_ready: bool) -> void:
+	if _queues.has(peer_id):
+		arena.referee.set_ready(peer_id, is_ready)
+
+
+## Any player may switch the mode while in the lobby (until there are hosts/parties).
+func on_request_mode(peer_id: int, mode: int) -> void:
+	if _queues.has(peer_id) and MatchRules.is_valid_mode(mode):
+		arena.referee.set_mode(mode as MatchRules.Mode)
+
+
 func _on_peer_connected(id: int) -> void:
+	NetSession.disable_throttle((session.multiplayer.multiplayer_peer as ENetMultiplayerPeer).get_peer(id))
 	var queue := NetInputQueue.new()
 	_queues[id] = queue
 	var p: Player = arena.add_player(id, arena.free_color_index(), Arena.DEFAULT_LOADOUT, queue)
 	session.rpc_welcome.rpc_id(id, id, arena.match_seed, tick, _roster())
+	session.rpc_match_state.rpc_id(id, arena.match_state.to_array())
+	session.rpc_pickups.rpc_id(id, arena.pickups.to_array())
 	for peer: int in session.multiplayer.get_peers():
 		if peer != id:
-			session.rpc_player_joined.rpc_id(peer, id, p.color_index)
+			session.rpc_player_joined.rpc_id(peer, id, p.color_index, false)
 	print("[server] peer %d joined (%d players)" % [id, arena.players.size()])
 
 
@@ -85,7 +103,7 @@ func _on_peer_disconnected(id: int) -> void:
 func _roster() -> Array:
 	var roster: Array = []
 	for p: Player in arena.players:
-		roster.append([p.player_id, p.color_index, arena.scores.kills_of(p.player_id), arena.scores.deaths_of(p.player_id)])
+		roster.append([p.player_id, p.color_index, p.is_bot, arena.scores.kills_of(p.player_id), arena.scores.deaths_of(p.player_id)])
 	return roster
 
 
@@ -98,6 +116,28 @@ func _on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_
 
 func _on_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
 	session.rpc_hit.rpc(owner_id, shot_seq, pellet, victim_id, damage, crit, at)
+
+
+## Reliable and ordered with welcome/join on CH_EVENTS, so a joining peer never sees state
+## for players it doesn't know yet.
+func _on_match_updated() -> void:
+	if not session.multiplayer.get_peers().is_empty():
+		session.rpc_match_state.rpc(arena.match_state.to_array())
+	if debug:
+		var st: MatchState = arena.match_state
+		print("[server] match %s %s t=%.1f participants=%s ready=%s %s" % [MatchState.Phase.keys()[st.phase],
+			MatchRules.MODE_NAMES[st.mode], st.time_left, st.participants, st.ready, st.blocker])
+
+
+func _on_pickups_changed() -> void:
+	if not session.multiplayer.get_peers().is_empty():
+		session.rpc_pickups.rpc(arena.pickups.to_array())
+	if debug:
+		var available: int = 0
+		for s: PickupField.Spot in arena.pickups.spots:
+			if s.available:
+				available += 1
+		print("[server] pickups %d/%d available" % [available, arena.pickups.spots.size()])
 
 
 func _on_kill(killer_id: int, victim_id: int) -> void:

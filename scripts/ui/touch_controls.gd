@@ -3,7 +3,8 @@ extends Control
 ## Multi-touch mobile controls, drawn with primitives:
 ## - floating joystick anywhere on the left part of the screen
 ## - attack button (hold = fire with auto-aim; drag off-centre = manual aim)
-## - skill button with cooldown sweep, weapon swap button, dev weapon-cycle button
+## - skill button with cooldown sweep, weapon swap button
+## Touches that start on a visible `blockers` control (e.g. lobby buttons) are left to the GUI.
 
 const JOYSTICK_ZONE_FRACTION: float = 0.45
 const JOY_RADIUS: float = 70.0
@@ -15,8 +16,6 @@ const SKILL_RADIUS: float = 40.0
 const SKILL_OFFSET: Vector2 = Vector2(-130, 20)
 const SWAP_RADIUS: float = 32.0
 const SWAP_OFFSET: Vector2 = Vector2(-20, -120)
-const DEV_RADIUS: float = 22.0
-const DEV_MARGIN: Vector2 = Vector2(40, 40)
 const HIT_SLOP: float = 1.25
 const AIM_LINE_WIDTH: float = 3.0
 const RING_WIDTH: float = 3.0
@@ -32,7 +31,7 @@ const NO_FINGER: int = -1
 const TOUCH_FLAG: String = "--touch"
 
 var player: Player
-var show_dev_button: bool = true
+var blockers: Array[Control] = []
 var move_vec: Vector2 = Vector2.ZERO
 var attack_held: bool = false
 ## Zero unless the attack finger has been dragged past the deadzone.
@@ -40,7 +39,6 @@ var attack_aim: Vector2 = Vector2.ZERO
 var skill_held: bool = false
 var swap_held: bool = false
 
-var _dev_cycle_requested: bool = false
 var _joy_finger: int = NO_FINGER
 var _joy_origin: Vector2 = Vector2.ZERO
 var _joy_pos: Vector2 = Vector2.ZERO
@@ -50,7 +48,7 @@ var _swap_finger: int = NO_FINGER
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -64,12 +62,6 @@ static func should_enable() -> bool:
 	return false
 
 
-func consume_dev_cycle() -> bool:
-	var r: bool = _dev_cycle_requested
-	_dev_cycle_requested = false
-	return r
-
-
 func _attack_center() -> Vector2:
 	return size - ATTACK_MARGIN
 
@@ -80,10 +72,6 @@ func _skill_center() -> Vector2:
 
 func _swap_center() -> Vector2:
 	return _attack_center() + SWAP_OFFSET
-
-
-func _dev_center() -> Vector2:
-	return Vector2(size.x - DEV_MARGIN.x, DEV_MARGIN.y)
 
 
 func _input(event: InputEvent) -> void:
@@ -104,7 +92,17 @@ func _hits(p: Vector2, center: Vector2, radius: float) -> bool:
 	return p.distance_to(center) <= radius * HIT_SLOP
 
 
+func _blocked(p: Vector2) -> bool:
+	var global_p: Vector2 = get_global_transform() * p
+	for b: Control in blockers:
+		if b.is_visible_in_tree() and b.get_global_rect().has_point(global_p):
+			return true
+	return false
+
+
 func _on_press(finger: int, p: Vector2) -> void:
+	if _blocked(p):
+		return
 	if _attack_finger == NO_FINGER and _hits(p, _attack_center(), ATTACK_RADIUS):
 		_attack_finger = finger
 		attack_held = true
@@ -115,8 +113,6 @@ func _on_press(finger: int, p: Vector2) -> void:
 	elif _swap_finger == NO_FINGER and _hits(p, _swap_center(), SWAP_RADIUS):
 		_swap_finger = finger
 		swap_held = true
-	elif show_dev_button and _hits(p, _dev_center(), DEV_RADIUS):
-		_dev_cycle_requested = true
 	elif _joy_finger == NO_FINGER and p.x < size.x * JOYSTICK_ZONE_FRACTION:
 		_joy_finger = finger
 		_joy_origin = p
@@ -193,12 +189,6 @@ func _draw() -> void:
 	draw_circle(wc, SWAP_RADIUS, COLOR_ACTIVE if swap_held else COLOR_IDLE)
 	draw_arc(wc, SWAP_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
 	_label(font, wc, "SWAP")
-
-	# Dev weapon cycle
-	if show_dev_button:
-		var dc: Vector2 = _dev_center()
-		draw_arc(dc, DEV_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
-		_label(font, dc, "W")
 
 
 func _label(font: Font, center: Vector2, text: String) -> void:

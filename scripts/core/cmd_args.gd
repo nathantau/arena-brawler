@@ -7,6 +7,8 @@ extends RefCounted
 ##   --autopilot                      (client) drive + fire automatically, for testing
 ##   --net-debug                      print net stats periodically
 ##   --touch                          show touch controls on desktop
+##   --mode duel|ffa                  (server / offline) starting match mode, default ffa
+##   --time-limit S                   (server / offline) match length in seconds (dev/testing)
 
 var server: bool = false
 var port: int = Constants.DEFAULT_PORT
@@ -16,6 +18,8 @@ var connect_port: int = Constants.DEFAULT_PORT
 var offline: bool = false
 var autopilot: bool = false
 var net_debug: bool = false
+var match_mode: MatchRules.Mode = MatchRules.Mode.FFA
+var time_limit: float = Constants.MATCH_TIME_LIMIT
 
 
 static func parse(args: PackedStringArray) -> CmdArgs:
@@ -44,6 +48,13 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				a.autopilot = true
 			"--net-debug":
 				a.net_debug = true
+			"--mode":
+				a.match_mode = MatchRules.Mode.DUEL if next == "duel" else MatchRules.Mode.FFA
+				i += 1
+			"--time-limit":
+				if next.is_valid_float() and next.to_float() > 0.0:
+					a.time_limit = next.to_float()
+				i += 1
 		i += 1
 	return a
 

@@ -40,8 +40,13 @@ var player_id: int = 0
 var color_index: int = 0
 var display_color: Color = Color.WHITE
 var is_local: bool = false
+var is_bot: bool = false
+## Countdown / results screen: inputs are ignored (timers still run).
+var frozen: bool = false
 var stats := PlayerStats.new()
 var loadout: Loadout
+## Loadout restored on every respawn (pickups are lost on death).
+var default_weapons: Array[WeaponData] = []
 var dash := DashSkill.new()
 var facing: Vector2 = Vector2.RIGHT
 ## Null for client-side remote players (they are positioned by interpolation).
@@ -68,6 +73,7 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	player_id = id
 	color_index = p_color_index
 	display_color = color
+	default_weapons = weapons
 	loadout = Loadout.new(weapons)
 	controller = ctrl
 	projectiles = pool
@@ -107,6 +113,12 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	stats.tick(delta)
 	dash.tick(delta)
 	loadout.tick(delta)
+	if frozen:
+		# Keep edge state current so a button held through the countdown doesn't fire on release.
+		_prev_swap = input.swap
+		_prev_skill = input.skill
+		velocity = Vector2.ZERO
+		return
 
 	if input.swap and not _prev_swap:
 		loadout.swap()
@@ -177,8 +189,16 @@ func respawn(at: Vector2) -> void:
 	stats.reset()
 	stats.invulnerable_time = Constants.RESPAWN_IFRAME_TIME
 	dash.reset()
-	loadout.reset_cooldowns()
+	loadout = Loadout.new(default_weapons)
 	_set_dead(false)
+
+
+## Leave the arena without dying (not playing this match): invisible, no collision, no
+## death counted. Respawns as soon as the match state allows it.
+func sit_out() -> void:
+	respawn_timer = 0.0
+	velocity = Vector2.ZERO
+	_set_dead(true)
 
 
 func _set_dead(value: bool) -> void:

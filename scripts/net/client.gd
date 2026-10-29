@@ -40,6 +40,7 @@ func start(host: String, port: int) -> Error:
 		return err
 	session.multiplayer.multiplayer_peer = peer
 	session.multiplayer.connection_failed.connect(_on_connection_failed)
+	session.multiplayer.connected_to_server.connect(_on_connected)
 	session.multiplayer.server_disconnected.connect(_on_server_disconnected)
 	print("[client] connecting to %s:%d" % [host, port])
 	return OK
@@ -48,11 +49,18 @@ func start(host: String, port: int) -> Error:
 func shutdown() -> void:
 	if session.multiplayer.connection_failed.is_connected(_on_connection_failed):
 		session.multiplayer.connection_failed.disconnect(_on_connection_failed)
+	if session.multiplayer.connected_to_server.is_connected(_on_connected):
+		session.multiplayer.connected_to_server.disconnect(_on_connected)
 	if session.multiplayer.server_disconnected.is_connected(_on_server_disconnected):
 		session.multiplayer.server_disconnected.disconnect(_on_server_disconnected)
 	if arena != null:
 		arena.queue_free()
 		arena = null
+
+
+func _on_connected() -> void:
+	var peer := session.multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	NetSession.disable_throttle(peer.get_peer(MultiplayerPeer.TARGET_PEER_SERVER))
 
 
 func _on_connection_failed() -> void:
@@ -70,16 +78,39 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 	_latest_tick = tick
 	arena = Arena.new(Arena.Mode.CLIENT, match_seed)
 	world_parent.add_child(arena)
+	arena.ready_requested.connect(func(is_ready: bool) -> void:
+		session.rpc_set_ready.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, is_ready))
+	arena.mode_requested.connect(func(mode: MatchRules.Mode) -> void:
+		session.rpc_request_mode.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, mode))
 	for entry: Array in roster:
-		_add_player(entry[0], entry[1])
-		arena.scores.kills[entry[0]] = entry[2]
-		arena.scores.deaths[entry[0]] = entry[3]
+		_add_player(entry[0], entry[1], entry[2])
+		arena.scores.kills[entry[0]] = entry[3]
+		arena.scores.deaths[entry[0]] = entry[4]
 	print("[client] joined as %d (%d players)" % [local_id, arena.players.size()])
+	if autopilot:
+		arena.ready_requested.emit(true)
 
 
-func on_player_joined(id: int, color_index: int) -> void:
+func on_player_joined(id: int, color_index: int, is_bot: bool) -> void:
 	if arena != null:
-		_add_player(id, color_index)
+		_add_player(id, color_index, is_bot)
+
+
+func on_match_state(state: Array) -> void:
+	if arena == null:
+		return
+	var before: MatchState.Phase = arena.match_state.phase
+	arena.apply_match_state(state)
+	if debug and arena.match_state.phase != before:
+		print("[client %d] match phase %s" % [local_id, MatchState.Phase.keys()[arena.match_state.phase]])
+	# Autopilot re-readies after every match so soak tests loop forever.
+	if autopilot and arena.match_state.phase == MatchState.Phase.LOBBY and not arena.match_state.ready.has(local_id):
+		arena.ready_requested.emit(true)
+
+
+func on_pickups(states: Array) -> void:
+	if arena != null:
+		arena.pickups.apply_array(states)
 
 
 func on_player_left(id: int) -> void:
@@ -194,7 +225,7 @@ func _reconcile(state: Array) -> void:
 			state[Player.StateField.VELOCITY], state[Player.StateField.HP], state[Player.StateField.ARMOR]])
 
 
-func _add_player(id: int, color_index: int) -> void:
+func _add_player(id: int, color_index: int, is_bot: bool) -> void:
 	if arena.get_player(id) != null:
 		return
 	if id == local_id:
@@ -204,7 +235,7 @@ func _add_player(id: int, color_index: int) -> void:
 		local_player = arena.add_player(id, color_index, Arena.DEFAULT_LOADOUT, recorder)
 		arena.attach_local_view(local_player, input)
 	else:
-		arena.add_player(id, color_index, Arena.DEFAULT_LOADOUT, null)
+		arena.add_player(id, color_index, Arena.BOT_LOADOUT if is_bot else Arena.DEFAULT_LOADOUT, null, is_bot)
 		_buffers[id] = SnapshotBuffer.new()
 
 
@@ -224,7 +255,7 @@ func ping_ms() -> int:
 
 func _report_stats() -> void:
 	var avg: float = _correction_sum / _corrections if _corrections > 0 else 0.0
-	var line: String = "ping %d ms · unacked %d · corrections %d (avg %.2f px, max %.1f px)" % [
+	var line: String = "fps %d · ping %d ms · unacked %d · corrections %d (avg %.2f px, max %.1f px)" % [Engine.get_frames_per_second(),
 		ping_ms(), _history.count(), _corrections, avg, _correction_max]
 	if arena.hud != null:
 		arena.hud.status_text = line
