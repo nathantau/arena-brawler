@@ -238,7 +238,10 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   auto-aim and bots target them), **Blink** (BLINK: `move_and_collide` hop, walls stop it, i-frames),
   **Smoke Bomb** (SMOKE: cloud at your feet; while inside it `is_hidden()` and enemy auto-aim / bots skip you),
   **Fan of Blades** (VOLLEY: fires `blade_fan`, 12 piercing kunai in a ring, through the normal shot pipeline
-  with seq + `VOLLEY_SEQ_OFFSET`). Dual Wield is still pickable too. Not done: bots don't prefer usable pickups; no
+  with seq + `VOLLEY_SEQ_OFFSET`). Dual Wield is still pickable too.
+  Flourishes (`SpecialFx`, detected from synced state changes so remote players show them too): clones appear in
+  a white cloud poof and vanish in poofs; the Great Ape transformation is struck by lightning in a cloud burst
+  and ends in a dark puff. Not done: bots don't prefer usable pickups; no
   per-weapon projectile sprites (still circles); the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
