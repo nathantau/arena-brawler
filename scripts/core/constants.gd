@@ -69,8 +69,12 @@ const BOT_SPECIAL_CHANCE_PER_SEC: float = 0.15
 
 # --- Feedback ---
 const HIT_FLASH_TIME: float = 0.08
-## Character sprite sheets (tools/sprites/generate.py): 64 px frames: idle, then hit flash, then walk.
+## Character sprite sheets (tools/sprites/generate.py): 96 px cells: idle, then hit flash, then walk (64 px art
+## centred in the cell), then the death fall, which uses the whole cell.
+const SPRITE_CELL_SIZE: int = 96
 const SPRITE_FRAME_SIZE: int = 64
+const SPRITE_DIE_FRAMES: int = 8
+const SPRITE_DIE_FPS: float = 9.0
 const SPRITE_IDLE_FRAMES: int = 4
 const SPRITE_HIT_FRAMES: int = 2
 const SPRITE_IDLE_FPS: float = 6.0

@@ -99,9 +99,22 @@ class Canvas:
         self.px[x, y] = color + (255,)
 
 
+## Set while drawing death frames: eye helpers draw knocked-out X eyes instead.
+KO = False
+
+
+def x_eye(c: Canvas, x: int, y: int, color=OUTLINE):
+    """A 4x4 knocked-out X with its top-left at (x, y)."""
+    c.flat(L([(x, y), (x + 3, y + 3)], 1), color)
+    c.flat(L([(x + 3, y), (x, y + 3)], 1), color)
+
+
 # All characters use a 6 px gap between eyes (left eye x, then left x + 10).
 def big_eyes(c: Canvas, y: int, xs: tuple[int, int], iris, h: int = 6):
     for x in xs:
+        if KO:
+            x_eye(c, x, y + 1)
+            continue
         c.flat(R((x, y, x + 3, y + h)), OUTLINE)
         c.flat(R((x, y + h - 2, x + 3, y + h - 1)), iris)
         c.flat(R((x, y, x + 1, y + 1)), WHITE)  # glints
@@ -185,6 +198,9 @@ def warden(step=None, t=0):
     up.part(R((17, 30, 47, 35)), STEEL_D)  # helmet rim
     up.flat(RR((22, 19, 47, 27), 3), OUTLINE)  # visor
     for x in (31, 41):  # round glowing eyes
+        if KO:
+            x_eye(up, x, 21, TEAL_L)
+            continue
         up.flat(RR((x, 20, x + 3, 25), 1), TEAL_L)
         up.flat(R((x, 20, x + 1, 21)), WHITE)
     up.flat(R((30, 27, 32, 27)), ORANGE)  # blush glow on the faceplate
@@ -309,6 +325,9 @@ def wukong_ape(step=None, t=0):
     up.flat(P([(43, 4), (47, 4), (47, 6)]), OUTLINE)  # chipped corner
     up.flat(R((28, 9, 29, 10)), RED)  # gem
     for x in (32, 42):  # glowing red eyes
+        if KO:
+            x_eye(up, x, 14, RED)
+            continue
         up.flat(R((x, 14, x + 3, 17)), OUTLINE)
         up.flat(R((x, 15, x + 3, 16)), RED)
         up.dot(x + 1, 15, ORANGE)
@@ -1034,6 +1053,59 @@ def frames(build, aura=None) -> list[Image.Image]:
     return idle + hit + walk
 
 
+## Sheet cells are bigger than the art so the toppling death frames fit; frames are centred in them.
+CELL = 96
+PAD = (CELL - SIZE) // 2
+
+
+def cell(img: Image.Image) -> Image.Image:
+    out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    out.alpha_composite(img, (PAD, PAD))
+    return out
+
+
+def death_frames(build) -> list[Image.Image]:
+    """8 CELL-sized frames, knocked out (X eyes, no aura): white flash, pops up, topples backwards (it
+    faces right, so the head lands on the left), bounces, lies dizzy under circling stars, then
+    dissolves (ordered dither) before the respawn."""
+    global KO
+    KO = True
+    try:
+        low, up = build(None, 0)
+    finally:
+        KO = False
+    ko = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    ko.alpha_composite(low.img, (PAD, PAD))
+    ko.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
+    ground = ko.getbbox()[3]
+
+    def pose(angle, lift=0, fade=0.0, stars=-1):
+        r = ko.rotate(angle, Image.NEAREST, center=(CELL // 2, ground))
+        left, top, right, low_ = r.getbbox()
+        dx = (CELL - left - right) // 2 if angle else 0  # lying down: centre it on the spot
+        dy = ground - low_ - lift
+        f = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        f.alpha_composite(r.crop((-dx, -dy, CELL - dx, CELL - dy)))
+        c = Canvas(CELL)
+        c.img, c.px = f, f.load()
+        if stars >= 0:  # three stars circling above the head end
+            hx, hy = left + dx + 8, top + dy - 6
+            for k in range(3):
+                a = math.tau * k / 3 + stars * 0.9
+                x, y = round(hx + math.cos(a) * 7), round(hy + math.sin(a) * 2)
+                c.flat(R((x - 1, y, x + 1, y)), YELLOW)
+                c.dot(x, y - 1, YELLOW)
+                c.dot(x, y + 1, YELLOW)
+        for y in range(CELL):
+            for x in range(CELL):
+                if BAYER[y % 4][x % 4] / 16 < fade:
+                    c.px[x, y] = (0, 0, 0, 0)
+        return outline(f)
+
+    return [recolor(pose(0), lambda _c: WHITE), pose(0, 3), pose(35, 2), pose(70, 1),
+            pose(90, 3), pose(90, stars=0), pose(90, 0, 0.45, stars=1), pose(90, 0, 0.8, stars=2)]
+
+
 def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
     """Self-check: palette-only colours, hard alpha, and (`edges`) the outline fits inside each frame."""
     allowed = set(PALETTE)
@@ -1051,11 +1123,11 @@ def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
-        fs = frames(build, AURAS.get(name))
-        sheet = Image.new("RGBA", (SIZE * len(fs), SIZE), (0, 0, 0, 0))
+        fs = [cell(f) for f in frames(build, AURAS.get(name))] + death_frames(build)
+        sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
         for i, f in enumerate(fs):
-            sheet.paste(f, (i * SIZE, 0))
-        check(sheet)
+            sheet.paste(f, (i * CELL, 0))
+        check(sheet, CELL)
         sheet.save(OUT / f"{name}.png")
         print(f"wrote {OUT / f'{name}.png'} ({len(fs)} frames)")
     WEAPON_OUT.mkdir(exist_ok=True)

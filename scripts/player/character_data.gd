@@ -62,17 +62,20 @@ static func frames_from_sheet(sheet: Texture2D) -> SpriteFrames:
 		Constants.SPRITE_HIT_FRAMES / Constants.HIT_FLASH_TIME, false)
 	_add_animation(frames, sheet, &"walk", Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES,
 		Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_WALK_FPS, true)
+	_add_animation(frames, sheet, &"die", Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES
+		+ Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_DIE_FRAMES, Constants.SPRITE_DIE_FPS, false,
+		Constants.SPRITE_CELL_SIZE)
 	return frames
 
 
 static func _add_animation(frames: SpriteFrames, sheet: Texture2D, anim: StringName, first: int, count: int,
-		fps: float, loop: bool) -> void:
+		fps: float, loop: bool, size: int = Constants.SPRITE_FRAME_SIZE) -> void:
 	frames.add_animation(anim)
 	frames.set_animation_speed(anim, fps)
 	frames.set_animation_loop(anim, loop)
-	var size: int = Constants.SPRITE_FRAME_SIZE
+	var inset: float = (Constants.SPRITE_CELL_SIZE - size) / 2.0
 	for i: int in count:
 		var frame := AtlasTexture.new()
 		frame.atlas = sheet
-		frame.region = Rect2((first + i) * size, 0, size, size)
+		frame.region = Rect2((first + i) * Constants.SPRITE_CELL_SIZE + inset, inset, size, size)
 		frames.add_frame(anim, frame)

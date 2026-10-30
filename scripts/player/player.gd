@@ -386,9 +386,25 @@ func _set_dead(value: bool) -> void:
 	if value == dead:
 		return
 	dead = value
+	# A real death (sitting out has no respawn timer) leaves the fall animation behind; on every peer.
+	if value and respawn_timer > 0.0 and is_inside_tree():
+		_spawn_corpse()
 	visible = not value
 	_shape.set_deferred("disabled", value)
 	_shield.sync(special, dead)
+
+
+## Plays the current sheet's (form's, if transformed) "die" animation where we fell, then frees itself.
+func _spawn_corpse() -> void:
+	var corpse := AnimatedSprite2D.new()
+	corpse.sprite_frames = _sprite.sprite_frames
+	corpse.scale = _sprite.scale
+	corpse.flip_h = _sprite.flip_h
+	corpse.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	corpse.global_position = global_position + visual_offset
+	corpse.animation_finished.connect(corpse.queue_free)
+	get_parent().add_child(corpse)
+	corpse.play(&"die")
 
 
 func capture_state() -> Array:

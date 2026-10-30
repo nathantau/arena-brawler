@@ -23,6 +23,11 @@ func test_catalog_and_skills() -> void:
 	for c: CharacterData in characters.ordered:
 		assert_not_null(c.sprite_sheet, c.id)
 		assert_not_null(c.hand_sprite, c.id)
+		var cells: int = Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES + Constants.SPRITE_WALK_FRAMES \
+			+ Constants.SPRITE_DIE_FRAMES
+		assert_eq(c.sprite_sheet.get_width(), cells * Constants.SPRITE_CELL_SIZE, "%s sheet has a death strip" % c.id)
+		assert_eq(c.sprite_frames().get_frame_count(&"die"), Constants.SPRITE_DIE_FRAMES)
+		assert_eq(c.sprite_frames().get_frame_texture(&"idle", 0).get_size(), Vector2.ONE * Constants.SPRITE_FRAME_SIZE)
 		assert_true(c.max_hp > 0 and c.move_speed > 0.0, c.id)
 		assert_ne(c.display_name, "")
 		assert_false(skills.specials_for(c).is_empty(), "%s has a special" % c.id)

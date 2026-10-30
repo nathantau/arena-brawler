@@ -24,6 +24,8 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
     shapes), otherwise each gets its own highlight streak.
   - Draw back-to-front: tail/back items, body, hands, head, face, then front accessories.
   - One readable signature silhouette element (hat, plume, shield, feathers...).
+- Death frames are generated automatically from the standing pose. Eyes must come from `big_eyes()`; custom
+  eyes need an `if KO: x_eye(...)` branch (see Warden / Great Ape) so the knocked-out frames get X eyes.
 - Leg details must use the `(x, dy)` list `legs()` returns, so they follow the walk cycle.
 - No hands on the sheet: add the character's glove/skin colour to `HANDS` and set `hand_sprite` in the `.tres`
   (`res://assets/sprites/<id>_hand.png`); the game draws hands on the held weapon.
