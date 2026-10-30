@@ -923,24 +923,42 @@ def poof_frame(size: int, k: int, color) -> Image.Image:
     return outline(c.img)
 
 
-def morph_frames(a: Image.Image, b: Image.Image) -> list[Image.Image]:
-    """Transformation from frame `a` into `b`, in full colour (no white flash): a dissolves into b (ordered
-    dither over 6 frames) with gold sparks crackling. Drawn growing from a's in-game scale to b's (SpecialFx)."""
+def morph_frames(a: Image.Image, b: Image.Image, b_scale: float) -> list[Image.Image]:
+    """Transformation from frame `a` into form `b` (drawn `b_scale` x in game), in full colour, growing
+    into it: crouch, stretch up, darken as it powers up, blend into b while still growing (ordered
+    dither, gold sparks crackling), overshoot, settle. CELL-sized frames; the size change is baked in,
+    so the strip is drawn at the normal sprite scale (SpecialFx) and pixels stay crisp."""
     rng = random.Random(7)
-    out = [a]
-    for p in (1 / 7, 2 / 7, 3 / 7, 4 / 7, 5 / 7, 6 / 7):
-        c = Canvas()  # each pixel from one sprite or the other: both stay readable
-        for y in range(SIZE):
-            for x in range(SIZE):
-                c.px[x, y] = (b if BAYER[y % 4][x % 4] / 16 < p else a).getpixel((x, y))
-        inside = [(x, y) for y in range(SIZE) for x in range(SIZE) if c.px[x, y][3]]
-        for x, y in rng.sample(inside, 6):  # sparks: short gold crackles
+
+    def at(img, sx, sy=None):  # img scaled (NEAREST) about the cell centre
+        w, h = round(SIZE * sx), round(SIZE * (sy or sx))
+        out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        out.alpha_composite(img.resize((w, h), Image.NEAREST), ((CELL - w) // 2, (CELL - h) // 2))
+        return out
+
+    def mix(s, p):  # each pixel from one sprite or the other at the same size: both stay readable
+        fa, fb = at(a, s), at(b, s)
+        out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        for y in range(CELL):
+            for x in range(CELL):
+                out.putpixel((x, y), (fb if BAYER[y % 4][x % 4] / 16 < p else fa).getpixel((x, y)))
+        return out
+
+    def sparks(img, n=6):  # short gold crackles inside the body
+        c = Canvas(CELL)
+        c.img, c.px = img, img.load()
+        inside = [(x, y) for y in range(CELL) for x in range(CELL) if c.px[x, y][3]]
+        for x, y in rng.sample(inside, n):
             dx, dy = rng.choice(((1, 0), (0, 1), (1, 1), (1, -1)))
             for j in range(3):
-                if 1 < x + dx * j < SIZE - 2 and 1 < y + dy * j < SIZE - 2:
+                if 1 < x + dx * j < CELL - 2 and 1 < y + dy * j < CELL - 2:
                     c.dot(x + dx * j, y + dy * j, YELLOW)
-        out.append(c.img)
-    return out + [b]
+        return img
+
+    g = b_scale - 1.0
+    return [at(a, 1.0), at(a, 1.1, 0.92), sparks(at(a, 1.04, 1.14), 4),
+            sparks(at(recolor(a, DARKER.__getitem__), 1 + g * 0.45)), sparks(mix(1 + g * 0.65, 0.35)),
+            sparks(mix(1 + g * 0.85, 0.7)), at(b, b_scale * 1.06), at(b, b_scale)]
 
 
 BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
@@ -996,8 +1014,9 @@ FX = {
     "bolt": lambda: strip([bolt(v) for v in range(BOLT_VARIANTS)]),
     "smoke": lambda: strip([smoke_frame(k) for k in range(SMOKE_FRAMES)]),
     # Transformation strips (SkillData.form_morph): the character's first idle frame into the form's.
+    # 1.35 = great_ape.tres form_scale (keep in sync).
     "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],
-                                                   frames(wukong_ape, AURAS["wukong_ape"])[0])),
+                                                   frames(wukong_ape, AURAS["wukong_ape"])[0], 1.35)),
 }
 
 

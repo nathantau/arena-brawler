@@ -7,8 +7,8 @@ description: Make the transition animation for a TRANSFORM special in Brawlbit (
 
 A TRANSFORM `SkillData` swaps the player's sprite to `form_sprite_sheet` (drawn x `form_scale`).
 `form_morph` is an optional strip that `SpecialFx` plays over ~0.55 s (`MORPH_TIME`) when the form
-starts — growing from scale 1 to `form_scale`, real sprite hidden (`Player` uses `is_morphing()`) — and
-backwards when it ends. Purely cosmetic: stats switch instantly.
+starts — at the normal sprite scale with the growth to `form_scale` drawn into its 96 px frames, real sprite
+hidden (`Player` uses `is_morphing()`) — and backwards when it ends. Purely cosmetic: stats switch instantly.
 
 ## Steps
 
@@ -17,10 +17,12 @@ backwards when it ends. Purely cosmetic: stats switch instantly.
 2. Add the strip to `FX` in generate.py:
    ```python
    "<id>_<form>_morph": lambda: strip(morph_frames(frames(<id>, AURAS.get("<id>"))[0],
-                                                   frames(<id>_<form>, AURAS.get("<id>_<form>"))[0])),
+                                                   frames(<id>_<form>, AURAS.get("<id>_<form>"))[0], <form_scale>)),
    ```
-   `morph_frames(a, b)` gives 8 frames: a → 6 full-colour ordered-dither crossfades with gold spark
-   crackles → b. No white silhouettes (the user didn't like them). Tweak the
+   `<form_scale>` must match the skill's `form_scale`. `morph_frames(a, b, scale)` gives 8 full-colour
+   frames that grow into the form: crouch, stretch, darken, two ordered-dither blends while growing (gold
+   sparks), overshoot, settle. No white silhouettes (the user didn't like them); the growth is in the art,
+   not engine scaling, so pixels stay crisp. Tweak the
    spark colour / count there if the form has a different theme (keep it generic; pass a parameter
    rather than forking the function).
 3. Run the generator; Read a x4 NEAREST preview. Each middle frame should still show both outlines

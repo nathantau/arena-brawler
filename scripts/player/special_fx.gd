@@ -62,7 +62,6 @@ var _rng := RandomNumberGenerator.new()
 var _morph_t: float = -1.0
 var _morph_back: bool = false
 var _morph_art: Texture2D
-var _morph_scale: float = 1.0
 var _morph_at: Vector2 = Vector2.ZERO
 var _morph_flip: bool = false
 
@@ -150,7 +149,6 @@ func _start_morph(p: Player, back: bool) -> void:
 	_morph_art = p.special.data.form_morph
 	if _morph_art == null:
 		return
-	_morph_scale = p.special.data.form_scale
 	_morph_back = back
 	_morph_t = 0.0
 
@@ -212,7 +210,7 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 	draw_set_transform(Vector2.ZERO)
 
 
-## Frame by frame from the character into the form, growing to its scale (or back, shrinking).
+## Frame by frame from the character into the form (or back). The strip has the growth baked in.
 func _draw_morph() -> void:
 	if _morph_t < 0.0:
 		return
@@ -220,9 +218,8 @@ func _draw_morph() -> void:
 	var k: int = mini(int(_morph_t / MORPH_TIME * n), n - 1)
 	if _morph_back:
 		k = n - 1 - k
-	var s: float = Constants.SPRITE_SCALE * lerpf(1.0, _morph_scale, k / float(n - 1))
 	draw_set_transform(_morph_at, 0.0, Vector2(-1.0 if _morph_flip else 1.0, 1.0))
-	_draw_frame(_morph_art, k, _morph_art.get_height(), Vector2.ZERO, s)
+	_draw_frame(_morph_art, k, _morph_art.get_height(), Vector2.ZERO, Constants.SPRITE_SCALE)
 	draw_set_transform(Vector2.ZERO)
 
 
