@@ -8,7 +8,10 @@ extends Resource
 ## DASH: burst of speed with i-frames. SHIELD: a barrier in front that blocks enemy shots.
 ## DUAL_WIELD: every shot fires a second, offset volley. TRANSFORM: a stronger form for a while
 ## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
-enum Kind { DASH, SHIELD, DUAL_WIELD, TRANSFORM }
+## BLINK: instant hop (stopped by walls) with i-frames. SMOKE: a cloud where you stand; inside it
+## enemy auto-aim and bots can't lock on. VOLLEY: fires `volley_weapon` once (e.g. a ring of
+## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
+enum Kind { DASH, SHIELD, DUAL_WIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -32,6 +35,23 @@ enum Kind { DASH, SHIELD, DUAL_WIELD, TRANSFORM }
 ## Length of the deployed barrier and how far in front of the player it appears.
 @export var shield_width: float = 110.0
 @export var shield_distance: float = 44.0
+
+@export_group("Blink")
+@export var blink_distance: float = 200.0
+
+@export_group("Smoke")
+@export var smoke_radius: float = 90.0
+
+@export_group("Volley")
+@export var volley_weapon: WeaponData
+
+@export_group("Clones")
+@export var clone_count: int = 3
+@export var clone_speed: float = 220.0
+## How far clones run out before milling about.
+@export var clone_reach: float = 260.0
+## Angle between neighbouring clones' paths.
+@export var clone_spread_deg: float = 55.0
 
 @export_group("Transform")
 ## Sheet laid out like a character's (idle, hit, walk); drawn `form_scale` x the usual size.

@@ -129,30 +129,31 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
 def flicker(step=None, t=0):
-    """Dash: hooded scout with a trailing scarf and a dagger on the back."""
+    """Ninja: black shroud and hood, masked face (just the eyes show), steel forehead plate,
+    a red scarf trailing behind and a ninjato on the back."""
     low = Canvas()
-    for x, dy in legs(low, NAVY, BROWN, step):
-        low.flat(R((x, 50 + dy, x + 6, 51 + dy)), SKIN_D)  # boot cuffs
+    for x, dy in legs(low, SHADOW, NAVY, step):
+        low.flat(R((x, 49 + dy, x + 5, 49 + dy)), NAVY)  # leg wraps
+        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), NAVY)
     up = Canvas()
     s = SWAY[t % 4]
-    up.part(P([(21, 33), (4, 27 + s), (2, 34 + s), (9, 40 + s), (21, 39)]), ORANGE)  # scarf tails flutter
-    up.part(P([(9, 33 + s), (2, 34 + s), (9, 40 + s)]), RED, shade=False)
-    up.part(L([(13, 25), (25, 45)], 4), BROWN)  # dagger sheath on the back
-    up.part(RR((9, 21, 15, 27), 1), STEEL)  # dagger pommel
-    up.part(RR((20, 33, 44, 48), 3), NAVY)  # tunic
-    up.part(L([(23, 35), (40, 46)], 2), BROWN, shade=False, line=False)  # strap
-    up.part(R((20, 44, 44, 46)), BROWN, line=False)  # belt
-    up.part(R((30, 43, 34, 47)), YELLOW)
-    up.dot(32, 45, ORANGE)
-    up.part(P([(18, 12), (7, 19), (17, 27)]), TEAL)  # hood point
-    up.part(E((15, 4, 49, 38)), TEAL)  # hood
-    up.part(E((23, 15, 47, 35)), SKIN)  # face
-    up.part(P([(23, 13), (47, 13), (47, 19), (41, 21), (36, 17), (30, 21), (23, 19)]), TEAL)  # fringe
-    up.flat(E((20, 8, 27, 13)), TEAL_L)  # hood shine
-    big_eyes(up, 22, (31, 41), TEAL)
-    face(up, (28, 45, 29), (37, 29))
-    up.part(RR((19, 31, 45, 37), 2), ORANGE)  # scarf
-    up.part(RR((17, 32, 24, 39), 2), RED)  # scarf knot
+    up.part(P([(21, 33), (4, 27 + s), (2, 34 + s), (9, 40 + s), (21, 39)]), RED)  # scarf tails flutter
+    up.part(P([(9, 33 + s), (2, 34 + s), (9, 40 + s)]), MAROON, shade=False)
+    up.part(L([(13, 25), (25, 45)], 4), OUTLINE)  # ninjato on the back
+    up.part(RR((9, 21, 15, 27), 1), STEEL)  # its guard and pommel
+    up.part(RR((20, 33, 44, 48), 3), SHADOW)  # shroud
+    up.part(P([(22, 34), (32, 41), (42, 34), (42, 37), (32, 44), (22, 37)]), NAVY, shade=False, line=False)  # wrap fold
+    up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
+    up.part(P([(18, 12), (7, 19), (17, 27)]), SHADOW)  # hood point
+    up.part(E((15, 4, 49, 38)), SHADOW)  # hood
+    up.part(RR((22, 18, 47, 27), 3), SKIN)  # eye slit
+    up.part(R((22, 13, 47, 17)), STEEL)  # forehead plate
+    up.flat(R((32, 14, 36, 15)), STEEL_D)  # its engraving
+    up.part(E((21, 26, 48, 37)), SHADOW)  # mask over the lower face
+    up.flat(E((20, 8, 27, 13)), NAVY)  # hood sheen
+    big_eyes(up, 20, (31, 41), RED, h=5)
+    up.part(RR((19, 31, 45, 37), 2), RED)  # scarf
+    up.part(RR((17, 32, 24, 39), 2), MAROON)  # scarf knot
     return low, up
 
 
@@ -472,7 +473,7 @@ def revolver(c):
 
 
 # Hands are drawn by the game on the weapon's grip (they follow the aim), not baked into the sheets.
-HANDS = {"flicker": SKIN, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN}
+HANDS = {"flicker": NAVY, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN}
 HAND_SIZE = 10
 
 
@@ -818,6 +819,16 @@ ICONS = {
     "ape": lambda c: (c.flat(E((1, 1, 11, 11)), MAROON), c.flat(E((3, 5, 10, 11)), BROWN),
                       c.flat(R((2, 2, 10, 3)), YELLOW), c.flat(R((4, 6, 5, 7)), RED), c.flat(R((7, 6, 8, 7)), RED),
                       c.flat(R((5, 9, 8, 9)), OUTLINE)),
+    "clones": lambda c: (c.flat(E((0, 2, 6, 8)), SHADOW), c.flat(R((1, 7, 5, 11)), SHADOW),
+                         c.flat(E((6, 1, 12, 7)), NAVY), c.flat(R((7, 6, 11, 11)), NAVY),
+                         c.flat(R((7, 3, 11, 4)), SKIN), c.flat(R((1, 4, 5, 5)), STEEL_D)),
+    "blink": lambda c: (c.flat(P([(6, 0), (8, 4), (12, 6), (8, 8), (6, 12), (4, 8), (0, 6), (4, 4)]), TEAL_L),
+                        c.flat(E((5, 5, 7, 7)), WHITE)),
+    "smoke": lambda c: (c.flat(E((0, 5, 7, 12)), STEEL_D), c.flat(E((4, 2, 12, 10)), STEEL),
+                        c.flat(E((6, 6, 12, 12)), STEEL_D), c.flat(R((4, 1, 5, 2)), RED)),
+    "volley": lambda c: [c.flat(L([(6 + round(2 * dx), 6 + round(2 * dy)), (6 + round(6 * dx), 6 + round(6 * dy))], 1), STEEL)
+                         for dx, dy in ((1, 0), (0.7, 0.7), (0, 1), (-0.7, 0.7), (-1, 0), (-0.7, -0.7), (0, -1), (0.7, -0.7))]
+                        + [c.flat(E((4, 4, 8, 8)), RED)],
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -955,7 +966,7 @@ def main() -> None:
     print(f"wrote UI kit to {UI_OUT}")
     # App Store icons must be opaque.
     icon = Image.new("RGBA", (SIZE, SIZE), NAVY + (255,))
-    icon.alpha_composite(frames(flicker)[0])
+    icon.alpha_composite(frames(flicker)[0])  # the app icon follows Flicker's look
     icon.convert("RGB").resize((ICON_SIZE, ICON_SIZE), Image.NEAREST).save(ROOT / "assets" / "icon.png")
     print("wrote assets/icon.png")
 

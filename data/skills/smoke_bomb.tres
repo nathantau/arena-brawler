@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_smoke.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"smoke_bomb"
+display_name = "Smoke Bomb"
+kind = 5
+special = true
+blurb = "Hide from auto-aim"
+tags = Array[StringName]([&"flicker"])
+cooldown = 10.0
+duration = 4.0
+smoke_radius = 90.0

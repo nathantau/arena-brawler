@@ -29,7 +29,8 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.default_character(), flicker)
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
-	for id: StringName in [&"dash", &"barrier", &"dual_wield", &"great_ape"]:
+	for id: StringName in [&"dash", &"barrier", &"dual_wield", &"great_ape", &"blink", &"smoke_bomb",
+			&"fan_of_blades", &"shadow_clones"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -189,3 +190,108 @@ func test_switching_character_keeps_a_usable_special() -> void:
 	assert_eq(p.special.data.id, &"barrier", "Warden can use Barrier too")
 	p.set_character(flicker)
 	assert_eq(p.special.data, skills.specials_for(flicker)[0], "Flicker can't: falls back to a default")
+
+
+
+# --- Flicker's ninja specials ------------------------------------------------------
+
+func _wall(world: Node2D, center: Vector2, size: Vector2) -> void:
+	var body := StaticBody2D.new()
+	body.collision_layer = Constants.LAYER_WALLS
+	var shape := RectangleShape2D.new()
+	shape.size = size
+	var cs := CollisionShape2D.new()
+	cs.shape = shape
+	body.add_child(cs)
+	body.position = center
+	world.add_child(body)
+
+
+func _flicker_in(world: Node2D, special: StringName, pool: ProjectilePool = null) -> Player:
+	var p := Player.new()
+	p.setup(1, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3, flicker)
+	world.add_child(p)
+	p.set_special(skills.get_skill(special))
+	return p
+
+
+func _press_special(p: Player, aim: Vector2, move: Vector2 = Vector2.ZERO) -> void:
+	var f := InputFrame.new()
+	f.seq = 10
+	f.aim_vec = aim
+	f.move_vec = move
+	f.special = true
+	p.simulate(f, DT)
+
+
+func test_flicker_can_pick_all_ninja_specials() -> void:
+	var ids: Array[StringName] = []
+	for sk: SkillData in skills.specials_for(flicker):
+		ids.append(sk.id)
+	assert_eq(ids[0], &"shadow_clones", "signature first")
+	for id: StringName in [&"blink", &"smoke_bomb", &"fan_of_blades", &"dual_wield"]:
+		assert_has(ids, id)
+	for c: CharacterData in [warden, twinshot]:
+		assert_false(c.can_use_skill(skills.get_skill(&"blink")), String(c.id))
+
+
+func test_blink_hops_and_walls_stop_it() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	_wall(world, Vector2(400, 300), Vector2(20, 400))
+	var p: Player = _flicker_in(world, &"blink")
+	p.global_position = Vector2(100, 300)
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
+	assert_gt(p.global_position.x, 100.0 + skills.get_skill(&"blink").blink_distance * 0.9, "hopped forward")
+	assert_true(p.stats.is_invulnerable())
+	p.special.reset()
+	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
+	assert_lt(p.global_position.x, 400.0 - 10.0, "stopped at the wall")
+
+
+func test_smoke_hides_only_inside_the_cloud() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var p: Player = _flicker_in(world, &"smoke_bomb")
+	p.global_position = Vector2(200, 200)
+	assert_false(p.is_hidden())
+	_press_special(p, Vector2.RIGHT)
+	assert_true(p.is_hidden())
+	p.global_position += Vector2(skills.get_skill(&"smoke_bomb").smoke_radius + 5.0, 0)
+	assert_false(p.is_hidden(), "stepped out of the smoke")
+
+
+func test_shadow_clones_run_out_and_stop_at_walls() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	_wall(world, Vector2(300, 200), Vector2(20, 600))
+	var p: Player = _flicker_in(world, &"shadow_clones")
+	p.global_position = Vector2(150, 200)
+	await wait_physics_frames(2)
+	assert_eq(p.clone_points().size(), 0)
+	_press_special(p, Vector2.RIGHT)
+	p.special.active_remaining -= 2.0  # two seconds in
+	var points: PackedVector2Array = p.clone_points()
+	assert_eq(points.size(), skills.get_skill(&"shadow_clones").clone_count)
+	for c: Vector2 in points:
+		assert_lt(c.x, 300.0, "clones don't run through walls")
+		assert_gt(c.distance_to(Vector2(150, 200)), 50.0, "clones moved away")
+	assert_eq(p.clone_points(), points, "deterministic: same state, same clones")
+
+
+func test_fan_of_blades_fires_a_ring() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var p: Player = _flicker_in(world, &"fan_of_blades", pool)
+	p.global_position = Vector2(500, 500)
+	await wait_physics_frames(1)
+	_press_special(p, Vector2.RIGHT)
+	assert_eq(pool.active_count(), skills.get_skill(&"fan_of_blades").volley_weapon.pellets)
+	var spread := Rect2(p.global_position, Vector2.ZERO)
+	for sl: ProjectilePool.Slot in pool.debug_slots():
+		if sl.active:
+			spread = spread.expand(sl.pos + sl.vel)
+	assert_true(spread.size.x > 400.0 and spread.size.y > 400.0, "blades fly every way")

@@ -32,9 +32,9 @@ func get_input(player: Player, delta: float) -> InputFrame:
 	_frame.skill = false
 	_frame.special = false
 
-	var target: Player = _nearest_visible_enemy(player)
+	var target: Variant = _nearest_visible_enemy(player)
 	if target != null:
-		var to: Vector2 = target.global_position - player.global_position
+		var to: Vector2 = (target as Vector2) - player.global_position
 		var dist: float = to.length()
 		var dir: Vector2 = to / dist
 		var radial: Vector2 = dir if dist > Constants.BOT_PREFERRED_DISTANCE else -dir
@@ -50,17 +50,22 @@ func get_input(player: Player, delta: float) -> InputFrame:
 	return _frame
 
 
-## Bots only hunt non-bot players so they don't just shoot each other.
-func _nearest_visible_enemy(player: Player) -> Player:
+## Where to shoot: the nearest visible non-bot enemy, or one of its shadow clones (bots fall for
+## them). Enemies hidden in their smoke are ignored. Null if nothing is in sight.
+func _nearest_visible_enemy(player: Player) -> Variant:
 	var space: PhysicsDirectSpaceState2D = player.get_world_2d().direct_space_state
-	var best: Player = null
+	var best: Variant = null
 	var best_dist_sq: float = Constants.BOT_SIGHT_RANGE * Constants.BOT_SIGHT_RANGE
 	for p: Player in arena.players:
 		if p == player or p.dead or p.controller is BotBrain:
 			continue
-		var d: float = player.global_position.distance_squared_to(p.global_position)
-		if d > 0.0 and d < best_dist_sq \
-				and AutoAim.has_line_of_sight(space, _query, player.global_position, p.global_position):
-			best = p
-			best_dist_sq = d
+		var spots: PackedVector2Array = p.clone_points()
+		if not p.is_hidden():
+			spots.append(p.global_position)
+		for at: Vector2 in spots:
+			var d: float = player.global_position.distance_squared_to(at)
+			if d > 0.0 and d < best_dist_sq \
+					and AutoAim.has_line_of_sight(space, _query, player.global_position, at):
+				best = at
+				best_dist_sq = d
 	return best

@@ -6,6 +6,8 @@ extends PlayerController
 var touch: TouchControls
 var arena: Arena
 var auto_target: Player
+## Where auto-aim points: the target, or one of its shadow clones if that's nearer.
+var auto_aim_point: Vector2 = Vector2.ZERO
 ## Dev/test: drive in circles and fire continuously (--autopilot).
 var autopilot: bool = false
 
@@ -13,6 +15,7 @@ var _frame := InputFrame.new()
 var _query := PhysicsRayQueryParameters2D.new()
 var _candidates: Array[Player] = []
 var _positions := PackedVector2Array()
+var _is_clone: Array[bool] = []
 var _space: PhysicsDirectSpaceState2D
 var _origin: Vector2 = Vector2.ZERO
 var _is_visible_cb: Callable = _is_visible
@@ -42,28 +45,39 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 	elif touch_on and touch.attack_aim != Vector2.ZERO:
 		aim = touch.attack_aim
 	elif auto_target != null:
-		aim = auto_target.global_position - player.global_position
+		aim = auto_aim_point - player.global_position
 	_frame.aim_vec = aim.normalized() if aim != Vector2.ZERO else Vector2.ZERO
 
 	return _frame
 
 
+## Enemies hidden in their smoke are skipped; shadow clones count as targets (that's the trick).
 func _update_auto_target(player: Player) -> void:
 	_candidates.clear()
 	_positions.clear()
+	_is_clone.clear()
 	for p: Player in arena.players:
-		if p != player and not p.dead:
+		if p == player or p.dead:
+			continue
+		if not p.is_hidden():
 			_candidates.append(p)
 			_positions.append(p.global_position)
+			_is_clone.append(false)
+		for c: Vector2 in p.clone_points():
+			_candidates.append(p)
+			_positions.append(c)
+			_is_clone.append(true)
 	_space = player.get_world_2d().direct_space_state
 	_origin = player.global_position
 	var idx: int = AutoAim.pick_nearest(_origin, _positions, Constants.AUTO_AIM_RANGE, _is_visible_cb)
 	var new_target: Player = _candidates[idx] if idx >= 0 else null
-	if auto_target != null and auto_target != new_target:
+	if auto_target != null:
 		auto_target.targeted = false
 	auto_target = new_target
 	if auto_target != null:
-		auto_target.targeted = true
+		auto_aim_point = _positions[idx]
+		# The red ring would give away which one is real.
+		auto_target.targeted = not _is_clone[idx]
 
 
 func _is_visible(i: int) -> bool:

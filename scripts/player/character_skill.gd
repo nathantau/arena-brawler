@@ -4,7 +4,9 @@ extends RefCounted
 ## - DASH: burst of speed in `direction` with i-frames (movement reads is_dashing()).
 ## - SHIELD: a barrier centred on `anchor`, facing `direction`, that blocks enemy projectiles.
 ## - DUAL_WIELD: every shot fires a second, offset volley for no extra energy.
-## - TRANSFORM: a stronger form; fires `form_weapon` (cooldown in `form_weapon_cooldown`).
+## - TRANSFORM: a stronger form; fires `form_weapon` (its cooldown is snapshotted).
+## - BLINK: like a dash's i-frames; the Player does the hop. VOLLEY: the Player fires it.
+## - SMOKE / CLONES: centred on `anchor` (where you stood), aimed along `direction`.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 var data: SkillData
@@ -46,6 +48,19 @@ func is_transformed() -> bool:
 	return data.kind == SkillData.Kind.TRANSFORM and is_active()
 
 
+func is_smoking() -> bool:
+	return data.kind == SkillData.Kind.SMOKE and is_active()
+
+
+func is_cloning() -> bool:
+	return data.kind == SkillData.Kind.CLONES and is_active()
+
+
+## Seconds since activation (drives clone paths).
+func elapsed() -> float:
+	return data.duration - active_remaining
+
+
 ## 1.0 = just used, 0.0 = ready.
 func cooldown_fraction() -> float:
 	if data.cooldown <= 0.0:
@@ -61,10 +76,12 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 	active_remaining = data.duration
 	cooldown_remaining = data.cooldown
 	match data.kind:
-		SkillData.Kind.DASH:
+		SkillData.Kind.DASH, SkillData.Kind.BLINK:
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.dash_iframes)
 		SkillData.Kind.SHIELD:
 			anchor = origin + direction * data.shield_distance
+		SkillData.Kind.SMOKE, SkillData.Kind.CLONES:
+			anchor = origin
 		SkillData.Kind.TRANSFORM:
 			form_weapon.cooldown = 0.0
 	return true

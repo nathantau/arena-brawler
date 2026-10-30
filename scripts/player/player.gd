@@ -33,6 +33,11 @@ const MELEE_ANIM_TIME: float = 0.16
 const MELEE_REST_DEG: float = 35.0
 const THRUST_REACH: float = 0.35
 const INVULN_ALPHA: float = 0.45
+## Volley shots get their own key space so they never collide with the same frame's normal shot.
+const VOLLEY_SEQ_OFFSET: int = 1 << 24
+## Shadow clones weave side to side as they run.
+const CLONE_WOBBLE_PX: float = 26.0
+const CLONE_WOBBLE_SPEED: float = 4.0
 const BAR_WIDTH: float = 40.0
 const BAR_HEIGHT: float = 4.0
 const BAR_GAP: float = 2.0
@@ -92,6 +97,9 @@ var _recoil_len: float = RECOIL_TIME
 var _sprite := AnimatedSprite2D.new()
 ## Drawn after the sprite: the gun when it's in front of the body, and health bars.
 var _overlay := Node2D.new()
+## Smoke clouds and shadow clones (cosmetic, from the synced special state).
+var _special_fx := SpecialFx.new()
+var _clone_query := PhysicsRayQueryParameters2D.new()
 
 
 func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData], ctrl: PlayerController,
@@ -120,6 +128,8 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	add_child(_sprite)
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
+	add_child(_special_fx)
+	_clone_query.collision_mask = Constants.LAYER_WALLS
 	set_character(p_character)
 
 
@@ -185,7 +195,8 @@ func _process(delta: float) -> void:
 		_sprite.play(anim)
 	_sprite.position = visual_offset
 	_sprite.flip_h = facing.x < 0.0
-	_sprite.modulate.a = INVULN_ALPHA if stats.is_invulnerable() else 1.0
+	_sprite.modulate.a = INVULN_ALPHA if stats.is_invulnerable() or is_hidden() else 1.0
+	_special_fx.sync(self)
 	queue_redraw()
 	_overlay.queue_redraw()
 
@@ -235,8 +246,46 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 
 
 func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
-	if slot.try_activate(_skill_direction(slot.data, input), global_position, stats) and not replay:
+	if not slot.try_activate(_skill_direction(slot.data, input), global_position, stats):
+		return
+	match slot.data.kind:
+		SkillData.Kind.BLINK:
+			move_and_collide(slot.direction * slot.data.blink_distance)  # walls stop the hop
+		SkillData.Kind.VOLLEY:
+			if not replay:
+				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
+				projectiles.fire_shot(player_id, seq, global_position, slot.direction, slot.data.volley_weapon, match_seed)
+				shot_fired.emit(self, seq, global_position, slot.direction, slot.data.volley_weapon.id, false)
+	if not replay:
 		skill_used.emit(self, slot.data)
+
+
+## Inside your own smoke: enemy auto-aim and bots can't lock on.
+func is_hidden() -> bool:
+	return special.is_smoking() and global_position.distance_to(special.anchor) <= special.data.smoke_radius
+
+
+## Where this player's shadow clones are right now (empty unless cloning). A pure function of the
+## synced special state and the walls, so every peer (and the server's bots) sees the same clones.
+func clone_points() -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if dead or not special.is_cloning():
+		return out
+	var d: SkillData = special.data
+	var t: float = special.elapsed()
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	for k: int in d.clone_count:
+		var angle: float = special.direction.angle() + deg_to_rad(d.clone_spread_deg) * (k - (d.clone_count - 1) * 0.5)
+		var run: Vector2 = Vector2.RIGHT.rotated(angle)
+		var target: Vector2 = special.anchor + run * minf(t * d.clone_speed, d.clone_reach) \
+			+ run.orthogonal() * sin(t * CLONE_WOBBLE_SPEED + k * 2.0) * CLONE_WOBBLE_PX
+		_clone_query.from = special.anchor
+		_clone_query.to = target
+		var hit: Dictionary = space.intersect_ray(_clone_query)
+		if not hit.is_empty():
+			target = hit.position - run * Constants.PLAYER_RADIUS
+		out.append(target)
+	return out
 
 
 func is_dashing() -> bool:
@@ -254,7 +303,8 @@ func held_weapon() -> WeaponState:
 
 ## Dash goes where you're moving (else where you face); the barrier goes where you aim.
 func _skill_direction(data: SkillData, input: InputFrame) -> Vector2:
-	if data.kind == SkillData.Kind.DASH and input.move_vec.length() > Constants.INPUT_DEADZONE:
+	var moves: bool = data.kind == SkillData.Kind.DASH or data.kind == SkillData.Kind.BLINK
+	if moves and input.move_vec.length() > Constants.INPUT_DEADZONE:
 		return input.move_vec
 	if input.aim_vec.length_squared() > 0.0:
 		return input.aim_vec

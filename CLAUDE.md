@@ -230,8 +230,15 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `ape_fists` (melee slam) instead of the loadout; form weapon cooldown is in the snapshot). Snapshots carry both
   slots (`DASH_*`, `SPECIAL_ID/…`); server validates `rpc_select_special`; `--special ID` CLI. The loading room is
   fighter cards with a special column beside them, then weapons. Removed per-character skill fields (Wukong's
-  longer Somersault dash is gone: everyone shares one Dash). Next idea from the user: a ninja whose special makes
-  harmless moving decoy clones. Not done: bots don't prefer usable pickups; no
+  longer Somersault dash is gone: everyone shares one Dash).
+- **Flicker is the ninja** (2026-10-30): black shroud, masked face, steel forehead plate, red scarf, ninjato; dark
+  hands. Four Flicker-only specials (tag `flicker`): **Shadow Clones** (signature, CLONES: 3 decoys run out from
+  where you stood; positions are a pure function of the synced special state + walls (`Player.clone_points()`),
+  drawn by `player/special_fx.gd` with the owner's sprite/weapon; harmless and bullets pass through, but enemy
+  auto-aim and bots target them), **Blink** (BLINK: `move_and_collide` hop, walls stop it, i-frames),
+  **Smoke Bomb** (SMOKE: cloud at your feet; while inside it `is_hidden()` and enemy auto-aim / bots skip you),
+  **Fan of Blades** (VOLLEY: fires `blade_fan`, 12 piercing kunai in a ring, through the normal shot pipeline
+  with seq + `VOLLEY_SEQ_OFFSET`). Dual Wield is still pickable too. Not done: bots don't prefer usable pickups; no
   per-weapon projectile sprites (still circles); the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
