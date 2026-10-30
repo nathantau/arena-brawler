@@ -180,9 +180,9 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   shared 16-colour `palette.py`, auto 1 px outline, self-check for palette/alpha/edges) into `assets/sprites/<id>.png`:
   horizontal sheets of 4 idle-bob frames + 2 hit-flash frames + 8 walk frames (16 fps, shown above 40 px/s) + 8 death
   frames (generated for every character and form: white flash, pop, topple backwards, X eyes via the `KO` flag in the eye
-  helpers, dizzy stars, dither dissolve; 9 fps). Sheet cells are 96 px (`SPRITE_CELL_SIZE`) so the fall fits; the other
-  animations cut the centred 64 px. On a real death `Player._spawn_corpse()` plays "die" on every peer; scarves/feathers/plumes sway and Warden's gem glints via the `t` tick. Flicker (hooded scout, scarf), Warden (knight, plume,
-  tower shield), Twinshot (wide-brim gunslinger, two holsters), Wukong (monkey king, cloud puffs via `AURAS`, Dash). Flint (soot-black fire elemental, flickering flame hair, embers via `AURAS`; Ember Palm: short-range piercing fire stream with drag; Supernova: VOLLEY of 16 fireballs). New characters: `.claude/skills/new-character`. `CharacterData.sprite_sheet` → `sprite_frames()`
+  helpers, dizzy stars, dither dissolve; 9 fps). Sheet cells are 96 px (`SPRITE_CELL_SIZE`) so the fall and art above the 64 px
+  body box (`CROWNS`) fit; all animations use whole cells, menus use `CharacterData.portrait()` (`SPRITE_PORTRAIT_RECT`). On a real death `Player._spawn_corpse()` plays "die" on every peer; scarves/feathers/plumes sway and Warden's gem glints via the `t` tick. Flicker (hooded scout, scarf), Warden (knight, plume,
+  tower shield), Twinshot (wide-brim gunslinger, two holsters), Wukong (monkey king, cloud puffs via `AURAS`, Dash). Flint (soot-black fire elemental, head on fire: an upright flickering flame drawn above the body box via generate.py `CROWNS`; Ember Palm: short-range piercing fire stream with drag; Supernova: VOLLEY of 16 fireballs). New characters: `.claude/skills/new-character`. `CharacterData.sprite_sheet` → `sprite_frames()`
   builds a shared SpriteFrames ("idle", "hit", "walk"); the Player has an `AnimatedSprite2D` (Nearest, x1.5) plus an overlay
   node for the front gun and bars. Player colour = foot ring only (sheets aren't recoloured).
   The script also writes `assets/icon.png` and one 48x24 image per weapon (`assets/sprites/weapons/<id>.png`).

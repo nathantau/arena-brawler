@@ -22,6 +22,7 @@ extends Resource
 ## Drawn on the held weapon's grip(s) (tools/sprites/generate.py HANDS); the sheets have no hands.
 @export var hand_sprite: Texture2D
 
+var _portraits: Array[AtlasTexture] = []
 var _sprite_frames: SpriteFrames
 
 @export_group("Dual wield")
@@ -47,7 +48,21 @@ func _shares_tag(tags: Array[StringName]) -> bool:
 	return false
 
 
-## "idle" (looping bob) + "hit" (one-shot flash) + "walk" (looping) animations cut from sprite_sheet; built once, shared.
+## Menu art: idle frame `i`, cropped from its cell to the body plus a little headroom (hair, flames).
+func portrait(i: int = 0) -> Texture2D:
+	if _portraits.is_empty():
+		var cell: int = Constants.SPRITE_CELL_SIZE
+		var r: Rect2 = Constants.SPRITE_PORTRAIT_RECT
+		for k: int in Constants.SPRITE_IDLE_FRAMES:
+			var t := AtlasTexture.new()
+			t.atlas = sprite_sheet
+			t.region = Rect2(r.position + Vector2(k * cell, 0), r.size)
+			_portraits.append(t)
+	return _portraits[i % _portraits.size()]
+
+
+## "idle" (looping bob) + "hit" (one-shot flash) + "walk" (looping) + "die" animations cut from
+## sprite_sheet (whole cells, so art above the body box shows); built once, shared.
 func sprite_frames() -> SpriteFrames:
 	if _sprite_frames == null:
 		_sprite_frames = frames_from_sheet(sprite_sheet)
@@ -63,19 +78,18 @@ static func frames_from_sheet(sheet: Texture2D) -> SpriteFrames:
 	_add_animation(frames, sheet, &"walk", Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES,
 		Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_WALK_FPS, true)
 	_add_animation(frames, sheet, &"die", Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES
-		+ Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_DIE_FRAMES, Constants.SPRITE_DIE_FPS, false,
-		Constants.SPRITE_CELL_SIZE)
+		+ Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_DIE_FRAMES, Constants.SPRITE_DIE_FPS, false)
 	return frames
 
 
 static func _add_animation(frames: SpriteFrames, sheet: Texture2D, anim: StringName, first: int, count: int,
-		fps: float, loop: bool, size: int = Constants.SPRITE_FRAME_SIZE) -> void:
+		fps: float, loop: bool) -> void:
 	frames.add_animation(anim)
 	frames.set_animation_speed(anim, fps)
 	frames.set_animation_loop(anim, loop)
-	var inset: float = (Constants.SPRITE_CELL_SIZE - size) / 2.0
+	var size: int = Constants.SPRITE_CELL_SIZE
 	for i: int in count:
 		var frame := AtlasTexture.new()
 		frame.atlas = sheet
-		frame.region = Rect2((first + i) * Constants.SPRITE_CELL_SIZE + inset, inset, size, size)
+		frame.region = Rect2((first + i) * size, 0, size, size)
 		frames.add_frame(anim, frame)

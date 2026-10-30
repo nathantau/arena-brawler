@@ -253,17 +253,21 @@ def twinshot(step=None, t=0):
     return low, up
 
 
-def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: int = 5):
+def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: int = 5, lean: float = 0.0,
+          back: float = 0.0):
     """A flickering flame: tongues of uneven height (they shift each tick), red outside, orange,
-    then a yellow core."""
+    then a yellow core. `lean` sweeps the tips backwards (left) by that fraction of their height;
+    `back` makes the rear tongues up to that much taller, so it streams off behind."""
     def shape(k, inset):
         w = (x1 - x0) - 2 * inset
         pts = [(x0 + inset, base)]
         for i in range(tongues):
             hx = x0 + inset + w * (i + 0.5) / tongues
             hh = (height - inset * 2) * (0.6 + 0.4 * (((i * 7 + t) % 4) in (1, 2))) * (1.15 if i == tongues // 2 else 1)
-            pts += [(hx - w / tongues * 0.3, base - hh * 0.55), (hx + SWAY[(t + i) % 4], base - hh),
-                    (hx + w / tongues * 0.3, base - hh * 0.5)]
+            hh *= 1 + back * (1 - i / max(1, tongues - 1))
+            pts += [(hx - w / tongues * 0.45 - lean * hh * 0.5, base - hh * 0.55),
+                    (hx + SWAY[(t + i) % 4] - lean * hh, base - hh),
+                    (hx + w / tongues * 0.45 - lean * hh * 0.45, base - hh * 0.5)]
         return pts + [(x1 - inset, base)]
     c.part(P(shape(t, 0)), RED, shade=False)
     c.part(P(shape(t, 3)), ORANGE, shade=False, line=False)
@@ -271,8 +275,8 @@ def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: 
 
 
 def flint(step=None, t=0):
-    """Fire: a soot-black little fire elemental with glowing ember cracks, a molten face and a
-    flame for hair that flickers every tick; embers rise behind (AURAS)."""
+    """Fire: a soot-black little fire elemental with glowing ember cracks and a molten face. His
+    flaming hair is drawn above the art box (CROWNS: flint_crown)."""
     low = Canvas()
     for x, dy in legs(low, SHADOW, MAROON, step):
         low.flat(R((x + 2, 47 + dy, x + 2, 50 + dy)), ORANGE)  # ember crack down each leg
@@ -282,7 +286,6 @@ def flint(step=None, t=0):
         up.flat(L(pts, 1), ORANGE)  # glowing cracks
     up.flat(P([(32, 37), (35, 40), (32, 43), (29, 40)]), YELLOW)  # ember heart
     up.dot(32, 40, WHITE)
-    flame(up, 14, 50, 22, 22, t)  # hair: a big flame behind the head
     up.part(E((20, 14, 44, 37)), ORANGE)  # molten face
     up.part(E((27, 27, 39, 35)), YELLOW, line=False)  # hot glow around the mouth
     big_eyes(up, 23, (29, 39), YELLOW)
@@ -293,13 +296,12 @@ def flint(step=None, t=0):
     return low, up
 
 
-def flint_embers(i: int) -> Canvas:
-    """Embers drifting up behind Flint; loops every 4 frames."""
-    c = Canvas()
-    for k, (x, y) in enumerate(((12, 30), (52, 26), (9, 44), (55, 40), (16, 18), (48, 12))):
-        phase = (i + k) % 4
-        yy = y - 3 * phase
-        c.flat(R((x + SWAY[(i + k) % 4], yy, x + 1 + SWAY[(i + k) % 4], yy + 1)), YELLOW if phase < 2 else ORANGE)
+def flint_crown(t: int, dy: int) -> Canvas:
+    """Flint's head on fire: an upright flame rising off his head, its tongues flickering every tick.
+    A CELL canvas drawn behind the frame (the face covers its base); `dy` = the head's bob."""
+    c = Canvas(CELL)
+    top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
+    flame(c, PAD + 15, PAD + 49, top + 24, 26, t, tongues=5)
     return c
 
 
@@ -1390,7 +1392,10 @@ FX = {
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint}
 ## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
 FORMS = {"wukong_ape": wukong_ape}
-AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers}  # optional per-frame effects drawn behind
+AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
+## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
+## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
+CROWNS = {"flint": flint_crown}  # optional per-frame effects drawn behind
 
 
 # --- frame processing -------------------------------------------------------
@@ -1507,7 +1512,18 @@ def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
-        fs = [cell(f) for f in frames(build, AURAS.get(name))] + death_frames(build)
+        fs = [cell(f) for f in frames(build, AURAS.get(name))]
+        if name in CROWNS:
+            ticks = list(range(len(IDLE_BOB))) + [0, 0] + list(range(len(WALK_BOB)))
+            dys = IDLE_BOB + [IDLE_BOB[0]] * 2 + WALK_BOB
+            hit = {len(IDLE_BOB): lambda _c: WHITE, len(IDLE_BOB) + 1: LIGHTER.__getitem__}
+            for j, f in enumerate(fs):
+                crown = outline(CROWNS[name](ticks[j], dys[j]).img)
+                if j in hit:
+                    crown = recolor(crown, hit[j])
+                crown.alpha_composite(f)
+                fs[j] = crown
+        fs += death_frames(build)
         sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
         for i, f in enumerate(fs):
             sheet.paste(f, (i * CELL, 0))

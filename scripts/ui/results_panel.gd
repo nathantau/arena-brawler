@@ -88,7 +88,7 @@ func _add_row(place: int, id: int, is_me: bool, kills: int, deaths: int) -> void
 		rank.custom_minimum_size.x = ICON_SIZE.x
 	var p: Player = arena.get_player(id)
 	if p != null:
-		_icon(line, p.character.sprite_frames().get_frame_texture(&"idle", 0), PORTRAIT_SIZE)
+		_icon(line, p.character.portrait(), PORTRAIT_SIZE)
 	var name_label := _text(line, arena.player_name(id) + (" (you)" if is_me else ""), arena.player_color(id))
 	name_label.custom_minimum_size.x = NAME_MIN_W
 	if is_me:

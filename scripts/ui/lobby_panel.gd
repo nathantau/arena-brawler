@@ -78,7 +78,7 @@ func _ready() -> void:
 	_label(fighters, &"HeaderLabel").text = "1 · Choose your fighter"
 	var character_row := _row(fighters)
 	for c: CharacterData in arena.characters.ordered:
-		var card: Button = _card(character_row, CHARACTER_CARD_SIZE, c.sprite_frames().get_frame_texture(&"idle", 0),
+		var card: Button = _card(character_row, CHARACTER_CARD_SIZE, c.portrait(),
 			CHARACTER_ART_SCALE, [c.display_name, "HP %d · Armor %d" % [c.max_hp, c.max_armor]])
 		var id: StringName = c.id
 		card.pressed.connect(func() -> void: arena.character_requested.emit(id))

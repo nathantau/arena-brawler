@@ -95,8 +95,7 @@ func _draw() -> void:
 	var frame: int = int(_time * IDLE_FPS)
 	var x0: float = size.x * 0.5 - ROSTER_GAP * (_roster.size() - 1) * 0.5
 	for i: int in _roster.size():
-		var frames: SpriteFrames = _roster[i].sprite_frames()
-		var art: Texture2D = frames.get_frame_texture(&"idle", (frame + i) % frames.get_frame_count(&"idle"))
+		var art: Texture2D = _roster[i].portrait(frame + i)
 		UiStyle.draw_icon(self, art, Vector2(x0 + ROSTER_GAP * i, size.y * ROSTER_Y + 40.0), ROSTER_SCALE)
 
 
