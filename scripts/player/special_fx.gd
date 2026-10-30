@@ -26,14 +26,17 @@ const SMOKE_FPS: float = 6.0
 const SMOKE_ART_RADIUS: float = 90.0
 const SMOKE_ALPHA: float = 0.9
 const FADE_TIME: float = 0.4
-## Clones fade in from their poof over this long.
-const APPEAR_TIME: float = 0.18
+## Clones fade in inside their cloud while it's at its fullest (it plays slower than other poofs).
+const APPEAR_DELAY: float = 0.08
+const APPEAR_TIME: float = 0.2
+const CLONE_POOF_TIME: float = 0.7
 
 
 class Poof:
 	var pos: Vector2 = Vector2.ZERO
 	var art: Texture2D
 	var t: float = 0.0
+	var duration: float = POOF_TIME
 
 
 class Bolt:
@@ -66,7 +69,7 @@ func sync(p: Player) -> void:
 	var cloning: bool = p.special.is_cloning()
 	if cloning and not _was_cloning:
 		for at: Vector2 in _points:
-			_poof(at, POOF_SMALL)
+			_poof(at, POOF_BIG, CLONE_POOF_TIME)
 	elif _was_cloning and not cloning:
 		for at: Vector2 in _last_points:
 			_poof(at, POOF_SMALL)
@@ -88,7 +91,7 @@ func sync(p: Player) -> void:
 		add_child(c)
 		_clones.append(c)
 	var alpha: float = minf(clampf(p.special.active_remaining / FADE_TIME, 0.0, 1.0),
-		clampf(p.special.elapsed() / APPEAR_TIME, 0.0, 1.0))
+		clampf((p.special.elapsed() - APPEAR_DELAY) / APPEAR_TIME, 0.0, 1.0))
 	for i: int in _clones.size():
 		var c: AnimatedSprite2D = _clones[i]
 		c.visible = i < _points.size()
@@ -108,17 +111,18 @@ func sync(p: Player) -> void:
 func _process(delta: float) -> void:
 	for pf: Poof in _poofs:
 		pf.t += delta
-	_poofs = _poofs.filter(func(pf: Poof) -> bool: return pf.t < POOF_TIME)
+	_poofs = _poofs.filter(func(pf: Poof) -> bool: return pf.t < pf.duration)
 	if _bolt_t >= 0.0:
 		_bolt_t += delta
 		if _bolt_t > BOLT_TIME:
 			_bolt_t = -1.0
 
 
-func _poof(at: Vector2, art: Texture2D) -> void:
+func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME) -> void:
 	var pf := Poof.new()
 	pf.pos = at
 	pf.art = art
+	pf.duration = duration
 	_poofs.append(pf)
 
 
@@ -174,7 +178,7 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 func _draw_flourishes() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for pf: Poof in _poofs:
-		var frame: int = mini(int(pf.t / POOF_TIME * POOF_FRAMES), POOF_FRAMES - 1)
+		var frame: int = mini(int(pf.t / pf.duration * POOF_FRAMES), POOF_FRAMES - 1)
 		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px)
 	if _bolt_t >= 0.0 and int(_bolt_t * 30.0) % 3 != 2:
 		var bw: float = BOLT_ART.get_width() / float(BOLT_VARIANTS)

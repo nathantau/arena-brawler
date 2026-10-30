@@ -38,8 +38,10 @@ const VOLLEY_SEQ_OFFSET: int = 1 << 24
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
-## Clones pop into being this far out around you (each in its own cloud), then run.
+## Clones pop into being this far out around you (each in its own cloud), wait there while the
+## cloud clears, then run.
 const CLONE_START_DISTANCE: float = 48.0
+const CLONE_EMERGE_TIME: float = 0.3
 const BAR_WIDTH: float = 40.0
 const BAR_HEIGHT: float = 4.0
 const BAR_GAP: float = 2.0
@@ -274,13 +276,13 @@ func clone_points() -> PackedVector2Array:
 	if dead or not special.is_cloning():
 		return out
 	var d: SkillData = special.data
-	var t: float = special.elapsed()
+	var t: float = maxf(0.0, special.elapsed() - CLONE_EMERGE_TIME)
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	for k: int in d.clone_count:
 		var angle: float = special.direction.angle() + deg_to_rad(d.clone_spread_deg) * (k - (d.clone_count - 1) * 0.5)
 		var run: Vector2 = Vector2.RIGHT.rotated(angle)
 		var target: Vector2 = special.anchor + run * minf(CLONE_START_DISTANCE + t * d.clone_speed, d.clone_reach) \
-			+ run.orthogonal() * sin(t * CLONE_WOBBLE_SPEED + k * 2.0) * CLONE_WOBBLE_PX
+			+ run.orthogonal() * sin(t * CLONE_WOBBLE_SPEED) * CLONE_WOBBLE_PX
 		_clone_query.from = special.anchor
 		_clone_query.to = target
 		var hit: Dictionary = space.intersect_ray(_clone_query)
