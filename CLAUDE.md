@@ -79,7 +79,11 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `--autopilot` makes a client drive + fire on its own, e.g. two headless autopilot clients for soak tests:
   `godot --path . --headless --quit-after 4000 -- --connect 127.0.0.1:7777 --autopilot --net-debug`
 - Tests: `godot --path . --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit`
-- iOS export: `godot --path . --headless --export-release "iOS" build/ios/ArenaBrawler.xcodeproj`
+- iOS export (needs `app_store_team_id` in `export_presets.cfg`): `godot --path . --headless --export-release "iOS" build/ios/ArenaBrawler.xcodeproj`
+  - Compile check without signing: `xcodebuild -project build/ios/ArenaBrawler.xcodeproj -scheme ArenaBrawler -sdk iphoneos -configuration Release -derivedDataPath build/ios-dd CODE_SIGNING_ALLOWED=NO build`
+- Server Docker image: `server/build.sh` (exports Linux x86_64 + arm64 binaries, builds for this machine's arch;
+  `PLATFORM=linux/amd64 server/build.sh` for an x86 cloud VM). Run: `docker run --rm -p 7777:7777/udp arena-brawler-server --bots 2`
+- Regenerate the app icon from the sprite code: `godot --path . --headless --script tools/make_icon.gd`
 
 ## Status
 - [~] **M1 – implemented, needs a hands-on feel pass** (2026-10-28)
@@ -173,4 +177,14 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   palette letters take the player's colour, plus a coloured foot ring. Idle bob + 4-frame walk cycle (driven by
   on-screen movement so interpolated players animate too), sprite flips to face the aim, a separate 8x4 gun
   sprite rotates with aim and is tinted with the weapon colour. Hit flash = over-bright modulate.
-- [ ] M5 not started
+- [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
+  - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
+    and GUT excluded) and "iOS" (bundle `com.nathantau.arenabrawler`, landscape, Xcode project only).
+    `server/Dockerfile` (debian-slim, non-root, UDP 7777, extra args pass through) + `server/build.sh`.
+    Verified: container on Docker Desktop (arm64) ran a full match with 2 autopilot clients + 1 bot, no errors.
+    iOS: enabled ETC2/ASTC (required for mobile export); with a placeholder team ID the export produces an
+    Xcode project that compiles (`BUILD SUCCEEDED`, unsigned). App icon (`assets/icon.png`, 1024 px, no alpha)
+    generated from the Flicker sprite by `tools/make_icon.gd`.
+  - Still needed: Apple Team ID (+ signing) → archive + TestFlight upload; a cloud host with a public UDP port;
+    a default server address in the client (currently join-by-IP in the menu); test on a real device over the internet.
+- [ ] M6 not started
