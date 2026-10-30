@@ -30,7 +30,7 @@ const RECOIL_TIME: float = 0.06
 ## Melee animation: a sweep across the arc (or a stab out and back), starting from a raised guard.
 const MELEE_ANIM_TIME: float = 0.16
 const MELEE_REST_DEG: float = 35.0
-const THRUST_REACH: float = 0.6
+const THRUST_REACH: float = 0.35
 const INVULN_ALPHA: float = 0.45
 const BAR_WIDTH: float = 40.0
 const BAR_HEIGHT: float = 4.0
@@ -404,7 +404,13 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 		angle -= deg_to_rad(MELEE_REST_DEG) * flip_v
 	var scale_px: float = Constants.SPRITE_SCALE
 	ci.draw_set_transform(visual_offset + offset + Vector2(0.0, WEAPON_HAND_Y) + facing * hold, angle, Vector2(scale_px, scale_px * flip_v))
-	ci.draw_texture(w.sprite, -WEAPON_GRIP, Color(1, 1, 1, _sprite.modulate.a))
+	var tint := Color(1, 1, 1, _sprite.modulate.a)
+	ci.draw_texture(w.sprite, -WEAPON_GRIP, tint)
+	var hand: Texture2D = character.hand_sprite
+	if hand != null:
+		ci.draw_texture(hand, -hand.get_size() * 0.5, tint)
+		if w.off_hand != Vector2.ZERO:
+			ci.draw_texture(hand, w.off_hand - WEAPON_GRIP - hand.get_size() * 0.5, tint)
 
 
 func _draw_bars(r: float) -> void:

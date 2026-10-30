@@ -22,6 +22,7 @@ func test_catalog_covers_every_skill_kind() -> void:
 	for c: CharacterData in characters.ordered:
 		kinds.append(c.skill)
 		assert_not_null(c.sprite_sheet, c.id)
+		assert_not_null(c.hand_sprite, c.id)
 		assert_true(c.max_hp > 0 and c.move_speed > 0.0 and c.skill_cooldown > 0.0 and c.skill_duration > 0.0, c.id)
 		assert_ne(c.display_name, "")
 	assert_eq(characters.default_character(), flicker)

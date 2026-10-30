@@ -3,11 +3,13 @@
 [ext_resource type="Script" path="res://scripts/player/character_data.gd" id="1_cd"]
 [ext_resource type="Texture2D" path="res://assets/sprites/warden.png" id="2_sheet"]
 [ext_resource type="Resource" path="res://data/weapons/warden_hammer.tres" id="3_sig"]
+[ext_resource type="Texture2D" path="res://assets/sprites/warden_hand.png" id="4_hand"]
 
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
 signature_weapon = ExtResource("3_sig")
+hand_sprite = ExtResource("4_hand")
 weapon_tags = Array[StringName]([&"warden", &"blade", &"heavy", &"arcane"])
 id = &"warden"
 display_name = "Warden"

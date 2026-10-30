@@ -144,8 +144,6 @@ def flicker(step=None, t=0):
     up.part(R((20, 44, 44, 46)), BROWN, line=False)  # belt
     up.part(R((30, 43, 34, 47)), YELLOW)
     up.dot(32, 45, ORANGE)
-    up.part(E((16, 39, 23, 46)), SKIN)  # hands
-    up.part(E((41, 39, 48, 46)), SKIN)
     up.part(P([(18, 12), (7, 19), (17, 27)]), TEAL)  # hood point
     up.part(E((15, 4, 49, 38)), TEAL)  # hood
     up.part(E((23, 15, 47, 35)), SKIN)  # face
@@ -235,21 +233,17 @@ def twinshot(step=None, t=0):
 
 
 def wukong(step=None, t=0):
-    """Dash: monkey king with a golden circlet, pheasant feathers, a staff on his back and a cloud collar."""
+    """Dash: monkey king with a golden circlet, pheasant feathers and a cloud collar."""
     low = Canvas()
     for x, dy in legs(low, RED, BROWN, step):
         low.flat(R((x, 50 + dy, x + 6, 50 + dy)), YELLOW)  # leg wraps
     up = Canvas()
     s = SWAY[t % 4]
     up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11 + s, 31)], 3), BROWN)  # curly tail, tip wags
-    up.part(L([(10, 23), (46, 51)], 3), RED)  # staff on the back
-    up.part(RR((7, 20, 13, 26), 2), YELLOW)  # staff cap
     up.part(RR((20, 33, 44, 48), 3), YELLOW)  # golden armour
     up.flat(R((31, 36, 33, 44)), ORANGE)
     up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
     up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
-    up.part(E((16, 39, 23, 46)), SKIN)  # hands
-    up.part(E((41, 39, 48, 46)), SKIN)
     up.part(L([(25, 10), (16, 4), (6, 6 + s)], 2), RED, shade=False)  # pheasant feathers sway
     up.part(L([(29, 9), (24, 3), (14 + s, 2)], 2), RED, shade=False)
     up.part(E((11, 17, 21, 28)), BROWN)  # ear
@@ -398,6 +392,17 @@ def revolver(c):
     c.part(R((17, 8, 29, 11)), STEEL, shade=False)
     c.dot(28, 7, YELLOW)  # front sight
     c.dot(5, 7, STEEL_D)  # hammer
+
+
+# Hands are drawn by the game on the weapon's grip (they follow the aim), not baked into the sheets.
+HANDS = {"flicker": SKIN, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN}
+HAND_SIZE = 10
+
+
+def hand_image(color) -> Image.Image:
+    c = Canvas()
+    c.part(E((2, 2, 7, 7)), color)
+    return outline(c.img).crop((0, 0, HAND_SIZE, HAND_SIZE))
 
 
 WEAPONS = {"pistol": pistol, "bot_blaster": bot_blaster, "smg": smg, "shotgun": shotgun, "sniper": sniper,
@@ -739,6 +744,11 @@ def main() -> None:
         check(img, WEAPON_W)
         img.save(WEAPON_OUT / f"{name}.png")
     print(f"wrote {len(WEAPONS)} weapons to {WEAPON_OUT}")
+    assert HANDS.keys() == CHARACTERS.keys(), "every character needs a hand colour"
+    for name, color in HANDS.items():
+        img = hand_image(color)
+        check(img, HAND_SIZE)
+        img.save(OUT / f"{name}_hand.png")
     ARENA_OUT.mkdir(exist_ok=True)
     for name, parts in THEMES.items():
         sheet = theme_sheet(*parts)

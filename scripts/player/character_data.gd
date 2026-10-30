@@ -22,6 +22,9 @@ enum SkillKind { DASH, SHIELD, DUAL_WIELD }
 ## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames, then walk frames.
 @export var sprite_sheet: Texture2D
 
+## Drawn on the held weapon's grip(s) (tools/sprites/generate.py HANDS); the sheets have no hands.
+@export var hand_sprite: Texture2D
+
 var _sprite_frames: SpriteFrames
 
 @export_group("Dash")

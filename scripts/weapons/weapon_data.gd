@@ -34,6 +34,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var sfx: StringName = &"shot"
 ## Pixel art from tools/sprites/generate.py, pointing right, held at Player.WEAPON_GRIP.
 @export var sprite: Texture2D
+## Where the second hand holds it (sprite px, like Player.WEAPON_GRIP); zero = one-handed.
+@export var off_hand: Vector2 = Vector2.ZERO
 ## Who may carry it: any character sharing a tag (CharacterData.weapon_tags). Empty = everyone.
 ## A character's own id as the only tag makes a signature weapon.
 @export var tags: Array[StringName] = []

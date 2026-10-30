@@ -22,3 +22,4 @@ splash_radius = 90.0
 splash_edge_scale = 0.35
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"explosive", &"heavy"])
+off_hand = Vector2(22, 16)

@@ -25,6 +25,8 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
   - Draw back-to-front: tail/back items, body, hands, head, face, then front accessories.
   - One readable signature silhouette element (hat, plume, shield, feathers...).
 - Leg details must use the `(x, dy)` list `legs()` returns, so they follow the walk cycle.
+- No hands on the sheet: add the character's glove/skin colour to `HANDS` and set `hand_sprite` in the `.tres`
+  (`res://assets/sprites/<id>_hand.png`); the game draws hands on the held weapon.
 
 ## Steps
 
