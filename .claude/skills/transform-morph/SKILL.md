@@ -19,12 +19,12 @@ backwards when it ends. Purely cosmetic: stats switch instantly.
    "<id>_<form>_morph": lambda: strip(morph_frames(frames(<id>, AURAS.get("<id>"))[0],
                                                    frames(<id>_<form>, AURAS.get("<id>_<form>"))[0])),
    ```
-   `morph_frames(a, b)` gives 8 frames: a brightened → a white silhouette → 4 ordered-dither crossfades
-   of the two white line-art silhouettes with gold spark crackles → b white → b brightened. Tweak the
+   `morph_frames(a, b)` gives 8 frames: a → 6 full-colour ordered-dither crossfades with gold spark
+   crackles → b. No white silhouettes (the user didn't like them). Tweak the
    spark colour / count there if the form has a different theme (keep it generic; pass a parameter
    rather than forking the function).
 3. Run the generator; Read a x4 NEAREST preview. Each middle frame should still show both outlines
-   (if it turns into a shapeless blob, the masks are being unioned instead of picked per pixel).
+   (if it turns into a shapeless blob, the sprites are being unioned instead of picked per pixel).
 4. In `data/skills/<skill>.tres` add an `ext_resource` for `res://assets/fx/<id>_<form>_morph.png` and
    `form_morph = ExtResource("...")`.
 5. `godot --headless --import`, run GUT.

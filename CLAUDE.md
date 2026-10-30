@@ -244,7 +244,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   with seq + `VOLLEY_SEQ_OFFSET`). Dual Wield is still pickable too.
   Flourishes (`SpecialFx`, detected from synced state changes so remote players show them too): clones appear in
   their own cloud poof in a ring around the player (`CLONE_START_DISTANCE`), fade in, and vanish in poofs; the Great Ape transformation is struck by lightning, morphs
-  (`SkillData.form_morph`: 8-frame strip, Wukong -> white silhouette -> dithered crossfade with gold sparks -> ape,
+  (`SkillData.form_morph`: 8-frame strip, Wukong -> full-colour dithered crossfade with gold sparks -> ape,
   drawn growing to form_scale while the real sprite is hidden) and bursts out of a cloud; it ends in a dark puff,
   morphing back. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
   (generate.py `FX`: poof / poof_small / poof_dark 10 frames (swell, then burst into wisps), wukong_ape_morph, bolt 3 variants, smoke 4-frame loop; `Canvas(size)`

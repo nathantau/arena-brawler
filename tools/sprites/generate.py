@@ -924,17 +924,15 @@ def poof_frame(size: int, k: int, color) -> Image.Image:
 
 
 def morph_frames(a: Image.Image, b: Image.Image) -> list[Image.Image]:
-    """Transformation from frame `a` into `b`: a brightens to a white silhouette, the silhouette
-    dissolves into b's (ordered dither) with gold sparks crackling inside, then b fades in from white.
-    Drawn growing from a's in-game scale to b's (SpecialFx)."""
-    wa, wb = recolor(a, lambda _c: WHITE), recolor(b, lambda _c: WHITE)
+    """Transformation from frame `a` into `b`, in full colour (no white flash): a dissolves into b (ordered
+    dither over 6 frames) with gold sparks crackling. Drawn growing from a's in-game scale to b's (SpecialFx)."""
     rng = random.Random(7)
-    out = [recolor(a, LIGHTER.__getitem__), wa]
-    for p in (0.2, 0.4, 0.6, 0.8):
-        c = Canvas()  # each pixel from one silhouette or the other: both outlines stay readable
+    out = [a]
+    for p in (1 / 7, 2 / 7, 3 / 7, 4 / 7, 5 / 7, 6 / 7):
+        c = Canvas()  # each pixel from one sprite or the other: both stay readable
         for y in range(SIZE):
             for x in range(SIZE):
-                c.px[x, y] = (wb if BAYER[y % 4][x % 4] / 16 < p else wa).getpixel((x, y))
+                c.px[x, y] = (b if BAYER[y % 4][x % 4] / 16 < p else a).getpixel((x, y))
         inside = [(x, y) for y in range(SIZE) for x in range(SIZE) if c.px[x, y][3]]
         for x, y in rng.sample(inside, 6):  # sparks: short gold crackles
             dx, dy = rng.choice(((1, 0), (0, 1), (1, 1), (1, -1)))
@@ -942,7 +940,7 @@ def morph_frames(a: Image.Image, b: Image.Image) -> list[Image.Image]:
                 if 1 < x + dx * j < SIZE - 2 and 1 < y + dy * j < SIZE - 2:
                     c.dot(x + dx * j, y + dy * j, YELLOW)
         out.append(c.img)
-    return out + [wb, recolor(b, LIGHTER.__getitem__)]
+    return out + [b]
 
 
 BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
