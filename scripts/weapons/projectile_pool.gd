@@ -27,6 +27,15 @@ const IMPACT_POOL_SIZE: int = 48
 const IMPACT_TIME: float = 0.12
 const IMPACT_RADIUS_SCALE: float = 3.0
 const CRIT_RADIUS_SCALE: float = 1.4
+## Bullet sprites alternate their 2 frames this fast (fused grenades twice as fast); crits are drawn
+## bigger, flash every other frame and shed gold sparkles.
+const SPRITE_FPS: float = 12.0
+const CRIT_SPRITE_SCALE: float = 1.35
+const CRIT_FLASH: Color = Color(1.8, 1.8, 1.8)
+const CRIT_SPARKLE_COLOR: Color = Color(1.0, 0.85, 0.35)
+## Trail: this many art-pixel squares behind the bullet, shrinking.
+const TRAIL_DOTS: int = 3
+const IMPACT_SPARK_DIRS: Array[Vector2] = [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]
 const SPLASH_QUERY_MAX: int = 32
 ## Bouncing projectiles pulse so they read as "about to blow".
 const FUSE_PULSE_SPEED: float = 18.0
@@ -56,6 +65,7 @@ class Slot:
 	var pierce_left: int = 0
 	## Clients let piercing pellets fly on after server hit events (they stop where they stop locally).
 	var piercing: bool = false
+	var sprite: Texture2D
 
 
 class Impact:
@@ -81,6 +91,7 @@ var _time: float = 0.0
 
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	for i: int in Constants.PROJECTILE_POOL_SIZE:
 		_slots.append(Slot.new())
 	for i: int in IMPACT_POOL_SIZE:
@@ -169,6 +180,7 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.knockback = weapon.knockback
 	slot.radius = weapon.projectile_radius * (CRIT_RADIUS_SCALE if crit else 1.0)
 	slot.color = weapon.color
+	slot.sprite = weapon.projectile_sprite
 	slot.splash_radius = weapon.splash_radius
 	slot.splash_edge = weapon.splash_edge_scale
 	slot.bounces_left = weapon.bounces
@@ -428,18 +440,37 @@ func _add_impact(at: Vector2, radius: float, color: Color) -> void:
 
 func _draw() -> void:
 	var pulse: float = 1.0 + sin(_time * FUSE_PULSE_SPEED) * FUSE_PULSE_SCALE
+	var px: float = Constants.SPRITE_SCALE
 	for s: Slot in _slots:
 		if not s.active:
 			continue
-		var trail_color: Color = s.color
-		trail_color.a = TRAIL_ALPHA
-		draw_line(s.pos - s.vel * TRAIL_TIME, s.pos, trail_color, s.radius * TRAIL_WIDTH_SCALE)
 		var fused: bool = s.splash_radius > 0.0 and (s.bounces_left > 0 or s.drag > 0.0)
-		draw_circle(s.pos, s.radius * (pulse if fused else 1.0), s.color)
+		if s.sprite == null:
+			var trail_color: Color = s.color
+			trail_color.a = TRAIL_ALPHA
+			draw_line(s.pos - s.vel * TRAIL_TIME, s.pos, trail_color, s.radius * TRAIL_WIDTH_SCALE)
+			draw_circle(s.pos, s.radius * (pulse if fused else 1.0), s.color)
+			continue
+		var tick: int = int(_time * SPRITE_FPS * (2.0 if fused else 1.0)) + s.pellet
+		var back: Vector2 = -s.vel.normalized()
+		for i: int in TRAIL_DOTS:  # pixel trail, crits in gold
+			var size: float = px * (TRAIL_DOTS - i)
+			var at: Vector2 = ((s.pos + back * px * 4.0 * (i + 2)) / px).floor() * px
+			draw_rect(Rect2(at - Vector2(size, size) * 0.5, Vector2(size, size)),
+				CRIT_SPARKLE_COLOR if s.crit and (tick + i) % 2 == 0 else s.color)
+		var h: float = s.sprite.get_height()
+		var scale_px: float = px * (CRIT_SPRITE_SCALE if s.crit else 1.0)
+		draw_set_transform(s.pos, s.vel.angle(), Vector2(scale_px, scale_px))
+		draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % 2) * h, 0, h, h),
+			CRIT_FLASH if s.crit and tick % 2 == 0 else Color.WHITE)
+		draw_set_transform(Vector2.ZERO)
 	for imp: Impact in _impacts:
 		if imp.time_left <= 0.0:
 			continue
+		# Pixel pop: four sparks flying out diagonally, shrinking.
 		var t: float = 1.0 - imp.time_left / IMPACT_TIME
-		var c: Color = imp.color
-		c.a = 1.0 - t
-		draw_circle(imp.pos, imp.radius * lerpf(1.0, IMPACT_RADIUS_SCALE, t), c)
+		var size: float = maxf(px, snappedf(imp.radius * (1.0 - t), px))
+		var reach: float = imp.radius * lerpf(0.5, IMPACT_RADIUS_SCALE, t)
+		for d: Vector2 in IMPACT_SPARK_DIRS:
+			var at: Vector2 = ((imp.pos + d * reach * 0.7) / px).floor() * px
+			draw_rect(Rect2(at - Vector2(size, size) * 0.5, Vector2(size, size)), imp.color)

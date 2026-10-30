@@ -80,6 +80,9 @@ func test_catalog_has_the_mvp_eight() -> void:
 	assert_false(pickups.has(&"pistol"), "sidearm isn't a pickup")
 	assert_false(pickups.has(&"bot_blaster"))
 	assert_eq(pickups.size(), 7, "signature weapons are not pickups")
+	for w: WeaponData in catalog._by_id.values():
+		if w.kind == WeaponData.Kind.PROJECTILE:
+			assert_not_null(w.projectile_sprite, "%s has bullet art" % w.id)
 
 
 func test_splash_damage_falloff() -> void:

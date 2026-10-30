@@ -2,9 +2,11 @@
 
 [ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
 [ext_resource type="Texture2D" path="res://assets/sprites/weapons/rocket.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/rocket.png" id="9_proj"]
 
 [resource]
 script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
 id = &"rocket"
 display_name = "Boomtube"
 damage = 40

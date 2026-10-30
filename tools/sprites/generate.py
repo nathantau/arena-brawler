@@ -1191,6 +1191,105 @@ def slash_frame(k: int) -> Image.Image:
     return c.img
 
 
+# --- projectiles: per-weapon bullets (assets/sprites/projectiles/<weapon id>.png) --------------
+# 2-frame strips of PROJ x PROJ cells pointing right, centred; the game rotates them to the flight
+# direction, alternates the frames (flicker / spin) and draws crits bigger and flashing.
+PROJ = 20
+PROJ_OUT = OUT / "projectiles"
+
+
+def bolt_shot(core, glow, length, h):
+    """Energy bolt: a glowing capsule with a hot core, the tail flickering longer on frame 1."""
+    def draw(c, f):
+        m = PROJ // 2
+        tail = length + 2 * f
+        c.part(RR((m - tail // 2, m - h, m + length // 2, m + h), h), glow, shade=False)
+        c.flat(RR((m - tail // 2 + 2, m - h + 1, m + length // 2 - 1, m + h - 1), max(1, h - 1)), core)
+    return draw
+
+
+def tracer(c, f):  # sniper: a long white-hot needle with a cyan sheath
+    m = PROJ // 2
+    c.part(R((2, m - 1, PROJ - 3, m + 1)), TEAL_L, shade=False)
+    c.flat(R((4 - 2 * f, m, PROJ - 3, m)), WHITE)
+
+
+def pellet(c, f):  # shotgun: a hot lead ball
+    m = PROJ // 2
+    c.part(E((m - 3, m - 3, m + 3, m + 3)), ORANGE)
+    c.dot(m - 1 + f, m - 1, YELLOW)
+
+
+def kunai(c, f):  # Flicker's kunai: steel diamond blade, red-wrapped grip and a ring, point first
+    m = PROJ // 2
+    c.part(P([(PROJ - 3, m), (m + 2, m - 3), (m - 1, m), (m + 2, m + 3)]), STEEL)
+    c.flat(L([(m, m), (PROJ - 4, m)], 1), WHITE)
+    c.part(R((m - 4, m - 1, m - 1, m + 1)), RED, shade=False)
+    c.part(E((m - 8, m - 2, m - 4, m + 2)), STEEL_D, shade=False)
+    c.dot(m - 6, m, OUTLINE)  # ring hole
+    if f:
+        c.dot(PROJ - 4, m - 1, WHITE)
+
+
+def brass(c, f):  # Twinshot's revolver: a brass bullet with a copper tip
+    m = PROJ // 2
+    c.part(RR((m - 5, m - 2, m + 3, m + 2), 1), YELLOW)
+    c.part(P([(m + 3, m - 2), (m + 7, m), (m + 3, m + 2)]), ORANGE)
+    if f:
+        c.flat(R((m - 7, m - 1, m - 6, m + 1)), YELLOW)
+
+
+def rocket_shot(c, f):  # rocket: steel body, red nose and fins, flickering exhaust
+    m = PROJ // 2
+    flame = ((m - 8, m - 2, m - 4, m + 2), (m - 8, m - 1, m - 5, m + 1))[f]
+    c.part(E(flame), ORANGE, shade=False)
+    c.flat(E((flame[0] + 2, m - 1, flame[2], m + 1)), YELLOW)
+    c.part(P([(m - 5, m - 4), (m - 2, m - 2), (m - 2, m + 2), (m - 5, m + 4)]), RED)
+    c.part(RR((m - 5, m - 2, m + 5, m + 2), 1), STEEL)
+    c.part(P([(m + 5, m - 2), (m + 7, m), (m + 5, m + 2)]), RED)
+
+
+def grenade_shot(c, f):  # bouncing grenade: teal shell, steel cap; the band rolls round
+    m = PROJ // 2
+    c.part(E((m - 5, m - 5, m + 5, m + 5)), TEAL)
+    c.part(R((m - 2, m - 7, m + 2, m - 5)), STEEL, line=False)
+    if f:
+        c.flat(R((m - 5, m - 1, m + 5, m)), NAVY)
+    else:
+        c.flat(R((m - 1, m - 5, m, m + 5)), NAVY)
+    c.dot(m - 2, m - 3, TEAL_L)
+
+
+def plasma(c, f):  # bot blaster: a wobbling pink-red plasma blob
+    m = PROJ // 2
+    r = 5 if f else 4
+    c.part(E((m - r, m - 4, m + r, m + 4)), RED)
+    c.flat(E((m - 2, m - 2, m + 2, m + 2)), WHITE)
+
+
+PROJECTILES = {
+    "pistol": bolt_shot(WHITE, YELLOW, 10, 2),
+    "smg": bolt_shot(WHITE, TEAL_L, 8, 1),
+    "shotgun": pellet,
+    "sniper": tracer,
+    "rocket": rocket_shot,
+    "grenade": grenade_shot,
+    "flicker_kunai": kunai,
+    "blade_fan": kunai,
+    "twinshot_revolver": brass,
+    "bot_blaster": plasma,
+}
+
+
+def projectile_strip(draw) -> Image.Image:
+    frames_ = []
+    for f in range(2):
+        c = Canvas(PROJ)
+        draw(c, f)
+        frames_.append(outline(c.img))
+    return strip(frames_)
+
+
 def strip(frames_: list[Image.Image]) -> Image.Image:
     w, h = frames_[0].size
     out = Image.new("RGBA", (w * len(frames_), h), (0, 0, 0, 0))
@@ -1348,6 +1447,12 @@ def main() -> None:
         check(img, WEAPON_W)
         img.save(WEAPON_OUT / f"{name}.png")
     print(f"wrote {len(WEAPONS)} weapons to {WEAPON_OUT}")
+    PROJ_OUT.mkdir(exist_ok=True)
+    for name, draw in PROJECTILES.items():
+        img = projectile_strip(draw)
+        check(img, PROJ)
+        img.save(PROJ_OUT / f"{name}.png")
+    print(f"wrote {len(PROJECTILES)} projectiles to {PROJ_OUT}")
     assert HANDS.keys() == CHARACTERS.keys(), "every character needs a hand colour"
     for name, color in HANDS.items():
         img = hand_image(color)
