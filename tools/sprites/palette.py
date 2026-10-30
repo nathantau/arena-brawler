@@ -1,4 +1,4 @@
-"""Shared 16-colour palette for all generated sprites (RGB). Index 0 is the outline colour."""
+"""Shared 16-colour palette for all generated sprites (RGB), plus shade/highlight ramps."""
 
 OUTLINE = (27, 26, 46)
 SHADOW = (58, 58, 92)
@@ -10,7 +10,7 @@ SKIN = (240, 193, 154)
 RED = (217, 71, 75)
 ORANGE = (240, 138, 62)
 YELLOW = (245, 210, 86)
-GREEN = (91, 184, 93)
+MAROON = (122, 46, 56)
 TEAL = (47, 158, 147)
 TEAL_L = (126, 224, 207)
 BLUE = (60, 111, 209)
@@ -18,13 +18,19 @@ NAVY = (43, 58, 107)
 BROWN = (110, 70, 48)
 
 PALETTE = [OUTLINE, SHADOW, STEEL_D, STEEL, WHITE, SKIN_D, SKIN, RED,
-           ORANGE, YELLOW, GREEN, TEAL, TEAL_L, BLUE, NAVY, BROWN]
+           ORANGE, YELLOW, MAROON, TEAL, TEAL_L, BLUE, NAVY, BROWN]
 assert len(set(PALETTE)) == 16
 
-# One step lighter for each colour: used for the second hit-flash frame.
-LIGHTER = {
-    OUTLINE: OUTLINE, SHADOW: STEEL_D, STEEL_D: STEEL, STEEL: WHITE, WHITE: WHITE,
-    SKIN_D: SKIN, SKIN: WHITE, RED: ORANGE, ORANGE: YELLOW, YELLOW: WHITE,
-    GREEN: TEAL_L, TEAL: TEAL_L, TEAL_L: WHITE, BLUE: STEEL, NAVY: BLUE, BROWN: SKIN_D,
+# Shade (bottom/right edges of a part) and highlight (top/left edges; also the 2nd hit-flash frame).
+DARKER = {
+    OUTLINE: OUTLINE, SHADOW: OUTLINE, STEEL_D: SHADOW, STEEL: STEEL_D, WHITE: STEEL,
+    SKIN_D: BROWN, SKIN: SKIN_D, RED: MAROON, ORANGE: RED, YELLOW: ORANGE, MAROON: SHADOW,
+    TEAL: NAVY, TEAL_L: TEAL, BLUE: NAVY, NAVY: SHADOW, BROWN: MAROON,
 }
-assert set(LIGHTER) == set(PALETTE) and set(LIGHTER.values()) <= set(PALETTE)
+LIGHTER = {
+    OUTLINE: SHADOW, SHADOW: STEEL_D, STEEL_D: STEEL, STEEL: WHITE, WHITE: WHITE,
+    SKIN_D: SKIN, SKIN: WHITE, RED: ORANGE, ORANGE: YELLOW, YELLOW: WHITE, MAROON: RED,
+    TEAL: TEAL_L, TEAL_L: WHITE, BLUE: STEEL, NAVY: BLUE, BROWN: SKIN_D,
+}
+for ramp in (DARKER, LIGHTER):
+    assert set(ramp) == set(PALETTE) and set(ramp.values()) <= set(PALETTE)

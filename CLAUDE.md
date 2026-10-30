@@ -180,7 +180,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   shared 16-colour `palette.py`, auto 1 px outline, self-check for palette/alpha/edges) into `assets/sprites/<id>.png`:
   horizontal sheets of 4 idle-bob frames + 2 hit-flash frames. Flicker (hooded scout, scarf), Warden (knight, plume,
   tower shield), Twinshot (wide-brim gunslinger, two holsters). `CharacterData.sprite_sheet` → `sprite_frames()`
-  builds a shared SpriteFrames ("idle", "hit"); the Player has an `AnimatedSprite2D` (Nearest, x1.25) plus an overlay
+  builds a shared SpriteFrames ("idle", "hit"); the Player has an `AnimatedSprite2D` (Nearest, x1.5) plus an overlay
   node for the front gun and bars. Player colour = foot ring only (sheets aren't recoloured). No walk cycle yet.
   The gun is still a runtime 8x4 sprite (`fx/pixel_sprites.gd`). The script also writes `assets/icon.png`.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)

@@ -3,6 +3,8 @@
 Writes one horizontal sprite sheet per character to assets/sprites/<id>.png:
 frames 0-3 = idle bob, frames 4-5 = hit flash (white silhouette, then one step lighter).
 Each frame is 64x64, transparent, palette-only colours, with an automatic 1 px outline.
+Characters are built from "parts": each part is auto-shaded (dark band on its bottom/right
+edge, highlight on its top/left edge) and can draw a dark line where it overlaps earlier parts.
 Also writes the 1024 px app icon (assets/icon.png) from Flicker's first idle frame.
 
 Run: tools/sprites/.venv/bin/python tools/sprites/generate.py
@@ -12,104 +14,194 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from palette import (BLUE, BROWN, LIGHTER, NAVY, ORANGE, OUTLINE, PALETTE, RED, SHADOW, SKIN, SKIN_D,
-                     STEEL, STEEL_D, TEAL, TEAL_L, WHITE, YELLOW)
+from palette import (BLUE, BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, PALETTE, RED, SHADOW,
+                     SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, WHITE, YELLOW)
 
 SIZE = 64
 IDLE_BOB = [0, 1, 2, 1]  # upper-body offset (px down) per idle frame; legs stay planted
+SHADE_DEPTH = 2  # px of shade on a part's bottom/right edge
 ICON_SIZE = 1024
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "assets" / "sprites"
 
 
-def layer() -> tuple[Image.Image, ImageDraw.ImageDraw]:
-    img = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    return img, ImageDraw.Draw(img)
+# Shape helpers: each returns fn(draw, fill) so a shape can be painted into a mask or the canvas.
+def E(box):
+    return lambda d, f: d.ellipse(box, f)
 
 
-def eyes(d: ImageDraw.ImageDraw, y: int, xs: tuple[int, int], color=OUTLINE) -> None:
+def R(box):
+    return lambda d, f: d.rectangle(box, f)
+
+
+def RR(box, radius):
+    return lambda d, f: d.rounded_rectangle(box, radius, f)
+
+
+def P(points):
+    return lambda d, f: d.polygon(points, f)
+
+
+def L(points, width):
+    return lambda d, f: d.line(points, f, width)
+
+
+class Canvas:
+    def __init__(self):
+        self.img = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+        self.px = self.img.load()
+
+    def part(self, shape, color, shade=True, line=True):
+        """Paints a shaded part; `line` draws OUTLINE where its edge sits on earlier parts."""
+        mask = Image.new("1", (SIZE, SIZE), 0)
+        shape(ImageDraw.Draw(mask), 1)
+        m = mask.load()
+
+        def inside(x, y):
+            return 0 <= x < SIZE and 0 <= y < SIZE and m[x, y]
+
+        if line:
+            for y in range(SIZE):
+                for x in range(SIZE):
+                    if not inside(x, y) and self.px[x, y][3] and any(
+                            inside(nx, ny) for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))):
+                        self.px[x, y] = OUTLINE + (255,)
+        for y in range(SIZE):
+            for x in range(SIZE):
+                if not inside(x, y):
+                    continue
+                c = color
+                if shade:
+                    if not inside(x, y + SHADE_DEPTH) or not inside(x + SHADE_DEPTH, y):
+                        c = DARKER[color]
+                    elif not inside(x, y - 1) or not inside(x - 1, y):
+                        c = LIGHTER[color]
+                self.px[x, y] = c + (255,)
+
+    def flat(self, shape, color):
+        """Unshaded detail (eyes, rivets, stripes)."""
+        shape(ImageDraw.Draw(self.img), color + (255,))
+
+    def dot(self, x, y, color):
+        self.px[x, y] = color + (255,)
+
+
+def big_eyes(c: Canvas, y: int, xs: tuple[int, int], h: int = 5):
     for x in xs:
-        d.rectangle((x, y, x + 2, y + 3), color)
-        if color == OUTLINE:
-            d.point((x, y), WHITE)  # glint
+        c.flat(R((x, y, x + 3, y + h)), OUTLINE)
+        c.flat(R((x, y, x + 1, y + 1)), WHITE)  # glint
+        c.dot(x + 2, y + h - 1, SHADOW)
 
 
-def legs(d: ImageDraw.ImageDraw, pants, boots) -> None:
-    d.rectangle((24, 46, 30, 56), pants)
-    d.rectangle((34, 46, 40, 56), pants)
-    d.rectangle((23, 55, 31, 61), boots)
-    d.rectangle((33, 55, 41, 61), boots)
+def legs(c: Canvas, pants, boots):
+    c.part(R((24, 45, 30, 56)), pants)
+    c.part(R((34, 45, 40, 56)), pants)
+    c.part(RR((22, 53, 31, 61), 2), boots)
+    c.part(RR((33, 53, 42, 61), 2), boots)
 
 
-# --- characters: each returns (legs layer, upper layer), facing right -------
+# --- characters: each returns (legs canvas, upper canvas), facing right ------
 
 def flicker():
-    """Dash: hooded scout with a trailing scarf."""
-    low, d = layer()
-    legs(d, NAVY, BROWN)
-    up, d = layer()
-    d.polygon([(22, 33), (6, 29), (4, 35), (10, 39), (22, 38)], ORANGE)  # scarf tails
-    d.polygon([(10, 35), (4, 35), (10, 39)], RED)
-    d.rectangle((22, 34, 42, 47), NAVY)  # tunic
-    d.rectangle((38, 34, 42, 47), SHADOW)
-    d.rectangle((22, 44, 42, 45), BROWN)  # belt
-    d.rectangle((31, 43, 34, 46), YELLOW)
-    d.ellipse((16, 6, 48, 37), TEAL)  # hood
-    d.ellipse((20, 9, 30, 16), TEAL_L)
-    d.ellipse((24, 16, 46, 34), SKIN)  # face
-    d.rectangle((24, 15, 46, 19), TEAL)  # hood rim
-    d.rectangle((42, 22, 45, 31), SKIN_D)
-    eyes(d, 23, (33, 39))
-    d.rectangle((21, 32, 43, 36), ORANGE)  # scarf
-    d.rectangle((21, 36, 43, 37), RED)
-    d.ellipse((17, 39, 23, 45), SKIN)  # hands
-    d.ellipse((41, 39, 47, 45), SKIN)
+    """Dash: hooded scout with a trailing scarf and a dagger on the back."""
+    low = Canvas()
+    legs(low, NAVY, BROWN)
+    low.flat(R((22, 53, 31, 53)), SKIN_D)  # boot cuffs
+    low.flat(R((33, 53, 42, 53)), SKIN_D)
+    up = Canvas()
+    up.part(P([(21, 33), (4, 27), (2, 34), (9, 40), (21, 39)]), ORANGE)  # scarf tails
+    up.part(P([(9, 33), (2, 34), (9, 40)]), RED, shade=False)
+    up.part(L([(13, 25), (25, 45)], 4), BROWN)  # dagger sheath on the back
+    up.part(RR((9, 21, 15, 27), 1), STEEL)  # dagger pommel
+    up.part(RR((20, 33, 44, 48), 3), NAVY)  # tunic
+    up.part(L([(23, 35), (40, 46)], 2), BROWN, shade=False, line=False)  # strap
+    up.part(R((20, 44, 44, 46)), BROWN, line=False)  # belt
+    up.part(R((30, 43, 34, 47)), YELLOW)
+    up.dot(32, 45, ORANGE)
+    up.part(E((16, 39, 23, 46)), SKIN)  # hands
+    up.part(E((41, 39, 48, 46)), SKIN)
+    up.part(P([(18, 12), (7, 19), (17, 27)]), TEAL)  # hood point
+    up.part(E((15, 4, 49, 38)), TEAL)  # hood
+    up.part(E((23, 15, 47, 35)), SKIN)  # face
+    up.part(P([(23, 13), (47, 13), (47, 19), (41, 21), (36, 17), (30, 21), (23, 19)]), TEAL)  # fringe
+    up.flat(E((20, 8, 27, 13)), TEAL_L)  # hood shine
+    big_eyes(up, 22, (32, 40))
+    up.flat(R((29, 29, 31, 30)), SKIN_D)  # cheeks
+    up.flat(R((44, 29, 45, 30)), SKIN_D)
+    up.part(RR((19, 31, 45, 37), 2), ORANGE)  # scarf
+    up.part(RR((17, 32, 24, 39), 2), RED)  # scarf knot
     return low, up
 
 
 def warden():
-    """Shield: armoured knight with a plume and a tower shield."""
-    low, d = layer()
-    legs(d, STEEL_D, SHADOW)
-    up, d = layer()
-    d.rectangle((21, 33, 43, 47), STEEL)  # breastplate
-    d.rectangle((38, 33, 43, 47), STEEL_D)
-    d.rectangle((27, 35, 37, 47), BLUE)  # tabard
-    d.rectangle((27, 35, 37, 36), YELLOW)
-    d.ellipse((14, 30, 26, 40), STEEL)  # pauldrons
-    d.ellipse((38, 30, 50, 40), STEEL_D)
-    d.ellipse((22, 2, 36, 11), RED)  # plume
-    d.ellipse((24, 3, 30, 7), ORANGE)
-    d.ellipse((17, 6, 47, 36), STEEL)  # helmet
-    d.ellipse((21, 10, 28, 16), WHITE)
-    d.rectangle((18, 30, 46, 34), STEEL_D)  # rim
-    d.rounded_rectangle((23, 19, 46, 26), 3, OUTLINE)  # visor
-    eyes(d, 21, (33, 40), TEAL_L)
-    d.rounded_rectangle((40, 32, 54, 54), 4, BLUE)  # tower shield
-    d.rounded_rectangle((42, 34, 52, 52), 3, NAVY)
-    d.polygon([(47, 37), (50, 43), (47, 49), (44, 43)], YELLOW)
+    """Shield: armoured knight with a plume, cape and tower shield."""
+    low = Canvas()
+    legs(low, STEEL_D, NAVY)
+    low.part(R((24, 48, 30, 50)), STEEL, line=False)  # knee plates
+    low.part(R((34, 48, 40, 50)), STEEL, line=False)
+    up = Canvas()
+    up.part(P([(18, 32), (46, 32), (50, 50), (14, 50)]), RED)  # cape
+    up.part(RR((20, 32, 44, 48), 3), STEEL)  # breastplate
+    up.part(R((27, 35, 37, 48)), BLUE, line=False)  # tabard
+    up.flat(R((27, 35, 37, 35)), YELLOW)
+    up.flat(P([(32, 38), (35, 41), (32, 44), (29, 41)]), YELLOW)
+    up.part(R((20, 45, 44, 47)), BROWN)  # belt
+    up.part(E((12, 28, 27, 40)), STEEL)  # pauldrons
+    up.part(E((37, 28, 52, 40)), STEEL)
+    for x, y in ((16, 32), (23, 32), (41, 32), (48, 32)):
+        up.dot(x, y, WHITE)  # rivets
+    up.part(P([(24, 5), (10, 12), (14, 14), (24, 10)]), RED)  # plume tail
+    up.part(E((21, 2, 37, 12)), RED)  # plume
+    up.part(E((16, 5, 48, 37)), STEEL)  # helmet
+    up.part(R((31, 6, 33, 18)), STEEL, line=False)  # crest ridge
+    up.part(R((17, 30, 47, 35)), STEEL_D)  # helmet rim
+    up.flat(RR((22, 19, 47, 27), 3), OUTLINE)  # visor
+    up.flat(R((34, 21, 37, 24)), TEAL_L)
+    up.flat(R((41, 21, 44, 24)), TEAL_L)
+    up.flat(R((34, 21, 35, 22)), WHITE)
+    up.flat(R((41, 21, 42, 22)), WHITE)
+    for x in (35, 38, 41, 44):
+        up.dot(x, 29, STEEL_D)  # breathing holes
+    up.part(RR((40, 31, 56, 57), 5), BLUE)  # tower shield
+    up.flat(RR((42, 33, 54, 55), 4), NAVY)
+    up.part(RR((43, 34, 53, 54), 3), BLUE, line=False)
+    up.part(P([(48, 37), (52, 44), (48, 51), (44, 44)]), YELLOW, line=False)
+    for x, y in ((43, 34), (53, 34), (43, 54), (53, 54)):
+        up.dot(x, y, STEEL)
     return low, up
 
 
 def twinshot():
-    """Dual wield: gunslinger with a wide hat, poncho and two holstered pistols."""
-    low, d = layer()
-    legs(d, SHADOW, BROWN)
-    up, d = layer()
-    d.polygon([(20, 34), (44, 34), (48, 46), (16, 46)], ORANGE)  # poncho
-    d.rectangle((18, 40, 46, 41), RED)
-    d.rectangle((18, 45, 46, 47), BROWN)  # gun belt
-    for x in (14, 44):  # holsters + grips
-        d.rectangle((x, 43, x + 5, 51), BROWN)
-        d.rectangle((x + 1, 39, x + 3, 43), STEEL)
-    d.ellipse((21, 14, 43, 36), SKIN)  # face
-    d.rectangle((39, 22, 42, 31), SKIN_D)
-    eyes(d, 24, (31, 37))
-    d.rectangle((22, 32, 42, 36), RED)  # bandana
-    d.ellipse((6, 13, 58, 22), BROWN)  # hat brim
-    d.rounded_rectangle((19, 3, 45, 17), 5, BROWN)  # crown
-    d.rectangle((19, 11, 45, 13), YELLOW)  # band
-    d.ellipse((22, 5, 28, 9), SKIN_D)
+    """Dual wield: gunslinger with a feathered wide hat, poncho, bandolier and two holsters."""
+    low = Canvas()
+    legs(low, BLUE, BROWN)
+    low.dot(21, 58, YELLOW)  # spurs
+    low.dot(32, 58, YELLOW)
+    up = Canvas()
+    up.part(P([(18, 33), (46, 33), (50, 48), (14, 48)]), ORANGE)  # poncho
+    for x in range(16, 49, 4):
+        up.flat(P([(x, 41), (x + 2, 39), (x + 4, 41)]), RED)  # zigzag
+    for x in range(17, 48, 4):
+        up.dot(x, 44, YELLOW)
+    up.part(L([(19, 34), (44, 47)], 3), BROWN, shade=False)  # bandolier
+    for i in range(5):
+        up.dot(22 + i * 5, 36 + int(i * 2.5), YELLOW)
+    up.part(R((14, 46, 50, 48)), BROWN)  # gun belt
+    for x in (12, 45):
+        up.part(RR((x, 42, x + 7, 54), 2), BROWN)  # holster
+        up.part(RR((x + 1, 36, x + 5, 43), 1), STEEL_D)  # grip
+        up.dot(x + 2, 37, STEEL)
+    up.part(E((20, 14, 44, 37)), SKIN)  # face
+    big_eyes(up, 24, (30, 37))
+    up.flat(R((30, 22, 33, 22)), BROWN)  # brows
+    up.flat(R((37, 22, 40, 22)), BROWN)
+    up.part(RR((20, 32, 44, 37), 2), RED)  # bandana
+    up.part(P([(21, 33), (14, 37), (16, 40), (22, 36)]), RED)  # bandana tail
+    up.part(E((5, 13, 59, 23)), BROWN)  # hat brim
+    up.part(RR((18, 2, 46, 18), 6), BROWN)  # crown
+    up.flat(R((31, 3, 33, 7)), MAROON)  # crown dent
+    up.part(R((18, 11, 46, 14)), YELLOW, line=False)  # band
+    up.part(P([(40, 12), (53, 2), (56, 4), (44, 13)]), TEAL)  # feather
     return low, up
 
 
@@ -149,8 +241,8 @@ def frames(build) -> list[Image.Image]:
     low, up = build()
     idle = []
     for dy in IDLE_BOB:
-        f = low.copy()
-        f.alpha_composite(up, (0, dy))
+        f = low.img.copy()
+        f.alpha_composite(up.img, (0, dy))
         idle.append(outline(f))
     hit = [recolor(idle[0], lambda _c: WHITE), recolor(idle[0], LIGHTER.__getitem__)]
     return idle + hit

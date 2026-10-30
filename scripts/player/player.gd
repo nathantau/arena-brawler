@@ -19,20 +19,20 @@ enum StateField {
 	COUNT,
 }
 
-const GUN_HOLD_DISTANCE: float = 22.0
+const GUN_HOLD_DISTANCE: float = 26.0
 const GUN_RECOIL_PX: float = 4.0
 const RECOIL_TIME: float = 0.06
 const INVULN_ALPHA: float = 0.45
 const BAR_WIDTH: float = 40.0
 const BAR_HEIGHT: float = 4.0
 const BAR_GAP: float = 2.0
-const BAR_OFFSET_Y: float = 20.0
+const BAR_OFFSET_Y: float = 28.0
 const RING_WIDTH: float = 2.0
 const TARGET_RING_PAD: float = 8.0
 const DUAL_GLOW_PAD: float = 3.0
 ## Coloured ellipse under the feet: the player's colour, squashed for a top-down look.
 const FOOT_RING_SQUASH: float = 0.45
-const FOOT_RING_Y: float = 30.0
+const FOOT_RING_Y: float = 40.0
 const SHADOW_COLOR: Color = Color(0, 0, 0, 0.3)
 const CIRCLE_SEGMENTS: int = 24
 const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
