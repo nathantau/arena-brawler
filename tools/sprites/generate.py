@@ -923,42 +923,121 @@ def poof_frame(size: int, k: int, color) -> Image.Image:
     return outline(c.img)
 
 
-def morph_frames(a: Image.Image, b: Image.Image, b_scale: float) -> list[Image.Image]:
-    """Transformation from frame `a` into form `b` (drawn `b_scale` x in game), in full colour, growing
-    into it: crouch, stretch up, darken as it powers up, blend into b while still growing (ordered
-    dither, gold sparks crackling), overshoot, settle. CELL-sized frames; the size change is baked in,
-    so the strip is drawn at the normal sprite scale (SpecialFx) and pixels stay crisp."""
+def ape_morph(t: float, scale: float) -> Image.Image:
+    """An in-between creature, `t` of the way from Wukong to the Great Ape, drawn crisp at `scale` x (a CELL
+    frame centred like a scaled sprite): every body part's shape is interpolated between the two designs
+    (legs thicken and splay, the torso swells into a hunched back, arms and fists sprout, the head pushes
+    forward, the circlet tilts), and fur / face / eyes switch to the ape's halfway."""
+    c = Canvas(CELL)
+    k = CELL / 2
+
+    def pt(p0, p1, dy=0):  # interpolate a point (art px) and map it into the scaled cell
+        return (k + (p0[0] + (p1[0] - p0[0]) * t - 32) * scale, k + (p0[1] + (p1[1] - p0[1]) * t + dy - 32) * scale)
+
+    def pts(a, b, dy=0):
+        return [pt(p0, p1, dy) for p0, p1 in zip(a, b)]
+
+    def box(a, b, dy=0):
+        (x0, y0), (x1, y1) = pt(a[:2], b[:2], dy), pt(a[2:], b[2:], dy)
+        return (x0, y0, x1, y1)
+
+    def w(a, b):
+        return max(1, round((a + (b - a) * t) * scale))
+
+    ape = t >= 0.55  # face, eyes and chest turn; the fur darkens a step earlier so changes are staggered
+    fur = MAROON if t >= 0.4 else BROWN
+    face_c = BROWN if ape else SKIN
+    u = UPPER_DY
+
+    def shrink(points, r):  # Wukong-only bits shrink away towards their first point by t = r
+        f = max(0.0, 1 - t / r)
+        x0, y0 = points[0]
+        return [pt((x0 + (x - x0) * f, y0 + (y - y0) * f), (x0 + (x - x0) * f, y0 + (y - y0) * f), u) for x, y in points]
+
+    if t < 0.45:  # pheasant feathers retract
+        c.part(L(shrink([(25, 10), (16, 4), (6, 6)], 0.45), w(2, 2)), RED, shade=False)
+        c.part(L(shrink([(29, 9), (24, 3), (14, 2)], 0.45), w(2, 2)), RED, shade=False)
+    if t > 0.5:  # bristling back fur pushes up
+        for x, y in ((14, 18), (20, 13), (27, 11)):
+            c.part(P(pts([(x + 3, y + 7), (x + 3, y + 5), (x + 3, y + 7)], [(x, y + 5), (x + 3, y), (x + 6, y + 5)], u)),
+                   MAROON)
+    # tail: Wukong's curl stretches into the ape's
+    c.part(L(pts([(21, 44), (11, 45), (6, 40), (7, 33), (11, 31)], [(14, 40), (9, 39), (6, 38), (4, 31), (8, 27)], u),
+             w(3, 3)), fur)
+    for x0, x1 in ((24, 21), (34, 35)):  # legs thicken and splay; feet broaden
+        c.part(P(pts([(x0, 45), (x0 + 5, 45), (x0 + 5, 54), (x0, 54)],
+                     [(x1, 44), (x1 + 8, 44), (x1 + 9, 54), (x1 - 1, 54)])), MAROON if ape else RED)
+        c.part(RR(box((x0 - 1, 53, x0 + 7, 57), (x1 - 2, 53, x1 + 10, 58)), w(2, 2)), BROWN)
+    # the hunched back swells out from behind the armour
+    c.part(E(box((20, 31, 44, 48), (10, 14, 54, 45), u)), fur)
+    if t > 0.1:  # the back arm sprouts from the shoulder
+        c.part(L(pts([(22, 36), (20, 40), (20, 42)], [(15, 26), (11, 36), (11, 44)], u), w(2, 7)), fur)
+    # the golden armour shrinks into the ape's chest
+    c.part(RR(box((20, 33, 44, 48), (22, 26, 44, 43), u), w(3, 8)), BROWN if ape else YELLOW)
+    if t > 0.1:  # front arm and both fists grow
+        c.part(L(pts([(42, 36), (44, 40), (44, 42)], [(49, 26), (53, 36), (53, 44)], u), w(2, 7)), fur)
+        for x0, x1 in ((18, 5), (40, 47)):
+            if ape:
+                c.part(R(box((x0 + 1, 41, x0 + 5, 42), (x1 + 2, 38, x1 + 10, 41), u)), YELLOW)
+            c.part(RR(box((x0, 42, x0 + 6, 46), (x1, 42, x1 + 12, 53), u), w(1, 3)), fur)
+    # head: Wukong's round head pushes forward and shrinks into the ape's
+    if t < 0.75:
+        c.part(E(box((11, 17, 21, 28), (20, 10, 28, 20), u)), fur)  # ear tucks in
+    c.part(E(box((15, 6, 49, 38), (24, 3, 50, 29), u)), fur)
+    c.part(E(box((23, 15, 47, 36), (28, 11, 50, 29), u)), face_c)
+    collar = ((11, 31, 3), (15, 35, 5), (21, 38, 4), (26, 39, 3), (43, 38, 3), (47, 36, 4))
+    for x, y, r in collar:  # the cloud collar puffs away
+        rr = r * scale * (1 - t / 0.5)
+        if rr >= 1:
+            cx, cy = pt((x, y), (x, y), u)
+            c.part(E((cx - rr, cy - rr, cx + rr, cy + rr)), WHITE, line=False)
+    # the circlet tilts askew
+    c.part(P(pts([(17, 13), (47, 13), (47, 16), (17, 16)], [(23, 8), (47, 4), (47, 9), (23, 13)], u)), YELLOW,
+           shade=False)
+    for x0, x1 in ((31, 32), (41, 42)):  # eyes slide and narrow; turn red and angry halfway
+        ex, ey = pt((x0, 22), (x1, 14), u)
+        eh = w(6, 3)
+        ew = w(3, 3)
+        if ape:
+            c.flat(R((ex, ey, ex + ew, ey + eh)), OUTLINE)
+            c.flat(R((ex, ey + 1, ex + ew, ey + eh - 1)), RED)
+        else:
+            c.flat(R((ex, ey, ex + ew, ey + eh)), OUTLINE)
+            c.flat(R((ex, ey + eh - 2, ex + ew, ey + eh - 1)), YELLOW)
+            c.dot(round(ex), round(ey), WHITE)
+    if ape:  # scowl and fangs push in
+        for bx in ((29, 11, 37, 14), (48, 11, 40, 14)):
+            c.flat(L(pts([bx[:2], bx[2:]], [bx[:2], bx[2:]], u), w(1, 2)), OUTLINE)
+        for fx in (35, 43):
+            c.flat(P(pts([(fx, 27), (fx + 3, 27), (fx + 2, 25), (fx + 1, 25)],
+                         [(fx, 27), (fx + 3, 27), (fx + 2, 23), (fx + 1, 23)], u)), WHITE)
+    return outline(c.img)
+
+
+def morph_frames(a: Image.Image, b: Image.Image, b_scale: float, between) -> list[Image.Image]:
+    """Transformation from a character's frame `a` into its form `b` (drawn `b_scale` x in game), in full colour:
+    six in-between creatures (`between(t, scale)`, e.g. ape_morph) that stretch, swell and grow, with gold sparks crackling. CELL-sized
+    frames with the growth baked in, drawn at the normal sprite scale (SpecialFx) so pixels stay crisp."""
     rng = random.Random(7)
 
-    def at(img, sx, sy=None):  # img scaled (NEAREST) about the cell centre
-        w, h = round(SIZE * sx), round(SIZE * (sy or sx))
+    def at(img, sc):  # img scaled (NEAREST) about the cell centre
+        n = round(SIZE * sc)
         out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
-        out.alpha_composite(img.resize((w, h), Image.NEAREST), ((CELL - w) // 2, (CELL - h) // 2))
+        out.alpha_composite(img.resize((n, n), Image.NEAREST), ((CELL - n) // 2, (CELL - n) // 2))
         return out
 
-    def mix(s, p):  # each pixel from one sprite or the other at the same size: both stay readable
-        fa, fb = at(a, s), at(b, s)
-        out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
-        for y in range(CELL):
-            for x in range(CELL):
-                out.putpixel((x, y), (fb if BAYER[y % 4][x % 4] / 16 < p else fa).getpixel((x, y)))
-        return out
-
-    def sparks(img, n=6):  # short gold crackles inside the body
-        c = Canvas(CELL)
-        c.img, c.px = img, img.load()
-        inside = [(x, y) for y in range(CELL) for x in range(CELL) if c.px[x, y][3]]
+    def sparks(img, n=5):  # short gold crackles inside the body
+        px = img.load()
+        inside = [(x, y) for y in range(CELL) for x in range(CELL) if px[x, y][3]]
         for x, y in rng.sample(inside, n):
             dx, dy = rng.choice(((1, 0), (0, 1), (1, 1), (1, -1)))
             for j in range(3):
                 if 1 < x + dx * j < CELL - 2 and 1 < y + dy * j < CELL - 2:
-                    c.dot(x + dx * j, y + dy * j, YELLOW)
+                    px[x + dx * j, y + dy * j] = YELLOW + (255,)
         return img
 
-    g = b_scale - 1.0
-    return [at(a, 1.0), at(a, 1.1, 0.92), sparks(at(a, 1.04, 1.14), 4),
-            sparks(at(recolor(a, DARKER.__getitem__), 1 + g * 0.45)), sparks(mix(1 + g * 0.65, 0.35)),
-            sparks(mix(1 + g * 0.85, 0.7)), at(b, b_scale * 1.06), at(b, b_scale)]
+    steps = (0.15, 0.3, 0.45, 0.6, 0.75, 0.9)
+    return [at(a, 1.0)] + [sparks(between(t, 1 + (b_scale - 1) * t)) for t in steps] + [at(b, b_scale)]
 
 
 BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
@@ -1016,7 +1095,7 @@ FX = {
     # Transformation strips (SkillData.form_morph): the character's first idle frame into the form's.
     # 1.35 = great_ape.tres form_scale (keep in sync).
     "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],
-                                                   frames(wukong_ape, AURAS["wukong_ape"])[0], 1.35)),
+                                                   frames(wukong_ape, AURAS["wukong_ape"])[0], 1.35, ape_morph)),
 }
 
 

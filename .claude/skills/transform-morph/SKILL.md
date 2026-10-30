@@ -14,19 +14,22 @@ hidden (`Player` uses `is_morphing()`) — and backwards when it ends. Purely co
 
 1. The form itself must exist first: `def <id>_<form>(step=None, t=0)` in generate.py `FORMS`
    (+ optional aura in `AURAS`), same rules as the `new-character` skill.
-2. Add the strip to `FX` in generate.py:
+2. Write `def <form>_morph(t, scale) -> Image.Image` next to `ape_morph` (copy it): an in-between creature
+   `t` of the way from character to form, drawn **crisp at `scale`** into a CELL frame (map art points with its
+   `pt`/`pts`/`box` helpers, never resize art). Interpolate every body part's shape between the two designs
+   (same point count both sides), sprout new parts (arms, fists) from where they'd grow, shrink away
+   character-only bits (feathers, collar), and **stagger** colour switches (fur first, then face/eyes/chest)
+   so no single frame changes everything. The user wants to see the body stretching and morphing — not a
+   crossfade, not white silhouettes, not a scaled-up copy of the sprite.
+3. Add the strip to `FX` in generate.py:
    ```python
    "<id>_<form>_morph": lambda: strip(morph_frames(frames(<id>, AURAS.get("<id>"))[0],
-                                                   frames(<id>_<form>, AURAS.get("<id>_<form>"))[0], <form_scale>)),
+                                                   frames(<id>_<form>, AURAS.get("<id>_<form>"))[0],
+                                                   <form_scale>, <form>_morph)),
    ```
-   `<form_scale>` must match the skill's `form_scale`. `morph_frames(a, b, scale)` gives 8 full-colour
-   frames that grow into the form: crouch, stretch, darken, two ordered-dither blends while growing (gold
-   sparks), overshoot, settle. No white silhouettes (the user didn't like them); the growth is in the art,
-   not engine scaling, so pixels stay crisp. Tweak the
-   spark colour / count there if the form has a different theme (keep it generic; pass a parameter
-   rather than forking the function).
-3. Run the generator; Read a x4 NEAREST preview. Each middle frame should still show both outlines
-   (if it turns into a shapeless blob, the sprites are being unioned instead of picked per pixel).
+   `<form_scale>` must match the skill's `form_scale`. Frames: the character, six in-betweens (t 0.15-0.9,
+   growing, gold sparks), the form. Run the generator and Read a x3 NEAREST preview; iterate until each
+   step changes a little and the first and last in-betweens still read as their neighbours.
 4. In `data/skills/<skill>.tres` add an `ext_resource` for `res://assets/fx/<id>_<form>_morph.png` and
    `form_morph = ExtResource("...")`.
 5. `godot --headless --import`, run GUT.
