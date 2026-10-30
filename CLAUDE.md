@@ -1,4 +1,4 @@
-# CLAUDE.md — Arena Brawler (working title)
+# CLAUDE.md — Brawlbit (repo and Xcode project still named arena-brawler / ArenaBrawler)
 
 ## What we're building
 A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguelike shooters like Soul Knight: twin-stick movement + aim, auto-aim assist, a wide variety of weapons, energy/mana for weapons, a dodge/skill per character, fast and punchy. Instead of dungeon runs, players are matched into small arenas against other real players.

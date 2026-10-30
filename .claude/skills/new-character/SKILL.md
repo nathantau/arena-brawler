@@ -1,6 +1,6 @@
 ---
 name: new-character
-description: Add a new playable character to Arena Brawler — procedural pixel-art sprite sheet (tools/sprites/generate.py), CharacterData .tres, tests, preview. Use when asked to make, design, draw or add a character/hero/fighter, or to redesign an existing character's sprite.
+description: Add a new playable character to Brawlbit — procedural pixel-art sprite sheet (tools/sprites/generate.py), CharacterData .tres, tests, preview. Use when asked to make, design, draw or add a character/hero/fighter, or to redesign an existing character's sprite.
 ---
 
 # New character

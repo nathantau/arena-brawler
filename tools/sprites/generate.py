@@ -1,4 +1,4 @@
-"""Procedural pixel art for Arena Brawler's original characters.
+"""Procedural pixel art for Brawlbit's original characters.
 
 Writes one horizontal sprite sheet per character to assets/sprites/<id>.png (and one image per
 weapon to assets/sprites/weapons/<id>.png):

@@ -10,7 +10,7 @@ const DEFAULT_ADDRESS: String = "127.0.0.1:7777"
 const BUTTON_MIN_SIZE: Vector2 = Vector2(360, 64)
 const FIELD_MIN_SIZE: Vector2 = Vector2(236, 56)
 const SPACING: int = 14
-const LOGO_SIZE: int = 72
+const LOGO_SIZE: int = 96
 const TAGLINE: String = "Pick a fighter. Grab a weapon. Brawl."
 const FLOOR_THEME: StringName = &"gym"
 const FLOOR_TILE: float = 64.0
@@ -87,7 +87,7 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), VEIL)
 
 	var top: float = UiStyle.safe_insets(get_viewport()).y + LOGO_SIZE + 20.0
-	UiStyle.draw_text(self, Vector2(0, top), "ARENA BRAWLER", LOGO_SIZE, UiStyle.C_YELLOW, HORIZONTAL_ALIGNMENT_CENTER,
+	UiStyle.draw_text(self, Vector2(0, top), "BRAWLBIT", LOGO_SIZE, UiStyle.C_YELLOW, HORIZONTAL_ALIGNMENT_CENTER,
 		size.x, true)
 	UiStyle.draw_text(self, Vector2(0, top + UiStyle.SIZE_BODY + 18.0), TAGLINE, UiStyle.SIZE_BODY, UiStyle.C_WHITE,
 		HORIZONTAL_ALIGNMENT_CENTER, size.x)
