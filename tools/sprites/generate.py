@@ -292,7 +292,6 @@ def flint(step=None, t=0):
     up.flat(R((25, 30, 26, 30)), RED)  # blush
     up.flat(R((42, 30, 43, 30)), RED)
     up.flat(R((33, 31, 35, 31)), MAROON)  # little grin
-    flame(up, 20, 44, 18, 7, t + 2, tongues=4, line=False)  # small tongues licking up from the forehead
     return low, up
 
 
