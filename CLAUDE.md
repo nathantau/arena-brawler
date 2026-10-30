@@ -25,7 +25,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - Energy pool consumed by weapons; restored by pickups.
 - Carry 2 weapons, tap to swap.
 - 1 character skill on cooldown (MVP characters: Dash-dodge with i-frames; Deployable shield; Dual-wield burst).
-**Weapons (MVP set of ~8):** pistol (free, 0 energy), SMG, shotgun, sniper, rocket (splash), laser beam, melee sword (reflects bullets on swing), bouncing grenade launcher. All data-driven via `Resource` files (`WeaponData.tres`): damage, fire rate, spread, projectile speed, energy cost, crit chance, knockback.
+**Weapons (MVP set of ~8, plus one signature weapon per character):** pistol (free, 0 energy), SMG, shotgun, sniper, rocket (splash), laser beam, melee sword (reflects bullets on swing), bouncing grenade launcher. All data-driven via `Resource` files (`WeaponData.tres`): damage, fire rate, spread, projectile speed, energy cost, crit chance, knockback.
 **Controls (mobile):** left virtual joystick = move; right side = attack button with **auto-aim to nearest visible enemy**, optional drag-to-aim on the attack button; skill button; weapon swap button. Haptics on hit.
 
 ## Project structure
@@ -141,7 +141,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
     Lobby requests are `rpc_set_ready` / `rpc_request_mode` (any player may switch mode in the lobby for now).
   - **Pickups** (`arena/pickup_field.gd`): layout chars `E` (energy +80, 12 s respawn) and `W` (weapon from
     SMG/Scattercannon, 18 s). Server-authoritative; availability sent as a small reliable array on change.
-    Everyone starts with only the Pocket Blaster; slot 0 is a permanent sidearm, weapon pickups fill/replace
+    Everyone starts with only their sidearm (now the character's signature weapon); slot 0 is a permanent sidearm, weapon pickups fill/replace
     slot 2; dying resets your loadout. Energy pickups are skipped when full, weapon pickups when already carried.
   - Players have placeholder names from their colour ("Blue", "Red bot") until accounts in M6.
   - Also fixed: full-screen UI controls (HUD, touch controls, menu) never resized to the screen (anchors without
@@ -182,7 +182,18 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   tower shield), Twinshot (wide-brim gunslinger, two holsters), Wukong (monkey king, cloud puffs via `AURAS`, Dash). New characters: `.claude/skills/new-character`. `CharacterData.sprite_sheet` → `sprite_frames()`
   builds a shared SpriteFrames ("idle", "hit", "walk"); the Player has an `AnimatedSprite2D` (Nearest, x1.5) plus an overlay
   node for the front gun and bars. Player colour = foot ring only (sheets aren't recoloured).
-  The gun is still a runtime 8x4 sprite (`fx/pixel_sprites.gd`). The script also writes `assets/icon.png`.
+  The script also writes `assets/icon.png` and one 48x24 image per weapon (`assets/sprites/weapons/<id>.png`).
+- **Character weapons** (2026-10-30): many-to-many via tags. `WeaponData.tags` (e.g. `blade`, `light`, `heavy`,
+  `precision`, `explosive`, `arcane`; empty = anyone) vs `CharacterData.weapon_tags`; `can_use()` = any shared tag.
+  Pickups a character can't use stay on the floor and are drawn faded for the local player. Each character has a
+  free **signature weapon** (`signature_weapon`, tagged with the character's id, not a pickup) as its permanent
+  slot-0 sidearm (bots keep the Dummy Blaster): Flicker's Ripple Kunai (3-knife fan, `pierce` = passes through
+  1 player), Warden's Oath Hammer (melee slam: one blast at the tip of the reach, not behind walls), Twinshot's
+  Ricochet Six (bullets bounce off walls twice and still hit), Wukong's Cloud Staff (`thrust`: long narrow stab).
+  Weapons are drawn from their sprite at the character's pixel scale, pivoting on the grip at hand height: guns
+  kick back and up, melee sweeps the arc from a raised guard, thrusts stab out and back (`Player._draw_gun`).
+  Clients don't stop piercing pellets on server hit events. Not done: bots don't prefer usable pickups; no
+  per-weapon projectile sprites (still circles); the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nathantau.arenabrawler`, landscape, Xcode project only).

@@ -4,7 +4,9 @@ extends Node2D
 ## - PROJECTILE: fixed-size pool; each step is a raycast from the previous to the next
 ##   position. Optional splash (explodes on impact / end of life) and wall bounces.
 ## - BEAM: instant raycast at fire time.
-## - MELEE: arc hit around the wielder; can reflect enemy projectiles inside the arc.
+## - MELEE: arc hit around the wielder; can reflect enemy projectiles inside the arc. With
+##   splash it's a slam: one blast at the tip of the reach instead.
+## Piercing projectiles damage each player they pass through, up to WeaponData.pierce.
 ##
 ## Authoritative pools (offline / server) apply damage. Client pools are cosmetic: they stop
 ## on walls, shields and players locally but damage only ever comes from the server.
@@ -51,6 +53,9 @@ class Slot:
 	var bounces_left: int = 0
 	var bounce_damping: float = 1.0
 	var drag: float = 0.0
+	var pierce_left: int = 0
+	## Clients let piercing pellets fly on after server hit events (they stop where they stop locally).
+	var piercing: bool = false
 
 
 class Impact:
@@ -107,7 +112,8 @@ func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon
 func kill_shot(owner_id: int, shot_seq: int, pellet: int, at: Vector2) -> void:
 	for s: Slot in _slots:
 		if s.active and s.owner_id == owner_id and s.shot_seq == shot_seq and s.pellet == pellet:
-			_stop(s, at)
+			if not s.piercing:
+				_stop(s, at)
 			return
 
 
@@ -168,6 +174,8 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.bounces_left = weapon.bounces
 	slot.bounce_damping = weapon.bounce_damping
 	slot.drag = weapon.drag
+	slot.pierce_left = weapon.pierce
+	slot.piercing = weapon.pierce > 0
 	if not AutoAim.has_line_of_sight(space, _los_query, origin, muzzle):
 		_stop(slot, muzzle)
 
@@ -214,6 +222,9 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 				s.vel = facing * s.vel.length()
 				s.attacker_id = owner_id
 				s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
+	if weapon.splash_radius > 0.0:
+		_slam(owner_id, seq, origin, facing, weapon)
+		return
 	if not authoritative:
 		return
 	var crit: bool = CombatRules.roll_crit(weapon, _shot_rng)
@@ -233,6 +244,25 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 			_damage_player(target, owner_id, seq, 0, damage, crit, push, target.global_position)
 		elif collider is Crate:
 			(collider as Crate).take_damage(damage)
+
+
+## Hammer-style melee: a blast centred at the tip of the reach (pulled in to the wielder if a
+## wall is in the way, so it never lands on the far side of a wall).
+func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData) -> void:
+	var at: Vector2 = origin + facing * weapon.melee_range
+	if not AutoAim.has_line_of_sight(get_world_2d().direct_space_state, _los_query, origin, at):
+		at = origin
+	var blast := Slot.new()
+	blast.owner_id = owner_id
+	blast.attacker_id = owner_id
+	blast.shot_seq = seq
+	blast.crit = CombatRules.roll_crit(weapon, _shot_rng)
+	blast.damage = CombatRules.damage_for(weapon, blast.crit)
+	blast.knockback = weapon.knockback
+	blast.color = weapon.color
+	blast.splash_radius = weapon.splash_radius
+	blast.splash_edge = weapon.splash_edge_scale
+	_explode(blast, at)
 
 
 func _next_free_slot() -> Slot:
@@ -280,12 +310,19 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 				if authoritative:
 					_damage_player(target, s.attacker_id, s.shot_seq, s.pellet, s.damage, s.crit,
 						s.vel.normalized() * s.knockback, hit.position, s.owner_id)
+				if s.pierce_left > 0:
+					s.pierce_left -= 1
+					_add_impact(hit.position, s.radius, s.color)
+					_exclude(hit.rid)
+					continue
 				_finish(s, hit.position)
 			return
 		if target != null or _passes_through(collider, s.attacker_id):
 			_exclude(hit.rid)
 			continue
 		if s.bounces_left > 0 and not collider is ShieldWall:
+			if collider is Crate and authoritative and s.splash_radius <= 0.0:
+				(collider as Crate).take_damage(s.damage)  # ricochets still chip crates
 			_bounce(s, hit.position, hit.normal, delta)
 			return
 		if collider is Crate and authoritative and s.splash_radius <= 0.0:
@@ -397,7 +434,8 @@ func _draw() -> void:
 		var trail_color: Color = s.color
 		trail_color.a = TRAIL_ALPHA
 		draw_line(s.pos - s.vel * TRAIL_TIME, s.pos, trail_color, s.radius * TRAIL_WIDTH_SCALE)
-		draw_circle(s.pos, s.radius * (pulse if s.bounces_left > 0 or s.drag > 0.0 else 1.0), s.color)
+		var fused: bool = s.splash_radius > 0.0 and (s.bounces_left > 0 or s.drag > 0.0)
+		draw_circle(s.pos, s.radius * (pulse if fused else 1.0), s.color)
 	for imp: Impact in _impacts:
 		if imp.time_left <= 0.0:
 			continue

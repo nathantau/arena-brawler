@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/twinshot_revolver.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"twinshot_revolver"
+display_name = "Ricochet Six"
+pickup = false
+damage = 11
+fire_interval = 0.3
+spread_deg = 2.0
+projectile_speed = 1050.0
+projectile_range = 1000.0
+projectile_radius = 3.5
+energy_cost = 0
+crit_chance = 0.15
+knockback = 40.0
+color = Color(1, 0.8, 0.4, 1)
+screen_shake = 0.06
+sfx = &"shot_light"
+bounces = 2
+bounce_damping = 0.9
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"twinshot"])

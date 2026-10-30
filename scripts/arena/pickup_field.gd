@@ -18,7 +18,8 @@ const PAD_COLOR: Color = Color(1, 1, 1, 0.08)
 const OUTLINE_COLOR: Color = Color(1, 1, 1, 0.7)
 const OUTLINE_WIDTH: float = 2.0
 const PAD_RADIUS_SCALE: float = 1.4
-const WEAPON_SIZE: Vector2 = Vector2(28, 12)
+## Weapons the viewer's character can't carry are drawn faded.
+const UNUSABLE_ALPHA: float = 0.3
 const LABEL_FONT_SIZE: int = 11
 const LABEL_OFFSET_Y: float = 24.0
 const BOB_PX: float = 3.0
@@ -36,6 +37,8 @@ class Spot:
 
 
 var authoritative: bool = true
+## This device's player (cosmetic: fades weapons their character can't use).
+var viewer: Player
 var spots: Array[Spot] = []
 
 var _catalog: WeaponCatalog
@@ -71,8 +74,9 @@ func reset() -> void:
 
 
 ## Applies a pickup's effect. Returns false if it would do nothing (energy full, weapon
-## already carried); the pickup then stays on the floor.
-static func apply_to(kind: Kind, weapon: WeaponData, stats: PlayerStats, loadout: Loadout) -> bool:
+## already carried or not usable by `character`); the pickup then stays on the floor.
+static func apply_to(kind: Kind, weapon: WeaponData, stats: PlayerStats, loadout: Loadout,
+		character: CharacterData = null) -> bool:
 	match kind:
 		Kind.ENERGY:
 			if stats.energy >= stats.max_energy:
@@ -80,7 +84,9 @@ static func apply_to(kind: Kind, weapon: WeaponData, stats: PlayerStats, loadout
 			stats.add_energy(Constants.ENERGY_PICKUP_AMOUNT)
 			return true
 		Kind.WEAPON:
-			return weapon != null and loadout.give(weapon)
+			if weapon == null or (character != null and not character.can_use(weapon)):
+				return false
+			return loadout.give(weapon)
 	return false
 
 
@@ -106,7 +112,7 @@ func tick(delta: float, players: Array[Player]) -> void:
 			if p.dead or p.global_position.distance_squared_to(s.pos) > reach_sq:
 				continue
 			var weapon: WeaponData = _catalog.get_weapon(s.weapon_id) if s.kind == Kind.WEAPON else null
-			if apply_to(s.kind, weapon, p.stats, p.loadout):
+			if apply_to(s.kind, weapon, p.stats, p.loadout, p.character):
 				s.available = false
 				s.timer = respawn_time(s.kind)
 				dirty = true
@@ -174,11 +180,16 @@ func _draw() -> void:
 			draw_line(_diamond[3], _diamond[0], OUTLINE_COLOR, OUTLINE_WIDTH)
 		else:
 			var w: WeaponData = _catalog.get_weapon(s.weapon_id) if _catalog != null else null
-			var color: Color = w.color if w != null else OUTLINE_COLOR
-			var rect := Rect2(c - WEAPON_SIZE * 0.5, WEAPON_SIZE)
-			draw_rect(rect, color)
-			draw_rect(rect, OUTLINE_COLOR, false, OUTLINE_WIDTH)
-			if w != null:
-				var tw: float = font.get_string_size(w.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
-				draw_string(font, s.pos + Vector2(-tw * 0.5, -LABEL_OFFSET_Y), w.display_name,
-					HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, OUTLINE_COLOR)
+			if w == null:
+				continue
+			var tint := Color(1, 1, 1, 1)
+			if viewer != null and not viewer.character.can_use(w):
+				tint.a = UNUSABLE_ALPHA
+			var scale_px: float = Constants.SPRITE_SCALE
+			draw_set_transform(c, 0.0, Vector2(scale_px, scale_px))
+			draw_texture(w.sprite, -w.sprite.get_size() * 0.5, tint)
+			draw_set_transform(Vector2.ZERO)
+			var label_color: Color = OUTLINE_COLOR * tint
+			var tw: float = font.get_string_size(w.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
+			draw_string(font, s.pos + Vector2(-tw * 0.5, -LABEL_OFFSET_Y), w.display_name,
+				HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, label_color)

@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/wukong_staff.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"wukong_staff"
+display_name = "Cloud Staff"
+pickup = false
+kind = 2
+damage = 24
+fire_interval = 0.42
+energy_cost = 0
+crit_chance = 0.15
+knockback = 260.0
+color = Color(1, 0.6, 0.4, 1)
+screen_shake = 0.1
+sfx = &"swing"
+melee_range = 110.0
+melee_arc_deg = 36.0
+thrust = true
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"wukong"])

@@ -2,10 +2,13 @@
 
 [ext_resource type="Script" path="res://scripts/player/character_data.gd" id="1_cd"]
 [ext_resource type="Texture2D" path="res://assets/sprites/flicker.png" id="2_sheet"]
+[ext_resource type="Resource" path="res://data/weapons/flicker_kunai.tres" id="3_sig"]
 
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
+signature_weapon = ExtResource("3_sig")
+weapon_tags = Array[StringName]([&"flicker", &"blade", &"light", &"precision"])
 id = &"flicker"
 display_name = "Flicker"
 skill_name = "Dash"

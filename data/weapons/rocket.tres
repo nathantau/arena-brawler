@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
 [ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/rocket.png" id="2_sprite"]
 
 [resource]
 script = ExtResource("1_wd")
@@ -19,3 +20,5 @@ screen_shake = 0.3
 sfx = &"shot_rocket"
 splash_radius = 90.0
 splash_edge_scale = 0.35
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"explosive", &"heavy"])

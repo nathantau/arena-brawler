@@ -32,6 +32,13 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var screen_shake: float = 0.0
 ## Sound id in Sfx.
 @export var sfx: StringName = &"shot"
+## Pixel art from tools/sprites/generate.py, pointing right, held at Player.WEAPON_GRIP.
+@export var sprite: Texture2D
+## Who may carry it: any character sharing a tag (CharacterData.weapon_tags). Empty = everyone.
+## A character's own id as the only tag makes a signature weapon.
+@export var tags: Array[StringName] = []
+## Projectiles pass through this many players before stopping (damaging each).
+@export var pierce: int = 0
 
 @export_group("Splash")
 ## > 0: explodes on impact / at end of life, damaging everyone (but the shooter) in range.
@@ -53,3 +60,6 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var melee_arc_deg: float = 120.0
 ## Swinging sends enemy projectiles inside the arc back the way you face.
 @export var reflects: bool = false
+## Animate (and draw the hit) as a straight stab instead of a sweep.
+@export var thrust: bool = false
+## With splash_radius > 0 a melee hit is a slam: one blast at the tip of the reach instead of the arc.

@@ -15,6 +15,10 @@ enum SkillKind { DASH, SHIELD, DUAL_WIELD }
 @export var skill_cooldown: float = 1.8
 ## How long the skill stays active (dash burst, shield up, dual-wield window).
 @export var skill_duration: float = 0.16
+## Weapon classes this character can carry (see WeaponData.tags); include the character's own id.
+@export var weapon_tags: Array[StringName] = []
+## Starting sidearm, never dropped (slot 0). Null = the shared default loadout.
+@export var signature_weapon: WeaponData
 ## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames, then walk frames.
 @export var sprite_sheet: Texture2D
 
@@ -32,6 +36,15 @@ var _sprite_frames: SpriteFrames
 @export_group("Dual wield")
 ## Sideways offset of each gun's muzzle while dual-wielding.
 @export var dual_offset: float = 9.0
+
+
+func can_use(weapon: WeaponData) -> bool:
+	if weapon.tags.is_empty():
+		return true
+	for tag: StringName in weapon.tags:
+		if weapon_tags.has(tag):
+			return true
+	return false
 
 
 ## "idle" (looping bob) + "hit" (one-shot flash) + "walk" (looping) animations cut from sprite_sheet; built once, shared.

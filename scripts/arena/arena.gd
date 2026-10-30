@@ -61,6 +61,7 @@ const PARTICLE_SIZE: float = 4.0
 const PARTICLE_LIFE: float = 0.35
 const CRATE_DEBRIS_COLOR: Color = Color(0.55, 0.4, 0.25)
 const BEAM_WIDTH_SCALE: float = 2.0
+const THRUST_FX_WIDTH: float = 7.0
 
 var mode: Mode
 var match_seed: int
@@ -262,6 +263,7 @@ func free_color_index() -> int:
 func attach_local_view(p: Player, input: LocalInput) -> void:
 	local_player = p
 	p.is_local = true
+	pickups.viewer = p
 
 	camera = Camera2D.new()
 	camera.zoom = Vector2.ONE * Constants.CAMERA_ZOOM
@@ -321,7 +323,11 @@ func _attach_effects() -> void:
 	projectiles.beam_drawn.connect(func(from: Vector2, to: Vector2, w: WeaponData) -> void:
 		effects.beam(from, to, w.color, w.projectile_radius * BEAM_WIDTH_SCALE))
 	projectiles.swung.connect(func(origin: Vector2, facing: Vector2, w: WeaponData) -> void:
-		effects.swing(origin, facing, w.melee_range, w.melee_arc_deg, w.color))
+		if w.thrust:
+			var tip: Vector2 = origin + facing * (w.melee_range + Constants.PLAYER_RADIUS)
+			effects.beam(origin + facing * Constants.PLAYER_RADIUS, tip, w.color, THRUST_FX_WIDTH)
+		else:
+			effects.swing(origin, facing, w.melee_range, w.melee_arc_deg, w.color))
 	projectiles.exploded.connect(_fx_explosion)
 	hit_landed.connect(_fx_hit)
 	kill_registered.connect(_fx_kill)

@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
 [ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/bot_blaster.png" id="2_sprite"]
 
 [resource]
 script = ExtResource("1_wd")
@@ -17,3 +18,4 @@ knockback = 30.0
 color = Color(1, 0.35, 0.5, 1)
 pickup = false
 sfx = &"shot_light"
+sprite = ExtResource("2_sprite")

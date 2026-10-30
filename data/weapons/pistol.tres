@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
 [ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/pistol.png" id="2_sprite"]
 
 [resource]
 script = ExtResource("1_wd")
@@ -19,3 +20,4 @@ color = Color(1, 0.92, 0.45, 1)
 pickup = false
 sfx = &"shot_light"
 screen_shake = 0.05
+sprite = ExtResource("2_sprite")

@@ -83,10 +83,11 @@ func test_pickup_collected_then_respawns() -> void:
 			spot = s
 			break
 	assert_has(arena.catalog.pickup_ids(), spot.weapon_id)
+	spot.weapon_id = &"sword"  # one the default character can carry
 	p.global_position = spot.pos
 	arena.pickups.tick(Constants.PHYSICS_DT, arena.players)
 	assert_false(spot.available)
-	assert_eq(p.loadout.weapon_ids(), PackedStringArray(["pistol", String(spot.weapon_id)]))
+	assert_eq(p.loadout.weapon_ids(), PackedStringArray([String(p.character.signature_weapon.id), "sword"]))
 	p.global_position = Vector2.ZERO
 	arena.pickups.tick(Constants.WEAPON_PICKUP_RESPAWN + Constants.PHYSICS_DT, arena.players)
 	assert_true(spot.available)
@@ -110,7 +111,7 @@ func test_respawn_restores_default_loadout() -> void:
 	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
 	p.loadout.give(catalog.get_weapon(&"smg"))
 	p.respawn(Vector2(100, 100))
-	assert_eq(p.loadout.weapon_ids(), PackedStringArray(["pistol"]))
+	assert_eq(p.loadout.weapon_ids(), PackedStringArray([String(p.character.signature_weapon.id)]))
 
 
 func test_frozen_player_ignores_input() -> void:
@@ -182,3 +183,29 @@ func test_crates_reset_at_countdown() -> void:
 	arena.referee.set_ready(1, true)
 	arena.referee.tick(Constants.PHYSICS_DT, [1] as Array[int], [Constants.BOT_ID_BASE] as Array[int], arena.scores)
 	assert_true(crate.is_intact())
+
+
+func test_weapon_pickup_needs_a_shared_tag() -> void:
+	var chars := CharacterCatalog.load_all()
+	var flicker: CharacterData = chars.get_character(&"flicker")
+	var stats := PlayerStats.new()
+	var l: Loadout = _loadout([&"flicker_kunai"])
+	assert_false(PickupField.apply_to(PickupField.Kind.WEAPON, catalog.get_weapon(&"rocket"), stats, l, flicker),
+		"Flicker can't carry heavy/explosive weapons")
+	assert_eq(l.slots.size(), 1)
+	assert_true(PickupField.apply_to(PickupField.Kind.WEAPON, catalog.get_weapon(&"sniper"), stats, l, flicker))
+
+
+func test_unusable_pickup_stays_on_the_floor() -> void:
+	var arena := _arena()
+	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	var spot: PickupField.Spot = null
+	for s: PickupField.Spot in arena.pickups.spots:
+		if s.kind == PickupField.Kind.WEAPON:
+			spot = s
+			break
+	spot.weapon_id = &"rocket"
+	p.global_position = spot.pos
+	arena.pickups.tick(Constants.PHYSICS_DT, arena.players)
+	assert_true(spot.available)
+	assert_eq(p.loadout.slots.size(), 1)

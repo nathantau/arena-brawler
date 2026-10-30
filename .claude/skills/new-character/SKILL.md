@@ -39,7 +39,11 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
    Also check the walk frames (6-13) as a GIF and that loops are smooth.
 4. Create `data/characters/<id>.tres` (copy an existing one): `id`, `display_name`, `skill_name`,
    stats, `skill` (existing `SkillKind` only — a new skill kind is gameplay work, ask first),
-   `sprite_sheet = ExtResource(...)` pointing at `res://assets/sprites/<id>.png`.
+   `sprite_sheet = ExtResource(...)` pointing at `res://assets/sprites/<id>.png`, `weapon_tags` (own id + 2-3
+   weapon classes, so every pickup stays shared by 2+ characters) and `signature_weapon`.
+   Signature weapon: draw it in `WEAPONS` (48x24, pointing right, grip at `GRIP`), add
+   `data/weapons/<id>_<weapon>.tres` with `pickup = false`, `energy_cost = 0`, `tags = [&"<id>"]`, and give it one
+   distinct behaviour (existing fields: pierce, bounces, splash, melee slam/thrust, reflects).
 5. Update the character count in `tests/test_skills_and_movement.gd`
    (`test_catalog_covers_every_skill_kind`).
 6. `godot --headless --import`, then run GUT (all must pass).

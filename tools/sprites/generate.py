@@ -1,6 +1,7 @@
 """Procedural pixel art for Arena Brawler's original characters.
 
-Writes one horizontal sprite sheet per character to assets/sprites/<id>.png:
+Writes one horizontal sprite sheet per character to assets/sprites/<id>.png (and one image per
+weapon to assets/sprites/weapons/<id>.png):
 frames 0-3 = idle bob, frames 4-5 = hit flash (white silhouette, then one step lighter),
 frames 6-13 = walk cycle (legs stride, upper body bounces on the passing frames).
 Characters also get `t` (frame tick) for small loops: fluttering scarves, swaying feathers, glints.
@@ -279,6 +280,137 @@ def wukong_clouds(i: int) -> Canvas:
     return c
 
 
+
+# --- weapons: 48x24 cells, pointing right, held at GRIP (Godot pivots there) -------
+
+WEAPON_W, WEAPON_H = 48, 24
+GRIP = (6, 12)  # keep in sync with Player.WEAPON_GRIP
+WEAPON_OUT = OUT / "weapons"
+
+
+def grip(c: Canvas, color=BROWN):
+    c.part(P([(5, 12), (9, 12), (8, 18), (4, 18)]), color)
+
+
+def blaster(c: Canvas, body):
+    grip(c)
+    c.part(R((3, 8, 17, 12)), body)
+    c.part(R((17, 9, 21, 11)), STEEL, shade=False)
+
+
+def pistol(c):
+    blaster(c, STEEL_D)
+
+
+def bot_blaster(c):
+    blaster(c, RED)
+
+
+def smg(c):
+    c.part(R((2, 9, 4, 12)), BROWN)  # stub stock
+    grip(c, NAVY)
+    c.part(R((3, 8, 25, 13)), STEEL_D)
+    c.part(R((14, 13, 17, 20)), NAVY)  # magazine
+    c.part(R((25, 9, 31, 11)), STEEL, shade=False)
+    c.flat(R((27, 8, 28, 8)), TEAL_L)  # sight
+
+
+def shotgun(c):
+    c.part(P([(2, 10), (9, 9), (9, 14), (2, 16)]), BROWN)  # stock
+    c.part(R((9, 8, 25, 13)), STEEL_D)
+    c.part(R((25, 8, 35, 13)), STEEL)
+    c.flat(R((25, 10, 35, 10)), OUTLINE)  # double barrel split
+    c.part(R((16, 13, 25, 15)), BROWN)  # pump
+    c.flat(R((35, 9, 35, 12)), ORANGE)
+
+
+def sniper(c):
+    c.part(P([(2, 10), (10, 9), (10, 14), (3, 15)]), BROWN)
+    c.part(R((10, 9, 24, 13)), NAVY)
+    c.part(R((24, 10, 45, 11)), STEEL, shade=False)
+    c.part(R((13, 5, 22, 8)), STEEL_D)  # scope
+    c.flat(R((22, 6, 22, 7)), TEAL_L)
+    c.flat(R((43, 9, 43, 9)), STEEL)
+
+
+def rocket(c):
+    grip(c)
+    c.part(RR((2, 6, 36, 16), 2), STEEL_D)
+    for x in (8, 28):
+        c.flat(R((x, 6, x + 2, 16)), RED)
+    c.part(P([(36, 7), (43, 11), (36, 15)]), RED)  # warhead
+
+
+def grenade(c):
+    grip(c)
+    c.part(R((3, 8, 20, 14)), BROWN)
+    c.part(E((12, 4, 25, 17)), STEEL_D)  # drum
+    for x, y in ((15, 7), (20, 7), (15, 13), (20, 13)):
+        c.flat(R((x, y, x + 1, y + 1)), YELLOW)
+    c.part(R((25, 8, 34, 14)), STEEL)
+    c.flat(R((34, 9, 34, 13)), OUTLINE)
+
+
+def laser(c):
+    grip(c, NAVY)
+    c.part(R((3, 9, 22, 13)), NAVY)
+    for x in (8, 12, 16):
+        c.flat(R((x, 9, x, 13)), TEAL)  # coils
+    c.part(P([(22, 8), (26, 6), (35, 11), (26, 16), (22, 14)]), TEAL_L)  # prism
+
+
+def sword(c):
+    c.part(E((2, 10, 5, 14)), YELLOW)  # pommel
+    c.part(R((5, 10, 9, 13)), BROWN)
+    c.part(R((9, 5, 11, 18)), YELLOW)  # crossguard
+    c.part(P([(12, 9), (39, 9), (44, 11), (39, 13), (12, 13)]), WHITE)
+    c.flat(R((13, 11, 37, 11)), STEEL)  # fuller
+
+
+def kunai(c):
+    c.part(E((2, 9, 7, 14)), STEEL_D)  # ring pommel
+    c.dot(4, 11, OUTLINE)
+    c.part(R((7, 10, 13, 13)), MAROON)
+    for x in (8, 11):
+        c.flat(R((x, 10, x, 13)), RED)  # wraps
+    c.part(P([(13, 8), (17, 9), (27, 11), (17, 13), (13, 14)]), STEEL)
+
+
+def hammer(c):
+    c.part(R((2, 10, 30, 13)), BROWN)
+    c.part(RR((29, 2, 43, 21), 2), STEEL)
+    c.flat(R((29, 9, 43, 14)), YELLOW)
+    c.flat(R((35, 10, 37, 13)), TEAL_L)  # oath gem
+
+
+def staff(c):
+    c.part(R((2, 10, 45, 13)), RED)
+    for x in (2, 40):
+        c.part(R((x, 9, x + 5, 14)), YELLOW)
+    c.flat(R((20, 10, 21, 13)), YELLOW)
+
+
+def revolver(c):
+    grip(c)
+    c.part(R((4, 8, 13, 12)), STEEL_D)
+    c.part(RR((9, 7, 17, 13), 1), STEEL)  # cylinder
+    c.flat(R((11, 9, 15, 9)), STEEL_D)
+    c.part(R((17, 8, 29, 11)), STEEL, shade=False)
+    c.dot(28, 7, YELLOW)  # front sight
+    c.dot(5, 7, STEEL_D)  # hammer
+
+
+WEAPONS = {"pistol": pistol, "bot_blaster": bot_blaster, "smg": smg, "shotgun": shotgun, "sniper": sniper,
+           "rocket": rocket, "grenade": grenade, "laser": laser, "sword": sword,
+           "flicker_kunai": kunai, "warden_hammer": hammer, "twinshot_revolver": revolver, "wukong_staff": staff}
+
+
+def weapon_image(draw) -> Image.Image:
+    c = Canvas()
+    draw(c)
+    return outline(c.img).crop((0, 0, WEAPON_W, WEAPON_H))
+
+
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong}
 AURAS = {"wukong": wukong_clouds}  # optional per-frame effects drawn behind the character
 
@@ -326,7 +458,7 @@ def frames(build, aura=None) -> list[Image.Image]:
     return idle + hit + walk
 
 
-def check(sheet: Image.Image) -> None:
+def check(sheet: Image.Image, frame_w: int = SIZE) -> None:
     """Self-check: palette-only colours, hard alpha, and the outline fits inside each frame."""
     allowed = set(PALETTE)
     px = sheet.load()
@@ -336,7 +468,7 @@ def check(sheet: Image.Image) -> None:
             r, g, b, a = px[x, y]
             assert a in (0, 255), f"soft alpha at {x},{y}"
             assert not a or (r, g, b) in allowed, f"off-palette colour {(r, g, b)} at {x},{y}"
-            on_edge = y in (0, h - 1) or x % SIZE in (0, SIZE - 1)
+            on_edge = y in (0, h - 1) or x % frame_w in (0, frame_w - 1)
             assert not (a and on_edge), f"sprite touches frame edge at {x},{y}"
 
 
@@ -350,6 +482,12 @@ def main() -> None:
         check(sheet)
         sheet.save(OUT / f"{name}.png")
         print(f"wrote {OUT / f'{name}.png'} ({len(fs)} frames)")
+    WEAPON_OUT.mkdir(exist_ok=True)
+    for name, draw in WEAPONS.items():
+        img = weapon_image(draw)
+        check(img, WEAPON_W)
+        img.save(WEAPON_OUT / f"{name}.png")
+    print(f"wrote {len(WEAPONS)} weapons to {WEAPON_OUT}")
     # App Store icons must be opaque.
     icon = Image.new("RGBA", (SIZE, SIZE), NAVY + (255,))
     icon.alpha_composite(frames(flicker)[0])

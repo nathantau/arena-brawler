@@ -79,7 +79,7 @@ func test_catalog_has_the_mvp_eight() -> void:
 	var pickups: Array[StringName] = catalog.pickup_ids()
 	assert_false(pickups.has(&"pistol"), "sidearm isn't a pickup")
 	assert_false(pickups.has(&"bot_blaster"))
-	assert_eq(pickups.size(), 7)
+	assert_eq(pickups.size(), 7, "signature weapons are not pickups")
 
 
 func test_splash_damage_falloff() -> void:
@@ -240,3 +240,100 @@ func test_client_pool_never_damages() -> void:
 	await wait_physics_frames(20)
 	assert_eq(target.stats.armor, target.stats.max_armor)
 	assert_eq(crate.hp, Constants.CRATE_HP)
+
+
+# --- character weapons (many-to-many) -----------------------------------------
+
+func test_every_weapon_has_a_sprite() -> void:
+	for id: StringName in [&"pistol", &"bot_blaster", &"smg", &"shotgun", &"sniper", &"rocket", &"grenade",
+			&"laser", &"sword", &"flicker_kunai", &"warden_hammer", &"twinshot_revolver", &"wukong_staff"]:
+		assert_not_null(_w(id).sprite, String(id))
+
+
+func test_signature_weapons_belong_to_their_character_only() -> void:
+	for c: CharacterData in characters.ordered:
+		var sig: WeaponData = c.signature_weapon
+		assert_not_null(sig, String(c.id))
+		assert_false(sig.pickup, "signatures never drop")
+		assert_eq(sig.energy_cost, 0, "signatures are free sidearms")
+		for other: CharacterData in characters.ordered:
+			assert_eq(other.can_use(sig), other == c, "%s using %s" % [other.id, sig.id])
+
+
+func test_pickup_weapons_are_many_to_many() -> void:
+	var users_per_weapon: Dictionary[StringName, int] = {}
+	for c: CharacterData in characters.ordered:
+		var usable: int = 0
+		for id: StringName in catalog.pickup_ids():
+			if c.can_use(_w(id)):
+				usable += 1
+				users_per_weapon[id] = users_per_weapon.get(id, 0) + 1
+		assert_between(usable, 2, catalog.pickup_ids().size() - 1, "%s: some weapons, not all" % c.id)
+	for id: StringName in catalog.pickup_ids():
+		assert_true(users_per_weapon.get(id, 0) >= 2, "%s is shared by 2+ characters" % id)
+
+
+func test_untagged_weapons_are_universal() -> void:
+	for c: CharacterData in characters.ordered:
+		assert_true(c.can_use(_w(&"pistol")), String(c.id))
+
+
+# --- signature weapon behaviours ----------------------------------------------
+
+func test_kunai_pierce_one_player() -> void:
+	var first: Player = _player(TARGET, Vector2(220, 300))
+	var second: Player = _player(3, Vector2(320, 300))
+	var third: Player = _player(4, Vector2(420, 300))
+	await wait_physics_frames(2)
+	var kunai: WeaponData = _w(&"flicker_kunai").duplicate()
+	kunai.pellets = 1
+	pool.fire_shot(SHOOTER, 1, Vector2(100, 300), Vector2.RIGHT, kunai, SEED)
+	await wait_physics_frames(30)
+	assert_lt(first.stats.armor, first.stats.max_armor)
+	assert_lt(second.stats.armor, second.stats.max_armor, "passed through the first")
+	assert_eq(third.stats.armor, third.stats.max_armor, "stopped after one pierce")
+
+
+func test_hammer_slams_at_the_tip_hitting_everyone_near_it() -> void:
+	var front: Player = _player(TARGET, Vector2(170, 300))
+	var beside: Player = _player(3, Vector2(170, 350))
+	var behind: Player = _player(4, Vector2(40, 300))
+	var swinger: Player = _player(SHOOTER, Vector2(100, 300))
+	await wait_physics_frames(2)
+	var blasts: Array = []
+	pool.exploded.connect(func(at: Vector2, _r: float, _c: Color) -> void: blasts.append(at))
+	pool.fire_shot(SHOOTER, 1, Vector2(100, 300), Vector2.RIGHT, _w(&"warden_hammer"), SEED)
+	assert_eq(blasts.size(), 1)
+	assert_almost_eq(blasts[0].x, 100.0 + _w(&"warden_hammer").melee_range, 0.1)
+	assert_lt(front.stats.armor, front.stats.max_armor)
+	assert_lt(beside.stats.armor, beside.stats.max_armor, "splash, not just the arc")
+	assert_eq(behind.stats.armor, behind.stats.max_armor)
+	assert_eq(swinger.stats.armor, swinger.stats.max_armor, "no self-damage")
+
+
+func test_hammer_slam_does_not_land_behind_a_wall() -> void:
+	var hidden: Player = _player(TARGET, Vector2(175, 300))
+	_wall(Vector2(140, 300), Vector2(10, 200))
+	await wait_physics_frames(2)
+	pool.fire_shot(SHOOTER, 1, Vector2(100, 300), Vector2.RIGHT, _w(&"warden_hammer"), SEED)
+	assert_eq(hidden.stats.armor, hidden.stats.max_armor)
+
+
+func test_ricochet_hits_after_bouncing_off_a_wall() -> void:
+	_wall(Vector2(300, 300), Vector2(20, 400))
+	var target: Player = _player(TARGET, Vector2(150, 300))
+	await wait_physics_frames(2)
+	# Fired away from the target, comes back off the wall.
+	pool.fire_shot(SHOOTER, 1, Vector2(200, 300), Vector2.RIGHT, _w(&"twinshot_revolver"), SEED)
+	await wait_physics_frames(30)
+	assert_lt(target.stats.armor, target.stats.max_armor)
+	assert_eq(pool.active_count(), 0, "a ricochet stops on the player it hits (no splash)")
+
+
+func test_staff_thrust_is_long_and_narrow() -> void:
+	var far: Player = _player(TARGET, Vector2(220, 300))
+	var side: Player = _player(3, Vector2(130, 340))
+	await wait_physics_frames(2)
+	pool.fire_shot(SHOOTER, 1, Vector2(100, 300), Vector2.RIGHT, _w(&"wukong_staff"), SEED)
+	assert_lt(far.stats.armor, far.stats.max_armor, "beyond sword reach")
+	assert_eq(side.stats.armor, side.stats.max_armor, "outside the narrow cone")

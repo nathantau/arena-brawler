@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
 [ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/grenade.png" id="2_sprite"]
 
 [resource]
 script = ExtResource("1_wd")
@@ -22,3 +23,5 @@ splash_edge_scale = 0.4
 bounces = 4
 bounce_damping = 0.7
 drag = 1.2
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"explosive", &"light"])

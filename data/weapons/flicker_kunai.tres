@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/flicker_kunai.png" id="2_sprite"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"flicker_kunai"
+display_name = "Ripple Kunai"
+pickup = false
+damage = 6
+fire_interval = 0.42
+pellets = 3
+pellet_spread_deg = 16.0
+projectile_speed = 1250.0
+projectile_range = 560.0
+projectile_radius = 3.0
+energy_cost = 0
+crit_chance = 0.1
+knockback = 20.0
+color = Color(0.5, 0.95, 0.85, 1)
+screen_shake = 0.05
+sfx = &"shot_light"
+pierce = 1
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"flicker"])

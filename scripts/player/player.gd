@@ -19,9 +19,18 @@ enum StateField {
 	COUNT,
 }
 
-const GUN_HOLD_DISTANCE: float = 26.0
+## Weapon art (WeaponData.sprite) is drawn at the character's pixel scale, pivoting on its grip.
+const WEAPON_GRIP: Vector2 = Vector2(6, 12)
+const WEAPON_HOLD_DISTANCE: float = 14.0
+## Hands sit below the sprite's centre.
+const WEAPON_HAND_Y: float = 12.0
 const GUN_RECOIL_PX: float = 4.0
+const GUN_KICK_DEG: float = 14.0
 const RECOIL_TIME: float = 0.06
+## Melee animation: a sweep across the arc (or a stab out and back), starting from a raised guard.
+const MELEE_ANIM_TIME: float = 0.16
+const MELEE_REST_DEG: float = 35.0
+const THRUST_REACH: float = 0.6
 const INVULN_ALPHA: float = 0.45
 const BAR_WIDTH: float = 40.0
 const BAR_HEIGHT: float = 4.0
@@ -71,7 +80,9 @@ var _shield := ShieldWall.new()
 var _prev_skill: bool = false
 var _prev_swap: bool = false
 var _hit_flash: float = 0.0
+## Attack animation time left, and its full length (depends on the weapon used).
 var _recoil: float = 0.0
+var _recoil_len: float = RECOIL_TIME
 var _sprite := AnimatedSprite2D.new()
 ## Drawn after the sprite: the gun when it's in front of the body, and health bars.
 var _overlay := Node2D.new()
@@ -114,6 +125,9 @@ func set_character(data: CharacterData) -> void:
 	_shield.sync(skill, dead)
 	_sprite.sprite_frames = data.sprite_frames()
 	_sprite.play(&"idle")
+	if data.signature_weapon != null and not is_bot:
+		default_weapons = [data.signature_weapon]
+		loadout = Loadout.new(default_weapons)
 
 
 func _physics_process(delta: float) -> void:
@@ -202,7 +216,8 @@ func _try_fire(seq: int, replay: bool) -> void:
 
 
 func play_recoil() -> void:
-	_recoil = RECOIL_TIME
+	_recoil_len = MELEE_ANIM_TIME if loadout.active().data.kind == WeaponData.Kind.MELEE else RECOIL_TIME
+	_recoil = _recoil_len
 
 
 func flash() -> void:
@@ -355,16 +370,24 @@ func _draw_guns(ci: CanvasItem) -> void:
 
 
 func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
-	var gun: Texture2D = PixelSprites.gun_texture()
-	var recoil_px: float = GUN_RECOIL_PX * (_recoil / RECOIL_TIME)
-	var pos: Vector2 = visual_offset + offset + facing * (GUN_HOLD_DISTANCE - recoil_px)
+	var w: WeaponData = loadout.active().data
 	# Mirror vertically when aiming left so the grip stays below the barrel.
 	var flip_v: float = -1.0 if facing.x < 0.0 else 1.0
-	var scale_px: float = PixelSprites.SCALE
-	var color: Color = loadout.active().data.color
-	color.a = _sprite.modulate.a
-	ci.draw_set_transform(pos, facing.angle(), Vector2(scale_px, scale_px * flip_v))
-	ci.draw_texture(gun, Vector2(0.0, -gun.get_size().y * 0.5), color)
+	var t: float = _recoil / _recoil_len  # 1 the moment the attack starts, 0 at rest
+	var angle: float = facing.angle()
+	var hold: float = WEAPON_HOLD_DISTANCE
+	if w.kind != WeaponData.Kind.MELEE:
+		hold -= GUN_RECOIL_PX * t
+		angle -= deg_to_rad(GUN_KICK_DEG) * t * flip_v
+	elif w.thrust:
+		hold += w.melee_range * THRUST_REACH * sin(t * PI)
+	elif _recoil > 0.0:
+		angle += deg_to_rad(w.melee_arc_deg) * (0.5 - t) * flip_v
+	else:
+		angle -= deg_to_rad(MELEE_REST_DEG) * flip_v
+	var scale_px: float = Constants.SPRITE_SCALE
+	ci.draw_set_transform(visual_offset + offset + Vector2(0.0, WEAPON_HAND_Y) + facing * hold, angle, Vector2(scale_px, scale_px * flip_v))
+	ci.draw_texture(w.sprite, -WEAPON_GRIP, Color(1, 1, 1, _sprite.modulate.a))
 
 
 func _draw_bars(r: float) -> void:
