@@ -115,8 +115,10 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
     for x, (dx, dy) in zip((24, 34), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
         c.part(R((x + dx, 45 + dy, x + dx + 6, 56 + dy)), pants)
         xs.append((x + dx, dy))
-    for x, dy in xs:
-        c.part(RR((x - 2, 53 + dy, x + 7, 61 + dy), 3), boots)
+    for x, dy in xs:  # boot: shaft, then a foot with the toe pointing forward, dark sole
+        c.part(P([(x - 1, 52 + dy), (x + 6, 52 + dy), (x + 6, 55 + dy), (x + 8, 55 + dy),
+                  (x + 10, 57 + dy), (x + 10, 61 + dy), (x - 2, 61 + dy), (x - 2, 57 + dy)]), boots)
+        c.flat(R((x - 2, 61 + dy, x + 10, 61 + dy)), SHADOW)
     return xs
 
 
@@ -126,7 +128,7 @@ def flicker(step=None):
     """Dash: hooded scout with a trailing scarf and a dagger on the back."""
     low = Canvas()
     for x, dy in legs(low, NAVY, BROWN, step):
-        low.flat(R((x - 2, 53 + dy, x + 7, 53 + dy)), SKIN_D)  # boot cuffs
+        low.flat(R((x - 1, 52 + dy, x + 6, 53 + dy)), SKIN_D)  # boot cuffs
     up = Canvas()
     up.part(P([(21, 33), (4, 27), (2, 34), (9, 40), (21, 39)]), ORANGE)  # scarf tails
     up.part(P([(9, 33), (2, 34), (9, 40)]), RED, shade=False)
