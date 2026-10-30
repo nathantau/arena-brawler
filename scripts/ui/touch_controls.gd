@@ -1,7 +1,7 @@
 class_name TouchControls
 extends Control
 ## Multi-touch mobile controls, drawn with primitives:
-## - floating joystick anywhere on the left part of the screen
+## - joystick anywhere on the left part of the screen (base fixed where you touch until release)
 ## - attack button (hold = fire with auto-aim; drag off-centre = manual aim)
 ## - skill button with cooldown sweep, weapon swap button
 ## Touches that start on a visible `blockers` control (e.g. lobby buttons) are left to the GUI.
@@ -123,12 +123,9 @@ func _on_press(finger: int, p: Vector2) -> void:
 
 func _on_drag(finger: int, p: Vector2) -> void:
 	if finger == _joy_finger:
-		var offset: Vector2 = p - _joy_origin
-		if offset.length() > JOY_RADIUS:
-			# Floating stick: drag the base along so reversing direction is instant.
-			_joy_origin = p - offset.normalized() * JOY_RADIUS
-			offset = p - _joy_origin
-		_joy_pos = p
+		# The base stays where the finger first landed until release; the knob is clamped to its ring.
+		var offset: Vector2 = (p - _joy_origin).limit_length(JOY_RADIUS)
+		_joy_pos = _joy_origin + offset
 		move_vec = offset / JOY_RADIUS
 	elif finger == _attack_finger:
 		var drag: Vector2 = p - _attack_center()
