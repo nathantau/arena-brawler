@@ -15,7 +15,7 @@ enum SkillKind { DASH, SHIELD, DUAL_WIELD }
 @export var skill_cooldown: float = 1.8
 ## How long the skill stays active (dash burst, shield up, dual-wield window).
 @export var skill_duration: float = 0.16
-## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames.
+## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames, then walk frames.
 @export var sprite_sheet: Texture2D
 
 var _sprite_frames: SpriteFrames
@@ -34,7 +34,7 @@ var _sprite_frames: SpriteFrames
 @export var dual_offset: float = 9.0
 
 
-## "idle" (looping bob) + "hit" (one-shot flash) animations cut from sprite_sheet; built once, shared.
+## "idle" (looping bob) + "hit" (one-shot flash) + "walk" (looping) animations cut from sprite_sheet; built once, shared.
 func sprite_frames() -> SpriteFrames:
 	if _sprite_frames != null:
 		return _sprite_frames
@@ -43,6 +43,8 @@ func sprite_frames() -> SpriteFrames:
 	_add_animation(&"idle", 0, Constants.SPRITE_IDLE_FRAMES, Constants.SPRITE_IDLE_FPS, true)
 	_add_animation(&"hit", Constants.SPRITE_IDLE_FRAMES, Constants.SPRITE_HIT_FRAMES,
 		Constants.SPRITE_HIT_FRAMES / Constants.HIT_FLASH_TIME, false)
+	_add_animation(&"walk", Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES,
+		Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_WALK_FPS, true)
 	return _sprite_frames
 
 

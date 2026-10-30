@@ -1,7 +1,8 @@
 """Procedural pixel art for Arena Brawler's original characters.
 
 Writes one horizontal sprite sheet per character to assets/sprites/<id>.png:
-frames 0-3 = idle bob, frames 4-5 = hit flash (white silhouette, then one step lighter).
+frames 0-3 = idle bob, frames 4-5 = hit flash (white silhouette, then one step lighter),
+frames 6-9 = walk cycle (legs stride, upper body bounces on the passing frames).
 Each frame is 64x64, transparent, palette-only colours, with an automatic 1 px outline.
 Characters are built from "parts": each part is auto-shaded (dark band on its bottom/right
 edge, highlight on its top/left edge) and can draw a dark line where it overlaps earlier parts.
@@ -19,6 +20,10 @@ from palette import (BLUE, BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE
 
 SIZE = 64
 IDLE_BOB = [0, 1, 2, 1]  # upper-body offset (px down) per idle frame; legs stay planted
+UPPER_DY = 2  # upper body sits this far down over the legs: shorter legs = chibbier
+# Walk: per frame, (dx, dy) of the back and front leg, plus the upper-body bounce.
+WALK_LEGS = [((-3, 0), (3, 0)), ((0, 0), (0, -2)), ((3, 0), (-3, 0)), ((0, -2), (0, 0))]
+WALK_BOB = [0, -1, 0, -1]
 SHADE_DEPTH = 2  # px of shade on a part's bottom/right edge
 ICON_SIZE = 1024
 ROOT = Path(__file__).resolve().parents[2]
@@ -86,28 +91,42 @@ class Canvas:
         self.px[x, y] = color + (255,)
 
 
-def big_eyes(c: Canvas, y: int, xs: tuple[int, int], h: int = 5):
+def big_eyes(c: Canvas, y: int, xs: tuple[int, int], iris, h: int = 6):
     for x in xs:
         c.flat(R((x, y, x + 3, y + h)), OUTLINE)
-        c.flat(R((x, y, x + 1, y + 1)), WHITE)  # glint
-        c.dot(x + 2, y + h - 1, SHADOW)
+        c.flat(R((x, y + h - 2, x + 3, y + h - 1)), iris)
+        c.flat(R((x, y, x + 1, y + 1)), WHITE)  # glints
+        c.dot(x + 3, y + h - 2, WHITE)
 
 
-def legs(c: Canvas, pants, boots):
-    c.part(R((24, 45, 30, 56)), pants)
-    c.part(R((34, 45, 40, 56)), pants)
-    c.part(RR((22, 53, 31, 61), 2), boots)
-    c.part(RR((33, 53, 42, 61), 2), boots)
+def face(c: Canvas, blush: tuple[int, int, int], mouth: tuple[int, int] | None = None):
+    """Blush marks at (left x, right x, y) and an optional tiny mouth at (x, y)."""
+    lx, rx, y = blush
+    c.flat(R((lx, y, lx + 2, y)), ORANGE)
+    c.flat(R((rx, y, rx + 1, y)), ORANGE)
+    if mouth:
+        mx, my = mouth
+        c.flat(R((mx, my, mx + 1, my)), MAROON)
+
+
+def legs(c: Canvas, pants, boots, step) -> list[int]:
+    """Two stubby legs (back, front); `step` indexes WALK_LEGS, None = standing. Returns each leg's x."""
+    xs = []
+    for x, (dx, dy) in zip((24, 34), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
+        c.part(R((x + dx, 45 + dy, x + dx + 6, 56 + dy)), pants)
+        xs.append((x + dx, dy))
+    for x, dy in xs:
+        c.part(RR((x - 2, 53 + dy, x + 7, 61 + dy), 3), boots)
+    return xs
 
 
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
-def flicker():
+def flicker(step=None):
     """Dash: hooded scout with a trailing scarf and a dagger on the back."""
     low = Canvas()
-    legs(low, NAVY, BROWN)
-    low.flat(R((22, 53, 31, 53)), SKIN_D)  # boot cuffs
-    low.flat(R((33, 53, 42, 53)), SKIN_D)
+    for x, dy in legs(low, NAVY, BROWN, step):
+        low.flat(R((x - 2, 53 + dy, x + 7, 53 + dy)), SKIN_D)  # boot cuffs
     up = Canvas()
     up.part(P([(21, 33), (4, 27), (2, 34), (9, 40), (21, 39)]), ORANGE)  # scarf tails
     up.part(P([(9, 33), (2, 34), (9, 40)]), RED, shade=False)
@@ -125,20 +144,18 @@ def flicker():
     up.part(E((23, 15, 47, 35)), SKIN)  # face
     up.part(P([(23, 13), (47, 13), (47, 19), (41, 21), (36, 17), (30, 21), (23, 19)]), TEAL)  # fringe
     up.flat(E((20, 8, 27, 13)), TEAL_L)  # hood shine
-    big_eyes(up, 22, (32, 40))
-    up.flat(R((29, 29, 31, 30)), SKIN_D)  # cheeks
-    up.flat(R((44, 29, 45, 30)), SKIN_D)
+    big_eyes(up, 21, (32, 40), TEAL)
+    face(up, (28, 45, 29), (37, 29))
     up.part(RR((19, 31, 45, 37), 2), ORANGE)  # scarf
     up.part(RR((17, 32, 24, 39), 2), RED)  # scarf knot
     return low, up
 
 
-def warden():
+def warden(step=None):
     """Shield: armoured knight with a plume, cape and tower shield."""
     low = Canvas()
-    legs(low, STEEL_D, NAVY)
-    low.part(R((24, 48, 30, 50)), STEEL, line=False)  # knee plates
-    low.part(R((34, 48, 40, 50)), STEEL, line=False)
+    for x, dy in legs(low, STEEL_D, NAVY, step):
+        low.part(R((x, 48 + dy, x + 6, 50 + dy)), STEEL, line=False)  # knee plates
     up = Canvas()
     up.part(P([(18, 32), (46, 32), (50, 50), (14, 50)]), RED)  # cape
     up.part(RR((20, 32, 44, 48), 3), STEEL)  # breastplate
@@ -156,10 +173,11 @@ def warden():
     up.part(R((31, 6, 33, 18)), STEEL, line=False)  # crest ridge
     up.part(R((17, 30, 47, 35)), STEEL_D)  # helmet rim
     up.flat(RR((22, 19, 47, 27), 3), OUTLINE)  # visor
-    up.flat(R((34, 21, 37, 24)), TEAL_L)
-    up.flat(R((41, 21, 44, 24)), TEAL_L)
-    up.flat(R((34, 21, 35, 22)), WHITE)
-    up.flat(R((41, 21, 42, 22)), WHITE)
+    for x in (34, 41):  # round glowing eyes
+        up.flat(RR((x, 20, x + 3, 25), 1), TEAL_L)
+        up.flat(R((x, 20, x + 1, 21)), WHITE)
+    up.flat(R((30, 27, 32, 27)), ORANGE)  # blush glow on the faceplate
+    up.flat(R((46, 27, 47, 27)), ORANGE)
     for x in (35, 38, 41, 44):
         up.dot(x, 29, STEEL_D)  # breathing holes
     up.part(RR((40, 31, 56, 57), 5), BLUE)  # tower shield
@@ -171,12 +189,11 @@ def warden():
     return low, up
 
 
-def twinshot():
+def twinshot(step=None):
     """Dual wield: gunslinger with a feathered wide hat, poncho, bandolier and two holsters."""
     low = Canvas()
-    legs(low, BLUE, BROWN)
-    low.dot(21, 58, YELLOW)  # spurs
-    low.dot(32, 58, YELLOW)
+    for x, dy in legs(low, BLUE, BROWN, step):
+        low.dot(x - 3, 58 + dy, YELLOW)  # spurs
     up = Canvas()
     up.part(P([(18, 33), (46, 33), (50, 48), (14, 48)]), ORANGE)  # poncho
     for x in range(16, 49, 4):
@@ -192,9 +209,10 @@ def twinshot():
         up.part(RR((x + 1, 36, x + 5, 43), 1), STEEL_D)  # grip
         up.dot(x + 2, 37, STEEL)
     up.part(E((20, 14, 44, 37)), SKIN)  # face
-    big_eyes(up, 24, (30, 37))
-    up.flat(R((30, 22, 33, 22)), BROWN)  # brows
-    up.flat(R((37, 22, 40, 22)), BROWN)
+    big_eyes(up, 23, (30, 37), BLUE)
+    up.flat(R((30, 21, 33, 21)), BROWN)  # brows
+    up.flat(R((37, 21, 40, 21)), BROWN)
+    face(up, (26, 42, 30))
     up.part(RR((20, 32, 44, 37), 2), RED)  # bandana
     up.part(P([(21, 33), (14, 37), (16, 40), (22, 36)]), RED)  # bandana tail
     up.part(E((5, 13, 59, 23)), BROWN)  # hat brim
@@ -239,13 +257,16 @@ def recolor(img: Image.Image, fn) -> Image.Image:
 
 def frames(build) -> list[Image.Image]:
     low, up = build()
-    idle = []
-    for dy in IDLE_BOB:
-        f = low.img.copy()
-        f.alpha_composite(up.img, (0, dy))
-        idle.append(outline(f))
+
+    def frame(legs_img, dy):
+        f = legs_img.copy()
+        f.alpha_composite(up.img, (0, UPPER_DY + dy))
+        return outline(f)
+
+    idle = [frame(low.img, dy) for dy in IDLE_BOB]
     hit = [recolor(idle[0], lambda _c: WHITE), recolor(idle[0], LIGHTER.__getitem__)]
-    return idle + hit
+    walk = [frame(build(i)[0].img, dy) for i, dy in enumerate(WALK_BOB)]
+    return idle + hit + walk
 
 
 def check(sheet: Image.Image) -> None:

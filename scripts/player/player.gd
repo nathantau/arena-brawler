@@ -129,7 +129,11 @@ func _process(delta: float) -> void:
 	_hit_flash = maxf(0.0, _hit_flash - delta)
 	_recoil = maxf(0.0, _recoil - delta)
 	visual_offset *= exp(-Constants.CORRECTION_DECAY * delta)
-	var anim: StringName = &"hit" if _hit_flash > 0.0 else &"idle"
+	var anim: StringName = &"idle"
+	if _hit_flash > 0.0:
+		anim = &"hit"
+	elif velocity.length() > Constants.SPRITE_WALK_MIN_SPEED:
+		anim = &"walk"
 	if _sprite.animation != anim:
 		_sprite.play(anim)
 	_sprite.position = visual_offset
