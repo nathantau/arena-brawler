@@ -250,7 +250,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   sprite is hidden) and bursts out of a cloud; it ends in a dark puff,
   morphing back. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
   (generate.py `FX`: poof / poof_small / poof_dark 10 frames (swell, then burst into wisps), wukong_ape_morph, bolt 3 variants, smoke 4-frame loop; `Canvas(size)`
-  now takes any size). Still smooth (Effects): explosion rings, sword arcs, beams, particles. Not done: bots don't prefer usable pickups; no
+  now takes any size). `Effects` is pixel art too: explosions play `blast` (fireball → smoke + embers), melee slams `slam` (dust ring + floor cracks; `exploded(..., slam)`), sword swings `slash` (crescent smear tinted to the weapon), all sized to the radius / reach; beams and particles are hard-edged, snapped to art pixels and shrink instead of fading. Preview all effects: `tools/fx_preview.gd`. Still smooth: projectiles (circles) and impact pops. Not done: bots don't prefer usable pickups; no
   per-weapon projectile sprites (still circles); the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests

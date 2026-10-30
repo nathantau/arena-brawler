@@ -1,8 +1,11 @@
 class_name Effects
 extends Node2D
 ## Cosmetic-only effects in world space: particle bursts, damage numbers, beam lines, sword
-## swings and blast rings. Fixed-size pools, one _draw for everything, no per-frame
+## swings and blasts. Fixed-size pools, one _draw for everything, no per-frame
 ## allocation. Uses its own RNG (never the shared sim's).
+## Pixel art throughout: blasts / slams / slashes play strips from tools/sprites/generate.py
+## (assets/fx), particles and beams are hard-edged and snapped to the art-pixel grid
+## (Constants.SPRITE_SCALE), shrinking instead of fading.
 
 const PARTICLE_POOL: int = 384
 const NUMBER_POOL: int = 40
@@ -20,13 +23,15 @@ const COLOR_NUMBER_CRIT: Color = UiStyle.C_YELLOW
 const BEAM_TIME: float = 0.07
 const BEAM_CORE_COLOR: Color = Color(1, 1, 1, 0.9)
 const BEAM_CORE_SCALE: float = 0.4
-const SWING_TIME: float = 0.14
-const SWING_WIDTH: float = 10.0
-const SWING_SEGMENTS: int = 12
-const RING_TIME: float = 0.3
-const RING_WIDTH: float = 4.0
-const RING_SEGMENTS: int = 32
-const BLAST_FILL_ALPHA: float = 0.35
+const SWING_TIME: float = 0.18
+const RING_TIME: float = 0.5
+const SLAM_TIME: float = 0.4
+const BLAST_ART: Texture2D = preload("res://assets/fx/blast.png")
+const SLAM_ART: Texture2D = preload("res://assets/fx/slam.png")
+const SLASH_ART: Texture2D = preload("res://assets/fx/slash.png")
+## Art px the fireball / slam reaches and the slash arc's radius (generate.py BLAST_R, SLASH_R).
+const BLAST_ART_RADIUS: float = 56.0
+const SLASH_ART_RADIUS: float = 46.0
 
 
 class Particle:
@@ -64,9 +69,10 @@ class Swing:
 
 class Ring:
 	var life: float = 0.0
+	var duration: float = RING_TIME
 	var pos: Vector2 = Vector2.ZERO
 	var radius: float = 0.0
-	var color: Color = Color.WHITE
+	var art: Texture2D
 
 
 var _particles: Array[Particle] = []
@@ -83,6 +89,7 @@ var _rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	for i: int in PARTICLE_POOL:
 		_particles.append(Particle.new())
 	for i: int in NUMBER_POOL:
@@ -141,13 +148,15 @@ func swing(origin: Vector2, facing: Vector2, radius: float, arc_deg: float, colo
 	s.color = color
 
 
-func ring(at: Vector2, radius: float, color: Color) -> void:
+## Explosion (fireball) or melee slam (dust ring + cracks) sized to `radius`.
+func blast(at: Vector2, radius: float, slam: bool) -> void:
 	var r: Ring = _rings[_rc]
 	_rc = (_rc + 1) % _rings.size()
-	r.life = RING_TIME
+	r.duration = SLAM_TIME if slam else RING_TIME
+	r.life = r.duration
 	r.pos = at
 	r.radius = radius
-	r.color = color
+	r.art = SLAM_ART if slam else BLAST_ART
 
 
 func _process(delta: float) -> void:
@@ -171,38 +180,29 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	var px: float = Constants.SPRITE_SCALE
 	for r: Ring in _rings:
 		if r.life <= 0.0:
 			continue
-		var t: float = 1.0 - r.life / RING_TIME
-		var fill: Color = r.color
-		fill.a = BLAST_FILL_ALPHA * (1.0 - t)
-		draw_circle(r.pos, r.radius * lerpf(0.5, 1.0, t), fill)
-		var edge: Color = r.color
-		edge.a = 1.0 - t
-		draw_arc(r.pos, r.radius * lerpf(0.6, 1.1, t), 0.0, TAU, RING_SEGMENTS, edge, RING_WIDTH)
+		_draw_strip(r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / BLAST_ART_RADIUS, Color.WHITE)
 	for s: Swing in _swings:
 		if s.life <= 0.0:
 			continue
-		var c: Color = s.color
-		c.a = s.life / SWING_TIME
-		draw_arc(s.origin, s.radius, s.angle - s.arc * 0.5, s.angle + s.arc * 0.5, SWING_SEGMENTS, c, SWING_WIDTH)
+		_draw_strip(SLASH_ART, 1.0 - s.life / SWING_TIME, s.origin, s.angle, s.radius / SLASH_ART_RADIUS,
+			s.color.lightened(0.3))
 	for b: Beam in _beams:
 		if b.life <= 0.0:
 			continue
-		var a: float = b.life / BEAM_TIME
-		var c2: Color = b.color
-		c2.a = a
-		draw_line(b.from, b.to, c2, b.width)
-		var core: Color = BEAM_CORE_COLOR
-		core.a *= a
-		draw_line(b.from, b.to, core, b.width * BEAM_CORE_SCALE)
+		# Narrows in whole art pixels instead of fading.
+		var w: float = maxf(px, snappedf(b.width * b.life / BEAM_TIME, px))
+		draw_line(b.from, b.to, b.color, w)
+		if w > px:
+			draw_line(b.from, b.to, BEAM_CORE_COLOR, maxf(px, snappedf(w * BEAM_CORE_SCALE, px)))
 	for p: Particle in _particles:
 		if p.life <= 0.0:
 			continue
-		var pc: Color = p.color
-		pc.a = p.life / p.max_life
-		draw_rect(Rect2(p.pos - Vector2(p.size, p.size) * 0.5, Vector2(p.size, p.size)), pc)
+		var size: float = maxf(px, snappedf(p.size * p.life / p.max_life, px))
+		draw_rect(Rect2((p.pos / px).floor() * px - Vector2(size, size) * 0.5, Vector2(size, size)), p.color)
 	for n: DamageNumber in _numbers:
 		if n.life <= 0.0:
 			continue
@@ -211,3 +211,13 @@ func _draw() -> void:
 		var font_size: int = NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE
 		var w: float = UiStyle.text_width(n.text, font_size, true)
 		UiStyle.draw_text(self, n.pos - Vector2(w * 0.5, 0.0), n.text, font_size, nc, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
+
+
+## Frame `t` (0..1) of a strip of square frames, centred on `at`, rotated and scaled.
+func _draw_strip(art: Texture2D, t: float, at: Vector2, angle: float, scale_px: float, tint: Color) -> void:
+	var h: float = art.get_height()
+	var n: int = int(art.get_width() / h)
+	var k: int = mini(int(t * n), n - 1)
+	draw_set_transform(at, angle, Vector2(scale_px, scale_px))
+	draw_texture_rect_region(art, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2(k * h, 0, h, h), tint)
+	draw_set_transform(Vector2.ZERO)

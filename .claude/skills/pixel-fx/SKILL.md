@@ -44,4 +44,7 @@ pixel scale. Never draw effects with smooth `draw_circle`/`draw_arc` shapes — 
    (autopilot uses the special at sim frame 420 = movie frame ~210; use a new dir per run, `rm -rf $VAR`
    is blocked). Make a contact sheet of frames ~204-230 and Read it, then a GIF (Pillow, crop
    `(0, 0, 800, 450)` if the player is top-left, NEAREST resize, `duration=33`).
+   For world effects in `scripts/fx/effects.gd` (blast / slam / slash, beams, particles) use the side-by-side
+   preview instead: add the new effect to `tools/fx_preview.gd`, then
+   `godot --path . --write-movie <scratch>/pv/f.png --fixed-fps 30 --quit-after 30 -s tools/fx_preview.gd`.
 7. Update the FX line in CLAUDE.md Status, commit, send the user the GIF.

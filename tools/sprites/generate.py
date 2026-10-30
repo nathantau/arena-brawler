@@ -1078,6 +1078,119 @@ def smoke_frame(k: int, size: int = 136) -> Image.Image:
     return outline(c.img)
 
 
+BLAST_FRAMES = 10
+BLAST_SIZE = 128  # art px; the fireball reaches ~BLAST_R, drawn scaled to the weapon's splash radius
+BLAST_R = 56
+
+
+def blobs(pts):
+    return lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in pts if r >= 1]
+
+
+def blast_frame(k: int) -> Image.Image:
+    """Rocket / grenade explosion: white flash, a fireball of lumpy layers (red rim, orange, yellow
+    core) that billows out, then breaks into dark smoke puffs drifting up while embers fly out."""
+    rng = random.Random(3)
+    lumps = [(math.tau * i / 9 + rng.uniform(-0.25, 0.25), rng.uniform(0.85, 1.15), rng.uniform(0.8, 1.2))
+             for i in range(9)]
+    embers = [(rng.uniform(0, math.tau), rng.uniform(0.7, 1.0)) for _ in range(7)]
+    c = Canvas(BLAST_SIZE)
+    m = BLAST_SIZE // 2
+    t = k / (BLAST_FRAMES - 1)
+    g = min(1.0, (k + 1) / 3)  # swells over the first 3 frames
+    rise = BLAST_R * 0.2 * max(0.0, t - 0.4)
+
+    def ring(dist, size, color):
+        c.part(blobs([(m + math.cos(a) * dist * d, m + math.sin(a) * dist * d - rise, round(size * r))
+                      for a, d, r in lumps] + [(m, m - rise, round(dist * 0.9))]), color)
+
+    if t < 0.45:  # fire
+        ring(BLAST_R * 0.55 * g, BLAST_R * 0.36 * g, RED if k else YELLOW)
+        if k:
+            ring(BLAST_R * 0.35 * g * (1 - t), BLAST_R * 0.3 * g * (1 - t), ORANGE)
+        core = round(BLAST_R * 0.35 * g * (1 - 2 * t))
+        if core >= 2:
+            c.part(blobs([(m, m - rise, core)]), YELLOW if k else WHITE)
+        if k < 2:
+            c.part(blobs([(m, m, round(BLAST_R * 0.18))]), WHITE)
+    else:  # smoke: puffs drift out and up, shrinking; a last glow inside early on
+        f = (t - 0.45) / 0.55
+        c.part(blobs([(m + math.cos(a) * BLAST_R * (0.55 + 0.25 * f) * d, m + math.sin(a) * BLAST_R * (0.55 + 0.25 * f) * d
+                       - rise, round(BLAST_R * 0.3 * r * (1 - 0.8 * f))) for a, d, r in lumps]), SHADOW)
+        if f < 0.4:
+            c.part(blobs([(m, m - rise, round(BLAST_R * 0.25 * (1 - 2 * f)))]), RED)
+    if t > 0.15:  # embers streak out
+        for a, d in embers:
+            dist = BLAST_R * (0.4 + 0.75 * t) * d
+            x, y = round(m + math.cos(a) * dist), round(m + math.sin(a) * dist - rise)
+            if t < 0.9:
+                c.flat(R((x, y, x + 1, y + 1)), YELLOW if t < 0.5 else ORANGE)
+    return outline(c.img)
+
+
+SLAM_FRAMES = 8
+
+
+def slam_frame(k: int) -> Image.Image:
+    """Melee slam (hammer, ape fists): an impact flash, cracks in the floor, and a ring of dust puffs
+    rolling outward along the ground (squashed for the top-down 3/4 view)."""
+    rng = random.Random(5)
+    puffs = [(math.tau * i / 12 + rng.uniform(-0.15, 0.15), rng.uniform(0.85, 1.1), rng.uniform(0.8, 1.2))
+             for i in range(12)]
+    cracks = [math.tau * i / 5 + rng.uniform(-0.3, 0.3) for i in range(5)]
+    c = Canvas(BLAST_SIZE)
+    m = BLAST_SIZE // 2
+    t = k / (SLAM_FRAMES - 1)
+    if t < 0.85:  # cracks stay, then vanish with the dust
+        for a in cracks:
+            length = BLAST_R * min(0.5, 0.25 + t)
+            pts = [(m, m)]
+            for j in range(1, 4):
+                rr = length * j / 3
+                pts.append((m + math.cos(a + (0.15 if j % 2 else -0.15)) * rr, m + math.sin(a) * rr * 0.6))
+            c.flat(L(pts, 1), OUTLINE)
+    if k < 2:  # impact flash
+        r = round(BLAST_R * (0.22 if k == 0 else 0.32))
+        c.part(blobs([(m, m, r)]), WHITE if k == 0 else YELLOW)
+    dist = BLAST_R * (0.25 + 0.7 * math.sqrt(t))
+    size = BLAST_R * 0.2 * (1 - 0.75 * t)
+    c.part(blobs([(m + math.cos(a) * dist * d, m + math.sin(a) * dist * d * 0.6 - BLAST_R * 0.08 * t,
+                   round(size * r)) for a, d, r in puffs]), STEEL)
+    return outline(c.img)
+
+
+SLASH_FRAMES = 6
+SLASH_SIZE = 112
+SLASH_R = 46  # outer radius of the arc in art px (drawn scaled to the weapon's reach)
+SLASH_ARC = math.radians(150)
+
+
+def slash_frame(k: int) -> Image.Image:
+    """Sword swing smear, facing right, swept from top to bottom: a crescent whose leading edge races
+    round the arc (thick at the head, tapering to the tail) while the tail catches up. White edge,
+    light core: tinted to the weapon's colour in game."""
+    c = Canvas(SLASH_SIZE)
+    m = SLASH_SIZE // 2
+    head = (0.45, 0.85, 1.0, 1.0, 1.0, 1.0)[k]
+    tail = (0.0, 0.0, 0.15, 0.45, 0.7, 0.88)[k]
+
+    def band(r_out, width, color):
+        a0, a1 = -SLASH_ARC / 2 + SLASH_ARC * tail, -SLASH_ARC / 2 + SLASH_ARC * head
+        n = 32
+        outer, inner = [], []
+        for i in range(n + 1):
+            u = i / n
+            a = a0 + (a1 - a0) * u
+            w = max(1.0, width * math.sqrt(u) * (1 - 0.5 * tail))
+            outer.append((m + math.cos(a) * r_out, m + math.sin(a) * r_out))
+            inner.append((m + math.cos(a) * (r_out - w), m + math.sin(a) * (r_out - w)))
+        c.flat(P(outer + inner[::-1]), color)
+
+    band(SLASH_R, 20, STEEL)
+    band(SLASH_R, 8, WHITE)
+    return c.img
+
+
 def strip(frames_: list[Image.Image]) -> Image.Image:
     w, h = frames_[0].size
     out = Image.new("RGBA", (w * len(frames_), h), (0, 0, 0, 0))
@@ -1092,6 +1205,9 @@ FX = {
     "poof_dark": lambda: strip([poof_frame(64, k, SHADOW) for k in range(POOF_FRAMES)]),
     "bolt": lambda: strip([bolt(v) for v in range(BOLT_VARIANTS)]),
     "smoke": lambda: strip([smoke_frame(k) for k in range(SMOKE_FRAMES)]),
+    "blast": lambda: strip([blast_frame(k) for k in range(BLAST_FRAMES)]),
+    "slam": lambda: strip([slam_frame(k) for k in range(SLAM_FRAMES)]),
+    "slash": lambda: strip([slash_frame(k) for k in range(SLASH_FRAMES)]),
     # Transformation strips (SkillData.form_morph): the character's first idle frame into the form's.
     # 1.35 = great_ape.tres form_scale (keep in sync).
     "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],

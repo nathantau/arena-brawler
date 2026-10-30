@@ -18,7 +18,7 @@ signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, dam
 signal shot_spawned(owner_id: int, origin: Vector2, facing: Vector2, weapon: WeaponData)
 signal beam_drawn(from: Vector2, to: Vector2, weapon: WeaponData)
 signal swung(origin: Vector2, facing: Vector2, weapon: WeaponData)
-signal exploded(at: Vector2, radius: float, color: Color)
+signal exploded(at: Vector2, radius: float, color: Color, slam: bool)
 
 const TRAIL_TIME: float = 0.025
 const TRAIL_WIDTH_SCALE: float = 1.2
@@ -262,7 +262,7 @@ func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: We
 	blast.color = weapon.color
 	blast.splash_radius = weapon.splash_radius
 	blast.splash_edge = weapon.splash_edge_scale
-	_explode(blast, at)
+	_explode(blast, at, true)
 
 
 func _next_free_slot() -> Slot:
@@ -375,9 +375,9 @@ func _finish(s: Slot, at: Vector2) -> void:
 	_add_impact(at, s.radius, s.color)
 
 
-func _explode(s: Slot, at: Vector2) -> void:
+func _explode(s: Slot, at: Vector2, slam: bool = false) -> void:
 	s.active = false
-	exploded.emit(at, s.splash_radius, s.color)
+	exploded.emit(at, s.splash_radius, s.color, slam)
 	if not authoritative:
 		return
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
