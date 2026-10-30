@@ -2,7 +2,8 @@
 
 Writes one horizontal sprite sheet per character to assets/sprites/<id>.png:
 frames 0-3 = idle bob, frames 4-5 = hit flash (white silhouette, then one step lighter),
-frames 6-9 = walk cycle (legs stride, upper body bounces on the passing frames).
+frames 6-13 = walk cycle (legs stride, upper body bounces on the passing frames).
+Characters also get `t` (frame tick) for small loops: fluttering scarves, swaying feathers, glints.
 Each frame is 64x64, transparent, palette-only colours, with an automatic 1 px outline.
 Characters are built from "parts": each part is auto-shaded (dark band on its bottom/right
 edge, highlight on its top/left edge) and can draw a dark line where it overlaps earlier parts.
@@ -21,9 +22,11 @@ from palette import (BLUE, BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE
 SIZE = 64
 IDLE_BOB = [0, 1, 2, 1]  # upper-body offset (px down) per idle frame; legs stay planted
 UPPER_DY = 2  # upper body sits this far down over the legs: shorter legs = chibbier
-# Walk: per frame, (dx, dy) of the back and front leg, plus the upper-body bounce.
-WALK_LEGS = [((-3, 0), (3, 0)), ((0, 0), (0, -2)), ((3, 0), (-3, 0)), ((0, -2), (0, 0))]
-WALK_BOB = [0, -1, 0, -1]
+# Walk (8 frames): per frame, (dx, dy) of the back and front leg; a leg lifts while it swings forward.
+WALK_LEGS = [((-3, 0), (3, 0)), ((-2, -1), (2, 0)), ((0, -2), (0, 0)), ((2, -1), (-2, 0)),
+             ((3, 0), (-3, 0)), ((2, 0), (-2, -1)), ((0, 0), (0, -2)), ((-2, 0), (2, -1))]
+WALK_BOB = [1, 0, -1, 0, 1, 0, -1, 0]  # body dips on contact, rises while passing
+SWAY = [0, 1, 0, -1]  # px offset for fluttering bits, indexed by t % 4
 SHADE_DEPTH = 2  # px of shade on a part's bottom/right edge
 ICON_SIZE = 1024
 ROOT = Path(__file__).resolve().parents[2]
@@ -125,14 +128,15 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
-def flicker(step=None):
+def flicker(step=None, t=0):
     """Dash: hooded scout with a trailing scarf and a dagger on the back."""
     low = Canvas()
     for x, dy in legs(low, NAVY, BROWN, step):
         low.flat(R((x - 1, 52 + dy, x + 6, 53 + dy)), SKIN_D)  # boot cuffs
     up = Canvas()
-    up.part(P([(21, 33), (4, 27), (2, 34), (9, 40), (21, 39)]), ORANGE)  # scarf tails
-    up.part(P([(9, 33), (2, 34), (9, 40)]), RED, shade=False)
+    s = SWAY[t % 4]
+    up.part(P([(21, 33), (4, 27 + s), (2, 34 + s), (9, 40 + s), (21, 39)]), ORANGE)  # scarf tails flutter
+    up.part(P([(9, 33 + s), (2, 34 + s), (9, 40 + s)]), RED, shade=False)
     up.part(L([(13, 25), (25, 45)], 4), BROWN)  # dagger sheath on the back
     up.part(RR((9, 21, 15, 27), 1), STEEL)  # dagger pommel
     up.part(RR((20, 33, 44, 48), 3), NAVY)  # tunic
@@ -154,7 +158,7 @@ def flicker(step=None):
     return low, up
 
 
-def warden(step=None):
+def warden(step=None, t=0):
     """Shield: armoured knight with a plume, cape and tower shield."""
     low = Canvas()
     for x, dy in legs(low, STEEL_D, NAVY, step):
@@ -170,7 +174,8 @@ def warden(step=None):
     up.part(E((37, 28, 52, 40)), STEEL)
     for x, y in ((16, 32), (23, 32), (41, 32), (48, 32)):
         up.dot(x, y, WHITE)  # rivets
-    up.part(P([(24, 5), (10, 12), (14, 14), (24, 10)]), RED)  # plume tail
+    s = SWAY[t % 4]
+    up.part(P([(24, 5), (10, 12 + s), (14, 14 + s), (24, 10)]), RED)  # plume tail sways
     up.part(E((21, 2, 37, 12)), RED)  # plume
     up.part(E((16, 5, 48, 37)), STEEL)  # helmet
     up.part(R((31, 6, 33, 18)), STEEL, line=False)  # crest ridge
@@ -189,10 +194,12 @@ def warden(step=None):
     up.part(P([(48, 37), (52, 44), (48, 51), (44, 44)]), YELLOW, line=False)
     for x, y in ((43, 34), (53, 34), (43, 54), (53, 54)):
         up.dot(x, y, STEEL)
+    if t % 4 == 0:  # gem glint
+        up.flat(P([(48, 41), (49, 44), (48, 47), (47, 44)]), WHITE)
     return low, up
 
 
-def twinshot(step=None):
+def twinshot(step=None, t=0):
     """Dual wield: gunslinger with a feathered wide hat, poncho, bandolier and two holsters."""
     low = Canvas()
     for x, dy in legs(low, BLUE, BROWN, step):
@@ -217,22 +224,24 @@ def twinshot(step=None):
     up.flat(R((39, 21, 42, 21)), BROWN)
     face(up, (25, 43, 30))
     up.part(RR((20, 32, 44, 37), 2), RED)  # bandana
-    up.part(P([(21, 33), (14, 37), (16, 40), (22, 36)]), RED)  # bandana tail
+    s = SWAY[t % 4]
+    up.part(P([(21, 33), (14, 37 + s), (16, 40 + s), (22, 36)]), RED)  # bandana tail flutters
     up.part(E((5, 13, 59, 23)), BROWN)  # hat brim
     up.part(RR((18, 2, 46, 18), 6), BROWN)  # crown
     up.flat(R((31, 3, 33, 7)), MAROON)  # crown dent
     up.part(R((18, 11, 46, 14)), YELLOW, line=False)  # band
-    up.part(P([(40, 12), (53, 2), (56, 4), (44, 13)]), TEAL)  # feather
+    up.part(P([(40, 12), (53 + s, 2), (56 + s, 4), (44, 13)]), TEAL)  # feather sways
     return low, up
 
 
-def wukong(step=None):
+def wukong(step=None, t=0):
     """Dash: monkey king with a golden circlet, pheasant feathers, a staff on his back and a cloud collar."""
     low = Canvas()
     for x, dy in legs(low, RED, BROWN, step):
         low.flat(R((x, 50 + dy, x + 6, 50 + dy)), YELLOW)  # leg wraps
     up = Canvas()
-    up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11, 31)], 3), BROWN)  # curly tail
+    s = SWAY[t % 4]
+    up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11 + s, 31)], 3), BROWN)  # curly tail, tip wags
     up.part(L([(10, 23), (46, 51)], 3), RED)  # staff on the back
     up.part(RR((7, 20, 13, 26), 2), YELLOW)  # staff cap
     up.part(RR((20, 33, 44, 48), 3), YELLOW)  # golden armour
@@ -241,8 +250,8 @@ def wukong(step=None):
     up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
     up.part(E((16, 39, 23, 46)), SKIN)  # hands
     up.part(E((41, 39, 48, 46)), SKIN)
-    up.part(L([(25, 10), (16, 4), (6, 6)], 2), RED, shade=False)  # pheasant feathers
-    up.part(L([(29, 9), (24, 3), (14, 2)], 2), RED, shade=False)
+    up.part(L([(25, 10), (16, 4), (6, 6 + s)], 2), RED, shade=False)  # pheasant feathers sway
+    up.part(L([(29, 9), (24, 3), (14 + s, 2)], 2), RED, shade=False)
     up.part(E((11, 17, 21, 28)), BROWN)  # ear
     up.flat(E((14, 20, 18, 25)), SKIN_D)
     for x in (24, 31, 38):
@@ -262,7 +271,7 @@ def wukong(step=None):
 
 
 def wukong_clouds(i: int) -> Canvas:
-    """Puffs rising off the cloud collar; each loops over the 4-frame cycle, offset in phase."""
+    """Puffs rising off the cloud collar; each loops every 4 frames, offset in phase."""
     c = Canvas()
     for k, (x, y) in enumerate(((8, 30), (55, 26), (52, 44), (5, 46))):
         phase = (i + k) % 4
@@ -305,17 +314,16 @@ def recolor(img: Image.Image, fn) -> Image.Image:
 
 
 def frames(build, aura=None) -> list[Image.Image]:
-    low, up = build()
-
-    def frame(legs_img, dy, i):
+    def frame(step, dy, i):
+        low, up = build(step, i)
         f = aura(i).img if aura else Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-        f.alpha_composite(legs_img)
+        f.alpha_composite(low.img)
         f.alpha_composite(up.img, (0, UPPER_DY + dy))
         return outline(f)
 
-    idle = [frame(low.img, dy, i) for i, dy in enumerate(IDLE_BOB)]
+    idle = [frame(None, dy, i) for i, dy in enumerate(IDLE_BOB)]
     hit = [recolor(idle[0], lambda _c: WHITE), recolor(idle[0], LIGHTER.__getitem__)]
-    walk = [frame(build(i)[0].img, dy, i) for i, dy in enumerate(WALK_BOB)]
+    walk = [frame(i, dy, i) for i, dy in enumerate(WALK_BOB)]
     return idle + hit + walk
 
 

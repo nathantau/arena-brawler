@@ -28,13 +28,15 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
 
 ## Steps
 
-1. Write `def <id>(step=None)` in generate.py next to the others, returning `(low, up)` canvases.
-   For per-frame effects (smoke, clouds, sparks) add `def <id>_<fx>(i) -> Canvas` and register it
-   in `AURAS`; it is drawn behind the character and `i` is the frame in the 4-frame cycle.
+1. Write `def <id>(step=None, t=0)` in generate.py next to the others, returning `(low, up)` canvases.
+   `step` = walk frame (legs), `t` = frame tick (idle 0-3, walk 0-7). Give every character at least
+   one small loop driven by `SWAY[t % 4]` (fluttering cloth, swaying feather/tail) or a `t % 4 == 0`
+   glint. For effects around the body (smoke, clouds, sparks) add `def <id>_<fx>(i) -> Canvas` and
+   register it in `AURAS`; it is drawn behind the character. Keep loops period 4 so idle and walk both loop.
 2. Register in `CHARACTERS`, run `tools/sprites/.venv/bin/python tools/sprites/generate.py`.
 3. **Look at it.** Paste the sheet on a dark background, scale x8 with NEAREST, save to the
    scratchpad and Read the PNG. Iterate until it reads at a glance (silhouette, face, signature item).
-   Also check the walk frames (6-9) and that effects loop smoothly.
+   Also check the walk frames (6-13) as a GIF and that loops are smooth.
 4. Create `data/characters/<id>.tres` (copy an existing one): `id`, `display_name`, `skill_name`,
    stats, `skill` (existing `SkillKind` only — a new skill kind is gameplay work, ask first),
    `sprite_sheet = ExtResource(...)` pointing at `res://assets/sprites/<id>.png`.
