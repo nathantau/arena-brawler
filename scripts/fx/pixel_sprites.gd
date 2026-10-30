@@ -6,7 +6,7 @@ extends RefCounted
 ## (character, colour, frame). Purely cosmetic: never touched by the simulation.
 
 const SIZE: int = 16
-const SCALE: float = 4.0
+const SCALE: float = 5.0
 const GUN_W: int = 8
 const GUN_H: int = 4
 const ACCENT_DARKEN: float = 0.35

@@ -175,7 +175,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
     deliberately or use melee well; damage from blasts/knockback on yourself shows as a smoothed correction
     (up to ~50 px with rockets); SFX are placeholder synth blips — real sounds/art later; balance is untuned.
 - **Pixel-art sprites** (2026-10-30): the circle placeholders are replaced by original 16x16 chibi characters
-  (`fx/pixel_sprites.gd`, drawn at 4x): Flicker (hooded scout, scarf), Warden (armoured knight, plume),
+  (`fx/pixel_sprites.gd`, drawn at 5x): Flicker (hooded scout, scarf), Warden (armoured knight, plume),
   Twinshot (wide-brim gunslinger, poncho). Built at runtime from letter grids (no image assets); the "A"/"a"
   palette letters take the player's colour, plus a coloured foot ring. Idle bob + 4-frame walk cycle (driven by
   on-screen movement so interpolated players animate too), sprite flips to face the aim, a separate 8x4 gun
