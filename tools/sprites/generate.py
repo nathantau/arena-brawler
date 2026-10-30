@@ -257,14 +257,14 @@ def wukong(step=None, t=0):
     for x in (24, 31, 38):
         up.part(P([(x, 9), (x + 3, 4), (x + 6, 9)]), BROWN)  # fur tufts
     up.part(E((15, 6, 49, 38)), BROWN)  # head fur
-    lobes = (E((25, 16, 38, 29)), E((35, 16, 48, 29)), E((28, 24, 46, 36)))
-    up.part(lambda d, f: [shape(d, f) for shape in lobes], SKIN)  # heart-shaped monkey face, one shaded part
-    up.flat(P([(35, 16), (38, 16), (37, 19)]), BROWN)  # fur dip between the lobes
+    up.part(E((23, 15, 47, 36)), SKIN)  # round, human face
+    up.part(P([(23, 16), (47, 16), (47, 18), (43, 19), (39, 17), (35, 19), (30, 17), (26, 19), (23, 18)]), BROWN,
+            shade=False)  # spiky fringe
     up.part(R((17, 13, 47, 16)), YELLOW)  # golden circlet
     up.dot(32, 14, RED)
     up.dot(33, 14, RED)
-    big_eyes(up, 20, (31, 41), YELLOW)
-    face(up, (27, 45, 28), (37, 29))
+    big_eyes(up, 22, (31, 41), YELLOW)
+    face(up, (27, 45, 29), (37, 30))
     for x, y, r in ((16, 35, 4), (22, 37, 4), (42, 37, 4), (48, 35, 4)):  # cloud puffs on the shoulders
         up.part(E((x - r, y - r, x + r, y + r)), WHITE, line=False)
     return low, up
