@@ -301,7 +301,7 @@ def flint_crown(t: int, dy: int) -> Canvas:
     A CELL canvas drawn behind the body before outlining (the face covers its base); `dy` = the head's bob."""
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
-    flame(c, PAD + 15, PAD + 49, top + 24, 26, t, tongues=5)
+    flame(c, PAD + 21, PAD + 43, top + 24, 26, t, tongues=4)  # no wider than the face (20..44), or the side tongues read as horns
     return c
 
 
