@@ -146,7 +146,7 @@ def flicker(step=None):
     up.part(E((23, 15, 47, 35)), SKIN)  # face
     up.part(P([(23, 13), (47, 13), (47, 19), (41, 21), (36, 17), (30, 21), (23, 19)]), TEAL)  # fringe
     up.flat(E((20, 8, 27, 13)), TEAL_L)  # hood shine
-    big_eyes(up, 21, (32, 40), TEAL)
+    big_eyes(up, 22, (31, 41), TEAL)
     face(up, (28, 45, 29), (37, 29))
     up.part(RR((19, 31, 45, 37), 2), ORANGE)  # scarf
     up.part(RR((17, 32, 24, 39), 2), RED)  # scarf knot
@@ -211,10 +211,10 @@ def twinshot(step=None):
         up.part(RR((x + 1, 36, x + 5, 43), 1), STEEL_D)  # grip
         up.dot(x + 2, 37, STEEL)
     up.part(E((20, 14, 44, 37)), SKIN)  # face
-    big_eyes(up, 23, (30, 37), BLUE)
-    up.flat(R((30, 21, 33, 21)), BROWN)  # brows
-    up.flat(R((37, 21, 40, 21)), BROWN)
-    face(up, (26, 42, 30))
+    big_eyes(up, 23, (29, 38), BLUE)
+    up.flat(R((29, 21, 32, 21)), BROWN)  # brows
+    up.flat(R((38, 21, 41, 21)), BROWN)
+    face(up, (25, 43, 30))
     up.part(RR((20, 32, 44, 37), 2), RED)  # bandana
     up.part(P([(21, 33), (14, 37), (16, 40), (22, 36)]), RED)  # bandana tail
     up.part(E((5, 13, 59, 23)), BROWN)  # hat brim
