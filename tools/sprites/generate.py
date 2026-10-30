@@ -254,7 +254,7 @@ def twinshot(step=None, t=0):
 
 
 def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: int = 5, lean: float = 0.0,
-          back: float = 0.0):
+          back: float = 0.0, line: bool = True):
     """A flickering flame: tongues of uneven height (they shift each tick), red outside, orange,
     then a yellow core. `lean` sweeps the tips backwards (left) by that fraction of their height;
     `back` makes the rear tongues up to that much taller, so it streams off behind."""
@@ -269,7 +269,7 @@ def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: 
                     (hx + SWAY[(t + i) % 4] - lean * hh, base - hh),
                     (hx + w / tongues * 0.45 - lean * hh * 0.45, base - hh * 0.5)]
         return pts + [(x1 - inset, base)]
-    c.part(P(shape(t, 0)), RED, shade=False)
+    c.part(P(shape(t, 0)), RED, shade=False, line=line)
     c.part(P(shape(t, 3)), ORANGE, shade=False, line=False)
     c.part(P(shape(t, 6)), YELLOW, shade=False, line=False)
 
@@ -292,13 +292,13 @@ def flint(step=None, t=0):
     up.flat(R((25, 30, 26, 30)), RED)  # blush
     up.flat(R((42, 30, 43, 30)), RED)
     up.flat(R((33, 31, 35, 31)), MAROON)  # little grin
-    flame(up, 20, 44, 18, 7, t + 2, tongues=4)  # fringe of small tongues over the forehead
+    flame(up, 20, 44, 18, 7, t + 2, tongues=4, line=False)  # small tongues licking up from the forehead
     return low, up
 
 
 def flint_crown(t: int, dy: int) -> Canvas:
     """Flint's head on fire: an upright flame rising off his head, its tongues flickering every tick.
-    A CELL canvas drawn behind the frame (the face covers its base); `dy` = the head's bob."""
+    A CELL canvas drawn behind the body before outlining (the face covers its base); `dy` = the head's bob."""
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
     flame(c, PAD + 15, PAD + 49, top + 24, 26, t, tongues=5)
@@ -1428,12 +1428,18 @@ def recolor(img: Image.Image, fn) -> Image.Image:
     return out
 
 
-def frames(build, aura=None) -> list[Image.Image]:
+def frames(build, aura=None, crown=None) -> list[Image.Image]:
+    """Idle, hit and walk frames: SIZE px, or CELL px with `crown` (CROWNS) composited behind before the
+    single outline pass, so the crown and body share one silhouette with no line between them."""
     def frame(step, dy, i):
         low, up = build(step, i)
         f = aura(i).img if aura else Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
         f.alpha_composite(low.img)
         f.alpha_composite(up.img, (0, UPPER_DY + dy))
+        if crown:
+            out = crown(i, dy).img
+            out.alpha_composite(f, (PAD, PAD))
+            f = out
         return outline(f)
 
     idle = [frame(None, dy, i) for i, dy in enumerate(IDLE_BOB)]
@@ -1512,17 +1518,10 @@ def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
-        fs = [cell(f) for f in frames(build, AURAS.get(name))]
         if name in CROWNS:
-            ticks = list(range(len(IDLE_BOB))) + [0, 0] + list(range(len(WALK_BOB)))
-            dys = IDLE_BOB + [IDLE_BOB[0]] * 2 + WALK_BOB
-            hit = {len(IDLE_BOB): lambda _c: WHITE, len(IDLE_BOB) + 1: LIGHTER.__getitem__}
-            for j, f in enumerate(fs):
-                crown = outline(CROWNS[name](ticks[j], dys[j]).img)
-                if j in hit:
-                    crown = recolor(crown, hit[j])
-                crown.alpha_composite(f)
-                fs[j] = crown
+            fs = frames(build, AURAS.get(name), CROWNS[name])
+        else:
+            fs = [cell(f) for f in frames(build, AURAS.get(name))]
         fs += death_frames(build)
         sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
         for i, f in enumerate(fs):
