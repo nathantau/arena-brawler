@@ -259,7 +259,8 @@ def wukong(step=None, t=0):
     up.dot(33, 14, RED)
     big_eyes(up, 22, (31, 41), YELLOW)
     face(up, (27, 45, 29), (37, 30))
-    collar = ((14, 34, 4), (19, 37, 5), (25, 38, 4), (39, 38, 4), (45, 37, 5), (50, 34, 4))
+    # Lopsided on purpose: billows up over the back shoulder, just a wisp at the front.
+    collar = ((11, 31, 3), (15, 35, 5), (21, 38, 4), (26, 39, 3), (43, 38, 3), (47, 36, 4))
     up.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in collar], WHITE,
             line=False)  # fluffy cloud collar on the shoulders
     return low, up
@@ -269,9 +270,10 @@ def wukong_clouds(i: int) -> Canvas:
     """The cloud he rides (bobbing under his feet) and puffs rising off him; loops every 4 frames."""
     c = Canvas()
     bob = SWAY[i % 4]
-    ride = ((15, 56, 4), (22, 54, 5), (30, 55, 5), (38, 54, 5), (45, 55, 5), (51, 57, 3))
+    # Trails behind him (he faces right) into a wispy tail; tops at uneven heights.
+    ride = ((6, 58, 2), (11, 57, 3), (17, 55, 4), (24, 53, 5), (32, 55, 4), (39, 53, 4), (45, 56, 3))
     c.part(lambda d, f: [d.ellipse((x - r, y + bob - r, x + r, y + bob + r), f) for x, y, r in ride], WHITE)
-    for k, (x, y) in enumerate(((8, 32), (56, 28), (54, 44), (7, 45), (13, 20), (51, 17))):
+    for k, (x, y) in enumerate(((6, 29), (57, 23), (54, 47), (11, 46), (16, 17), (45, 12))):
         phase = (i + k) % 4
         r = (2, 3, 4, 3)[phase]
         c.part(E((x - r, y - 2 * phase - r, x + r, y - 2 * phase + r)), WHITE)
