@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/character_data.gd" id="1_cd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/wukong.png" id="2_sheet"]
+
+[resource]
+script = ExtResource("1_cd")
+sprite_sheet = ExtResource("2_sheet")
+id = &"wukong"
+display_name = "Wukong"
+skill_name = "Somersault"
+max_hp = 90
+max_armor = 40
+max_energy = 200
+move_speed = 285.0
+skill = 0
+skill_cooldown = 2.4
+skill_duration = 0.2
+dash_speed = 1050.0
+dash_iframes = 0.24

@@ -226,7 +226,53 @@ def twinshot(step=None):
     return low, up
 
 
-CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot}
+def wukong(step=None):
+    """Dash: monkey king with a golden circlet, pheasant feathers, a staff on his back and a cloud collar."""
+    low = Canvas()
+    for x, dy in legs(low, RED, BROWN, step):
+        low.flat(R((x, 50 + dy, x + 6, 50 + dy)), YELLOW)  # leg wraps
+    up = Canvas()
+    up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11, 31)], 3), BROWN)  # curly tail
+    up.part(L([(10, 23), (46, 51)], 3), RED)  # staff on the back
+    up.part(RR((7, 20, 13, 26), 2), YELLOW)  # staff cap
+    up.part(RR((20, 33, 44, 48), 3), YELLOW)  # golden armour
+    up.flat(R((31, 36, 33, 44)), ORANGE)
+    up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
+    up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
+    up.part(E((16, 39, 23, 46)), SKIN)  # hands
+    up.part(E((41, 39, 48, 46)), SKIN)
+    up.part(L([(25, 10), (16, 4), (6, 6)], 2), RED, shade=False)  # pheasant feathers
+    up.part(L([(29, 9), (24, 3), (14, 2)], 2), RED, shade=False)
+    up.part(E((11, 17, 21, 28)), BROWN)  # ear
+    up.flat(E((14, 20, 18, 25)), SKIN_D)
+    for x in (24, 31, 38):
+        up.part(P([(x, 9), (x + 3, 4), (x + 6, 9)]), BROWN)  # fur tufts
+    up.part(E((15, 6, 49, 38)), BROWN)  # head fur
+    lobes = (E((25, 16, 38, 29)), E((35, 16, 48, 29)), E((28, 24, 46, 36)))
+    up.part(lambda d, f: [shape(d, f) for shape in lobes], SKIN)  # heart-shaped monkey face, one shaded part
+    up.flat(P([(35, 16), (38, 16), (37, 19)]), BROWN)  # fur dip between the lobes
+    up.part(R((17, 13, 47, 16)), YELLOW)  # golden circlet
+    up.dot(32, 14, RED)
+    up.dot(33, 14, RED)
+    big_eyes(up, 20, (31, 41), YELLOW)
+    face(up, (27, 45, 28), (37, 29))
+    for x, y, r in ((16, 35, 4), (22, 37, 4), (42, 37, 4), (48, 35, 4)):  # cloud puffs on the shoulders
+        up.part(E((x - r, y - r, x + r, y + r)), WHITE, line=False)
+    return low, up
+
+
+def wukong_clouds(i: int) -> Canvas:
+    """Puffs rising off the cloud collar; each loops over the 4-frame cycle, offset in phase."""
+    c = Canvas()
+    for k, (x, y) in enumerate(((8, 30), (55, 26), (52, 44), (5, 46))):
+        phase = (i + k) % 4
+        r = (2, 3, 3, 2)[phase]
+        c.part(E((x - r, y - 2 * phase - r, x + r, y - 2 * phase + r)), WHITE)
+    return c
+
+
+CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong}
+AURAS = {"wukong": wukong_clouds}  # optional per-frame effects drawn behind the character
 
 
 # --- frame processing -------------------------------------------------------
@@ -258,17 +304,18 @@ def recolor(img: Image.Image, fn) -> Image.Image:
     return out
 
 
-def frames(build) -> list[Image.Image]:
+def frames(build, aura=None) -> list[Image.Image]:
     low, up = build()
 
-    def frame(legs_img, dy):
-        f = legs_img.copy()
+    def frame(legs_img, dy, i):
+        f = aura(i).img if aura else Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+        f.alpha_composite(legs_img)
         f.alpha_composite(up.img, (0, UPPER_DY + dy))
         return outline(f)
 
-    idle = [frame(low.img, dy) for dy in IDLE_BOB]
+    idle = [frame(low.img, dy, i) for i, dy in enumerate(IDLE_BOB)]
     hit = [recolor(idle[0], lambda _c: WHITE), recolor(idle[0], LIGHTER.__getitem__)]
-    walk = [frame(build(i)[0].img, dy) for i, dy in enumerate(WALK_BOB)]
+    walk = [frame(build(i)[0].img, dy, i) for i, dy in enumerate(WALK_BOB)]
     return idle + hit + walk
 
 
@@ -289,7 +336,7 @@ def check(sheet: Image.Image) -> None:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in CHARACTERS.items():
-        fs = frames(build)
+        fs = frames(build, AURAS.get(name))
         sheet = Image.new("RGBA", (SIZE * len(fs), SIZE), (0, 0, 0, 0))
         for i, f in enumerate(fs):
             sheet.paste(f, (i * SIZE, 0))

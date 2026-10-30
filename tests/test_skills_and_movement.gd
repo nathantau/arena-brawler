@@ -16,16 +16,18 @@ func before_all() -> void:
 	twinshot = characters.get_character(&"twinshot")
 
 
-func test_catalog_has_three_characters_with_distinct_skills() -> void:
-	assert_eq(characters.ordered.size(), 3)
+func test_catalog_covers_every_skill_kind() -> void:
+	assert_eq(characters.ordered.size(), 4)
 	var kinds: Array = []
 	for c: CharacterData in characters.ordered:
-		assert_false(kinds.has(c.skill), "%s duplicates a skill" % c.id)
 		kinds.append(c.skill)
+		assert_not_null(c.sprite_sheet, c.id)
 		assert_true(c.max_hp > 0 and c.move_speed > 0.0 and c.skill_cooldown > 0.0 and c.skill_duration > 0.0, c.id)
 		assert_ne(c.display_name, "")
 	assert_eq(characters.default_character(), flicker)
-	assert_eq(characters.next_after(characters.ordered[2].id), characters.ordered[0], "wraps")
+	for kind: int in CharacterData.SkillKind.values():
+		assert_true(kinds.has(kind), "no character has skill %d" % kind)
+	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 
 
 func test_dash_grants_iframes_and_cooldown() -> void:
