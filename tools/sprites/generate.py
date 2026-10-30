@@ -118,11 +118,11 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
     """Two stubby legs (back, front); `step` indexes WALK_LEGS, None = standing. Returns each leg's x."""
     xs = []
     for x, (dx, dy) in zip((24, 34), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
-        c.part(R((x + dx, 45 + dy, x + dx + 6, 54 + dy)), pants)
+        c.part(R((x + dx, 45 + dy, x + dx + 5, 54 + dy)), pants)
         xs.append((x + dx, dy))
-    for x, dy in xs:  # chibi bean foot, nudged forward, with a dark sole
-        c.part(E((x - 1, 51 + dy, x + 8, 58 + dy)), boots)
-        c.flat(R((x + 1, 58 + dy, x + 6, 58 + dy)), SHADOW)
+    for x, dy in xs:  # small rounded shoe with the toe forward, dark sole
+        c.part(RR((x - 1, 53 + dy, x + 7, 57 + dy), 2), boots)
+        c.flat(R((x, 57 + dy, x + 6, 57 + dy)), SHADOW)
     return xs
 
 
@@ -233,7 +233,7 @@ def twinshot(step=None, t=0):
 
 
 def wukong(step=None, t=0):
-    """Dash: monkey king with a golden circlet, pheasant feathers and a cloud collar."""
+    """Dash: monkey king with a golden circlet, pheasant feathers, a cloud collar, riding a cloud."""
     low = Canvas()
     for x, dy in legs(low, RED, BROWN, step):
         low.flat(R((x, 50 + dy, x + 6, 50 + dy)), YELLOW)  # leg wraps
@@ -259,17 +259,21 @@ def wukong(step=None, t=0):
     up.dot(33, 14, RED)
     big_eyes(up, 22, (31, 41), YELLOW)
     face(up, (27, 45, 29), (37, 30))
-    for x, y, r in ((16, 35, 4), (22, 37, 4), (42, 37, 4), (48, 35, 4)):  # cloud puffs on the shoulders
-        up.part(E((x - r, y - r, x + r, y + r)), WHITE, line=False)
+    collar = ((14, 34, 4), (19, 37, 5), (25, 38, 4), (39, 38, 4), (45, 37, 5), (50, 34, 4))
+    up.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in collar], WHITE,
+            line=False)  # fluffy cloud collar on the shoulders
     return low, up
 
 
 def wukong_clouds(i: int) -> Canvas:
-    """Puffs rising off the cloud collar; each loops every 4 frames, offset in phase."""
+    """The cloud he rides (bobbing under his feet) and puffs rising off him; loops every 4 frames."""
     c = Canvas()
-    for k, (x, y) in enumerate(((8, 30), (55, 26), (52, 44), (5, 46))):
+    bob = SWAY[i % 4]
+    ride = ((15, 56, 4), (22, 54, 5), (30, 55, 5), (38, 54, 5), (45, 55, 5), (51, 57, 3))
+    c.part(lambda d, f: [d.ellipse((x - r, y + bob - r, x + r, y + bob + r), f) for x, y, r in ride], WHITE)
+    for k, (x, y) in enumerate(((8, 32), (56, 28), (54, 44), (7, 45), (13, 20), (51, 17))):
         phase = (i + k) % 4
-        r = (2, 3, 3, 2)[phase]
+        r = (2, 3, 4, 3)[phase]
         c.part(E((x - r, y - 2 * phase - r, x + r, y - 2 * phase + r)), WHITE)
     return c
 
