@@ -91,6 +91,7 @@ class Canvas:
         self.px[x, y] = color + (255,)
 
 
+# All characters use a 6 px gap between eyes (left eye x, then left x + 10).
 def big_eyes(c: Canvas, y: int, xs: tuple[int, int], iris, h: int = 6):
     for x in xs:
         c.flat(R((x, y, x + 3, y + h)), OUTLINE)
@@ -175,7 +176,7 @@ def warden(step=None):
     up.part(R((31, 6, 33, 18)), STEEL, line=False)  # crest ridge
     up.part(R((17, 30, 47, 35)), STEEL_D)  # helmet rim
     up.flat(RR((22, 19, 47, 27), 3), OUTLINE)  # visor
-    for x in (32, 42):  # round glowing eyes
+    for x in (31, 41):  # round glowing eyes
         up.flat(RR((x, 20, x + 3, 25), 1), TEAL_L)
         up.flat(R((x, 20, x + 1, 21)), WHITE)
     up.flat(R((30, 27, 32, 27)), ORANGE)  # blush glow on the faceplate
@@ -211,9 +212,9 @@ def twinshot(step=None):
         up.part(RR((x + 1, 36, x + 5, 43), 1), STEEL_D)  # grip
         up.dot(x + 2, 37, STEEL)
     up.part(E((20, 14, 44, 37)), SKIN)  # face
-    big_eyes(up, 23, (29, 38), BLUE)
+    big_eyes(up, 23, (29, 39), BLUE)
     up.flat(R((29, 21, 32, 21)), BROWN)  # brows
-    up.flat(R((38, 21, 41, 21)), BROWN)
+    up.flat(R((39, 21, 42, 21)), BROWN)
     face(up, (25, 43, 30))
     up.part(RR((20, 32, 44, 37), 2), RED)  # bandana
     up.part(P([(21, 33), (14, 37), (16, 40), (22, 36)]), RED)  # bandana tail
