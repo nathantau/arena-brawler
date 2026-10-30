@@ -253,6 +253,56 @@ def twinshot(step=None, t=0):
     return low, up
 
 
+def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: int = 5):
+    """A flickering flame: tongues of uneven height (they shift each tick), red outside, orange,
+    then a yellow core."""
+    def shape(k, inset):
+        w = (x1 - x0) - 2 * inset
+        pts = [(x0 + inset, base)]
+        for i in range(tongues):
+            hx = x0 + inset + w * (i + 0.5) / tongues
+            hh = (height - inset * 2) * (0.6 + 0.4 * (((i * 7 + t) % 4) in (1, 2))) * (1.15 if i == tongues // 2 else 1)
+            pts += [(hx - w / tongues * 0.3, base - hh * 0.55), (hx + SWAY[(t + i) % 4], base - hh),
+                    (hx + w / tongues * 0.3, base - hh * 0.5)]
+        return pts + [(x1 - inset, base)]
+    c.part(P(shape(t, 0)), RED, shade=False)
+    c.part(P(shape(t, 3)), ORANGE, shade=False, line=False)
+    c.part(P(shape(t, 6)), YELLOW, shade=False, line=False)
+
+
+def flint(step=None, t=0):
+    """Fire: a soot-black little fire elemental with glowing ember cracks, a molten face and a
+    flame for hair that flickers every tick; embers rise behind (AURAS)."""
+    low = Canvas()
+    for x, dy in legs(low, SHADOW, MAROON, step):
+        low.flat(R((x + 2, 47 + dy, x + 2, 50 + dy)), ORANGE)  # ember crack down each leg
+    up = Canvas()
+    up.part(RR((20, 33, 44, 48), 3), SHADOW)  # sooty body
+    for pts in (((25, 35), (28, 39), (26, 43), (28, 47)), ((38, 34), (36, 38), (39, 42)), ((32, 44), (34, 47))):
+        up.flat(L(pts, 1), ORANGE)  # glowing cracks
+    up.flat(P([(32, 37), (35, 40), (32, 43), (29, 40)]), YELLOW)  # ember heart
+    up.dot(32, 40, WHITE)
+    flame(up, 14, 50, 22, 22, t)  # hair: a big flame behind the head
+    up.part(E((20, 14, 44, 37)), ORANGE)  # molten face
+    up.part(E((27, 27, 39, 35)), YELLOW, line=False)  # hot glow around the mouth
+    big_eyes(up, 23, (29, 39), YELLOW)
+    up.flat(R((25, 30, 26, 30)), RED)  # blush
+    up.flat(R((42, 30, 43, 30)), RED)
+    up.flat(R((33, 31, 35, 31)), MAROON)  # little grin
+    flame(up, 20, 44, 18, 7, t + 2, tongues=4)  # fringe of small tongues over the forehead
+    return low, up
+
+
+def flint_embers(i: int) -> Canvas:
+    """Embers drifting up behind Flint; loops every 4 frames."""
+    c = Canvas()
+    for k, (x, y) in enumerate(((12, 30), (52, 26), (9, 44), (55, 40), (16, 18), (48, 12))):
+        phase = (i + k) % 4
+        yy = y - 3 * phase
+        c.flat(R((x + SWAY[(i + k) % 4], yy, x + 1 + SWAY[(i + k) % 4], yy + 1)), YELLOW if phase < 2 else ORANGE)
+    return c
+
+
 def wukong(step=None, t=0):
     """Dash: monkey king with a golden circlet, pheasant feathers and a lopsided cloud collar."""
     low = Canvas()
@@ -495,8 +545,16 @@ def revolver(c):
     c.dot(5, 7, STEEL_D)  # hammer
 
 
+def ember_palm(c):  # Flint: a burning orb held in the palm, a tongue of fire licking forward
+    c.part(P([(10, 8), (24, 11), (10, 15)]), RED, shade=False)
+    c.part(P([(11, 10), (20, 11), (11, 13)]), YELLOW, shade=False, line=False)
+    c.part(E((3, 6, 14, 17)), ORANGE)
+    c.flat(E((6, 9, 11, 14)), YELLOW)
+    c.dot(7, 10, WHITE)
+
+
 # Hands are drawn by the game on the weapon's grip (they follow the aim), not baked into the sheets.
-HANDS = {"flicker": NAVY, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN}
+HANDS = {"flicker": NAVY, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN, "flint": ORANGE}
 HAND_SIZE = 10
 
 
@@ -508,7 +566,7 @@ def hand_image(color) -> Image.Image:
 
 WEAPONS = {"pistol": pistol, "bot_blaster": bot_blaster, "smg": smg, "shotgun": shotgun, "sniper": sniper,
            "rocket": rocket, "grenade": grenade, "laser": laser, "sword": sword,
-           "flicker_kunai": kunai, "warden_hammer": hammer, "twinshot_revolver": revolver, "wukong_staff": staff}
+           "flicker_kunai": kunai, "warden_hammer": hammer, "twinshot_revolver": revolver, "wukong_staff": staff, "flint_palm": ember_palm}
 
 
 def weapon_image(draw) -> Image.Image:
@@ -852,6 +910,10 @@ ICONS = {
     "volley": lambda c: [c.flat(L([(6 + round(2 * dx), 6 + round(2 * dy)), (6 + round(6 * dx), 6 + round(6 * dy))], 1), STEEL)
                          for dx, dy in ((1, 0), (0.7, 0.7), (0, 1), (-0.7, 0.7), (-1, 0), (-0.7, -0.7), (0, -1), (0.7, -0.7))]
                         + [c.flat(E((4, 4, 8, 8)), RED)],
+    "flare": lambda c: [c.flat(L([(6 + round(3 * dx), 6 + round(3 * dy)), (6 + round(6 * dx), 6 + round(6 * dy))], 1),
+                               ORANGE) for dx, dy in ((1, 0), (0.7, 0.7), (0, 1), (-0.7, 0.7), (-1, 0), (-0.7, -0.7),
+                                                      (0, -1), (0.7, -0.7))]
+                       + [c.flat(E((3, 3, 9, 9)), RED), c.flat(E((4, 4, 8, 8)), YELLOW)],
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -1260,6 +1322,15 @@ def grenade_shot(c, f):  # bouncing grenade: teal shell, steel cap; the band rol
     c.dot(m - 2, m - 3, TEAL_L)
 
 
+def fireball(c, f):  # Flint: a fireball with a licking tail that flickers
+    m = PROJ // 2
+    tail = (m - 8, m - 7)[f]
+    c.part(P([(tail, m - 1 - f), (m, m - 4), (m, m + 4), (tail + 1, m + 2)]), RED, shade=False)
+    c.part(E((m - 3, m - 4, m + 5, m + 4)), ORANGE)
+    c.flat(E((m - 1, m - 2, m + 3, m + 2)), YELLOW)
+    c.dot(m + 1, m - 1, WHITE)
+
+
 def plasma(c, f):  # bot blaster: a wobbling pink-red plasma blob
     m = PROJ // 2
     r = 5 if f else 4
@@ -1278,6 +1349,8 @@ PROJECTILES = {
     "blade_fan": kunai,
     "twinshot_revolver": brass,
     "bot_blaster": plasma,
+    "flint_palm": fireball,
+    "flare_ring": fireball,
 }
 
 
@@ -1314,10 +1387,10 @@ FX = {
 }
 
 
-CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong}
+CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint}
 ## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
 FORMS = {"wukong_ape": wukong_ape}
-AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}  # optional per-frame effects drawn behind
+AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers}  # optional per-frame effects drawn behind
 
 
 # --- frame processing -------------------------------------------------------

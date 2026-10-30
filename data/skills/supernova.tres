@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_flare.png" id="2_icon"]
+[ext_resource type="Resource" path="res://data/weapons/flare_ring.tres" id="3_ring"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"supernova"
+display_name = "Supernova"
+kind = 6
+special = true
+blurb = "Fireballs in every direction"
+tags = Array[StringName]([&"flint"])
+cooldown = 7.0
+duration = 0.1
+volley_weapon = ExtResource("3_ring")

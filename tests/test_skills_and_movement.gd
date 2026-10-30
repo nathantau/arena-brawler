@@ -19,7 +19,7 @@ func before_all() -> void:
 
 
 func test_catalog_and_skills() -> void:
-	assert_eq(characters.ordered.size(), 4)
+	assert_eq(characters.ordered.size(), 5)
 	for c: CharacterData in characters.ordered:
 		assert_not_null(c.sprite_sheet, c.id)
 		assert_not_null(c.hand_sprite, c.id)

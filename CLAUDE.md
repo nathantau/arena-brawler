@@ -73,7 +73,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - Run headless server: `godot --path . --headless -- --server --port 7777` (add `--bots N` for server-side bots)
 - Match options (server / offline): `--mode duel|ffa` (starting mode; players can switch it in the lobby),
   `--arena N` (0 = Pit, 1 = Foundry), `--time-limit S` (shorter matches for testing)
-- Pick a character (client / offline): `--character flicker|warden|twinshot`
+- Pick a character (client / offline): `--character flicker|warden|twinshot|wukong|flint`
 - Render frames to check visuals without a screen: `godot --path . --write-movie /tmp/f.png --fixed-fps 30 --quit-after 300 -- --offline --autopilot --touch`
 - Net debugging: add `--net-debug` (prints server/client net stats every second, logs reconciliation corrections);
   `--autopilot` makes a client drive + fire on its own, e.g. two headless autopilot clients for soak tests:
@@ -182,7 +182,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   frames (generated for every character and form: white flash, pop, topple backwards, X eyes via the `KO` flag in the eye
   helpers, dizzy stars, dither dissolve; 9 fps). Sheet cells are 96 px (`SPRITE_CELL_SIZE`) so the fall fits; the other
   animations cut the centred 64 px. On a real death `Player._spawn_corpse()` plays "die" on every peer; scarves/feathers/plumes sway and Warden's gem glints via the `t` tick. Flicker (hooded scout, scarf), Warden (knight, plume,
-  tower shield), Twinshot (wide-brim gunslinger, two holsters), Wukong (monkey king, cloud puffs via `AURAS`, Dash). New characters: `.claude/skills/new-character`. `CharacterData.sprite_sheet` → `sprite_frames()`
+  tower shield), Twinshot (wide-brim gunslinger, two holsters), Wukong (monkey king, cloud puffs via `AURAS`, Dash). Flint (soot-black fire elemental, flickering flame hair, embers via `AURAS`; Ember Palm: short-range piercing fire stream with drag; Supernova: VOLLEY of 16 fireballs). New characters: `.claude/skills/new-character`. `CharacterData.sprite_sheet` → `sprite_frames()`
   builds a shared SpriteFrames ("idle", "hit", "walk"); the Player has an `AnimatedSprite2D` (Nearest, x1.5) plus an overlay
   node for the front gun and bars. Player colour = foot ring only (sheets aren't recoloured).
   The script also writes `assets/icon.png` and one 48x24 image per weapon (`assets/sprites/weapons/<id>.png`).

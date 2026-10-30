@@ -9,7 +9,7 @@ extends PanelContainer
 const SPACING: int = 10
 const BUTTON_MIN_SIZE: Vector2 = Vector2(170, 52)
 const READY_MIN_SIZE: Vector2 = Vector2(240, 64)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(186, 196)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 196)
 ## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
 const SKILL_ROW_SIZE: Vector2 = Vector2(330, 66)
 const SKILL_ICON_SIZE: Vector2 = Vector2(45, 45)
