@@ -117,12 +117,11 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
     """Two stubby legs (back, front); `step` indexes WALK_LEGS, None = standing. Returns each leg's x."""
     xs = []
     for x, (dx, dy) in zip((24, 34), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
-        c.part(R((x + dx, 45 + dy, x + dx + 6, 56 + dy)), pants)
+        c.part(R((x + dx, 45 + dy, x + dx + 6, 54 + dy)), pants)
         xs.append((x + dx, dy))
-    for x, dy in xs:  # boot: shaft, then a foot with the toe pointing forward, dark sole
-        c.part(P([(x - 1, 52 + dy), (x + 6, 52 + dy), (x + 6, 55 + dy), (x + 8, 55 + dy),
-                  (x + 10, 57 + dy), (x + 10, 61 + dy), (x - 2, 61 + dy), (x - 2, 57 + dy)]), boots)
-        c.flat(R((x - 2, 61 + dy, x + 10, 61 + dy)), SHADOW)
+    for x, dy in xs:  # chibi bean foot, nudged forward, with a dark sole
+        c.part(E((x - 1, 51 + dy, x + 8, 58 + dy)), boots)
+        c.flat(R((x + 1, 58 + dy, x + 6, 58 + dy)), SHADOW)
     return xs
 
 
@@ -132,7 +131,7 @@ def flicker(step=None, t=0):
     """Dash: hooded scout with a trailing scarf and a dagger on the back."""
     low = Canvas()
     for x, dy in legs(low, NAVY, BROWN, step):
-        low.flat(R((x - 1, 52 + dy, x + 6, 53 + dy)), SKIN_D)  # boot cuffs
+        low.flat(R((x, 50 + dy, x + 6, 51 + dy)), SKIN_D)  # boot cuffs
     up = Canvas()
     s = SWAY[t % 4]
     up.part(P([(21, 33), (4, 27 + s), (2, 34 + s), (9, 40 + s), (21, 39)]), ORANGE)  # scarf tails flutter
@@ -203,7 +202,7 @@ def twinshot(step=None, t=0):
     """Dual wield: gunslinger with a feathered wide hat, poncho, bandolier and two holsters."""
     low = Canvas()
     for x, dy in legs(low, BLUE, BROWN, step):
-        low.dot(x - 3, 58 + dy, YELLOW)  # spurs
+        low.dot(x - 3, 55 + dy, YELLOW)  # spurs
     up = Canvas()
     up.part(P([(18, 33), (46, 33), (50, 48), (14, 48)]), ORANGE)  # poncho
     for x in range(16, 49, 4):
