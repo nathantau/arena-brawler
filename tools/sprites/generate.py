@@ -13,6 +13,8 @@ Also writes the 1024 px app icon (assets/icon.png) from Flicker's first idle fra
 Run: tools/sprites/.venv/bin/python tools/sprites/generate.py
 """
 
+import math
+import random
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -56,27 +58,29 @@ def L(points, width):
 
 
 class Canvas:
-    def __init__(self):
-        self.img = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    def __init__(self, size: int = SIZE):
+        self.size = size
+        self.img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
         self.px = self.img.load()
 
     def part(self, shape, color, shade=True, line=True):
         """Paints a shaded part; `line` draws OUTLINE where its edge sits on earlier parts."""
-        mask = Image.new("1", (SIZE, SIZE), 0)
+        n = self.size
+        mask = Image.new("1", (n, n), 0)
         shape(ImageDraw.Draw(mask), 1)
         m = mask.load()
 
         def inside(x, y):
-            return 0 <= x < SIZE and 0 <= y < SIZE and m[x, y]
+            return 0 <= x < n and 0 <= y < n and m[x, y]
 
         if line:
-            for y in range(SIZE):
-                for x in range(SIZE):
+            for y in range(n):
+                for x in range(n):
                     if not inside(x, y) and self.px[x, y][3] and any(
                             inside(nx, ny) for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))):
                         self.px[x, y] = OUTLINE + (255,)
-        for y in range(SIZE):
-            for x in range(SIZE):
+        for y in range(n):
+            for x in range(n):
                 if not inside(x, y):
                     continue
                 c = color
@@ -862,6 +866,85 @@ def ui_kit() -> dict[str, Image.Image]:
     return kit
 
 
+# --- effects: pixel-art animation strips for skills (assets/fx/), drawn at the sprite scale -----
+
+FX_OUT = ROOT / "assets" / "fx"
+POOF_FRAMES = 6
+SMOKE_FRAMES = 4
+BOLT_VARIANTS = 3
+BOLT_W, BOLT_H = 24, 88
+
+
+def poof_frame(size: int, k: int, color) -> Image.Image:
+    """A cloud puff bursting outward: a core that shrinks away and a ring of puffs that drift out."""
+    c = Canvas(size)
+    m = size // 2
+    t = k / (POOF_FRAMES - 1)
+    puffs = []
+    if k < POOF_FRAMES - 2:
+        puffs.append((m, m, round(size * 0.22 * (1 - 0.6 * t))))
+    for i in range(7):
+        ang = math.tau * i / 7 + 0.4
+        d = size * (0.12 + 0.26 * t)
+        r = round(size * 0.14 * (1 - 0.7 * t))
+        if r >= 1:
+            puffs.append((m + math.cos(ang) * d, m + math.sin(ang) * d, r))
+    c.part(lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in puffs], color)
+    return outline(c.img)
+
+
+def bolt(variant: int) -> Image.Image:
+    """A jagged lightning bolt, top to bottom: gold glow with a white core."""
+    rng = random.Random(variant)
+    c = Canvas(BOLT_H)
+    m = BOLT_H // 2
+    pts, x, y = [(m, 2)], m, 2
+    while y < BOLT_H - 14:  # uneven drops, sideways jolts that can double back
+        y += rng.randint(6, 15)
+        x = max(m - 9, min(m + 9, x + rng.choice((-1, 1)) * rng.randint(3, 8)))
+        pts.append((x, y))
+    pts.append((m + rng.randint(-2, 2), BOLT_H - 3))
+    kink = pts[len(pts) // 2]
+    fork = [kink, (kink[0] + (8 if kink[0] < m else -8), kink[1] + 8), (kink[0] + (5 if kink[0] < m else -5), kink[1] + 14)]
+    c.part(lambda dr, f: (dr.line(pts, f, 5), dr.line(fork, f, 3)), YELLOW, shade=False)
+    c.flat(L(pts, 1), WHITE)
+    return outline(c.img).crop((m - BOLT_W // 2, 0, m + BOLT_W // 2, BOLT_H))
+
+
+def smoke_frame(k: int, size: int = 136) -> Image.Image:
+    """Smoke Bomb cloud: a dark mass with puffs churning around it (loops)."""
+    c = Canvas(size)
+    m = size // 2
+    puffs = [(m, m, 40)]
+    for i in range(10):
+        ang = math.tau * i / 10 + k * 0.16
+        reach = 34 + 6 * math.sin(k * math.pi / 2 + i)
+        puffs.append((m + math.cos(ang) * reach, m + math.sin(ang) * reach, 20 + 4 * (i % 2)))
+    c.part(lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in puffs], SHADOW)
+    for i in range(0, 10, 3):  # a few lighter wisps on top
+        ang = math.tau * i / 10 + k * 0.16 + 0.3
+        x, y = m + math.cos(ang) * 30, m + math.sin(ang) * 30
+        c.flat(E((x - 5, y - 2, x + 5, y + 2)), STEEL_D)
+    return outline(c.img)
+
+
+def strip(frames_: list[Image.Image]) -> Image.Image:
+    w, h = frames_[0].size
+    out = Image.new("RGBA", (w * len(frames_), h), (0, 0, 0, 0))
+    for i, f in enumerate(frames_):
+        out.paste(f, (i * w, 0))
+    return out
+
+
+FX = {
+    "poof": lambda: strip([poof_frame(80, k, WHITE) for k in range(POOF_FRAMES)]),
+    "poof_small": lambda: strip([poof_frame(48, k, WHITE) for k in range(POOF_FRAMES)]),
+    "poof_dark": lambda: strip([poof_frame(64, k, SHADOW) for k in range(POOF_FRAMES)]),
+    "bolt": lambda: strip([bolt(v) for v in range(BOLT_VARIANTS)]),
+    "smoke": lambda: strip([smoke_frame(k) for k in range(SMOKE_FRAMES)]),
+}
+
+
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong}
 ## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
 FORMS = {"wukong_ape": wukong_ape}
@@ -875,12 +958,13 @@ def outline(img: Image.Image) -> Image.Image:
     src = img.load()
     out = img.copy()
     dst = out.load()
-    for y in range(SIZE):
-        for x in range(SIZE):
+    w, h = img.size
+    for y in range(h):
+        for x in range(w):
             if src[x, y][3]:
                 continue
             for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
-                if 0 <= nx < SIZE and 0 <= ny < SIZE and src[nx, ny][3]:
+                if 0 <= nx < w and 0 <= ny < h and src[nx, ny][3]:
                     dst[x, y] = OUTLINE + (255,)
                     break
     return out
@@ -889,8 +973,8 @@ def outline(img: Image.Image) -> Image.Image:
 def recolor(img: Image.Image, fn) -> Image.Image:
     out = img.copy()
     px = out.load()
-    for y in range(SIZE):
-        for x in range(SIZE):
+    for y in range(out.height):
+        for x in range(out.width):
             r, g, b, a = px[x, y]
             if a and (r, g, b) != OUTLINE:
                 px[x, y] = fn((r, g, b)) + (255,)
@@ -964,6 +1048,12 @@ def main() -> None:
         check(img, img.width, edges=False)  # UI art is outlined right up to its box
         img.save(UI_OUT / f"{name}.png")
     print(f"wrote UI kit to {UI_OUT}")
+    FX_OUT.mkdir(exist_ok=True)
+    for name, make in FX.items():
+        img = make()
+        check(img, img.height if name != "bolt" else BOLT_W, edges=name != "bolt")
+        img.save(FX_OUT / f"{name}.png")
+    print(f"wrote {len(FX)} effect strips to {FX_OUT}")
     # App Store icons must be opaque.
     icon = Image.new("RGBA", (SIZE, SIZE), NAVY + (255,))
     icon.alpha_composite(frames(flicker)[0])  # the app icon follows Flicker's look

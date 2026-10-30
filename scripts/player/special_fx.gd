@@ -5,34 +5,38 @@ extends Node2D
 ## walk animation, weapon and hand so they're hard to tell apart.
 ## Start / end flourishes are detected from state changes (so remote players get them too):
 ## clones appear in a white cloud poof and vanish in poofs; a transformation is struck by
-## lightning in a burst of cloud, and ends in a dark puff.
+## lightning in a burst of cloud, and ends in a dark puff. All pixel-art strips from
+## tools/sprites/generate.py (assets/fx), drawn at the characters' pixel scale.
 
-const SMOKE_PUFFS: int = 10
-const SMOKE_SPIN: float = 0.5
-const SMOKE_PULSE: float = 2.0
-const SMOKE_COLOR: Color = Color(0.2, 0.2, 0.3, 0.82)
-const SMOKE_EDGE: Color = Color(0.32, 0.32, 0.46, 0.9)
-const FADE_TIME: float = 0.4
-const POOF_TIME: float = 0.55
-const POOF_PUFFS: int = 7
-const POOF_START_R: float = 6.0
-const POOF_COLOR: Color = Color(0.96, 0.95, 0.9)
-const POOF_DARK: Color = Color(0.2, 0.2, 0.3)
-const BOLT_TIME: float = 0.35
+const FX_DIR: String = "res://assets/fx/"
+const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
+const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
+const POOF_DARK: Texture2D = preload(FX_DIR + "poof_dark.png")
+const BOLT_ART: Texture2D = preload(FX_DIR + "bolt.png")
+const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
+const POOF_FRAMES: int = 6
+const POOF_TIME: float = 0.5
+const BOLT_VARIANTS: int = 3
 const BOLT_COUNT: int = 4
-const BOLT_SEGMENTS: int = 6
-const BOLT_HEIGHT: float = 170.0
-const BOLT_JAG: float = 16.0
-const BOLT_WIDTH: float = 6.0
-const BOLT_CORE: Color = Color(1, 1, 0.95)
-const BOLT_GLOW: Color = Color(0.96, 0.82, 0.34)
+const BOLT_TIME: float = 0.35
+const BOLT_SPREAD: Vector2 = Vector2(36, 14)
+const SMOKE_FRAMES: int = 4
+const SMOKE_FPS: float = 6.0
+## smoke.png is drawn for this radius; other radii scale it.
+const SMOKE_ART_RADIUS: float = 90.0
+const SMOKE_ALPHA: float = 0.9
+const FADE_TIME: float = 0.4
 
 
 class Poof:
 	var pos: Vector2 = Vector2.ZERO
-	var radius: float = 30.0
+	var art: Texture2D
 	var t: float = 0.0
-	var color: Color = Color.WHITE
+
+
+class Bolt:
+	var land: Vector2 = Vector2.ZERO
+	var variant: int = 0
 
 
 var _clones: Array[AnimatedSprite2D] = []
@@ -41,7 +45,7 @@ var _owner: Player
 var _smoke_t: float = -1.0
 var _poofs: Array[Poof] = []
 var _bolt_t: float = -1.0
-var _bolts: Array[PackedVector2Array] = []
+var _bolts: Array[Bolt] = []
 var _was_cloning: bool = false
 var _was_transformed: bool = false
 var _last_points := PackedVector2Array()
@@ -59,19 +63,19 @@ func sync(p: Player) -> void:
 	_points = p.clone_points()
 	var cloning: bool = p.special.is_cloning()
 	if cloning and not _was_cloning:
-		_poof(p.special.anchor, 64.0, POOF_COLOR)
+		_poof(p.special.anchor, POOF_BIG)
 	elif _was_cloning and not cloning:
 		for at: Vector2 in _last_points:
-			_poof(at, 30.0, POOF_COLOR)
+			_poof(at, POOF_SMALL)
 	_was_cloning = cloning
 	if cloning:
 		_last_points = _points
 	var transformed: bool = p.special.is_transformed()
 	if transformed and not _was_transformed:
 		_strike(p.global_position)
-		_poof(p.global_position, 60.0, POOF_COLOR)
+		_poof(p.global_position, POOF_BIG)
 	elif _was_transformed and not transformed and not p.dead:
-		_poof(p.global_position, 44.0, POOF_DARK)
+		_poof(p.global_position, POOF_DARK)
 	_was_transformed = transformed
 	var frames: SpriteFrames = p.character.sprite_frames()
 	while _clones.size() < _points.size():
@@ -107,26 +111,30 @@ func _process(delta: float) -> void:
 			_bolt_t = -1.0
 
 
-func _poof(at: Vector2, radius: float, color: Color) -> void:
+func _poof(at: Vector2, art: Texture2D) -> void:
 	var pf := Poof.new()
 	pf.pos = at
-	pf.radius = radius
-	pf.color = color
+	pf.art = art
 	_poofs.append(pf)
 
 
-## Jagged bolts from above, landing around the player (cosmetic RNG, not the sim's).
+## Bolts from above, landing around the player (cosmetic RNG, not the sim's).
 func _strike(at: Vector2) -> void:
 	_bolts.clear()
-	for b: int in BOLT_COUNT:
-		var land: Vector2 = at + Vector2(_rng.randf_range(-36.0, 36.0), _rng.randf_range(-8.0, 20.0))
-		var bolt := PackedVector2Array()
-		for i: int in BOLT_SEGMENTS + 1:
-			var k: float = float(i) / BOLT_SEGMENTS
-			var jag: float = 0.0 if i == BOLT_SEGMENTS else _rng.randf_range(-BOLT_JAG, BOLT_JAG)
-			bolt.append(land + Vector2(jag, -BOLT_HEIGHT * (1.0 - k)))
-		_bolts.append(bolt)
+	for i: int in BOLT_COUNT:
+		var b := Bolt.new()
+		b.land = at + Vector2(_rng.randf_range(-BOLT_SPREAD.x, BOLT_SPREAD.x), _rng.randf_range(-BOLT_SPREAD.y, BOLT_SPREAD.y))
+		b.variant = _rng.randi_range(0, BOLT_VARIANTS - 1)
+		_bolts.append(b)
 	_bolt_t = 0.0
+
+
+## Frame `frame` of a horizontal strip of square frames, centred on `at`, at the sprite scale.
+func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_px: float, alpha: float = 1.0) -> void:
+	var h: float = art.get_height()
+	var size := Vector2(frame_w, h) * scale_px
+	draw_texture_rect_region(art, Rect2(at - size * 0.5, size), Rect2(frame * frame_w, 0, frame_w, h),
+		Color(1, 1, 1, alpha))
 
 
 func _draw() -> void:
@@ -136,15 +144,10 @@ func _draw() -> void:
 	for i: int in _points.size():
 		_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
 	if _smoke_t >= 0.0:
-		var anchor: Vector2 = _owner.special.anchor
-		var r: float = _owner.special.data.smoke_radius
-		draw_circle(anchor, r * 0.7, SMOKE_COLOR)
-		for i: int in SMOKE_PUFFS:
-			var angle: float = TAU * i / SMOKE_PUFFS + _smoke_t * SMOKE_SPIN
-			var reach: float = r * (0.55 + 0.15 * sin(_smoke_t * SMOKE_PULSE + i))
-			var puff: Vector2 = anchor + Vector2.RIGHT.rotated(angle) * reach
-			draw_circle(puff, r * 0.38, SMOKE_EDGE if i % 3 == 0 else SMOKE_COLOR)
-
+		var frame: int = int(_smoke_t * SMOKE_FPS) % SMOKE_FRAMES
+		var k: float = _owner.special.data.smoke_radius / SMOKE_ART_RADIUS
+		_draw_frame(SMOKE_ART, frame, SMOKE_ART.get_height(), _owner.special.anchor, Constants.SPRITE_SCALE * k,
+			SMOKE_ALPHA)
 
 ## The clone holds the owner's current weapon (and hand), pointing the way it runs.
 func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
@@ -163,18 +166,14 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 	draw_set_transform(Vector2.ZERO)
 
 
-## Poofs: a ring of puffs swelling outward and fading. Bolts: glow then core, flickering out.
+## Poofs play their strip once; bolts flicker (every third frame off) and stand on their landing spot.
 func _draw_flourishes() -> void:
+	var px: float = Constants.SPRITE_SCALE
 	for pf: Poof in _poofs:
-		var k: float = pf.t / POOF_TIME
-		var c: Color = pf.color
-		c.a = 1.0 - k * k
-		draw_circle(pf.pos, lerpf(POOF_START_R, pf.radius * 0.55, k), c)
-		for i: int in POOF_PUFFS:
-			var dir: Vector2 = Vector2.RIGHT.rotated(TAU * i / POOF_PUFFS + 0.4)
-			draw_circle(pf.pos + dir * pf.radius * k, lerpf(POOF_START_R, pf.radius * 0.4, k), c)
+		var frame: int = mini(int(pf.t / POOF_TIME * POOF_FRAMES), POOF_FRAMES - 1)
+		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px)
 	if _bolt_t >= 0.0 and int(_bolt_t * 30.0) % 3 != 2:
-		for bolt: PackedVector2Array in _bolts:
-			draw_polyline(bolt, BOLT_GLOW, BOLT_WIDTH)
-			draw_polyline(bolt, BOLT_CORE, BOLT_WIDTH * 0.4)
-		draw_circle(_bolts[0][_bolts[0].size() - 1], 34.0 * (1.0 - _bolt_t / BOLT_TIME), Color(1, 1, 0.9, 0.6))
+		var bw: float = BOLT_ART.get_width() / float(BOLT_VARIANTS)
+		var bh: float = BOLT_ART.get_height()
+		for b: Bolt in _bolts:
+			_draw_frame(BOLT_ART, b.variant, bw, b.land - Vector2(0.0, bh * px * 0.5), px)
