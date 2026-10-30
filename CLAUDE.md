@@ -254,7 +254,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   per-weapon projectile sprites (still circles); the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
-    and GUT excluded) and "iOS" (bundle `com.nathantau.arenabrawler`, landscape, Xcode project only).
+    and GUT excluded) and "iOS" (bundle `com.nathantau.brawlbit`, landscape, Xcode project only).
     `server/Dockerfile` (debian-slim, non-root, UDP 7777, extra args pass through) + `server/build.sh`.
     Verified: container on Docker Desktop (arm64) ran a full match with 2 autopilot clients + 1 bot, no errors.
     iOS: enabled ETC2/ASTC (required for mobile export); with a placeholder team ID the export produces an
