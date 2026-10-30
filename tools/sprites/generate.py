@@ -233,7 +233,7 @@ def twinshot(step=None, t=0):
 
 
 def wukong(step=None, t=0):
-    """Dash: monkey king with a golden circlet, pheasant feathers, a cloud collar, riding a cloud."""
+    """Dash: monkey king with a golden circlet, pheasant feathers and a lopsided cloud collar."""
     low = Canvas()
     for x, dy in legs(low, RED, BROWN, step):
         low.flat(R((x, 50 + dy, x + 6, 50 + dy)), YELLOW)  # leg wraps
@@ -267,15 +267,20 @@ def wukong(step=None, t=0):
 
 
 def wukong_clouds(i: int) -> Canvas:
-    """The cloud he rides (bobbing under his feet) and puffs rising off him; loops every 4 frames."""
+    """Clouds gathered behind him (he faces right): a soft mass at his back, thin wisps peeling off
+    and drifting back while they thin out, and a few puffs rising behind his head. Loops every 4 frames."""
     c = Canvas()
-    bob = SWAY[i % 4]
-    # Trails behind him (he faces right) into a wispy tail; tops at uneven heights.
-    ride = ((6, 58, 2), (11, 57, 3), (17, 55, 4), (24, 53, 5), (32, 55, 4), (39, 53, 4), (45, 56, 3))
-    c.part(lambda d, f: [d.ellipse((x - r, y + bob - r, x + r, y + bob + r), f) for x, y, r in ride], WHITE)
-    for k, (x, y) in enumerate(((6, 29), (57, 23), (54, 47), (11, 46), (16, 17), (45, 12))):
+    s = SWAY[i % 4]
+    mass = ((9, 35 + s, 4), (13, 31, 5), (16, 38, 4), (8, 42 - s, 3), (19, 27 + s, 3))
+    c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in mass], WHITE)
+    for k, (x, y) in enumerate(((14, 22), (12, 47), (18, 51), (10, 28), (16, 44))):
         phase = (i + k) % 4
-        r = (2, 3, 4, 3)[phase]
+        length = (6, 5, 4, 2)[phase]  # thins out as it drifts back
+        x -= 2 * phase
+        c.part(E((x - length, y - 1 - phase % 2, x + length, y + 1 - phase % 2)), WHITE, shade=False)
+    for k, (x, y) in enumerate(((7, 20), (22, 15), (12, 12))):
+        phase = (i + k * 2) % 4
+        r = (1, 2, 3, 2)[phase]
         c.part(E((x - r, y - 2 * phase - r, x + r, y - 2 * phase + r)), WHITE)
     return c
 
