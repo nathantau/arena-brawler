@@ -318,15 +318,17 @@ def wukong_ape(step=None, t=0):
 
 
 def ape_storm(i: int) -> Canvas:
-    """A few dark storm clouds churning behind the Great Ape; loops every 4 frames."""
+    """Dark storm clouds churning around the Great Ape (thickest behind him); loops every 4 frames."""
     c = Canvas()
     s = SWAY[i % 4]
-    mass = ((10, 30 + s, 5), (16, 24, 4), (7, 40 - s, 3))
-    c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in mass], SHADOW)
-    for k, (x, y) in enumerate(((12, 16), (6, 48))):
-        phase = (i + k * 2) % 4
+    back = ((9, 28 + s, 6), (14, 19, 5), (8, 39 - s, 5), (10, 48 + s, 4), (21, 11 + s, 4))
+    c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in back], SHADOW)
+    front = ((55, 20 - s, 4), (58, 31, 3), (50, 12, 3))
+    c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in front], SHADOW)
+    for k, (x, y) in enumerate(((5, 14), (29, 8), (57, 44), (7, 54), (45, 6))):
+        phase = (i + k) % 4
         r = (1, 2, 3, 2)[phase]
-        c.part(E((x - r, y - 2 * phase - r, x + r, y - 2 * phase + r)), SHADOW)
+        c.part(E((x - r, y - 2 * phase - r + 6, x + r, y - 2 * phase + r + 6)), SHADOW)
     return c
 
 
