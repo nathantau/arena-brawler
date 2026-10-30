@@ -169,7 +169,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   - **Destructible crates** (`C` in layouts, `arena/crate.gd`): block movement + sight (on LAYER_WALLS), 60 hp,
     damaged by bullets/beams/blades/blasts, reset each match; hp mirrored to clients via `rpc_crates`.
   - **Juice** (local view only, never on the server): `fx/effects.gd` (pooled particles, damage numbers with crits,
-    beam lines, sword arcs, blast rings), camera shake (trauma model: own heavy shots, getting hit, nearby blasts),
+    beam lines, sword arcs, blast rings), camera zoomed 1.4x (`CAMERA_ZOOM`, bigger characters on phones), camera shake (trauma model: own heavy shots, getting hit, nearby blasts),
     haptics (hit, kill, nearby blast), character emblems, dual-gun / barrier visuals. `fx/sfx.gd` synthesizes all
     sounds at startup from a small recipe table (no audio assets), distance-attenuated.
   - Bots get varied characters and use their skill occasionally; autopilot uses its skill every 2.5 s.

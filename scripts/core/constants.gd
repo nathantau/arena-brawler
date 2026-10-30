@@ -82,6 +82,8 @@ const SPRITE_SCALE: float = 1.5
 const HAPTIC_HIT_MS: int = 30
 const HAPTIC_KILL_MS: int = 60
 const HAPTIC_EXPLOSION_MS: int = 45
+## World-to-screen zoom; >1 trades arena view for bigger characters on phone screens.
+const CAMERA_ZOOM: float = 1.4
 const CAMERA_LOOKAHEAD: float = 60.0
 const CAMERA_SMOOTHING: float = 10.0
 

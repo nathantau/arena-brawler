@@ -264,6 +264,7 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	p.is_local = true
 
 	camera = Camera2D.new()
+	camera.zoom = Vector2.ONE * Constants.CAMERA_ZOOM
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = Constants.CAMERA_SMOOTHING
 	_set_camera_limits()
