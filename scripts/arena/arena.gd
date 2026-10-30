@@ -32,12 +32,6 @@ const PLAYER_COLORS: Array[Color] = [
 ]
 ## Placeholder player names until accounts (M6).
 const PLAYER_COLOR_NAMES: Array[String] = ["Blue", "Red", "Purple", "Green", "Yellow", "Teal"]
-const FLOOR_COLOR: Color = Color(0.13, 0.14, 0.17)
-const FLOOR_GRID_COLOR: Color = Color(0.16, 0.17, 0.21)
-const WALL_COLOR: Color = Color(0.32, 0.34, 0.42)
-const WALL_TOP_COLOR: Color = Color(0.42, 0.45, 0.55)
-const WALL_TOP_INSET: float = 4.0
-const GRID_LINE_WIDTH: float = 1.0
 const PROJECTILE_Z: int = 1
 const EFFECTS_Z: int = 2
 ## Camera shake: offset = SHAKE_MAX_OFFSET * trauma², trauma decays per second.
@@ -89,6 +83,7 @@ var _threats := PackedVector2Array()
 var _human_ids: Array[int] = []
 var _bot_ids: Array[int] = []
 var _walls: StaticBody2D
+var _floor := ArenaFloor.new()
 var _trauma: float = 0.0
 var _shake_rng := RandomNumberGenerator.new()
 
@@ -132,6 +127,8 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 
 
 func _ready() -> void:
+	_floor.name = "Floor"
+	add_child(_floor)
 	add_child(crates)
 	add_child(pickups)
 	add_child(projectiles)
@@ -147,12 +144,12 @@ func _load_layout(index: int) -> void:
 		remove_child(_walls)
 		_walls.queue_free()
 	_build_walls()
-	crates.setup(map)
+	_floor.setup(map, ArenaLayouts.THEMES[index])
+	crates.setup(map, _floor.tiles)
 	pickups.setup(map, catalog, catalog.pickup_ids(), match_seed)
 	projectiles.clear()
 	if camera != null:
 		_set_camera_limits()
-	queue_redraw()
 
 
 func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl: PlayerController,
@@ -532,19 +529,3 @@ func _build_walls() -> void:
 		body.add_child(cs)
 	add_child(body)
 	queue_redraw()
-
-
-func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, map.size), FLOOR_COLOR)
-	var tile: float = Constants.TILE_SIZE
-	var x: float = 0.0
-	while x <= map.size.x:
-		draw_line(Vector2(x, 0.0), Vector2(x, map.size.y), FLOOR_GRID_COLOR, GRID_LINE_WIDTH)
-		x += tile
-	var y: float = 0.0
-	while y <= map.size.y:
-		draw_line(Vector2(0.0, y), Vector2(map.size.x, y), FLOOR_GRID_COLOR, GRID_LINE_WIDTH)
-		y += tile
-	for rect: Rect2 in map.walls:
-		draw_rect(rect, WALL_COLOR)
-		draw_rect(rect.grow(-WALL_TOP_INSET), WALL_TOP_COLOR)

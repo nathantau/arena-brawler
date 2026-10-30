@@ -31,8 +31,31 @@ func test_layout_has_spawns_for_ffa_and_is_symmetric() -> void:
 
 
 func test_second_arena_has_crates() -> void:
-	assert_eq(ArenaLayouts.count(), 2)
+	assert_eq(ArenaLayouts.count(), 3)
 	assert_true(ArenaMap.parse(ArenaLayouts.FOUNDRY, Constants.TILE_SIZE).crate_spots.size() > 0)
+	assert_true(ArenaMap.parse(ArenaLayouts.GYM, Constants.TILE_SIZE).crate_spots.size() > 0)
+
+
+func test_every_layout_has_art_that_fits() -> void:
+	assert_eq(ArenaLayouts.THEMES.size(), ArenaLayouts.count())
+	for i: int in ArenaLayouts.count():
+		var theme: StringName = ArenaLayouts.THEMES[i]
+		var tiles: Texture2D = load(ArenaFloor.ART_DIR + "%s_tiles.png" % theme)
+		assert_not_null(tiles, String(theme))
+		assert_eq(tiles.get_width(), ArenaFloor.ART_TILE * ArenaFloor.Tile.size(), String(theme))
+		var decal_path: String = ArenaFloor.ART_DIR + "%s_decal.png" % theme
+		if ResourceLoader.exists(decal_path):
+			var map := ArenaMap.parse(ArenaLayouts.get_layout(i), Constants.TILE_SIZE)
+			var art_px: float = Constants.TILE_SIZE / ArenaFloor.ART_TILE
+			assert_eq((load(decal_path) as Texture2D).get_size() * art_px, map.size, "decal covers the arena")
+
+
+func test_floor_tiles_pick_wall_faces_and_shadows() -> void:
+	var rows: Array[String] = ["###", "#.#", "###"]
+	assert_eq(ArenaFloor.tile_at(rows, 1, 0), ArenaFloor.Tile.WALL_FACE, "floor below: show the face")
+	assert_eq(ArenaFloor.tile_at(rows, 0, 0), ArenaFloor.Tile.WALL_TOP)
+	assert_eq(ArenaFloor.tile_at(rows, 1, 1), ArenaFloor.Tile.FLOOR_SHADOW)
+	assert_eq(ArenaFloor.tile_at(rows, 1, 2), ArenaFloor.Tile.WALL_TOP, "bottom edge")
 
 
 func test_parse_merges_wall_runs_and_finds_spawns() -> void:

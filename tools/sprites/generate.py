@@ -411,6 +411,257 @@ def weapon_image(draw) -> Image.Image:
     return outline(c.img).crop((0, 0, WEAPON_W, WEAPON_H))
 
 
+# --- arenas: 32x32 tiles drawn at the characters' pixel scale (48 px world tiles) ---------
+# Each theme writes assets/arenas/<theme>_tiles.png, one row of TILE cells in TILE_ORDER, and
+# optionally <theme>_decal.png, a full-arena overlay painted over the floor (court lines).
+
+TILE = 32
+TILE_ORDER = ["floor_a", "floor_b", "floor_shadow", "wall_top", "wall_face", "crate", "crate_damaged"]
+FACE_H = 12  # front face height on wall tiles above floor (3/4 view)
+SHADOW_ROWS = 6  # floor rows darkened under a wall face
+ARENA_W, ARENA_H = 40, 24  # layout size in tiles (ArenaLayouts); decals cover it exactly
+ARENA_OUT = ROOT / "assets" / "arenas"
+
+
+def tile_canvas(base) -> Canvas:
+    c = Canvas()
+    c.flat(R((0, 0, TILE - 1, TILE - 1)), base)
+    return c
+
+
+def crop_tile(c: Canvas) -> Image.Image:
+    return c.img.crop((0, 0, TILE, TILE))
+
+
+def darken_rows(img: Image.Image, rows: int) -> Image.Image:
+    out = img.copy()
+    px = out.load()
+    for y in range(rows):
+        for x in range(TILE):
+            r, g, b, a = px[x, y]
+            px[x, y] = DARKER[(r, g, b)] + (a,)
+    return out
+
+
+def with_face(top: Image.Image, face: Image.Image) -> Image.Image:
+    """A wall tile seen from the front: its top, with the front face over the bottom FACE_H rows."""
+    out = top.copy()
+    out.paste(face.crop((0, TILE - FACE_H, TILE, TILE)), (0, TILE - FACE_H))
+    return out
+
+
+def object_tile(draw) -> Image.Image:
+    c = Canvas()
+    draw(c)
+    return outline(c.img).crop((0, 0, TILE, TILE))
+
+
+# Gym: hardwood court, padded blue walls, ball carts.
+def gym_floor(variant: int):
+    c = tile_canvas(SKIN_D)
+    for x in range(0, TILE, 8):
+        c.flat(R((x, 0, x, TILE - 1)), BROWN)  # plank seams
+        joint = (x * 5 + variant * 13) % TILE
+        c.flat(R((x, joint, x + 7, joint)), BROWN)  # staggered plank ends
+    for x, y in ((3, 6), (19, 21), (12, 27), (27, 10)) if variant else ((5, 14), (22, 4), (14, 25)):
+        c.flat(R((x, y, x + 2, y)), ORANGE)  # grain
+    return crop_tile(c)
+
+
+def gym_wall_top():
+    c = tile_canvas(BLUE)
+    for v in (0, 16):
+        c.flat(R((v, 0, v, TILE - 1)), NAVY)
+        c.flat(R((0, v, TILE - 1, v)), NAVY)
+    for x, y in ((8, 8), (24, 8), (8, 24), (24, 24)):
+        c.dot(x, y, STEEL)  # tufted buttons
+    return crop_tile(c)
+
+
+def gym_wall_face():
+    c = tile_canvas(NAVY)
+    c.flat(R((0, TILE - FACE_H, TILE - 1, TILE - FACE_H)), STEEL)  # top trim
+    for x in (0, 16):
+        c.flat(R((x, TILE - FACE_H + 1, x, TILE - 1)), SHADOW)
+    c.flat(R((0, TILE - 1, TILE - 1, TILE - 1)), OUTLINE)
+    return crop_tile(c)
+
+
+def ball_cart(balls):
+    def draw(c: Canvas):
+        c.part(R((4, 12, 27, 27)), STEEL_D)  # cart
+        c.flat(R((6, 14, 25, 25)), SHADOW)
+        for x, y in balls:
+            c.part(E((x, y, x + 9, y + 9)), ORANGE)
+            c.flat(R((x + 4, y, x + 4, y + 9)), OUTLINE)  # seams
+            c.flat(R((x, y + 4, x + 9, y + 4)), OUTLINE)
+        for x in (5, 25):
+            c.part(R((x, 27, x + 2, 29)), OUTLINE, shade=False)  # wheels
+    return draw
+
+
+# Pit: stone arena floor, stone block walls, wooden crates.
+def pit_floor(variant: int):
+    c = tile_canvas(SHADOW)
+    for v in (0, 16):
+        c.flat(R((0, v, TILE - 1, v)), OUTLINE)
+    off = 8 if variant else 0
+    for y0 in (0, 16):
+        x = (off + (8 if y0 else 0)) % 16
+        c.flat(R((x, y0, x, y0 + 15)), OUTLINE)
+        c.flat(R((x + 16, y0, x + 16, y0 + 15)), OUTLINE)
+    for x, y in ((5, 5), (20, 10), (11, 22), (27, 27)) if variant else ((9, 3), (25, 20), (3, 19)):
+        c.dot(x, y, NAVY)
+    return crop_tile(c)
+
+
+def pit_wall_top():
+    c = tile_canvas(STEEL_D)
+    for y in (0, 11, 22):
+        c.flat(R((0, y, TILE - 1, y)), SHADOW)
+        x = 8 if y == 11 else 0
+        c.flat(R((x, y, x, y + 10)), SHADOW)
+        c.flat(R((x + 16, y, x + 16, y + 10)), SHADOW)
+    c.flat(R((2, 2, 6, 2)), STEEL)
+    c.flat(R((19, 13, 23, 13)), STEEL)
+    return crop_tile(c)
+
+
+def pit_wall_face():
+    c = tile_canvas(SHADOW)
+    c.flat(R((0, TILE - FACE_H, TILE - 1, TILE - FACE_H)), STEEL)
+    for x in (0, 16):
+        c.flat(R((x + 4, TILE - FACE_H + 1, x + 4, TILE - 1)), OUTLINE)
+    c.flat(R((0, TILE - 6, TILE - 1, TILE - 6)), OUTLINE)
+    c.flat(R((0, TILE - 1, TILE - 1, TILE - 1)), OUTLINE)
+    return crop_tile(c)
+
+
+def wood_crate(damaged):
+    def draw(c: Canvas):
+        c.part(R((4, 6, 27, 28)), BROWN)
+        c.flat(R((7, 9, 24, 25)), SKIN_D)
+        c.flat(L([(7, 9), (24, 25)], 2), BROWN)  # brace
+        if damaged:
+            c.flat(L([(18, 6), (15, 13), (19, 17)], 1), OUTLINE)
+            c.flat(L([(6, 22), (11, 20)], 1), OUTLINE)
+    return draw
+
+
+# Foundry: riveted steel floor plates, brick walls, hazard-striped steel crates.
+def foundry_floor(variant: int):
+    c = tile_canvas(STEEL_D)
+    c.flat(R((0, 0, TILE - 1, 0)), SHADOW)
+    c.flat(R((0, 0, 0, TILE - 1)), SHADOW)
+    for x, y in ((3, 3), (28, 3), (3, 28), (28, 28)):
+        c.dot(x, y, STEEL)
+    if variant:
+        for y in range(10, 23, 3):
+            c.flat(R((9, y, 22, y)), SHADOW)  # vent grill
+    else:
+        c.flat(R((12, 15, 19, 16)), STEEL)  # scuff
+    return crop_tile(c)
+
+
+def foundry_wall_top():
+    c = tile_canvas(RED)
+    for i, y in enumerate(range(0, TILE, 8)):
+        c.flat(R((0, y, TILE - 1, y)), MAROON)
+        x = 4 if i % 2 else 12
+        c.flat(R((x, y, x, y + 7)), MAROON)
+        c.flat(R((x + 16, y, x + 16, y + 7)), MAROON)
+    return crop_tile(c)
+
+
+def foundry_wall_face():
+    c = tile_canvas(MAROON)
+    c.flat(R((0, TILE - FACE_H, TILE - 1, TILE - FACE_H)), ORANGE)
+    for i in range(0, TILE, 8):
+        c.flat(P([(i, TILE - 6), (i + 4, TILE - 10), (i + 6, TILE - 10), (i + 2, TILE - 6)]), YELLOW)  # hazard
+    c.flat(R((0, TILE - 5, TILE - 1, TILE - 2)), OUTLINE)
+    c.flat(R((0, TILE - 1, TILE - 1, TILE - 1)), OUTLINE)
+    return crop_tile(c)
+
+
+def steel_crate(damaged):
+    def draw(c: Canvas):
+        c.part(R((4, 6, 27, 28)), STEEL)
+        c.flat(R((4, 15, 27, 19)), YELLOW)
+        for x in range(4, 27, 4):
+            c.flat(P([(x, 19), (x + 2, 15), (x + 3, 15), (x + 1, 19)]), OUTLINE)
+        if damaged:
+            c.flat(L([(9, 6), (12, 12), (9, 14)], 1), OUTLINE)
+            c.flat(E((19, 21, 24, 25)), STEEL_D)  # dent
+    return draw
+
+
+THEMES = {
+    "gym": (gym_floor, gym_wall_top, gym_wall_face, ball_cart([(7, 8), (15, 6), (11, 14)]),
+            ball_cart([(13, 12)])),
+    "pit": (pit_floor, pit_wall_top, pit_wall_face, wood_crate(False), wood_crate(True)),
+    "foundry": (foundry_floor, foundry_wall_top, foundry_wall_face, steel_crate(False), steel_crate(True)),
+}
+
+
+def theme_sheet(floor, wall_top, wall_face, crate, crate_damaged) -> Image.Image:
+    a = floor(0)
+    top = wall_top()
+    tiles = [a, floor(1), darken_rows(a, SHADOW_ROWS), top, with_face(top, wall_face()),
+             object_tile(crate), object_tile(crate_damaged)]
+    sheet = Image.new("RGBA", (TILE * len(tiles), TILE), (0, 0, 0, 0))
+    for i, t in enumerate(tiles):
+        sheet.paste(t, (i * TILE, 0))
+    return sheet
+
+
+def gym_decal() -> Image.Image:
+    """Court markings for the whole Gym (ARENA_W x ARENA_H tiles), hoops centred on the end walls."""
+    w, h = ARENA_W * TILE, ARENA_H * TILE
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx, cy = w // 2, h // 2
+    paint, line = MAROON + (255,), WHITE + (255,)
+    left, right, top, bottom = TILE + 10, w - TILE - 11, TILE + 10, h - TILE - 11
+    d.ellipse((cx - 70, cy - 70, cx + 70, cy + 70), paint)  # centre circle
+    for side in (1, -1):
+        base = left if side == 1 else right
+        hoop = base + side * 30
+        lane = (min(base, base + side * 190), cy - 60, max(base, base + side * 190), cy + 60)
+        d.rectangle(lane, paint)  # the key
+        d.rectangle(lane, outline=line, width=2)
+        ft = base + side * 190
+        d.ellipse((ft - 60, cy - 60, ft + 60, cy + 60), outline=line, width=2)  # free-throw circle
+        d.arc((hoop - 300, cy - 300, hoop + 300, cy + 300), -68 if side == 1 else 112, 68 if side == 1 else 248,
+              line, 2)  # three-point arc
+        for y in (cy - 278, cy + 276):
+            x_end = hoop + side * 112
+            d.rectangle((min(base, x_end), y, max(base, x_end), y + 1), line)
+        d.rectangle((min(base, base + side * 6), cy - 22, max(base, base + side * 6), cy + 22), WHITE + (255,))  # backboard
+        rim = base + side * 16
+        d.ellipse((rim - 9, cy - 9, rim + 9, cy + 9), outline=ORANGE + (255,), width=2)
+    d.ellipse((cx - 70, cy - 70, cx + 70, cy + 70), outline=line, width=2)
+    d.ellipse((cx - 22, cy - 22, cx + 22, cy + 22), outline=line, width=2)
+    d.rectangle((cx - 1, top, cx, bottom), line)  # half-court line
+    d.rectangle((left, top, right, bottom), outline=line, width=2)  # boundary
+    return img
+
+
+DECALS = {"gym": gym_decal}
+
+
+def pickup_art() -> dict[str, Image.Image]:
+    """Shared pickup pad (32x32) and energy crystal (16x24)."""
+    pad = Canvas()
+    pad.part(E((2, 9, 29, 26)), STEEL_D)
+    pad.flat(E((7, 12, 24, 23)), SHADOW)
+    pad.flat(E((10, 14, 21, 21)), NAVY)
+    crystal = Canvas()
+    crystal.part(P([(8, 2), (13, 9), (8, 21), (3, 9)]), TEAL_L)
+    crystal.flat(L([(8, 3), (8, 19)], 1), WHITE)
+    crystal.flat(P([(9, 9), (12, 9), (8, 20)]), TEAL)
+    return {"pad": outline(pad.img).crop((0, 0, 32, 32)), "energy": outline(crystal.img).crop((0, 0, 16, 24))}
+
+
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong}
 AURAS = {"wukong": wukong_clouds}  # optional per-frame effects drawn behind the character
 
@@ -458,8 +709,8 @@ def frames(build, aura=None) -> list[Image.Image]:
     return idle + hit + walk
 
 
-def check(sheet: Image.Image, frame_w: int = SIZE) -> None:
-    """Self-check: palette-only colours, hard alpha, and the outline fits inside each frame."""
+def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
+    """Self-check: palette-only colours, hard alpha, and (`edges`) the outline fits inside each frame."""
     allowed = set(PALETTE)
     px = sheet.load()
     w, h = sheet.size
@@ -469,7 +720,7 @@ def check(sheet: Image.Image, frame_w: int = SIZE) -> None:
             assert a in (0, 255), f"soft alpha at {x},{y}"
             assert not a or (r, g, b) in allowed, f"off-palette colour {(r, g, b)} at {x},{y}"
             on_edge = y in (0, h - 1) or x % frame_w in (0, frame_w - 1)
-            assert not (a and on_edge), f"sprite touches frame edge at {x},{y}"
+            assert not (edges and a and on_edge), f"sprite touches frame edge at {x},{y}"
 
 
 def main() -> None:
@@ -488,6 +739,19 @@ def main() -> None:
         check(img, WEAPON_W)
         img.save(WEAPON_OUT / f"{name}.png")
     print(f"wrote {len(WEAPONS)} weapons to {WEAPON_OUT}")
+    ARENA_OUT.mkdir(exist_ok=True)
+    for name, parts in THEMES.items():
+        sheet = theme_sheet(*parts)
+        check(sheet, edges=False)  # tiles fill their cells edge to edge
+        sheet.save(ARENA_OUT / f"{name}_tiles.png")
+    for name, decal in DECALS.items():
+        img = decal()
+        check(img, img.width)
+        img.save(ARENA_OUT / f"{name}_decal.png")
+    for name, img in pickup_art().items():
+        check(img, img.width)
+        img.save(ARENA_OUT / f"{name}.png")
+    print(f"wrote {len(THEMES)} arena themes to {ARENA_OUT}")
     # App Store icons must be opaque.
     icon = Image.new("RGBA", (SIZE, SIZE), NAVY + (255,))
     icon.alpha_composite(frames(flicker)[0])

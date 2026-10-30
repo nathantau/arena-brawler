@@ -9,7 +9,7 @@ signal destroyed(at: Vector2)
 var crates: Array[Crate] = []
 
 
-func setup(map: ArenaMap) -> void:
+func setup(map: ArenaMap, art: Texture2D = null) -> void:
 	for c: Crate in crates:
 		remove_child(c)
 		c.queue_free()
@@ -17,6 +17,7 @@ func setup(map: ArenaMap) -> void:
 	for i: int in map.crate_spots.size():
 		var c := Crate.new()
 		c.setup(i, map.crate_spots[i], Constants.TILE_SIZE)
+		c.art = art
 		c.damaged.connect(_on_damaged)
 		add_child(c)
 		crates.append(c)

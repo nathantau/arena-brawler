@@ -13,19 +13,15 @@ enum Kind { ENERGY, WEAPON }
 ## Wire format per spot: [available, weapon_id].
 enum Field { AVAILABLE, WEAPON_ID, COUNT }
 
-const ENERGY_COLOR: Color = Color(0.3, 0.6, 1.0)
-const PAD_COLOR: Color = Color(1, 1, 1, 0.08)
-const OUTLINE_COLOR: Color = Color(1, 1, 1, 0.7)
-const OUTLINE_WIDTH: float = 2.0
-const PAD_RADIUS_SCALE: float = 1.4
+const PAD_ART: Texture2D = preload("res://assets/arenas/pad.png")
+const ENERGY_ART: Texture2D = preload("res://assets/arenas/energy.png")
+const LABEL_COLOR: Color = Color(1, 1, 1, 0.8)
 ## Weapons the viewer's character can't carry are drawn faded.
 const UNUSABLE_ALPHA: float = 0.3
 const LABEL_FONT_SIZE: int = 11
 const LABEL_OFFSET_Y: float = 24.0
 const BOB_PX: float = 3.0
 const BOB_SPEED: float = 3.0
-const SEGMENTS: int = 20
-const DIAMOND_WIDTH: float = 0.7
 
 
 class Spot:
@@ -46,8 +42,10 @@ var _weapon_pool: Array[StringName] = []
 var _rng := RandomNumberGenerator.new()
 var _seed: int = 0
 var _time: float = 0.0
-## Reused so _draw doesn't allocate.
-var _diamond := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+
+
+func _init() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 
 func setup(map: ArenaMap, catalog: WeaponCatalog, weapon_pool: Array[StringName], p_seed: int) -> void:
@@ -161,35 +159,32 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
+## Sprites are drawn at the characters' pixel scale; labels in plain world units.
 func _draw() -> void:
 	var font: Font = ThemeDB.fallback_font
-	var bob: Vector2 = Vector2(0.0, sin(_time * BOB_SPEED) * BOB_PX)
-	var r: float = Constants.PICKUP_RADIUS
+	var bob: Vector2 = Vector2(0.0, roundf(sin(_time * BOB_SPEED) * BOB_PX))
+	var scale_px: float = Constants.SPRITE_SCALE
 	for s: Spot in spots:
-		draw_circle(s.pos, r * PAD_RADIUS_SCALE, PAD_COLOR)
+		_draw_art(PAD_ART, s.pos, Color.WHITE)
 		if not s.available:
 			continue
-		var c: Vector2 = s.pos + bob
 		if s.kind == Kind.ENERGY:
-			_diamond[0] = c + Vector2(0, -r)
-			_diamond[1] = c + Vector2(r * DIAMOND_WIDTH, 0)
-			_diamond[2] = c + Vector2(0, r)
-			_diamond[3] = c + Vector2(-r * DIAMOND_WIDTH, 0)
-			draw_colored_polygon(_diamond, ENERGY_COLOR)
-			draw_polyline(_diamond, OUTLINE_COLOR, OUTLINE_WIDTH)
-			draw_line(_diamond[3], _diamond[0], OUTLINE_COLOR, OUTLINE_WIDTH)
-		else:
-			var w: WeaponData = _catalog.get_weapon(s.weapon_id) if _catalog != null else null
-			if w == null:
-				continue
-			var tint := Color(1, 1, 1, 1)
-			if viewer != null and not viewer.character.can_use(w):
-				tint.a = UNUSABLE_ALPHA
-			var scale_px: float = Constants.SPRITE_SCALE
-			draw_set_transform(c, 0.0, Vector2(scale_px, scale_px))
-			draw_texture(w.sprite, -w.sprite.get_size() * 0.5, tint)
-			draw_set_transform(Vector2.ZERO)
-			var label_color: Color = OUTLINE_COLOR * tint
-			var tw: float = font.get_string_size(w.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
-			draw_string(font, s.pos + Vector2(-tw * 0.5, -LABEL_OFFSET_Y), w.display_name,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, label_color)
+			_draw_art(ENERGY_ART, s.pos + bob - Vector2(0.0, ENERGY_ART.get_height() * scale_px * 0.3), Color.WHITE)
+			continue
+		var w: WeaponData = _catalog.get_weapon(s.weapon_id) if _catalog != null else null
+		if w == null:
+			continue
+		var tint := Color(1, 1, 1, 1)
+		if viewer != null and not viewer.character.can_use(w):
+			tint.a = UNUSABLE_ALPHA
+		_draw_art(w.sprite, s.pos + bob, tint)
+		var tw: float = font.get_string_size(w.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
+		draw_string(font, s.pos + Vector2(-tw * 0.5, -LABEL_OFFSET_Y), w.display_name,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, LABEL_COLOR * tint)
+
+
+func _draw_art(art: Texture2D, center: Vector2, tint: Color) -> void:
+	var scale_px: float = Constants.SPRITE_SCALE
+	draw_set_transform(center, 0.0, Vector2(scale_px, scale_px))
+	draw_texture(art, -art.get_size() * 0.5, tint)
+	draw_set_transform(Vector2.ZERO)

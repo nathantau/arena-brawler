@@ -8,6 +8,8 @@ const ENERGY_CHAR: String = "E"
 const WEAPON_CHAR: String = "W"
 const CRATE_CHAR: String = "C"
 
+## The layout as parsed (the floor art reads it per cell).
+var rows: Array[String] = []
 var walls: Array[Rect2] = []
 var spawns: PackedVector2Array = PackedVector2Array()
 var energy_spots: PackedVector2Array = PackedVector2Array()
@@ -18,6 +20,7 @@ var size: Vector2 = Vector2.ZERO
 
 static func parse(rows: Array[String], tile: float) -> ArenaMap:
 	var map := ArenaMap.new()
+	map.rows = rows
 	var width: int = 0
 	for y: int in rows.size():
 		var row: String = rows[y]

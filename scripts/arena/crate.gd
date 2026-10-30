@@ -7,15 +7,15 @@ extends StaticBody2D
 signal damaged(crate: Crate)
 
 const INSET: float = 4.0
-const COLOR_BODY: Color = Color(0.55, 0.4, 0.25)
-const COLOR_EDGE: Color = Color(0.32, 0.22, 0.13)
-const COLOR_CRACK: Color = Color(0.2, 0.13, 0.07)
-const EDGE_WIDTH: float = 3.0
-const CRACK_WIDTH: float = 2.0
+## Below this fraction of hp the damaged frame shows.
+const DAMAGED_FRACTION: float = 0.5
 
 var index: int = 0
 var hp: int = Constants.CRATE_HP
 var size: float = 0.0
+
+## Theme tile sheet (ArenaFloor.tiles); drawn with the crate frames from it.
+var art: Texture2D
 
 var _cs := CollisionShape2D.new()
 
@@ -23,6 +23,7 @@ var _cs := CollisionShape2D.new()
 func setup(p_index: int, center: Vector2, tile: float) -> void:
 	index = p_index
 	position = center
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	size = tile - INSET * 2.0
 	collision_layer = Constants.LAYER_WALLS | Constants.LAYER_CRATES
 	collision_mask = 0
@@ -55,13 +56,9 @@ func set_hp(value: int) -> void:
 
 
 func _draw() -> void:
-	var r := Rect2(Vector2(-size, -size) * 0.5, Vector2(size, size))
-	draw_rect(r, COLOR_BODY)
-	draw_rect(r, COLOR_EDGE, false, EDGE_WIDTH)
-	draw_line(r.position, r.end, COLOR_EDGE, EDGE_WIDTH)
-	# Cracks appear as it takes damage.
-	var dmg: float = 1.0 - float(hp) / float(Constants.CRATE_HP)
-	if dmg > 0.3:
-		draw_line(Vector2(-size * 0.4, size * 0.1), Vector2(0, -size * 0.1), COLOR_CRACK, CRACK_WIDTH)
-	if dmg > 0.6:
-		draw_line(Vector2(size * 0.1, size * 0.4), Vector2(size * 0.35, -size * 0.2), COLOR_CRACK, CRACK_WIDTH)
+	if art == null:
+		return
+	var t: float = Constants.TILE_SIZE
+	var damaged: bool = hp < Constants.CRATE_HP * DAMAGED_FRACTION
+	var frame: ArenaFloor.Tile = ArenaFloor.Tile.CRATE_DAMAGED if damaged else ArenaFloor.Tile.CRATE
+	draw_texture_rect_region(art, Rect2(-t * 0.5, -t * 0.5, t, t), ArenaFloor.region(frame))
