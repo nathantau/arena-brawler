@@ -240,7 +240,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   **Fan of Blades** (VOLLEY: fires `blade_fan`, 12 piercing kunai in a ring, through the normal shot pipeline
   with seq + `VOLLEY_SEQ_OFFSET`). Dual Wield is still pickable too.
   Flourishes (`SpecialFx`, detected from synced state changes so remote players show them too): clones appear in
-  a white cloud poof and vanish in poofs; the Great Ape transformation is struck by lightning in a cloud burst
+  their own cloud poof in a ring around the player (`CLONE_START_DISTANCE`), fade in, and vanish in poofs; the Great Ape transformation is struck by lightning in a cloud burst
   and ends in a dark puff. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
   (generate.py `FX`: poof / poof_small / poof_dark 6 frames, bolt 3 variants, smoke 4-frame loop; `Canvas(size)`
   now takes any size). Still smooth (Effects): explosion rings, sword arcs, beams, particles. Not done: bots don't prefer usable pickups; no

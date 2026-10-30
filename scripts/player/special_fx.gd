@@ -4,7 +4,7 @@ extends Node2D
 ## frame from the synced skill state (Player calls sync()). Clones copy the owner's sprite,
 ## walk animation, weapon and hand so they're hard to tell apart.
 ## Start / end flourishes are detected from state changes (so remote players get them too):
-## clones appear in a white cloud poof and vanish in poofs; a transformation is struck by
+## each clone appears from its own cloud poof around the player and vanishes in one; a transformation is struck by
 ## lightning in a burst of cloud, and ends in a dark puff. All pixel-art strips from
 ## tools/sprites/generate.py (assets/fx), drawn at the characters' pixel scale.
 
@@ -26,6 +26,8 @@ const SMOKE_FPS: float = 6.0
 const SMOKE_ART_RADIUS: float = 90.0
 const SMOKE_ALPHA: float = 0.9
 const FADE_TIME: float = 0.4
+## Clones fade in from their poof over this long.
+const APPEAR_TIME: float = 0.18
 
 
 class Poof:
@@ -63,7 +65,8 @@ func sync(p: Player) -> void:
 	_points = p.clone_points()
 	var cloning: bool = p.special.is_cloning()
 	if cloning and not _was_cloning:
-		_poof(p.special.anchor, POOF_BIG)
+		for at: Vector2 in _points:
+			_poof(at, POOF_SMALL)
 	elif _was_cloning and not cloning:
 		for at: Vector2 in _last_points:
 			_poof(at, POOF_SMALL)
@@ -84,7 +87,8 @@ func sync(p: Player) -> void:
 		c.show_behind_parent = true
 		add_child(c)
 		_clones.append(c)
-	var alpha: float = clampf(p.special.active_remaining / FADE_TIME, 0.0, 1.0)
+	var alpha: float = minf(clampf(p.special.active_remaining / FADE_TIME, 0.0, 1.0),
+		clampf(p.special.elapsed() / APPEAR_TIME, 0.0, 1.0))
 	for i: int in _clones.size():
 		var c: AnimatedSprite2D = _clones[i]
 		c.visible = i < _points.size()
