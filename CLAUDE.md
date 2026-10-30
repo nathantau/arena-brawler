@@ -81,6 +81,9 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - Tests: `godot --path . --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit`
 - iOS export (needs `app_store_team_id` in `export_presets.cfg`): `godot --path . --headless --export-release "iOS" build/ios/ArenaBrawler.xcodeproj`
   - Compile check without signing: `xcodebuild -project build/ios/ArenaBrawler.xcodeproj -scheme ArenaBrawler -sdk iphoneos -configuration Release -derivedDataPath build/ios-dd CODE_SIGNING_ALLOWED=NO build`
+- Install on a USB/Wi-Fi-paired iPhone (dev-signed; after an iOS export): `xcodebuild -project build/ios/ArenaBrawler.xcodeproj -scheme ArenaBrawler -configuration Release -destination id=<UDID> -derivedDataPath build/ios-dev -allowProvisioningUpdates <ASC key flags as in tools/release/release_ios.sh> CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" build`
+  then `xcrun devicectl device install app --device <UDID> build/ios-dev/Build/Products/Release-iphoneos/ArenaBrawler.app` (`xcrun devicectl list devices` for the UDID)
+- TestFlight: `ASC_KEY_ID=... ASC_ISSUER_ID=... tools/release/release_ios.sh` (needs the app record in App Store Connect)
 - Server Docker image: `server/build.sh` (exports Linux x86_64 + arm64 binaries, builds for this machine's arch;
   `PLATFORM=linux/amd64 server/build.sh` for an x86 cloud VM). Run: `docker run --rm -p 7777:7777/udp arena-brawler-server --bots 2`
 - Regenerate the app icon from the sprite code: `godot --path . --headless --script tools/make_icon.gd`
