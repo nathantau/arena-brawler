@@ -57,6 +57,9 @@ enum Kind { DASH, SHIELD, DUAL_WIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
 ## Sheet laid out like a character's (idle, hit, walk); drawn `form_scale` x the usual size.
 @export var form_sprite_sheet: Texture2D
 @export var form_scale: float = 1.0
+## Optional strip of square frames played (growing to form_scale) as the form takes over, and
+## backwards when it ends (SpecialFx). The real sprite is hidden meanwhile.
+@export var form_morph: Texture2D
 ## Fired instead of the loadout while transformed (its cooldown lives on the skill).
 @export var form_weapon: WeaponData
 ## Incoming damage is multiplied by this while transformed.

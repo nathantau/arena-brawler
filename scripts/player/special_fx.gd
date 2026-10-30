@@ -5,7 +5,8 @@ extends Node2D
 ## walk animation, weapon and hand so they're hard to tell apart.
 ## Start / end flourishes are detected from state changes (so remote players get them too):
 ## each clone appears from its own cloud poof around the player and vanishes in one; a transformation is struck by
-## lightning in a burst of cloud, and ends in a dark puff. All pixel-art strips from
+## lightning, morphs into the form (SkillData.form_morph) and bursts out of a cloud; it ends in a dark puff,
+## morphing back. All pixel-art strips from
 ## tools/sprites/generate.py (assets/fx), drawn at the characters' pixel scale.
 
 const FX_DIR: String = "res://assets/fx/"
@@ -14,7 +15,6 @@ const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
 const POOF_DARK: Texture2D = preload(FX_DIR + "poof_dark.png")
 const BOLT_ART: Texture2D = preload(FX_DIR + "bolt.png")
 const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
-const POOF_FRAMES: int = 6
 const POOF_TIME: float = 0.5
 const BOLT_VARIANTS: int = 3
 const BOLT_COUNT: int = 4
@@ -30,6 +30,9 @@ const FADE_TIME: float = 0.4
 const APPEAR_DELAY: float = 0.08
 const APPEAR_TIME: float = 0.2
 const CLONE_POOF_TIME: float = 0.7
+const MORPH_TIME: float = 0.55
+## The transformation's cloud bursts this far into the morph, as it finishes.
+const MORPH_POOF_AT: float = 0.4
 
 
 class Poof:
@@ -55,6 +58,13 @@ var _was_cloning: bool = false
 var _was_transformed: bool = false
 var _last_points := PackedVector2Array()
 var _rng := RandomNumberGenerator.new()
+## Seconds into the transformation morph (-1 = none); `_morph_back` plays it in reverse.
+var _morph_t: float = -1.0
+var _morph_back: bool = false
+var _morph_art: Texture2D
+var _morph_scale: float = 1.0
+var _morph_at: Vector2 = Vector2.ZERO
+var _morph_flip: bool = false
 
 
 func _init() -> void:
@@ -79,10 +89,17 @@ func sync(p: Player) -> void:
 	var transformed: bool = p.special.is_transformed()
 	if transformed and not _was_transformed:
 		_strike(p.global_position)
-		_poof(p.global_position, POOF_BIG)
+		_start_morph(p, false)
+		if _morph_t < 0.0:
+			_poof(p.global_position, POOF_BIG)
 	elif _was_transformed and not transformed and not p.dead:
 		_poof(p.global_position, POOF_DARK)
+		_start_morph(p, true)
 	_was_transformed = transformed
+	if p.dead:
+		_morph_t = -1.0
+	_morph_at = p.global_position + p.visual_offset
+	_morph_flip = p.facing.x < 0.0
 	var frames: SpriteFrames = p.character.sprite_frames()
 	while _clones.size() < _points.size():
 		var c := AnimatedSprite2D.new()
@@ -116,6 +133,26 @@ func _process(delta: float) -> void:
 		_bolt_t += delta
 		if _bolt_t > BOLT_TIME:
 			_bolt_t = -1.0
+	if _morph_t >= 0.0:
+		if not _morph_back and _morph_t < MORPH_POOF_AT and _morph_t + delta >= MORPH_POOF_AT:
+			_poof(_morph_at, POOF_BIG)
+		_morph_t += delta
+		if _morph_t > MORPH_TIME:
+			_morph_t = -1.0
+
+
+## The owner's sprite is hidden while this plays (Player).
+func is_morphing() -> bool:
+	return _morph_t >= 0.0
+
+
+func _start_morph(p: Player, back: bool) -> void:
+	_morph_art = p.special.data.form_morph
+	if _morph_art == null:
+		return
+	_morph_scale = p.special.data.form_scale
+	_morph_back = back
+	_morph_t = 0.0
 
 
 func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME) -> void:
@@ -146,6 +183,7 @@ func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_
 
 
 func _draw() -> void:
+	_draw_morph()
 	_draw_flourishes()
 	if _owner == null:
 		return
@@ -174,11 +212,26 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 	draw_set_transform(Vector2.ZERO)
 
 
+## Frame by frame from the character into the form, growing to its scale (or back, shrinking).
+func _draw_morph() -> void:
+	if _morph_t < 0.0:
+		return
+	var n: int = _morph_art.get_width() / _morph_art.get_height()
+	var k: int = mini(int(_morph_t / MORPH_TIME * n), n - 1)
+	if _morph_back:
+		k = n - 1 - k
+	var s: float = Constants.SPRITE_SCALE * lerpf(1.0, _morph_scale, k / float(n - 1))
+	draw_set_transform(_morph_at, 0.0, Vector2(-1.0 if _morph_flip else 1.0, 1.0))
+	_draw_frame(_morph_art, k, _morph_art.get_height(), Vector2.ZERO, s)
+	draw_set_transform(Vector2.ZERO)
+
+
 ## Poofs play their strip once; bolts flicker (every third frame off) and stand on their landing spot.
 func _draw_flourishes() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for pf: Poof in _poofs:
-		var frame: int = mini(int(pf.t / pf.duration * POOF_FRAMES), POOF_FRAMES - 1)
+		var n: int = pf.art.get_width() / pf.art.get_height()
+		var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
 		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px)
 	if _bolt_t >= 0.0 and int(_bolt_t * 30.0) % 3 != 2:
 		var bw: float = BOLT_ART.get_width() / float(BOLT_VARIANTS)

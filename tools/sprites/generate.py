@@ -869,28 +869,64 @@ def ui_kit() -> dict[str, Image.Image]:
 # --- effects: pixel-art animation strips for skills (assets/fx/), drawn at the sprite scale -----
 
 FX_OUT = ROOT / "assets" / "fx"
-POOF_FRAMES = 6
+POOF_FRAMES = 10
 SMOKE_FRAMES = 4
 BOLT_VARIANTS = 3
 BOLT_W, BOLT_H = 24, 88
 
 
 def poof_frame(size: int, k: int, color) -> Image.Image:
-    """A cloud puff bursting outward: a core that shrinks away and a ring of puffs that drift out."""
+    """A cloud puff: lumps swell up into a full cloud (3 frames), then burst outward, drift up and
+    break into wisps. Lumps are uneven (seeded by size, so every frame of a strip agrees)."""
+    rng = random.Random(size)
+    lumps = [(rng.uniform(-0.3, 0.3), rng.uniform(0.8, 1.15), rng.uniform(0.8, 1.2)) for _ in range(9)]
     c = Canvas(size)
     m = size // 2
-    t = k / (POOF_FRAMES - 1)
-    puffs = []
-    if k < POOF_FRAMES - 2:
-        puffs.append((m, m, round(size * 0.22 * (1 - 0.6 * t))))
-    for i in range(7):
-        ang = math.tau * i / 7 + 0.4
-        d = size * (0.12 + 0.26 * t)
-        r = round(size * 0.14 * (1 - 0.7 * t))
+    grow = min(1.0, (k + 1) / 3)
+    t = max(0.0, (k - 2) / (POOF_FRAMES - 3))
+    rise = size * 0.03 * t
+    ring, wisps = [], []
+    for i, (da, reach, rr) in enumerate(lumps):
+        ang = math.tau * i / len(lumps) + 0.4 + da
+        d = size * (0.06 + 0.13 * grow + 0.15 * t * reach)
+        r = round(size * 0.13 * rr * grow * (1 - 0.8 * t))
         if r >= 1:
-            puffs.append((m + math.cos(ang) * d, m + math.sin(ang) * d, r))
-    c.part(lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in puffs], color)
+            ring.append((m + math.cos(ang) * d, m + math.sin(ang) * d - rise, r))
+        if t > 0.2:  # trailing wisps between the lumps, lagging behind them
+            ang += math.pi / len(lumps)
+            d = size * (0.12 + 0.2 * t)
+            wisps.append((m + math.cos(ang) * d, m + math.sin(ang) * d - rise, max(1, round(size * 0.04 * (1 - t)))))
+    blob = lambda pts: lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in pts]
+    c.part(blob(wisps + ring), color)
+    core = round(size * 0.22 * grow * (1 - 1.3 * t))
+    if core >= 2:  # drawn over the ring, outlined where it overlaps: reads as separate lumps
+        c.part(blob([(m, m - rise, core)]), color)
     return outline(c.img)
+
+
+def morph_frames(a: Image.Image, b: Image.Image) -> list[Image.Image]:
+    """Transformation from frame `a` into `b`: a brightens to a white silhouette, the silhouette
+    dissolves into b's (ordered dither) with gold sparks crackling inside, then b fades in from white.
+    Drawn growing from a's in-game scale to b's (SpecialFx)."""
+    wa, wb = recolor(a, lambda _c: WHITE), recolor(b, lambda _c: WHITE)
+    rng = random.Random(7)
+    out = [recolor(a, LIGHTER.__getitem__), wa]
+    for p in (0.2, 0.4, 0.6, 0.8):
+        c = Canvas()  # each pixel from one silhouette or the other: both outlines stay readable
+        for y in range(SIZE):
+            for x in range(SIZE):
+                c.px[x, y] = (wb if BAYER[y % 4][x % 4] / 16 < p else wa).getpixel((x, y))
+        inside = [(x, y) for y in range(SIZE) for x in range(SIZE) if c.px[x, y][3]]
+        for x, y in rng.sample(inside, 6):  # sparks: short gold crackles
+            dx, dy = rng.choice(((1, 0), (0, 1), (1, 1), (1, -1)))
+            for j in range(3):
+                if 1 < x + dx * j < SIZE - 2 and 1 < y + dy * j < SIZE - 2:
+                    c.dot(x + dx * j, y + dy * j, YELLOW)
+        out.append(c.img)
+    return out + [wb, recolor(b, LIGHTER.__getitem__)]
+
+
+BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
 
 
 def bolt(variant: int) -> Image.Image:
@@ -942,6 +978,9 @@ FX = {
     "poof_dark": lambda: strip([poof_frame(64, k, SHADOW) for k in range(POOF_FRAMES)]),
     "bolt": lambda: strip([bolt(v) for v in range(BOLT_VARIANTS)]),
     "smoke": lambda: strip([smoke_frame(k) for k in range(SMOKE_FRAMES)]),
+    # Transformation strips (SkillData.form_morph): the character's first idle frame into the form's.
+    "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],
+                                                   frames(wukong_ape, AURAS["wukong_ape"])[0])),
 }
 
 

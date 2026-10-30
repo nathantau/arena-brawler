@@ -199,8 +199,9 @@ func _process(delta: float) -> void:
 		_sprite.play(anim)
 	_sprite.position = visual_offset
 	_sprite.flip_h = facing.x < 0.0
-	_sprite.modulate.a = INVULN_ALPHA if stats.is_invulnerable() or is_hidden() else 1.0
 	_special_fx.sync(self)
+	_sprite.modulate.a = 0.0 if _special_fx.is_morphing() else \
+		INVULN_ALPHA if stats.is_invulnerable() or is_hidden() else 1.0
 	queue_redraw()
 	_overlay.queue_redraw()
 
