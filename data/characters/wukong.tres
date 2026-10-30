@@ -4,22 +4,18 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/wukong.png" id="2_sheet"]
 [ext_resource type="Resource" path="res://data/weapons/wukong_staff.tres" id="3_sig"]
 [ext_resource type="Texture2D" path="res://assets/sprites/wukong_hand.png" id="4_hand"]
+[ext_resource type="Resource" path="res://data/skills/great_ape.tres" id="5_skill"]
 
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
 signature_weapon = ExtResource("3_sig")
 hand_sprite = ExtResource("4_hand")
+signature_skill = ExtResource("5_skill")
 weapon_tags = Array[StringName]([&"wukong", &"blade", &"arcane", &"explosive"])
 id = &"wukong"
 display_name = "Wukong"
-skill_name = "Somersault"
 max_hp = 90
 max_armor = 40
 max_energy = 200
 move_speed = 285.0
-skill = 0
-skill_cooldown = 2.4
-skill_duration = 0.2
-dash_speed = 1050.0
-dash_iframes = 0.24

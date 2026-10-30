@@ -91,6 +91,12 @@ func on_select_character(peer_id: int, id: StringName) -> void:
 		arena.select_character(p, id)
 
 
+func on_select_special(peer_id: int, id: StringName) -> void:
+	var p: Player = arena.get_player(peer_id)
+	if p != null:
+		arena.select_special(p, id)
+
+
 func on_select_weapon(peer_id: int, id: StringName) -> void:
 	var p: Player = arena.get_player(peer_id)
 	if p != null:

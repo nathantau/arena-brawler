@@ -45,6 +45,7 @@ func _inputs(n: int) -> Array[InputFrame]:
 		f.move_vec = Vector2(1, sin(i * 0.1)).normalized()
 		f.aim_vec = Vector2.UP.rotated(i * 0.05)
 		f.skill = i % 40 < 3
+		f.special = i % 50 > 45
 		f.swap = i == 25
 		f.fire = i % 3 != 0
 		out.append(f)
@@ -53,7 +54,7 @@ func _inputs(n: int) -> Array[InputFrame]:
 
 func test_replay_from_captured_state_matches() -> void:
 	await wait_physics_frames(2)  # let the wall register in the physics space
-	for character: StringName in [&"flicker", &"warden", &"twinshot"]:
+	for character: StringName in [&"flicker", &"warden", &"twinshot", &"wukong"]:
 		await _check_replay(character)
 
 
@@ -74,10 +75,12 @@ func _check_replay(character: StringName) -> void:
 	assert_almost_eq(b.global_position.y, a.global_position.y, 0.01)
 	assert_eq(b.stats.energy, a.stats.energy)
 	assert_eq(b.loadout.active_index, a.loadout.active_index)
-	assert_almost_eq(b.skill.cooldown_remaining, a.skill.cooldown_remaining, 0.0001)
+	assert_almost_eq(b.dash.cooldown_remaining, a.dash.cooldown_remaining, 0.0001)
+	assert_almost_eq(b.special.cooldown_remaining, a.special.cooldown_remaining, 0.0001)
+	assert_almost_eq(b.special.active_remaining, a.special.active_remaining, 0.0001)
 	assert_eq(b.last_input_seq, a.last_input_seq)
 	assert_true(a.global_position.x < WALL_X, "walls stopped the player")
-	assert_eq(b.skill.anchor, a.skill.anchor, String(character))
+	assert_eq(b.special.anchor, a.special.anchor, String(character))
 	a.queue_free()
 	b.queue_free()
 	await wait_physics_frames(1)
@@ -89,7 +92,8 @@ func test_state_roundtrip() -> void:
 	a.velocity = Vector2(5, 6)
 	a.stats.apply_damage(70)
 	a.stats.energy = 33
-	a.skill.try_activate(Vector2.LEFT, a.global_position, a.stats)
+	a.dash.try_activate(Vector2.LEFT, a.global_position, a.stats)
+	a.special.try_activate(Vector2.LEFT, a.global_position, a.stats)
 	a.loadout.swap()
 	a.last_input_seq = 77
 	var b: Player = _player(2)

@@ -1,24 +1,21 @@
 class_name CharacterData
 extends Resource
 ## Data-driven character definition. One .tres per character in res://data/characters/.
-
-enum SkillKind { DASH, SHIELD, DUAL_WIELD }
+## Skills live in SkillData (everyone dashes; specials are picked by tag like weapons).
 
 @export var id: StringName = &""
 @export var display_name: String = ""
-@export var skill_name: String = ""
 @export var max_hp: int = 100
 @export var max_armor: int = 50
 @export var max_energy: int = 200
 @export var move_speed: float = 270.0
-@export var skill: SkillKind = SkillKind.DASH
-@export var skill_cooldown: float = 1.8
-## How long the skill stays active (dash burst, shield up, dual-wield window).
-@export var skill_duration: float = 0.16
-## Weapon classes this character can carry (see WeaponData.tags); include the character's own id.
+## Weapon and special classes this character can use (see WeaponData.tags / SkillData.tags);
+## include the character's own id.
 @export var weapon_tags: Array[StringName] = []
 ## Starting sidearm, never dropped (slot 0). Null = the shared default loadout.
 @export var signature_weapon: WeaponData
+## Default special. Null = the first special the character can use.
+@export var signature_skill: SkillData
 ## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames, then walk frames.
 @export var sprite_sheet: Texture2D
 
@@ -27,24 +24,24 @@ enum SkillKind { DASH, SHIELD, DUAL_WIELD }
 
 var _sprite_frames: SpriteFrames
 
-@export_group("Dash")
-@export var dash_speed: float = 950.0
-@export var dash_iframes: float = 0.22
-
-@export_group("Shield")
-## Length of the deployed barrier and how far in front of the player it appears.
-@export var shield_width: float = 110.0
-@export var shield_distance: float = 44.0
-
 @export_group("Dual wield")
 ## Sideways offset of each gun's muzzle while dual-wielding.
 @export var dual_offset: float = 9.0
 
 
 func can_use(weapon: WeaponData) -> bool:
-	if weapon.tags.is_empty():
+	return _shares_tag(weapon.tags)
+
+
+func can_use_skill(skill: SkillData) -> bool:
+	return _shares_tag(skill.tags)
+
+
+## Empty `tags` = anyone.
+func _shares_tag(tags: Array[StringName]) -> bool:
+	if tags.is_empty():
 		return true
-	for tag: StringName in weapon.tags:
+	for tag: StringName in tags:
 		if weapon_tags.has(tag):
 			return true
 	return false
@@ -52,25 +49,30 @@ func can_use(weapon: WeaponData) -> bool:
 
 ## "idle" (looping bob) + "hit" (one-shot flash) + "walk" (looping) animations cut from sprite_sheet; built once, shared.
 func sprite_frames() -> SpriteFrames:
-	if _sprite_frames != null:
-		return _sprite_frames
-	_sprite_frames = SpriteFrames.new()
-	_sprite_frames.remove_animation(&"default")
-	_add_animation(&"idle", 0, Constants.SPRITE_IDLE_FRAMES, Constants.SPRITE_IDLE_FPS, true)
-	_add_animation(&"hit", Constants.SPRITE_IDLE_FRAMES, Constants.SPRITE_HIT_FRAMES,
-		Constants.SPRITE_HIT_FRAMES / Constants.HIT_FLASH_TIME, false)
-	_add_animation(&"walk", Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES,
-		Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_WALK_FPS, true)
+	if _sprite_frames == null:
+		_sprite_frames = frames_from_sheet(sprite_sheet)
 	return _sprite_frames
 
 
-func _add_animation(anim: StringName, first: int, count: int, fps: float, loop: bool) -> void:
-	_sprite_frames.add_animation(anim)
-	_sprite_frames.set_animation_speed(anim, fps)
-	_sprite_frames.set_animation_loop(anim, loop)
+static func frames_from_sheet(sheet: Texture2D) -> SpriteFrames:
+	var frames := SpriteFrames.new()
+	frames.remove_animation(&"default")
+	_add_animation(frames, sheet, &"idle", 0, Constants.SPRITE_IDLE_FRAMES, Constants.SPRITE_IDLE_FPS, true)
+	_add_animation(frames, sheet, &"hit", Constants.SPRITE_IDLE_FRAMES, Constants.SPRITE_HIT_FRAMES,
+		Constants.SPRITE_HIT_FRAMES / Constants.HIT_FLASH_TIME, false)
+	_add_animation(frames, sheet, &"walk", Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES,
+		Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_WALK_FPS, true)
+	return frames
+
+
+static func _add_animation(frames: SpriteFrames, sheet: Texture2D, anim: StringName, first: int, count: int,
+		fps: float, loop: bool) -> void:
+	frames.add_animation(anim)
+	frames.set_animation_speed(anim, fps)
+	frames.set_animation_loop(anim, loop)
 	var size: int = Constants.SPRITE_FRAME_SIZE
 	for i: int in count:
 		var frame := AtlasTexture.new()
-		frame.atlas = sprite_sheet
+		frame.atlas = sheet
 		frame.region = Rect2((first + i) * size, 0, size, size)
-		_sprite_frames.add_frame(anim, frame)
+		frames.add_frame(anim, frame)

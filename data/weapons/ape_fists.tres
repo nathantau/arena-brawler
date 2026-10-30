@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"ape_fists"
+display_name = "Ape Fists"
+pickup = false
+kind = 2
+damage = 26
+fire_interval = 0.5
+energy_cost = 0
+crit_chance = 0.1
+knockback = 380.0
+color = Color(0.85, 0.55, 0.3, 1)
+screen_shake = 0.3
+sfx = &"swing"
+splash_radius = 64.0
+splash_edge_scale = 0.5
+melee_range = 44.0
+melee_arc_deg = 160.0
+tags = Array[StringName]([&"great_ape"])

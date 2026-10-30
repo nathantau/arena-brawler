@@ -58,13 +58,15 @@ func _start_offline() -> void:
 		_offline_arena.select_character(me, args.character)
 	if args.weapon != &"":
 		_offline_arena.select_weapon(me, args.weapon)
+	if args.special != &"":
+		_offline_arena.select_special(me, args.special)
 	if args.autopilot:
 		_offline_arena.referee.set_ready(me.player_id, true)
 
 
 func _join(host: String, port: int) -> void:
 	var err: Error = session.start_client(self, host, port, args.autopilot, args.net_debug, args.character,
-		args.weapon)
+		args.weapon, args.special)
 	if err != OK:
 		_on_client_disconnected("Could not start client: %s" % error_string(err))
 		return

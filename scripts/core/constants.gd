@@ -65,6 +65,7 @@ const BOT_STRAFE_WEIGHT: float = 0.8
 const BOT_AIM_ERROR_DEG: float = 10.0
 const BOT_SIGHT_RANGE: float = 600.0
 const BOT_SKILL_CHANCE_PER_SEC: float = 0.4
+const BOT_SPECIAL_CHANCE_PER_SEC: float = 0.15
 
 # --- Feedback ---
 const HIT_FLASH_TIME: float = 0.08
@@ -153,3 +154,4 @@ const AUTOPILOT_TURN_PER_FRAME: float = 0.03
 const AUTOPILOT_STEER_DIRECTIONS: int = 16
 const AUTOPILOT_PROBE_DISTANCE: float = 70.0
 const AUTOPILOT_SKILL_EVERY_FRAMES: int = 150
+const AUTOPILOT_SPECIAL_EVERY_FRAMES: int = 420

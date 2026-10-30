@@ -160,7 +160,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   - `ProjectilePool` handles all three kinds. Each pellet keeps its (owner, seq, pellet) key; `attacker_id` changes
     when reflected so server hit events still match the client's cosmetic copy.
   - **3 characters** (`data/characters/*.tres`, `CharacterData` + `CharacterSkill` replacing `DashSkill`):
-    Flicker (Dash, i-frames), Warden (Barrier: a wall on `LAYER_SHIELDS` that stops enemy projectiles, 3 s),
+    Flicker, Warden (Barrier: a wall on `LAYER_SHIELDS` that stops enemy projectiles, 3 s),
     Twinshot (Dual wield: every shot fires a second offset volley for 4 s; pellet keys offset by 64). Characters
     differ in HP/armor/energy/speed. Skill state + character id are in snapshots, so others' barriers and dual guns
     show on every client and replay is exact (tested for all three). Picked in the lobby (`rpc_select_character`).
@@ -219,7 +219,19 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   iPhone insets on desktop). Redone: HUD (icon bars, weapon slots with sprites + cost, kills/deaths pill, clock),
   touch controls (pixel buttons, skill icon + cooldown, swap shows the other weapon), title screen (tiled court,
   logo, idling roster), loading room, results (trophy, portraits). Damage numbers / pickup labels outlined.
-  iOS Simulator: Godot's simulator lib is x86_64 only, so build with `ARCHS=x86_64` (runs under Rosetta). Not done: bots don't prefer usable pickups; no
+  iOS Simulator: Godot's simulator lib is x86_64 only, so build with `ARCHS=x86_64` (runs under Rosetta).
+- **Skills as data: Dash + 1 special** (2026-10-30): `SkillData` resources in `data/skills/` (kind DASH / SHIELD /
+  DUAL_WIELD / TRANSFORM, cooldown, duration, icon, blurb, tags like weapons; `special = false` for Dash).
+  `SkillCatalog.shared()`; `CharacterData.signature_skill` + `can_use_skill()` (same tag list as weapons).
+  Every player has `dash` (shared, own button / Space / InputFrame `skill`) and `special` (picked in the loading
+  room, second button / E / InputFrame `special` flag 8). Specials: Barrier (heavy: Warden, Twinshot), Dual Wield
+  (light: Flicker, Twinshot), **Great Ape** (Wukong signature, TRANSFORM: 6 s as a big dark-red ape drawn x1.35
+  from `assets/sprites/wukong_ape.png` (generate.py `FORMS`), half damage taken, 0.9 speed, FIRE uses
+  `ape_fists` (melee slam) instead of the loadout; form weapon cooldown is in the snapshot). Snapshots carry both
+  slots (`DASH_*`, `SPECIAL_ID/…`); server validates `rpc_select_special`; `--special ID` CLI. The loading room is
+  fighter cards with a special column beside them, then weapons. Removed per-character skill fields (Wukong's
+  longer Somersault dash is gone: everyone shares one Dash). Next idea from the user: a ninja whose special makes
+  harmless moving decoy clones. Not done: bots don't prefer usable pickups; no
   per-weapon projectile sprites (still circles); the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests

@@ -188,8 +188,8 @@ func test_sword_ignores_own_projectiles() -> void:
 func test_shield_blocks_enemy_shots_not_own() -> void:
 	var warden: Player = _player(SHOOTER, Vector2(100, 300), &"warden")
 	var target: Player = _player(TARGET, Vector2(400, 300))
-	warden.skill.try_activate(Vector2.RIGHT, warden.global_position, warden.stats)
-	warden._shield.sync(warden.skill, false)
+	warden.special.try_activate(Vector2.RIGHT, warden.global_position, warden.stats)
+	warden._shield.sync(warden.special, false)
 	await wait_physics_frames(2)
 	# Enemy fires at the warden: stopped by the barrier.
 	pool.fire_shot(TARGET, 1, target.global_position, Vector2.LEFT, _w(&"pistol"), SEED)

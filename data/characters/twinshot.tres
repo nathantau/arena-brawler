@@ -4,21 +4,19 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/twinshot.png" id="2_sheet"]
 [ext_resource type="Resource" path="res://data/weapons/twinshot_revolver.tres" id="3_sig"]
 [ext_resource type="Texture2D" path="res://assets/sprites/twinshot_hand.png" id="4_hand"]
+[ext_resource type="Resource" path="res://data/skills/dual_wield.tres" id="5_skill"]
 
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
 signature_weapon = ExtResource("3_sig")
 hand_sprite = ExtResource("4_hand")
+signature_skill = ExtResource("5_skill")
 weapon_tags = Array[StringName]([&"twinshot", &"light", &"precision", &"heavy"])
 id = &"twinshot"
 display_name = "Twinshot"
-skill_name = "Dual wield"
 max_hp = 90
 max_armor = 40
 max_energy = 220
 move_speed = 280.0
-skill = 2
-skill_cooldown = 9.0
-skill_duration = 4.0
 dual_offset = 9.0

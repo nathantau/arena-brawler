@@ -15,6 +15,7 @@ signal mode_requested(mode: MatchRules.Mode)
 signal arena_requested(index: int)
 signal character_requested(id: StringName)
 signal weapon_requested(id: StringName)
+signal special_requested(id: StringName)
 signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool)
 ## Authoritative damage (offline / server).
 signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2)
@@ -124,6 +125,9 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 		weapon_requested.connect(func(id: StringName) -> void:
 			if local_player != null:
 				select_weapon(local_player, id))
+		special_requested.connect(func(id: StringName) -> void:
+			if local_player != null:
+				select_special(local_player, id))
 
 
 func _ready() -> void:
@@ -233,6 +237,16 @@ func select_weapon(p: Player, id: StringName) -> void:
 	if w == null or not w.pickup or not p.character.can_use(w) or match_state.phase != MatchState.Phase.LOBBY:
 		return
 	p.set_starting_weapon(w)
+	match_updated.emit()
+
+
+## Lobby only (authoritative): the special a player brings (next to everyone's Dash).
+## Must be a special their character can use.
+func select_special(p: Player, id: StringName) -> void:
+	var s: SkillData = SkillCatalog.shared().get_skill(id)
+	if s == null or not s.special or not p.character.can_use_skill(s) or match_state.phase != MatchState.Phase.LOBBY:
+		return
+	p.set_special(s)
 	match_updated.emit()
 
 
@@ -402,18 +416,24 @@ func _fx_kill(killer_id: int, victim_id: int) -> void:
 		Input.vibrate_handheld(Constants.HAPTIC_KILL_MS)
 
 
-func _on_skill_used(user: Player) -> void:
+func _on_skill_used(user: Player, skill: SkillData) -> void:
 	if effects == null:
 		return
 	effects.burst(user.global_position, user.display_color, BURST_SKILL_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE,
 		PARTICLE_LIFE)
-	match user.character.skill:
-		CharacterData.SkillKind.DASH:
+	match skill.kind:
+		SkillData.Kind.DASH:
 			sfx.play(&"dash", user.global_position)
-		CharacterData.SkillKind.SHIELD:
+		SkillData.Kind.SHIELD:
 			sfx.play(&"shield", user.global_position)
-		CharacterData.SkillKind.DUAL_WIELD:
+		SkillData.Kind.DUAL_WIELD:
 			sfx.play(&"dual", user.global_position)
+		SkillData.Kind.TRANSFORM:
+			sfx.play(&"transform", user.global_position)
+			effects.burst(user.global_position, Color.WHITE, BURST_EXPLOSION_COUNT, BURST_DEATH_SPEED,
+				PARTICLE_SIZE * 2.0, PARTICLE_LIFE * 2.0)
+			if user == local_player:
+				add_shake(SHAKE_EXPLOSION)
 
 
 func _process(delta: float) -> void:

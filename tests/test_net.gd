@@ -15,12 +15,14 @@ func test_input_roundtrip() -> void:
 	var f := _frame(42, Vector2(0.5, -0.5), true)
 	f.aim_vec = Vector2.UP
 	f.skill = true
+	f.special = true
 	var g: InputFrame = InputFrame.from_array(f.to_array())
 	assert_eq(g.seq, 42)
 	assert_eq(g.move_vec, Vector2(0.5, -0.5))
 	assert_eq(g.aim_vec, Vector2.UP)
 	assert_true(g.fire)
 	assert_true(g.skill)
+	assert_true(g.special)
 	assert_false(g.swap)
 
 

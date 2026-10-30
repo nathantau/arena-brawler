@@ -1,14 +1,18 @@
 class_name LobbyPanel
 extends PanelContainer
-## The loading room, shown full screen during the lobby phase: pick a character, then a starting
-## weapon from the ones that character can carry (next to its signature weapon), then Ready.
+## The loading room, shown full screen during the lobby phase: pick a character, a starting
+## weapon (next to its signature weapon) and a special (next to everyone's Dash), then Ready.
+## Header and footer stay put; the three steps scroll between them on short screens.
 ## Also shows mode + arena, the roster with ready state and why the match can't start yet.
 ## Cards are rebuilt when the local character changes; highlights follow the synced state.
 
 const SPACING: int = 10
 const BUTTON_MIN_SIZE: Vector2 = Vector2(170, 52)
 const READY_MIN_SIZE: Vector2 = Vector2(240, 64)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(210, 196)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(186, 196)
+## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
+const SKILL_ROW_SIZE: Vector2 = Vector2(330, 66)
+const SKILL_ICON_SIZE: Vector2 = Vector2(45, 45)
 const WEAPON_CARD_SIZE: Vector2 = Vector2(182, 128)
 const CHARACTER_ART_SCALE: float = 2.0
 const WEAPON_ART_SCALE: float = 2.0
@@ -24,11 +28,13 @@ var _character_cards: Dictionary[StringName, Button] = {}
 var _weapon_row: HBoxContainer
 var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
+var _special_row: VBoxContainer
+var _special_cards: Dictionary[StringName, Button] = {}
 var _rows: HFlowContainer
 var _blocker: Label
 var _ready_button: Button
-## Last highlighted (character, weapon), so _process only restyles on change.
-var _shown_pick: Array[StringName] = [&"", &""]
+## Last highlighted (character, weapon, special), so _process only restyles on change.
+var _shown_pick: Array[StringName] = [&"", &"", &""]
 
 
 func _ready() -> void:
@@ -54,21 +60,43 @@ func _ready() -> void:
 	_arena_button.pressed.connect(func() -> void:
 		arena.arena_requested.emit((arena.match_state.arena_index + 1) % ArenaLayouts.count()))
 
-	_label(box, &"HeaderLabel").text = "1 · Choose your fighter"
-	var character_row := _row(box)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	box.add_child(scroll)
+	var steps := VBoxContainer.new()
+	steps.add_theme_constant_override("separation", SPACING)
+	steps.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(steps)
+
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", SPACING * 2)
+	steps.add_child(top)
+	var fighters := VBoxContainer.new()
+	fighters.add_theme_constant_override("separation", SPACING)
+	top.add_child(fighters)
+	_label(fighters, &"HeaderLabel").text = "1 · Choose your fighter"
+	var character_row := _row(fighters)
 	for c: CharacterData in arena.characters.ordered:
 		var card: Button = _card(character_row, CHARACTER_CARD_SIZE, c.sprite_frames().get_frame_texture(&"idle", 0),
-			CHARACTER_ART_SCALE, [c.display_name, "%s · HP %d" % [c.skill_name, c.max_hp]])
+			CHARACTER_ART_SCALE, [c.display_name, "HP %d · Armor %d" % [c.max_hp, c.max_armor]])
 		var id: StringName = c.id
 		card.pressed.connect(func() -> void: arena.character_requested.emit(id))
 		_character_cards[id] = card
 
-	_label(box, &"HeaderLabel").text = "2 · Choose your weapon"
-	_weapon_row = _row(box)
+	var specials := VBoxContainer.new()
+	specials.add_theme_constant_override("separation", SPACING)
+	top.add_child(specials)
+	_label(specials, &"HeaderLabel").text = "2 · Choose your special"
+	_special_row = VBoxContainer.new()
+	_special_row.add_theme_constant_override("separation", SPACING)
+	specials.add_child(_special_row)
+
+	_label(steps, &"HeaderLabel").text = "3 · Choose your weapon"
+	_weapon_row = _row(steps)
 
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", SPACING)
-	footer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(footer)
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -115,6 +143,8 @@ func _refresh() -> void:
 		_character_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[0] else &"Card"
 	for id: StringName in _weapon_cards:
 		_weapon_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[1] else &"Card"
+	for id: StringName in _special_cards:
+		_special_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[2] else &"Card"
 
 	for child: Node in _rows.get_children():
 		child.queue_free()
@@ -160,14 +190,58 @@ func _build_weapon_cards(c: CharacterData) -> void:
 		card.pressed.connect(func() -> void: arena.weapon_requested.emit(id))
 		_weapon_cards[id] = card
 
+	_special_cards.clear()
+	for child: Node in _special_row.get_children():
+		child.queue_free()
+	var dash: SkillData = SkillCatalog.shared().dash()
+	var dash_card: Button = _skill_row(dash, "Everyone has it")
+	dash_card.disabled = true
+	dash_card.theme_type_variation = &"CardGold"
+	for sk: SkillData in SkillCatalog.shared().specials_for(c):
+		var card: Button = _skill_row(sk, "%s · %ds" % [sk.blurb, roundi(sk.cooldown)])
+		var sid: StringName = sk.id
+		card.pressed.connect(func() -> void: arena.special_requested.emit(sid))
+		_special_cards[sid] = card
 
-## The local player's (character id, starting weapon id); the weapon is loadout slot 1.
+
+## A compact special row: icon on the left, bold name over a dim blurb.
+func _skill_row(sk: SkillData, blurb: String) -> Button:
+	var b := _button(_special_row, SKILL_ROW_SIZE)
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, SPACING)
+	row.add_theme_constant_override("separation", SPACING)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(row)
+	var pic := TextureRect.new()
+	pic.texture = sk.icon
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.custom_minimum_size = SKILL_ICON_SIZE
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(pic)
+	var text := VBoxContainer.new()
+	text.alignment = BoxContainer.ALIGNMENT_CENTER
+	text.add_theme_constant_override("separation", 0)
+	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(text)
+	var name_label: Label = _label(text, &"Label")
+	name_label.add_theme_font_override("font", UiStyle.bold())
+	name_label.text = sk.display_name
+	var blurb_label: Label = _label(text, &"DimLabel")
+	blurb_label.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	blurb_label.text = blurb
+	for l: Label in [name_label, blurb_label]:
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return b
+
+
+## The local player's (character id, starting weapon id, special id); the weapon is loadout slot 1.
 func _pick() -> Array[StringName]:
 	var me: Player = arena.local_player
 	if me == null:
-		return [&"", &""]
+		return [&"", &"", &""]
 	var slots: Array[WeaponState] = me.loadout.slots
-	return [me.character.id, slots[1].data.id if slots.size() > 1 else &""]
+	return [me.character.id, slots[1].data.id if slots.size() > 1 else &"", me.special.data.id]
 
 
 func _is_ready() -> bool:

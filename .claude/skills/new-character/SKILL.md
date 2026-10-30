@@ -39,15 +39,15 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
 3. **Look at it.** Paste the sheet on a dark background, scale x8 with NEAREST, save to the
    scratchpad and Read the PNG. Iterate until it reads at a glance (silhouette, face, signature item).
    Also check the walk frames (6-13) as a GIF and that loops are smooth.
-4. Create `data/characters/<id>.tres` (copy an existing one): `id`, `display_name`, `skill_name`,
-   stats, `skill` (existing `SkillKind` only — a new skill kind is gameplay work, ask first),
+4. Create `data/characters/<id>.tres` (copy an existing one): `id`, `display_name`, stats,
+   optional `signature_skill` (a `data/skills/*.tres` tagged with the character's id; reuse an existing
+   `SkillData.Kind` — a new kind is gameplay work, ask first; TRANSFORM forms go in generate.py `FORMS`),
    `sprite_sheet = ExtResource(...)` pointing at `res://assets/sprites/<id>.png`, `weapon_tags` (own id + 2-3
    weapon classes, so every pickup stays shared by 2+ characters) and `signature_weapon`.
    Signature weapon: draw it in `WEAPONS` (48x24, pointing right, grip at `GRIP`), add
    `data/weapons/<id>_<weapon>.tres` with `pickup = false`, `energy_cost = 0`, `tags = [&"<id>"]`, and give it one
    distinct behaviour (existing fields: pierce, bounces, splash, melee slam/thrust, reflects).
-5. Update the character count in `tests/test_skills_and_movement.gd`
-   (`test_catalog_covers_every_skill_kind`).
+5. Update the character count in `tests/test_skills_and_movement.gd` (`test_catalog_and_skills`).
 6. `godot --headless --import`, then run GUT (all must pass).
 7. In-game check: `godot --path . --write-movie <scratch>/f.png --fixed-fps 30 --quit-after 120 -- --offline --autopilot --touch --character <id>`
    and Read a frame.

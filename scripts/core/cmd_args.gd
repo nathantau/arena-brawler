@@ -13,6 +13,7 @@ extends RefCounted
 ##   --arena N                        (server / offline) starting arena index (ArenaLayouts.NAMES)
 ##   --character ID                   (client / offline) pick a character, e.g. warden
 ##   --weapon ID                      (client / offline) pick a starting weapon, e.g. sword
+##   --special ID                     (client / offline) pick a special skill, e.g. great_ape
 
 var server: bool = false
 var port: int = Constants.DEFAULT_PORT
@@ -27,6 +28,7 @@ var time_limit: float = Constants.MATCH_TIME_LIMIT
 var arena_index: int = 0
 var character: StringName = &""
 var weapon: StringName = &""
+var special: StringName = &""
 
 
 static func parse(args: PackedStringArray) -> CmdArgs:
@@ -63,6 +65,9 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				i += 1
 			"--weapon":
 				a.weapon = StringName(next)
+				i += 1
+			"--special":
+				a.special = StringName(next)
 				i += 1
 			"--arena":
 				a.arena_index = clampi(next.to_int(), 0, ArenaLayouts.count() - 1)

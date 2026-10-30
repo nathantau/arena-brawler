@@ -3,7 +3,7 @@ extends Control
 ## Multi-touch mobile controls inside the safe area, drawn with the pixel UI kit:
 ## - joystick anywhere on the left part of the screen (base fixed where you touch until release)
 ## - attack button (hold = fire with auto-aim; drag off-centre = manual aim)
-## - skill button (skill icon, cooldown sweep + seconds), swap button (shows the other weapon)
+## - dash and special buttons (skill icon, cooldown sweep + seconds), swap button (shows the other weapon)
 ## Touches that start on a visible `blockers` control (e.g. lobby buttons) are left to the GUI.
 
 const JOYSTICK_ZONE_FRACTION: float = 0.45
@@ -17,6 +17,10 @@ const ATTACK_MARGIN: Vector2 = Vector2(96, 92)
 const SKILL_RADIUS: float = 50.0
 const SKILL_SCALE: float = 3.0
 const SKILL_OFFSET: Vector2 = Vector2(-152, 24)
+## The special sits above the dash, left of the swap button.
+const SPECIAL_RADIUS: float = 50.0
+const SPECIAL_SCALE: float = 3.0
+const SPECIAL_OFFSET: Vector2 = Vector2(-140, -104)
 const SWAP_RADIUS: float = 33.0
 const SWAP_SCALE: float = 2.0
 const SWAP_OFFSET: Vector2 = Vector2(-14, -128)
@@ -27,11 +31,6 @@ const SEGMENTS: int = 32
 const IDLE_ALPHA: float = 0.75
 const COLOR_COOLDOWN: Color = Color(0.1, 0.1, 0.18, 0.7)
 const COLOR_AIM: Color = Color(1, 0.45, 0.4, 0.85)
-const SKILL_ICONS: Dictionary[CharacterData.SkillKind, String] = {
-	CharacterData.SkillKind.DASH: "icon_dash",
-	CharacterData.SkillKind.SHIELD: "icon_barrier",
-	CharacterData.SkillKind.DUAL_WIELD: "icon_dual",
-}
 const NO_FINGER: int = -1
 
 const TOUCH_FLAG: String = "--touch"
@@ -43,6 +42,7 @@ var attack_held: bool = false
 ## Zero unless the attack finger has been dragged past the deadzone.
 var attack_aim: Vector2 = Vector2.ZERO
 var skill_held: bool = false
+var special_held: bool = false
 var swap_held: bool = false
 
 var _joy_finger: int = NO_FINGER
@@ -50,6 +50,7 @@ var _joy_origin: Vector2 = Vector2.ZERO
 var _joy_pos: Vector2 = Vector2.ZERO
 var _attack_finger: int = NO_FINGER
 var _skill_finger: int = NO_FINGER
+var _special_finger: int = NO_FINGER
 var _swap_finger: int = NO_FINGER
 
 
@@ -74,6 +75,10 @@ func _attack_center() -> Vector2:
 
 func _skill_center() -> Vector2:
 	return _attack_center() + SKILL_OFFSET
+
+
+func _special_center() -> Vector2:
+	return _attack_center() + SPECIAL_OFFSET
 
 
 func _swap_center() -> Vector2:
@@ -116,6 +121,9 @@ func _on_press(finger: int, p: Vector2) -> void:
 	elif _skill_finger == NO_FINGER and _hits(p, _skill_center(), SKILL_RADIUS):
 		_skill_finger = finger
 		skill_held = true
+	elif _special_finger == NO_FINGER and _hits(p, _special_center(), SPECIAL_RADIUS):
+		_special_finger = finger
+		special_held = true
 	elif _swap_finger == NO_FINGER and _hits(p, _swap_center(), SWAP_RADIUS):
 		_swap_finger = finger
 		swap_held = true
@@ -150,6 +158,9 @@ func _on_release(finger: int) -> void:
 	elif finger == _skill_finger:
 		_skill_finger = NO_FINGER
 		skill_held = false
+	elif finger == _special_finger:
+		_special_finger = NO_FINGER
+		special_held = false
 	elif finger == _swap_finger:
 		_swap_finger = NO_FINGER
 		swap_held = false
@@ -178,19 +189,10 @@ func _draw() -> void:
 	_round(ac, "round_fire", ATTACK_SCALE, attack_held)
 	UiStyle.draw_icon(self, UiStyle.tex("icon_fire"), ac + _drop(attack_held), ATTACK_SCALE)
 
-	# Skill + cooldown sweep
-	var sc: Vector2 = _skill_center()
-	_round(sc, "round", SKILL_SCALE, skill_held)
+	# Dash and special, with cooldown sweeps
 	if player != null:
-		var sk: CharacterSkill = player.skill
-		UiStyle.draw_icon(self, UiStyle.tex(SKILL_ICONS[player.character.skill]), sc + _drop(skill_held), SKILL_SCALE)
-		if sk.is_active():
-			draw_arc(sc, SKILL_RADIUS - 2.0, 0.0, TAU, SEGMENTS, UiStyle.C_TEAL_L, 4.0)
-		elif not sk.is_ready():
-			draw_arc(sc, SKILL_RADIUS * 0.45, -PI * 0.5, -PI * 0.5 + TAU * sk.cooldown_fraction(), SEGMENTS,
-				COLOR_COOLDOWN, SKILL_RADIUS * 0.9)
-			UiStyle.draw_text(self, sc + Vector2(0, UiStyle.SIZE_HEADING * 0.35), str(ceili(sk.cooldown_remaining)),
-				UiStyle.SIZE_HEADING, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, -1.0, true)
+		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.dash, skill_held)
+		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.special, special_held)
 
 	# Swap: the weapon you'd switch to
 	var wc: Vector2 = _swap_center()
@@ -200,6 +202,20 @@ func _draw() -> void:
 		var next: WeaponData = lo.slots[(lo.active_index + 1) % lo.slots.size()].data
 		UiStyle.draw_icon(self, next.sprite, wc + _drop(swap_held), 1.0)
 	UiStyle.draw_icon(self, UiStyle.tex("icon_swap"), wc + Vector2(SWAP_RADIUS * 0.6, SWAP_RADIUS * 0.6), 1.0)
+
+
+func _skill_button(c: Vector2, radius: float, scale_px: float, sk: CharacterSkill, held: bool) -> void:
+	_round(c, "round", scale_px, held)
+	UiStyle.draw_icon(self, sk.data.icon, c + _drop(held), scale_px)
+	if sk.is_active():
+		draw_arc(c, radius - 2.0, 0.0, TAU, SEGMENTS, UiStyle.C_TEAL_L, 4.0)
+	elif not sk.is_ready():
+		draw_arc(c, radius * 0.45, -PI * 0.5, -PI * 0.5 + TAU * sk.cooldown_fraction(), SEGMENTS,
+			COLOR_COOLDOWN, radius * 0.9)
+		var secs: String = str(ceili(sk.cooldown_remaining))
+		var w: float = UiStyle.text_width(secs, UiStyle.SIZE_HEADING, true)
+		UiStyle.draw_text(self, c + Vector2(-w * 0.5, UiStyle.SIZE_HEADING * 0.35), secs, UiStyle.SIZE_HEADING,
+			UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
 
 
 func _round(center: Vector2, art: String, scale_px: float, pressed: bool) -> void:

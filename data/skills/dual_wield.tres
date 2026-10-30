@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_dual.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"dual_wield"
+display_name = "Dual Wield"
+kind = 2
+special = true
+blurb = "Every shot fires twice"
+tags = Array[StringName]([&"light"])
+cooldown = 9.0
+duration = 4.0

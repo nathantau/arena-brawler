@@ -1,0 +1,52 @@
+class_name SkillData
+extends Resource
+## Data-driven skill. One .tres per skill in res://data/skills/. Every player has the shared
+## Dash (`special = false`) plus one special picked in the loading room. Like weapons, who may
+## pick a special is decided by tags (CharacterData.weapon_tags); a character's own id as the
+## only tag makes it that character's signature.
+
+## DASH: burst of speed with i-frames. SHIELD: a barrier in front that blocks enemy shots.
+## DUAL_WIELD: every shot fires a second, offset volley. TRANSFORM: a stronger form for a while
+## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
+enum Kind { DASH, SHIELD, DUAL_WIELD, TRANSFORM }
+
+@export var id: StringName = &""
+@export var display_name: String = ""
+@export var kind: Kind = Kind.DASH
+## Pickable in the loading room's special slot (false for the shared Dash).
+@export var special: bool = true
+@export var tags: Array[StringName] = []
+@export var cooldown: float = 2.0
+## How long it stays active (dash burst, barrier up, dual-wield window, transformation).
+@export var duration: float = 0.2
+## UI icon (assets/ui/icon_*.png).
+@export var icon: Texture2D
+## Shown on the loading-room card.
+@export var blurb: String = ""
+
+@export_group("Dash")
+@export var dash_speed: float = 950.0
+@export var dash_iframes: float = 0.22
+
+@export_group("Shield")
+## Length of the deployed barrier and how far in front of the player it appears.
+@export var shield_width: float = 110.0
+@export var shield_distance: float = 44.0
+
+@export_group("Transform")
+## Sheet laid out like a character's (idle, hit, walk); drawn `form_scale` x the usual size.
+@export var form_sprite_sheet: Texture2D
+@export var form_scale: float = 1.0
+## Fired instead of the loadout while transformed (its cooldown lives on the skill).
+@export var form_weapon: WeaponData
+## Incoming damage is multiplied by this while transformed.
+@export_range(0.0, 1.0) var form_damage_scale: float = 1.0
+@export var form_speed_scale: float = 1.0
+
+var _form_frames: SpriteFrames
+
+
+func form_frames() -> SpriteFrames:
+	if _form_frames == null and form_sprite_sheet != null:
+		_form_frames = CharacterData.frames_from_sheet(form_sprite_sheet)
+	return _form_frames

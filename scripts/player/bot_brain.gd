@@ -30,6 +30,7 @@ func get_input(player: Player, delta: float) -> InputFrame:
 	_frame.aim_vec = Vector2.ZERO
 	_frame.fire = false
 	_frame.skill = false
+	_frame.special = false
 
 	var target: Player = _nearest_visible_enemy(player)
 	if target != null:
@@ -45,6 +46,7 @@ func get_input(player: Player, delta: float) -> InputFrame:
 		_frame.fire = true
 		# Skills are edge-triggered: a one-frame press now and then.
 		_frame.skill = rng.randf() < Constants.BOT_SKILL_CHANCE_PER_SEC * delta
+		_frame.special = rng.randf() < Constants.BOT_SPECIAL_CHANCE_PER_SEC * delta
 	return _frame
 
 

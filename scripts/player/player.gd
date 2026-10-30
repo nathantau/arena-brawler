@@ -7,15 +7,16 @@ extends CharacterBody2D
 signal died(victim: Player, killer_id: int)
 signal shot_fired(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool)
 ## Predicted/authoritative skill activation (not emitted during replay). For effects/SFX.
-signal skill_used(user: Player)
+signal skill_used(user: Player, skill: SkillData)
 
 ## Layout of capture_state() / apply_state() arrays sent in snapshots.
 enum StateField {
 	ID, POSITION, VELOCITY, FACING,
 	HP, ARMOR, ENERGY, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
-	CHARACTER, SKILL_COOLDOWN, SKILL_ACTIVE, SKILL_DIRECTION, SKILL_ANCHOR,
+	CHARACTER, DASH_COOLDOWN, DASH_ACTIVE, DASH_DIRECTION,
+	SPECIAL_ID, SPECIAL_COOLDOWN, SPECIAL_ACTIVE, SPECIAL_DIRECTION, SPECIAL_ANCHOR, SPECIAL_WEAPON_COOLDOWN,
 	ACTIVE_SLOT, WEAPON_IDS, WEAPON_COOLDOWNS,
-	PREV_SKILL, PREV_SWAP, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ,
+	PREV_DASH, PREV_SPECIAL, PREV_SWAP, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ,
 	COUNT,
 }
 
@@ -63,7 +64,9 @@ var loadout: Loadout
 var default_weapons: Array[WeaponData] = []
 ## Picked in the loading room: carried next to the signature weapon from every spawn.
 var starting_weapon: WeaponData
-var skill := CharacterSkill.new()
+## The shared Dash and the special picked in the loading room.
+var dash: CharacterSkill
+var special: CharacterSkill
 var facing: Vector2 = Vector2.RIGHT
 ## Null for client-side remote players (they are positioned by interpolation).
 var controller: PlayerController
@@ -79,7 +82,8 @@ var visual_offset: Vector2 = Vector2.ZERO
 
 var _shape: CollisionShape2D
 var _shield := ShieldWall.new()
-var _prev_skill: bool = false
+var _prev_dash: bool = false
+var _prev_special: bool = false
 var _prev_swap: bool = false
 var _hit_flash: float = 0.0
 ## Attack animation time left, and its full length (depends on the weapon used).
@@ -119,17 +123,24 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	set_character(p_character)
 
 
-## Switch character (lobby pick or a snapshot saying so): new stat maxes, fresh skill.
+## Switch character (lobby pick or a snapshot saying so): new stat maxes, fresh skills. Keeps
+## the picked special and starting weapon if the new character can use them.
 func set_character(data: CharacterData) -> void:
 	character = data
 	stats = PlayerStats.new(data.max_hp, data.max_armor, data.max_energy)
-	skill = CharacterSkill.new(data)
-	_shield.sync(skill, dead)
+	dash = CharacterSkill.new(SkillCatalog.shared().dash())
+	var keep: SkillData = special.data if special != null and data.can_use_skill(special.data) else null
+	set_special(keep if keep != null else SkillCatalog.shared().specials_for(data)[0])
 	_sprite.sprite_frames = data.sprite_frames()
 	_sprite.play(&"idle")
 	if starting_weapon != null and not data.can_use(starting_weapon):
 		starting_weapon = null
 	_reset_loadout()
+
+
+func set_special(data: SkillData) -> void:
+	special = CharacterSkill.new(data)
+	_shield.sync(special, dead)
 
 
 func set_starting_weapon(weapon: WeaponData) -> void:
@@ -165,6 +176,11 @@ func _process(delta: float) -> void:
 		anim = &"hit"
 	elif velocity.length() > Constants.SPRITE_WALK_MIN_SPEED:
 		anim = &"walk"
+	var frames: SpriteFrames = special.data.form_frames() if special.is_transformed() else character.sprite_frames()
+	if _sprite.sprite_frames != frames:
+		_sprite.sprite_frames = frames
+		_sprite.scale = Vector2.ONE * Constants.SPRITE_SCALE * (special.data.form_scale if special.is_transformed() else 1.0)
+		_sprite.play(anim)
 	if _sprite.animation != anim:
 		_sprite.play(anim)
 	_sprite.position = visual_offset
@@ -181,40 +197,64 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if dead:
 		return
 	stats.tick(delta)
-	skill.tick(delta)
+	dash.tick(delta)
+	special.tick(delta)
 	loadout.tick(delta)
 	if frozen:
 		# Keep edge state current so a button held through the countdown doesn't fire on release.
 		_prev_swap = input.swap
-		_prev_skill = input.skill
+		_prev_dash = input.skill
+		_prev_special = input.special
 		velocity = Vector2.ZERO
-		_shield.sync(skill, dead)
+		_shield.sync(special, dead)
 		return
 
 	if input.swap and not _prev_swap:
 		loadout.swap()
-	if input.skill and not _prev_skill:
-		if skill.try_activate(_skill_direction(input), global_position, stats) and not replay:
-			skill_used.emit(self)
+	if input.skill and not _prev_dash:
+		_activate(dash, input, replay)
+	if input.special and not _prev_special:
+		_activate(special, input, replay)
 	_prev_swap = input.swap
-	_prev_skill = input.skill
+	_prev_dash = input.skill
+	_prev_special = input.special
 
-	velocity = MovementSim.step_velocity(velocity, input.move_vec, skill, character.move_speed, delta)
+	var mover: CharacterSkill = special if special.is_dashing() else dash
+	var speed: float = character.move_speed * (special.data.form_speed_scale if special.is_transformed() else 1.0)
+	velocity = MovementSim.step_velocity(velocity, input.move_vec, mover, speed, delta)
 	move_and_slide()
-	_shield.sync(skill, dead)
+	_shield.sync(special, dead)
 
 	if input.aim_vec.length_squared() > 0.0:
 		facing = input.aim_vec.normalized()
 	elif input.move_vec.length() > Constants.INPUT_DEADZONE:
 		facing = input.move_vec.normalized()
 
-	if input.fire and not skill.is_dashing():
+	if input.fire and not is_dashing():
 		_try_fire(input.seq, replay)
 
 
+func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
+	if slot.try_activate(_skill_direction(slot.data, input), global_position, stats) and not replay:
+		skill_used.emit(self, slot.data)
+
+
+func is_dashing() -> bool:
+	return dash.is_dashing() or special.is_dashing()
+
+
+func is_dual_wielding() -> bool:
+	return special.is_dual_wielding()
+
+
+## The weapon FIRE uses: the transformed form's own weapon, else the loadout's active one.
+func held_weapon() -> WeaponState:
+	return special.form_weapon if special.is_transformed() else loadout.active()
+
+
 ## Dash goes where you're moving (else where you face); the barrier goes where you aim.
-func _skill_direction(input: InputFrame) -> Vector2:
-	if character.skill == CharacterData.SkillKind.DASH and input.move_vec.length() > Constants.INPUT_DEADZONE:
+func _skill_direction(data: SkillData, input: InputFrame) -> Vector2:
+	if data.kind == SkillData.Kind.DASH and input.move_vec.length() > Constants.INPUT_DEADZONE:
 		return input.move_vec
 	if input.aim_vec.length_squared() > 0.0:
 		return input.aim_vec
@@ -222,18 +262,18 @@ func _skill_direction(input: InputFrame) -> Vector2:
 
 
 func _try_fire(seq: int, replay: bool) -> void:
-	var weapon: WeaponState = loadout.active()
+	var weapon: WeaponState = held_weapon()
 	if not weapon.try_fire(stats) or replay:
 		return
 	var origin: Vector2 = global_position
-	var dual: bool = skill.is_dual_wielding()
+	var dual: bool = is_dual_wielding()
 	projectiles.fire_shot(player_id, seq, origin, facing, weapon.data, match_seed, dual, character.dual_offset)
 	play_recoil()
 	shot_fired.emit(self, seq, origin, facing, weapon.data.id, dual)
 
 
 func play_recoil() -> void:
-	_recoil_len = MELEE_ANIM_TIME if loadout.active().data.kind == WeaponData.Kind.MELEE else RECOIL_TIME
+	_recoil_len = MELEE_ANIM_TIME if held_weapon().data.kind == WeaponData.Kind.MELEE else RECOIL_TIME
 	_recoil = _recoil_len
 
 
@@ -249,6 +289,8 @@ func can_be_hit() -> bool:
 
 ## Authoritative damage entry point (offline / server only). Returns damage dealt.
 func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int) -> int:
+	if special.is_transformed():
+		damage = maxi(1, roundi(damage * special.data.form_damage_scale))
 	var dealt: int = stats.apply_damage(damage)
 	if dealt <= 0:
 		return 0
@@ -271,7 +313,8 @@ func respawn(at: Vector2) -> void:
 	velocity = Vector2.ZERO
 	stats.reset()
 	stats.invulnerable_time = Constants.RESPAWN_IFRAME_TIME
-	skill.reset()
+	dash.reset()
+	special.reset()
 	loadout = Loadout.new(default_weapons)
 	_set_dead(false)
 
@@ -290,7 +333,7 @@ func _set_dead(value: bool) -> void:
 	dead = value
 	visible = not value
 	_shape.set_deferred("disabled", value)
-	_shield.sync(skill, dead)
+	_shield.sync(special, dead)
 
 
 func capture_state() -> Array:
@@ -307,14 +350,20 @@ func capture_state() -> Array:
 	s[StateField.REGEN_ACCUM] = stats.regen_accum
 	s[StateField.INVULNERABLE] = stats.invulnerable_time
 	s[StateField.CHARACTER] = character.id
-	s[StateField.SKILL_COOLDOWN] = skill.cooldown_remaining
-	s[StateField.SKILL_ACTIVE] = skill.active_remaining
-	s[StateField.SKILL_DIRECTION] = skill.direction
-	s[StateField.SKILL_ANCHOR] = skill.anchor
+	s[StateField.DASH_COOLDOWN] = dash.cooldown_remaining
+	s[StateField.DASH_ACTIVE] = dash.active_remaining
+	s[StateField.DASH_DIRECTION] = dash.direction
+	s[StateField.SPECIAL_ID] = special.data.id
+	s[StateField.SPECIAL_COOLDOWN] = special.cooldown_remaining
+	s[StateField.SPECIAL_ACTIVE] = special.active_remaining
+	s[StateField.SPECIAL_DIRECTION] = special.direction
+	s[StateField.SPECIAL_ANCHOR] = special.anchor
+	s[StateField.SPECIAL_WEAPON_COOLDOWN] = special.form_weapon.cooldown if special.form_weapon != null else 0.0
 	s[StateField.ACTIVE_SLOT] = loadout.active_index
 	s[StateField.WEAPON_IDS] = loadout.weapon_ids()
 	s[StateField.WEAPON_COOLDOWNS] = loadout.cooldowns()
-	s[StateField.PREV_SKILL] = _prev_skill
+	s[StateField.PREV_DASH] = _prev_dash
+	s[StateField.PREV_SPECIAL] = _prev_special
 	s[StateField.PREV_SWAP] = _prev_swap
 	s[StateField.DEAD] = dead
 	s[StateField.RESPAWN_TIMER] = respawn_timer
@@ -340,17 +389,27 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	stats.time_since_damage = s[StateField.TIME_SINCE_DAMAGE]
 	stats.regen_accum = s[StateField.REGEN_ACCUM]
 	stats.invulnerable_time = s[StateField.INVULNERABLE]
-	skill.cooldown_remaining = s[StateField.SKILL_COOLDOWN]
-	skill.active_remaining = s[StateField.SKILL_ACTIVE]
-	skill.direction = s[StateField.SKILL_DIRECTION]
-	skill.anchor = s[StateField.SKILL_ANCHOR]
+	if s[StateField.SPECIAL_ID] != special.data.id:
+		var sd: SkillData = SkillCatalog.shared().get_skill(s[StateField.SPECIAL_ID])
+		if sd != null:
+			set_special(sd)
+	dash.cooldown_remaining = s[StateField.DASH_COOLDOWN]
+	dash.active_remaining = s[StateField.DASH_ACTIVE]
+	dash.direction = s[StateField.DASH_DIRECTION]
+	special.cooldown_remaining = s[StateField.SPECIAL_COOLDOWN]
+	special.active_remaining = s[StateField.SPECIAL_ACTIVE]
+	special.direction = s[StateField.SPECIAL_DIRECTION]
+	special.anchor = s[StateField.SPECIAL_ANCHOR]
+	if special.form_weapon != null:
+		special.form_weapon.cooldown = s[StateField.SPECIAL_WEAPON_COOLDOWN]
 	loadout.sync(s[StateField.WEAPON_IDS], s[StateField.WEAPON_COOLDOWNS], s[StateField.ACTIVE_SLOT], catalog)
-	_prev_skill = s[StateField.PREV_SKILL]
+	_prev_dash = s[StateField.PREV_DASH]
+	_prev_special = s[StateField.PREV_SPECIAL]
 	_prev_swap = s[StateField.PREV_SWAP]
 	respawn_timer = s[StateField.RESPAWN_TIMER]
 	last_input_seq = s[StateField.LAST_INPUT_SEQ]
 	_set_dead(s[StateField.DEAD])
-	_shield.sync(skill, dead)
+	_shield.sync(special, dead)
 	return true
 
 
@@ -361,7 +420,7 @@ func _draw() -> void:
 	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
 	draw_circle(Vector2.ZERO, r, SHADOW_COLOR)
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, CIRCLE_SEGMENTS, display_color, RING_WIDTH)
-	if skill.is_dual_wielding():
+	if is_dual_wielding():
 		draw_arc(Vector2.ZERO, r + DUAL_GLOW_PAD, 0.0, TAU, CIRCLE_SEGMENTS, gun_color, RING_WIDTH)
 	if targeted:
 		draw_arc(Vector2.ZERO, r + TARGET_RING_PAD, 0.0, TAU, CIRCLE_SEGMENTS, COLOR_TARGET, RING_WIDTH)
@@ -378,7 +437,7 @@ func _draw_overlay() -> void:
 
 
 func _draw_guns(ci: CanvasItem) -> void:
-	if skill.is_dual_wielding():
+	if is_dual_wielding():
 		var side: Vector2 = facing.orthogonal() * character.dual_offset
 		_draw_gun(ci, side)
 		_draw_gun(ci, -side)
@@ -387,7 +446,9 @@ func _draw_guns(ci: CanvasItem) -> void:
 
 
 func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
-	var w: WeaponData = loadout.active().data
+	var w: WeaponData = held_weapon().data
+	if w.sprite == null:
+		return  # e.g. a transformed form's fists
 	# Mirror vertically when aiming left so the grip stays below the barrel.
 	var flip_v: float = -1.0 if facing.x < 0.0 else 1.0
 	var t: float = _recoil / _recoil_len  # 1 the moment the attack starts, 0 at rest

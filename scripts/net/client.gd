@@ -13,6 +13,7 @@ var debug: bool = false
 ## Requested from the server on joining (--character, --weapon).
 var wanted_character: StringName = &""
 var wanted_weapon: StringName = &""
+var wanted_special: StringName = &""
 
 var _history := InputHistory.new()
 var _clock := RenderClock.new()
@@ -91,6 +92,8 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 		session.rpc_select_character.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, id))
 	arena.weapon_requested.connect(func(id: StringName) -> void:
 		session.rpc_select_weapon.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, id))
+	arena.special_requested.connect(func(id: StringName) -> void:
+		session.rpc_select_special.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, id))
 	for entry: Array in roster:
 		_add_player(entry[0], entry[1], entry[2])
 		arena.scores.kills[entry[0]] = entry[3]
@@ -100,6 +103,8 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 		arena.character_requested.emit(wanted_character)
 	if wanted_weapon != &"":
 		arena.weapon_requested.emit(wanted_weapon)
+	if wanted_special != &"":
+		arena.special_requested.emit(wanted_special)
 	if autopilot:
 		arena.ready_requested.emit(true)
 

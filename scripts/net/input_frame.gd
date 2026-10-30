@@ -1,12 +1,13 @@
 class_name InputFrame
 extends RefCounted
-## The only thing a client is allowed to send: {seq, move_vec, aim_vec, fire, skill, swap}.
+## The only thing a client is allowed to send: {seq, move_vec, aim_vec, fire, skill (dash), swap, special}.
 ## Buttons are held states; the simulation derives press edges itself so a dropped
 ## packet can't eat a dash. Wire format: [seq, move_vec, aim_vec, flags].
 
 const FLAG_FIRE: int = 1
 const FLAG_SKILL: int = 2
 const FLAG_SWAP: int = 4
+const FLAG_SPECIAL: int = 8
 const WIRE_SIZE: int = 4
 
 var seq: int = 0
@@ -15,6 +16,7 @@ var aim_vec: Vector2 = Vector2.ZERO
 var fire: bool = false
 var skill: bool = false
 var swap: bool = false
+var special: bool = false
 
 
 ## Clamp untrusted values into legal ranges (server must call this on received input).
@@ -35,10 +37,12 @@ func copy_from(other: InputFrame) -> void:
 	fire = other.fire
 	skill = other.skill
 	swap = other.swap
+	special = other.special
 
 
 func to_array() -> Array:
-	var flags: int = (FLAG_FIRE if fire else 0) | (FLAG_SKILL if skill else 0) | (FLAG_SWAP if swap else 0)
+	var flags: int = (FLAG_FIRE if fire else 0) | (FLAG_SKILL if skill else 0) | (FLAG_SWAP if swap else 0) \
+		| (FLAG_SPECIAL if special else 0)
 	return [seq, move_vec, aim_vec, flags]
 
 
@@ -58,5 +62,6 @@ static func from_array(data: Variant) -> InputFrame:
 	f.fire = flags & FLAG_FIRE != 0
 	f.skill = flags & FLAG_SKILL != 0
 	f.swap = flags & FLAG_SWAP != 0
+	f.special = flags & FLAG_SPECIAL != 0
 	f.sanitize()
 	return f

@@ -31,6 +31,7 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 	var fire_auto: bool = Input.is_action_pressed(&"fire_auto") or (touch_on and touch.attack_held)
 	_frame.fire = fire_mouse or fire_auto
 	_frame.skill = Input.is_action_pressed(&"skill") or (touch_on and touch.skill_held)
+	_frame.special = Input.is_action_pressed(&"special") or (touch_on and touch.special_held)
 	_frame.swap = Input.is_action_pressed(&"swap") or (touch_on and touch.swap_held)
 	_update_auto_target(player)
 	if autopilot:
@@ -73,6 +74,7 @@ func _is_visible(i: int) -> bool:
 func _drive_autopilot(player: Player) -> void:
 	_frame.fire = auto_target != null
 	_frame.skill = auto_target != null and _frame.seq % Constants.AUTOPILOT_SKILL_EVERY_FRAMES == 0
+	_frame.special = auto_target != null and _frame.seq % Constants.AUTOPILOT_SPECIAL_EVERY_FRAMES == 0
 	if auto_target != null:
 		_frame.move_vec = Vector2.RIGHT.rotated(_frame.seq * Constants.AUTOPILOT_TURN_PER_FRAME)
 		return

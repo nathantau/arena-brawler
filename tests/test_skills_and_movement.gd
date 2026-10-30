@@ -1,5 +1,5 @@
 extends GutTest
-## Character skills (dash / barrier / dual wield) and movement integration.
+## Skills (shared dash, specials: barrier / dual wield / Great Ape) and movement integration.
 
 const DT: float = 1.0 / 60.0
 
@@ -7,6 +7,7 @@ var characters: CharacterCatalog
 var flicker: CharacterData
 var warden: CharacterData
 var twinshot: CharacterData
+var skills: SkillCatalog
 
 
 func before_all() -> void:
@@ -14,79 +15,107 @@ func before_all() -> void:
 	flicker = characters.get_character(&"flicker")
 	warden = characters.get_character(&"warden")
 	twinshot = characters.get_character(&"twinshot")
+	skills = SkillCatalog.shared()
 
 
-func test_catalog_covers_every_skill_kind() -> void:
+func test_catalog_and_skills() -> void:
 	assert_eq(characters.ordered.size(), 4)
-	var kinds: Array = []
 	for c: CharacterData in characters.ordered:
-		kinds.append(c.skill)
 		assert_not_null(c.sprite_sheet, c.id)
 		assert_not_null(c.hand_sprite, c.id)
-		assert_true(c.max_hp > 0 and c.move_speed > 0.0 and c.skill_cooldown > 0.0 and c.skill_duration > 0.0, c.id)
+		assert_true(c.max_hp > 0 and c.move_speed > 0.0, c.id)
 		assert_ne(c.display_name, "")
+		assert_false(skills.specials_for(c).is_empty(), "%s has a special" % c.id)
 	assert_eq(characters.default_character(), flicker)
-	for kind: int in CharacterData.SkillKind.values():
-		assert_true(kinds.has(kind), "no character has skill %d" % kind)
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
+	var kinds: Array = []
+	for id: StringName in [&"dash", &"barrier", &"dual_wield", &"great_ape"]:
+		var sk: SkillData = skills.get_skill(id)
+		assert_not_null(sk, String(id))
+		assert_not_null(sk.icon, String(id))
+		assert_true(sk.cooldown > 0.0 and sk.duration > 0.0, String(id))
+		kinds.append(sk.kind)
+	for kind: int in SkillData.Kind.values():
+		assert_true(kinds.has(kind), "no skill of kind %d" % kind)
+
+
+func test_dash_is_everyones_and_not_a_special() -> void:
+	var dash: SkillData = skills.dash()
+	assert_false(dash.special)
+	for c: CharacterData in characters.ordered:
+		assert_true(c.can_use_skill(dash), String(c.id))
+		assert_false(skills.specials_for(c).has(dash), String(c.id))
+
+
+func test_signature_special_comes_first_and_is_exclusive() -> void:
+	for c: CharacterData in characters.ordered:
+		if c.signature_skill == null:
+			continue
+		assert_eq(skills.specials_for(c)[0], c.signature_skill, String(c.id))
+	var ape: SkillData = skills.get_skill(&"great_ape")
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(ape), c.id == &"wukong", String(c.id))
 
 
 func test_dash_grants_iframes_and_cooldown() -> void:
 	var stats := PlayerStats.new()
-	var skill := CharacterSkill.new(flicker)
+	var skill := CharacterSkill.new(skills.dash())
 	assert_true(skill.try_activate(Vector2(0, 2), Vector2.ZERO, stats))
 	assert_true(skill.is_dashing())
 	assert_eq(skill.direction, Vector2(0, 1))
 	assert_true(stats.is_invulnerable())
-	assert_almost_eq(stats.invulnerable_time, flicker.dash_iframes, 0.0001)
+	assert_almost_eq(stats.invulnerable_time, skills.dash().dash_iframes, 0.0001)
 
 
 func test_skill_blocked_during_cooldown() -> void:
 	var stats := PlayerStats.new()
-	var skill := CharacterSkill.new(flicker)
+	var dash: SkillData = skills.dash()
+	var skill := CharacterSkill.new(dash)
 	skill.try_activate(Vector2.RIGHT, Vector2.ZERO, stats)
-	skill.tick(flicker.skill_duration + 0.01)
+	skill.tick(dash.duration + 0.01)
 	assert_false(skill.is_active())
 	assert_false(skill.try_activate(Vector2.RIGHT, Vector2.ZERO, stats))
-	skill.tick(flicker.skill_cooldown)
+	skill.tick(dash.cooldown)
 	assert_true(skill.try_activate(Vector2.RIGHT, Vector2.ZERO, stats))
 
 
 func test_skill_needs_direction() -> void:
-	var skill := CharacterSkill.new(flicker)
+	var skill := CharacterSkill.new(skills.dash())
 	assert_false(skill.try_activate(Vector2.ZERO, Vector2.ZERO, PlayerStats.new()))
 
 
 func test_barrier_is_placed_in_front_and_expires() -> void:
 	var stats := PlayerStats.new()
-	var skill := CharacterSkill.new(warden)
+	var barrier: SkillData = skills.get_skill(&"barrier")
+	var skill := CharacterSkill.new(barrier)
 	assert_true(skill.try_activate(Vector2.UP, Vector2(100, 100), stats))
 	assert_true(skill.is_shielding())
 	assert_false(skill.is_dashing())
 	assert_false(stats.is_invulnerable(), "barrier gives no i-frames")
-	assert_eq(skill.anchor, Vector2(100, 100) + Vector2.UP * warden.shield_distance)
-	skill.tick(warden.skill_duration + 0.01)
+	assert_eq(skill.anchor, Vector2(100, 100) + Vector2.UP * barrier.shield_distance)
+	skill.tick(barrier.duration + 0.01)
 	assert_false(skill.is_shielding())
 
 
 func test_dual_wield_window() -> void:
-	var skill := CharacterSkill.new(twinshot)
+	var dual: SkillData = skills.get_skill(&"dual_wield")
+	var skill := CharacterSkill.new(dual)
 	assert_true(skill.try_activate(Vector2.RIGHT, Vector2.ZERO, PlayerStats.new()))
 	assert_true(skill.is_dual_wielding())
-	skill.tick(twinshot.skill_duration + 0.01)
+	skill.tick(dual.duration + 0.01)
 	assert_false(skill.is_dual_wielding())
 
 
 func test_dash_velocity_overrides_input() -> void:
-	var skill := CharacterSkill.new(flicker)
+	var skill := CharacterSkill.new(skills.dash())
 	skill.try_activate(Vector2.LEFT, Vector2.ZERO, PlayerStats.new())
 	var v: Vector2 = MovementSim.step_velocity(Vector2.ZERO, Vector2.RIGHT, skill, flicker.move_speed, DT)
-	assert_eq(v, Vector2.LEFT * flicker.dash_speed)
+	assert_eq(v, Vector2.LEFT * skills.dash().dash_speed)
 
 
 func test_movement_accelerates_to_character_speed() -> void:
 	for c: CharacterData in characters.ordered:
-		var skill := CharacterSkill.new(c)
+		var skill := CharacterSkill.new(skills.dash())
 		var v := Vector2.ZERO
 		for i: int in 120:
 			v = MovementSim.step_velocity(v, Vector2.RIGHT, skill, c.move_speed, DT)
@@ -94,7 +123,7 @@ func test_movement_accelerates_to_character_speed() -> void:
 
 
 func test_move_input_is_clamped_to_unit_length() -> void:
-	var skill := CharacterSkill.new(flicker)
+	var skill := CharacterSkill.new(skills.dash())
 	var v := Vector2.ZERO
 	for i: int in 120:
 		v = MovementSim.step_velocity(v, Vector2(5, 5), skill, flicker.move_speed, DT)
@@ -102,7 +131,7 @@ func test_move_input_is_clamped_to_unit_length() -> void:
 
 
 func test_movement_stops_without_input() -> void:
-	var skill := CharacterSkill.new(flicker)
+	var skill := CharacterSkill.new(skills.dash())
 	var v := Vector2(flicker.move_speed, 0)
 	for i: int in 60:
 		v = MovementSim.step_velocity(v, Vector2.ZERO, skill, flicker.move_speed, DT)
@@ -110,7 +139,7 @@ func test_movement_stops_without_input() -> void:
 
 
 func test_deadzone_ignored() -> void:
-	var skill := CharacterSkill.new(flicker)
+	var skill := CharacterSkill.new(skills.dash())
 	var v: Vector2 = MovementSim.step_velocity(Vector2.ZERO, Vector2(Constants.INPUT_DEADZONE * 0.5, 0), skill,
 		flicker.move_speed, DT)
 	assert_eq(v, Vector2.ZERO)
@@ -126,4 +155,37 @@ func test_character_sets_stat_maxes() -> void:
 	assert_eq(p.stats.max_energy, warden.max_energy)
 	p.set_character(twinshot)
 	assert_eq(p.stats.max_hp, twinshot.max_hp)
-	assert_eq(p.skill.data, twinshot)
+	assert_eq(p.special.data.id, &"barrier", "Warden's Barrier is kept: Twinshot can use it")
+
+
+# --- specials on a player ------------------------------------------------------
+
+func _player(c: CharacterData) -> Player:
+	var p := Player.new()
+	p.setup(1, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, null, 0, c)
+	add_child_autofree(p)
+	return p
+
+
+func test_great_ape_halves_damage_and_swaps_to_fists() -> void:
+	var p: Player = _player(characters.get_character(&"wukong"))
+	var ape: SkillData = skills.get_skill(&"great_ape")
+	assert_eq(p.special.data, ape, "Wukong's signature special")
+	assert_ne(p.held_weapon().data.id, &"ape_fists")
+	assert_true(p.special.try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
+	assert_eq(p.held_weapon().data.id, &"ape_fists")
+	var before: int = p.stats.hp + p.stats.armor
+	p.take_hit(40, false, Vector2.ZERO, 2)
+	assert_eq(before - (p.stats.hp + p.stats.armor), roundi(40 * ape.form_damage_scale))
+	p.special.tick(ape.duration + 0.01)
+	assert_false(p.special.is_transformed())
+	assert_ne(p.held_weapon().data.id, &"ape_fists", "back to the loadout")
+
+
+func test_switching_character_keeps_a_usable_special() -> void:
+	var p: Player = _player(twinshot)
+	p.set_special(skills.get_skill(&"barrier"))
+	p.set_character(warden)
+	assert_eq(p.special.data.id, &"barrier", "Warden can use Barrier too")
+	p.set_character(flicker)
+	assert_eq(p.special.data, skills.specials_for(flicker)[0], "Flicker can't: falls back to a default")

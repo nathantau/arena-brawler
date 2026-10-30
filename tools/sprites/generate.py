@@ -266,6 +266,70 @@ def wukong(step=None, t=0):
     return low, up
 
 
+def wukong_ape(step=None, t=0):
+    """Great Ape (Wukong's special): an angry, dark-red brute. Hunched, broad-shouldered, long arms
+    with big fists, glowing red eyes under a heavy scowl, golden circlet and bracers, storm clouds.
+    A transformation form, drawn bigger in game (SkillData.form_scale)."""
+    low = Canvas()
+    for x, (dx, dy) in zip((21, 35), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
+        x += dx  # thick, slightly bowed ape legs with broad flat feet, on the same stride as everyone
+        low.part(P([(x, 44 + dy), (x + 8, 44 + dy), (x + 9, 54 + dy), (x - 1, 54 + dy)]), MAROON)
+        low.part(E((x - 5, 54 + dy, x, 58 + dy)), BROWN)  # big toe splayed out to the side
+        low.part(RR((x - 2, 53 + dy, x + 10, 58 + dy), 2), BROWN)  # broad leathery foot
+        for tx in (x + 4, x + 7):
+            low.flat(R((tx, 56 + dy, tx, 58 + dy)), OUTLINE)  # toe creases
+        low.flat(R((x - 1, 58 + dy, x + 9, 58 + dy)), SHADOW)
+    up = Canvas()
+    s = SWAY[t % 4]
+    up.part(L([(14, 40), (6, 38), (4, 31), (8, 27 + s)], 3), MAROON)  # tail
+    up.part(E((10, 14, 54, 45)), MAROON)  # hunched back and shoulders
+    up.part(E((22, 26, 44, 43)), BROWN)  # chest
+    for x, y in ((14, 18), (20, 13), (27, 11)):
+        up.part(P([(x, y + 5), (x + 3, y), (x + 6, y + 5)]), MAROON)  # bristling back fur
+    up.part(L([(15, 26), (11, 36), (11, 44)], 7), MAROON)  # back arm
+    up.part(L([(49, 26), (53, 36), (53, 44)], 7), MAROON)  # front arm
+    for x, thumb in ((5, -2), (47, 9)):  # clenched fists, knuckles down; they bob with the stride
+        up.part(R((x + 2, 38, x + 10, 41)), YELLOW)  # golden bracers
+        up.part(RR((x, 42 + s, x + 12, 53 + s), 3), MAROON)
+        up.part(E((x + thumb, 43 + s, x + thumb + 5, 48 + s)), MAROON)  # thumb wrapped over the fingers
+        up.flat(RR((x + 1, 48 + s, x + 11, 53 + s), 1), BROWN)  # curled fingers
+        for kx in (x + 4, x + 7):
+            up.flat(R((kx, 48 + s, kx, 53 + s)), OUTLINE)  # knuckle splits
+        up.flat(R((x + 1, 48 + s, x + 11, 48 + s)), OUTLINE)
+    up.part(E((24, 3, 50, 29)), MAROON)  # head, pushed forward
+    up.part(E((28, 11, 50, 29)), BROWN)  # dark face
+    up.part(P([(23, 8), (47, 4), (47, 9), (23, 13)]), YELLOW, shade=False)  # golden circlet, knocked askew
+    up.flat(L([(23, 12), (47, 8)], 1), ORANGE)  # its lower rim
+    up.flat(L([(36, 5), (34, 8), (37, 9), (35, 12)], 1), OUTLINE)  # crack
+    up.flat(P([(43, 4), (47, 4), (47, 6)]), OUTLINE)  # chipped corner
+    up.flat(R((28, 9, 29, 10)), RED)  # gem
+    for x in (32, 42):  # glowing red eyes
+        up.flat(R((x, 14, x + 3, 17)), OUTLINE)
+        up.flat(R((x, 15, x + 3, 16)), RED)
+        up.dot(x + 1, 15, ORANGE)
+    up.flat(P([(29, 11), (37, 14), (37, 12), (30, 10)]), OUTLINE)  # angry brows slant to the middle
+    up.flat(P([(48, 11), (40, 14), (40, 12), (47, 10)]), OUTLINE)
+    up.flat(R((38, 21, 39, 21)), OUTLINE)  # nostrils
+    up.flat(R((42, 21, 43, 21)), OUTLINE)
+    up.flat(R((34, 25, 46, 26)), OUTLINE)  # grim mouth
+    for x in (35, 43):  # two lower fangs jutting up over the lip
+        up.flat(P([(x, 27), (x + 3, 27), (x + 2, 23), (x + 1, 23)]), WHITE)
+    return low, up
+
+
+def ape_storm(i: int) -> Canvas:
+    """A few dark storm clouds churning behind the Great Ape; loops every 4 frames."""
+    c = Canvas()
+    s = SWAY[i % 4]
+    mass = ((10, 30 + s, 5), (16, 24, 4), (7, 40 - s, 3))
+    c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in mass], SHADOW)
+    for k, (x, y) in enumerate(((12, 16), (6, 48))):
+        phase = (i + k * 2) % 4
+        r = (1, 2, 3, 2)[phase]
+        c.part(E((x - r, y - 2 * phase - r, x + r, y - 2 * phase + r)), SHADOW)
+    return c
+
+
 def wukong_clouds(i: int) -> Canvas:
     """Clouds gathered behind him (he faces right): a soft mass at his back, thin wisps peeling off
     and drifting back while they thin out, and a few puffs rising behind his head. Loops every 4 frames."""
@@ -749,6 +813,9 @@ ICONS = {
     "barrier": lambda c: (c.flat(RR((2, 1, 10, 11), 2), BLUE), c.flat(P([(6, 3), (8, 6), (6, 9), (4, 6)]), YELLOW)),
     "dual": lambda c: (c.flat(R((1, 3, 8, 5)), STEEL), c.flat(R((1, 5, 3, 8)), BROWN),
                        c.flat(R((4, 7, 11, 9)), STEEL), c.flat(R((9, 9, 11, 12)), BROWN)),
+    "ape": lambda c: (c.flat(E((1, 1, 11, 11)), MAROON), c.flat(E((3, 5, 10, 11)), BROWN),
+                      c.flat(R((2, 2, 10, 3)), YELLOW), c.flat(R((4, 6, 5, 7)), RED), c.flat(R((7, 6, 8, 7)), RED),
+                      c.flat(R((5, 9, 8, 9)), OUTLINE)),
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -783,7 +850,9 @@ def ui_kit() -> dict[str, Image.Image]:
 
 
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong}
-AURAS = {"wukong": wukong_clouds}  # optional per-frame effects drawn behind the character
+## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
+FORMS = {"wukong_ape": wukong_ape}
+AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}  # optional per-frame effects drawn behind
 
 
 # --- frame processing -------------------------------------------------------
@@ -845,7 +914,7 @@ def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    for name, build in CHARACTERS.items():
+    for name, build in (CHARACTERS | FORMS).items():
         fs = frames(build, AURAS.get(name))
         sheet = Image.new("RGBA", (SIZE * len(fs), SIZE), (0, 0, 0, 0))
         for i, f in enumerate(fs):

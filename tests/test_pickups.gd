@@ -244,3 +244,15 @@ func test_switching_character_drops_an_unusable_starting_weapon() -> void:
 	arena.select_weapon(p, &"shotgun")
 	arena.select_character(p, &"warden")
 	assert_eq(p.loadout.weapon_ids(), PackedStringArray(["warden_hammer", "shotgun"]), "kept: Warden uses heavy")
+
+
+func test_special_must_be_a_usable_special() -> void:
+	var arena := _arena()
+	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	var before: StringName = p.special.data.id
+	for bad: StringName in [&"dash", &"great_ape", &"barrier", &"nope"]:  # Flicker: not a special / not usable
+		arena.select_special(p, bad)
+		assert_eq(p.special.data.id, before, String(bad))
+	arena.select_character(p, &"wukong")
+	arena.select_special(p, &"great_ape")
+	assert_eq(p.special.data.id, &"great_ape")

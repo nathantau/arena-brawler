@@ -1,20 +1,25 @@
 class_name CharacterSkill
 extends RefCounted
-## The character's one skill, on cooldown. Behaviour depends on CharacterData.skill:
+## One skill slot (the shared Dash or the picked special), on cooldown. Behaviour by SkillData.kind:
 ## - DASH: burst of speed in `direction` with i-frames (movement reads is_dashing()).
 ## - SHIELD: a barrier centred on `anchor`, facing `direction`, that blocks enemy projectiles.
 ## - DUAL_WIELD: every shot fires a second, offset volley for no extra energy.
+## - TRANSFORM: a stronger form; fires `form_weapon` (cooldown in `form_weapon_cooldown`).
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
-var data: CharacterData
+var data: SkillData
 var cooldown_remaining: float = 0.0
 var active_remaining: float = 0.0
 var direction: Vector2 = Vector2.ZERO
 var anchor: Vector2 = Vector2.ZERO
+## The transformed form's weapon (null for other kinds).
+var form_weapon: WeaponState
 
 
-func _init(p_data: CharacterData = null) -> void:
+func _init(p_data: SkillData = null) -> void:
 	data = p_data
+	if data != null and data.form_weapon != null:
+		form_weapon = WeaponState.new(data.form_weapon)
 
 
 func is_active() -> bool:
@@ -26,22 +31,26 @@ func is_ready() -> bool:
 
 
 func is_dashing() -> bool:
-	return data.skill == CharacterData.SkillKind.DASH and is_active()
+	return data.kind == SkillData.Kind.DASH and is_active()
 
 
 func is_shielding() -> bool:
-	return data.skill == CharacterData.SkillKind.SHIELD and is_active()
+	return data.kind == SkillData.Kind.SHIELD and is_active()
 
 
 func is_dual_wielding() -> bool:
-	return data.skill == CharacterData.SkillKind.DUAL_WIELD and is_active()
+	return data.kind == SkillData.Kind.DUAL_WIELD and is_active()
+
+
+func is_transformed() -> bool:
+	return data.kind == SkillData.Kind.TRANSFORM and is_active()
 
 
 ## 1.0 = just used, 0.0 = ready.
 func cooldown_fraction() -> float:
-	if data.skill_cooldown <= 0.0:
+	if data.cooldown <= 0.0:
 		return 0.0
-	return clampf(cooldown_remaining / data.skill_cooldown, 0.0, 1.0)
+	return clampf(cooldown_remaining / data.cooldown, 0.0, 1.0)
 
 
 ## `dir`: dash direction / facing. `origin`: the player's position (shield placement).
@@ -49,21 +58,28 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 	if not is_ready() or dir.length_squared() == 0.0:
 		return false
 	direction = dir.normalized()
-	active_remaining = data.skill_duration
-	cooldown_remaining = data.skill_cooldown
-	match data.skill:
-		CharacterData.SkillKind.DASH:
+	active_remaining = data.duration
+	cooldown_remaining = data.cooldown
+	match data.kind:
+		SkillData.Kind.DASH:
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.dash_iframes)
-		CharacterData.SkillKind.SHIELD:
+		SkillData.Kind.SHIELD:
 			anchor = origin + direction * data.shield_distance
+		SkillData.Kind.TRANSFORM:
+			form_weapon.cooldown = 0.0
 	return true
 
 
+## The cooldown runs while the skill is active too (set cooldown > duration).
 func tick(delta: float) -> void:
 	active_remaining = maxf(0.0, active_remaining - delta)
 	cooldown_remaining = maxf(0.0, cooldown_remaining - delta)
+	if form_weapon != null:
+		form_weapon.tick(delta)
 
 
 func reset() -> void:
 	cooldown_remaining = 0.0
 	active_remaining = 0.0
+	if form_weapon != null:
+		form_weapon.cooldown = 0.0
