@@ -11,6 +11,7 @@ extends RefCounted
 ##   --time-limit S                   (server / offline) match length in seconds (dev/testing)
 ##   --arena N                        (server / offline) starting arena index (ArenaLayouts.NAMES)
 ##   --character ID                   (client / offline) pick a character, e.g. warden
+##   --weapon ID                      (client / offline) pick a starting weapon, e.g. sword
 
 var server: bool = false
 var port: int = Constants.DEFAULT_PORT
@@ -24,6 +25,7 @@ var match_mode: MatchRules.Mode = MatchRules.Mode.FFA
 var time_limit: float = Constants.MATCH_TIME_LIMIT
 var arena_index: int = 0
 var character: StringName = &""
+var weapon: StringName = &""
 
 
 static func parse(args: PackedStringArray) -> CmdArgs:
@@ -57,6 +59,9 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				i += 1
 			"--character":
 				a.character = StringName(next)
+				i += 1
+			"--weapon":
+				a.weapon = StringName(next)
 				i += 1
 			"--arena":
 				a.arena_index = clampi(next.to_int(), 0, ArenaLayouts.count() - 1)

@@ -91,6 +91,12 @@ func on_select_character(peer_id: int, id: StringName) -> void:
 		arena.select_character(p, id)
 
 
+func on_select_weapon(peer_id: int, id: StringName) -> void:
+	var p: Player = arena.get_player(peer_id)
+	if p != null:
+		arena.select_weapon(p, id)
+
+
 func _on_peer_connected(id: int) -> void:
 	NetSession.disable_throttle((session.multiplayer.multiplayer_peer as ENetMultiplayerPeer).get_peer(id))
 	var queue := NetInputQueue.new()

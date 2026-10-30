@@ -30,9 +30,10 @@ func start_server(arena: Arena, port: int, bot_count: int, debug: bool) -> Error
 
 
 func start_client(world_parent: Node, host: String, port: int, autopilot: bool, debug: bool,
-		character: StringName = &"") -> Error:
+		character: StringName = &"", weapon: StringName = &"") -> Error:
 	client = NetClient.new(self, world_parent, autopilot, debug)
 	client.wanted_character = character
+	client.wanted_weapon = weapon
 	return client.start(host, port)
 
 
@@ -89,6 +90,12 @@ func rpc_request_arena(index: int) -> void:
 func rpc_select_character(id: StringName) -> void:
 	if server != null:
 		server.on_select_character(multiplayer.get_remote_sender_id(), id)
+
+
+@rpc("any_peer", "call_remote", "reliable", CH_EVENTS)
+func rpc_select_weapon(id: StringName) -> void:
+	if server != null:
+		server.on_select_weapon(multiplayer.get_remote_sender_id(), id)
 
 
 # --- server -> client -------------------------------------------------------

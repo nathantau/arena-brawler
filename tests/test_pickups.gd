@@ -209,3 +209,38 @@ func test_unusable_pickup_stays_on_the_floor() -> void:
 	arena.pickups.tick(Constants.PHYSICS_DT, arena.players)
 	assert_true(spot.available)
 	assert_eq(p.loadout.slots.size(), 1)
+
+
+# --- loading room: starting weapon ---------------------------------------------
+
+func test_starting_weapon_joins_the_signature_and_survives_respawn() -> void:
+	var arena := _arena()
+	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	arena.select_weapon(p, &"sniper")
+	var expected := PackedStringArray([String(p.character.signature_weapon.id), "sniper"])
+	assert_eq(p.loadout.weapon_ids(), expected)
+	p.loadout.give(catalog.get_weapon(&"smg"))
+	p.respawn(Vector2(100, 100))
+	assert_eq(p.loadout.weapon_ids(), expected, "back to the picked loadout, pickups lost")
+
+
+func test_starting_weapon_must_be_a_usable_pickup() -> void:
+	var arena := _arena()
+	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	for bad: StringName in [&"rocket", &"pistol", &"warden_hammer", &"nope"]:
+		arena.select_weapon(p, bad)
+		assert_eq(p.loadout.slots.size(), 1, String(bad))
+	for w: WeaponData in arena.starting_weapons_for(p.character):
+		assert_true(w.pickup and p.character.can_use(w), String(w.id))
+
+
+func test_switching_character_drops_an_unusable_starting_weapon() -> void:
+	var arena := _arena()
+	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	arena.select_weapon(p, &"sword")
+	arena.select_character(p, &"twinshot")
+	assert_null(p.starting_weapon, "Twinshot can't carry blades")
+	assert_eq(p.loadout.weapon_ids(), PackedStringArray(["twinshot_revolver"]))
+	arena.select_weapon(p, &"shotgun")
+	arena.select_character(p, &"warden")
+	assert_eq(p.loadout.weapon_ids(), PackedStringArray(["warden_hammer", "shotgun"]), "kept: Warden uses heavy")

@@ -14,6 +14,7 @@ signal ready_requested(is_ready: bool)
 signal mode_requested(mode: MatchRules.Mode)
 signal arena_requested(index: int)
 signal character_requested(id: StringName)
+signal weapon_requested(id: StringName)
 signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool)
 ## Authoritative damage (offline / server).
 signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2)
@@ -125,6 +126,9 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 		character_requested.connect(func(id: StringName) -> void:
 			if local_player != null:
 				select_character(local_player, id))
+		weapon_requested.connect(func(id: StringName) -> void:
+			if local_player != null:
+				select_weapon(local_player, id))
 
 
 func _ready() -> void:
@@ -223,6 +227,25 @@ func select_character(p: Player, id: StringName) -> void:
 		return
 	p.set_character(c)
 	match_updated.emit()
+
+
+## Lobby only (authoritative): the weapon a player starts with besides their signature one.
+## Must be a pickup weapon their character can use.
+func select_weapon(p: Player, id: StringName) -> void:
+	var w: WeaponData = catalog.get_weapon(id)
+	if w == null or not w.pickup or not p.character.can_use(w) or match_state.phase != MatchState.Phase.LOBBY:
+		return
+	p.set_starting_weapon(w)
+	match_updated.emit()
+
+
+## Weapons `c` may start with, in catalog order (what the loading room offers).
+func starting_weapons_for(c: CharacterData) -> Array[WeaponData]:
+	var out: Array[WeaponData] = []
+	for id: StringName in catalog.pickup_ids():
+		if c.can_use(catalog.get_weapon(id)):
+			out.append(catalog.get_weapon(id))
+	return out
 
 
 ## Client: adopt the server's match state, running phase side effects on a phase change.

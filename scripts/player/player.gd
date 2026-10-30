@@ -61,6 +61,8 @@ var stats := PlayerStats.new()
 var loadout: Loadout
 ## Loadout restored on every respawn (pickups are lost on death).
 var default_weapons: Array[WeaponData] = []
+## Picked in the loading room: carried next to the signature weapon from every spawn.
+var starting_weapon: WeaponData
 var skill := CharacterSkill.new()
 var facing: Vector2 = Vector2.RIGHT
 ## Null for client-side remote players (they are positioned by interpolation).
@@ -125,9 +127,24 @@ func set_character(data: CharacterData) -> void:
 	_shield.sync(skill, dead)
 	_sprite.sprite_frames = data.sprite_frames()
 	_sprite.play(&"idle")
-	if data.signature_weapon != null and not is_bot:
-		default_weapons = [data.signature_weapon]
-		loadout = Loadout.new(default_weapons)
+	if starting_weapon != null and not data.can_use(starting_weapon):
+		starting_weapon = null
+	_reset_loadout()
+
+
+func set_starting_weapon(weapon: WeaponData) -> void:
+	starting_weapon = weapon
+	_reset_loadout()
+
+
+## Bots keep the loadout they were set up with.
+func _reset_loadout() -> void:
+	if is_bot or character.signature_weapon == null:
+		return
+	default_weapons = [character.signature_weapon]
+	if starting_weapon != null:
+		default_weapons.append(starting_weapon)
+	loadout = Loadout.new(default_weapons)
 
 
 func _physics_process(delta: float) -> void:

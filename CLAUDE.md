@@ -192,7 +192,13 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   Ricochet Six (bullets bounce off walls twice and still hit), Wukong's Cloud Staff (`thrust`: long narrow stab).
   Weapons are drawn from their sprite at the character's pixel scale, pivoting on the grip at hand height: guns
   kick back and up, melee sweeps the arc from a raised guard, thrusts stab out and back (`Player._draw_gun`).
-  Clients don't stop piercing pellets on server hit events. Not done: bots don't prefer usable pickups; no
+  Clients don't stop piercing pellets on server hit events.
+  **Loading room** (`ui/lobby_panel.gd`, full screen in the lobby phase): pick a character card, then a starting
+  weapon card (pickup weapons the character can use; signature shown as always carried), then Ready (disabled
+  until a weapon is picked; the server doesn't require one, so autopilot/bots are unaffected). The pick is
+  server-validated (`Arena.select_weapon`, `rpc_select_weapon`; lobby only, usable pickup weapon) and becomes
+  slot 1 of the respawn loadout; switching to a character that can't use it drops it. `--weapon ID` picks one
+  from the command line (offline / client). Not done: bots don't prefer usable pickups; no
   per-weapon projectile sprites (still circles); the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
