@@ -13,6 +13,7 @@ var _menu: MainMenu
 
 func _ready() -> void:
 	InputSetup.ensure_actions()
+	UiStyle.install()
 	session = NetSession.new()
 	session.name = "Session"
 	add_child(session)

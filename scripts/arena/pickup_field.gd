@@ -18,8 +18,8 @@ const ENERGY_ART: Texture2D = preload("res://assets/arenas/energy.png")
 const LABEL_COLOR: Color = Color(1, 1, 1, 0.8)
 ## Weapons the viewer's character can't carry are drawn faded.
 const UNUSABLE_ALPHA: float = 0.3
-const LABEL_FONT_SIZE: int = 11
-const LABEL_OFFSET_Y: float = 24.0
+const LABEL_FONT_SIZE: int = 15
+const LABEL_OFFSET_Y: float = 30.0
 const BOB_PX: float = 3.0
 const BOB_SPEED: float = 3.0
 
@@ -161,7 +161,6 @@ func _process(delta: float) -> void:
 
 ## Sprites are drawn at the characters' pixel scale; labels in plain world units.
 func _draw() -> void:
-	var font: Font = ThemeDB.fallback_font
 	var bob: Vector2 = Vector2(0.0, roundf(sin(_time * BOB_SPEED) * BOB_PX))
 	var scale_px: float = Constants.SPRITE_SCALE
 	for s: Spot in spots:
@@ -178,9 +177,9 @@ func _draw() -> void:
 		if viewer != null and not viewer.character.can_use(w):
 			tint.a = UNUSABLE_ALPHA
 		_draw_art(w.sprite, s.pos + bob, tint)
-		var tw: float = font.get_string_size(w.display_name, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
-		draw_string(font, s.pos + Vector2(-tw * 0.5, -LABEL_OFFSET_Y), w.display_name,
-			HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, LABEL_COLOR * tint)
+		var tw: float = UiStyle.text_width(w.display_name, LABEL_FONT_SIZE)
+		UiStyle.draw_text(self, s.pos + Vector2(-tw * 0.5, -LABEL_OFFSET_Y), w.display_name, LABEL_FONT_SIZE,
+			LABEL_COLOR * tint)
 
 
 func _draw_art(art: Texture2D, center: Vector2, tint: Color) -> void:

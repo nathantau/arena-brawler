@@ -303,6 +303,7 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	var touch := TouchControls.new()
 	touch.player = p
 	touch.visible = TouchControls.should_enable()
+	hud.show_skill = not touch.visible
 	var lobby := LobbyPanel.new()
 	lobby.arena = self
 	var results := ResultsPanel.new()

@@ -12,11 +12,11 @@ const RING_POOL: int = 24
 const PARTICLE_DRAG: float = 6.0
 const NUMBER_TIME: float = 0.7
 const NUMBER_RISE: float = 50.0
-const NUMBER_FONT_SIZE: int = 16
-const NUMBER_CRIT_FONT_SIZE: int = 22
+const NUMBER_FONT_SIZE: int = 18
+const NUMBER_CRIT_FONT_SIZE: int = 26
 const NUMBER_SPREAD_PX: float = 10.0
 const COLOR_NUMBER: Color = Color(1, 1, 1)
-const COLOR_NUMBER_CRIT: Color = Color(1, 0.85, 0.2)
+const COLOR_NUMBER_CRIT: Color = UiStyle.C_YELLOW
 const BEAM_TIME: float = 0.07
 const BEAM_CORE_COLOR: Color = Color(1, 1, 1, 0.9)
 const BEAM_CORE_SCALE: float = 0.4
@@ -203,13 +203,11 @@ func _draw() -> void:
 		var pc: Color = p.color
 		pc.a = p.life / p.max_life
 		draw_rect(Rect2(p.pos - Vector2(p.size, p.size) * 0.5, Vector2(p.size, p.size)), pc)
-	var font: Font = ThemeDB.fallback_font
 	for n: DamageNumber in _numbers:
 		if n.life <= 0.0:
 			continue
 		var nc: Color = COLOR_NUMBER_CRIT if n.crit else COLOR_NUMBER
 		nc.a = clampf(n.life / NUMBER_TIME * 2.0, 0.0, 1.0)
-		draw_string_outline(font, n.pos, n.text, HORIZONTAL_ALIGNMENT_CENTER, -1,
-			NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE, 4, Color(0, 0, 0, nc.a))
-		draw_string(font, n.pos, n.text, HORIZONTAL_ALIGNMENT_CENTER, -1,
-			NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE, nc)
+		var font_size: int = NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE
+		var w: float = UiStyle.text_width(n.text, font_size, true)
+		UiStyle.draw_text(self, n.pos - Vector2(w * 0.5, 0.0), n.text, font_size, nc, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)

@@ -1,31 +1,44 @@
 class_name Hud
 extends Control
-## Top-left stat bars and weapon info; top-centre kills + match clock; countdown,
-## respawn and spectating messages. Drawn with primitives.
+## In-match HUD inside the safe area, drawn with the pixel UI kit (UiStyle):
+## - top-left: HP / armor / energy bars with icons, then the carried weapons as slots
+##   (sprite, energy cost; the active one framed in gold), and the skill when there's no touch button
+## - top-centre: kills / deaths, and the match clock under it
+## - top-right: status line (ping etc. when online)
+## - centre: countdown, respawn / spectating messages.
 
-const MARGIN: Vector2 = Vector2(20, 20)
-const BAR_SIZE: Vector2 = Vector2(220, 16)
-const BAR_GAP: float = 6.0
-const FONT_SIZE: int = 14
-const BIG_FONT_SIZE: int = 28
-const COUNTDOWN_FONT_SIZE: int = 96
-const TEXT_PAD: float = 4.0
-const COLOR_BG: Color = Color(0, 0, 0, 0.55)
-const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
-const COLOR_ARMOR: Color = Color(0.7, 0.75, 0.85)
-const COLOR_ENERGY: Color = Color(0.3, 0.6, 1.0)
-const COLOR_TEXT: Color = Color(1, 1, 1, 0.95)
-const COLOR_DIM: Color = Color(1, 1, 1, 0.5)
+const PANEL_PAD: Vector2 = Vector2(14, 12)
+const ICON_SCALE: float = 2.0
+const ROW_H: float = 30.0
+const ROW_GAP: float = 6.0
+const BAR_W: float = 200.0
+const BAR_H: float = 22.0
+const BAR_TEXT_PAD: float = 6.0
+const SLOT_SIZE: Vector2 = Vector2(118, 72)
+const SLOT_GAP: float = 8.0
+const SLOT_ART_SCALE: float = 2.0
+const SECTION_GAP: float = 10.0
+const PILL_H: float = 46.0
+const PILL_PAD: float = 18.0
+const PILL_ITEM_GAP: float = 26.0
+const MESSAGE_Y: float = 0.62
+const COUNTDOWN_Y: float = 0.45
 
 var player: Player
 var arena: Arena
 var scores: ScoreBoard
-## Free-form line under the kill counter (e.g. ping when online).
+## Free-form line at the top right (e.g. ping when online).
 var status_text: String = ""
+## Desktop has no skill button: show the skill under the weapons instead.
+var show_skill: bool = false
+
+var _panel: StyleBoxTexture = UiStyle.slice("panel")
+var _slot: StyleBoxTexture = UiStyle.slice("card")
+var _slot_active: StyleBoxTexture = UiStyle.slice("card_gold")
 
 
 func _ready() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UiStyle.fit_to_safe_area(self)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -36,64 +49,121 @@ func _process(_delta: float) -> void:
 func _draw() -> void:
 	if player == null:
 		return
-	var font: Font = ThemeDB.fallback_font
-	var s: PlayerStats = player.stats
-	var pos: Vector2 = MARGIN
-	_bar(font, pos, float(s.hp) / s.max_hp, COLOR_HP, "%d / %d" % [s.hp, s.max_hp])
-	pos.y += BAR_SIZE.y + BAR_GAP
-	_bar(font, pos, float(s.armor) / s.max_armor, COLOR_ARMOR, "%d / %d" % [s.armor, s.max_armor])
-	pos.y += BAR_SIZE.y + BAR_GAP
-	_bar(font, pos, float(s.energy) / s.max_energy, COLOR_ENERGY, "%d / %d" % [s.energy, s.max_energy])
-	pos.y += BAR_SIZE.y + BAR_GAP + FONT_SIZE
+	_draw_vitals()
+	_draw_score()
+	if status_text != "":
+		UiStyle.draw_text(self, Vector2(0.0, UiStyle.SIZE_TINY), status_text, UiStyle.SIZE_TINY, UiStyle.C_DIM,
+			HORIZONTAL_ALIGNMENT_RIGHT, size.x)
+	_draw_messages()
 
+
+func _draw_vitals() -> void:
+	var s: PlayerStats = player.stats
+	var rows: int = 3
+	var panel := Rect2(Vector2.ZERO, PANEL_PAD * 2.0 + Vector2(ROW_H + BAR_W, rows * ROW_H + (rows - 1) * ROW_GAP))
+	draw_style_box(_panel, panel)
+	var pos: Vector2 = PANEL_PAD
+	_bar(pos, "icon_hp", s.hp, s.max_hp, UiStyle.C_RED, UiStyle.C_MAROON)
+	pos.y += ROW_H + ROW_GAP
+	_bar(pos, "icon_armor", s.armor, s.max_armor, UiStyle.C_STEEL, UiStyle.C_STEEL_D)
+	pos.y += ROW_H + ROW_GAP
+	_bar(pos, "icon_energy", s.energy, s.max_energy, UiStyle.C_TEAL_L, UiStyle.C_TEAL)
+
+	var slot_pos := Vector2(0.0, panel.end.y + SECTION_GAP)
 	for i: int in player.loadout.slots.size():
 		var w: WeaponData = player.loadout.slots[i].data
 		var active: bool = i == player.loadout.active_index
-		var label: String = "%s %s  (%d energy)" % ["▶" if active else " ", w.display_name, w.energy_cost]
-		draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, COLOR_TEXT if active else COLOR_DIM)
-		pos.y += FONT_SIZE + TEXT_PAD
+		var r := Rect2(slot_pos, SLOT_SIZE)
+		draw_style_box(_slot_active if active else _slot, r)
+		var art_tint := Color(1, 1, 1, 1.0 if active else 0.6)
+		UiStyle.draw_icon(self, w.sprite, r.get_center() - Vector2(0, 6), SLOT_ART_SCALE, art_tint)
+		var cost: String = "free" if w.energy_cost == 0 else str(w.energy_cost)
+		var badge := Vector2(r.end.x - 10.0, r.end.y - 10.0)
+		UiStyle.draw_text(self, badge, cost, UiStyle.SIZE_TINY, UiStyle.C_TEAL_L if w.energy_cost > 0 else UiStyle.C_DIM,
+			HORIZONTAL_ALIGNMENT_RIGHT, -1.0)
+		if w.energy_cost > 0:
+			var tw: float = UiStyle.text_width(cost, UiStyle.SIZE_TINY)
+			UiStyle.draw_icon(self, UiStyle.tex("icon_energy"), badge + Vector2(-tw - 10.0, -6.0), 1.0)
+		slot_pos.x += SLOT_SIZE.x + SLOT_GAP
+	var active_w: WeaponData = player.loadout.active().data
+	var name_y: float = panel.end.y + SECTION_GAP + SLOT_SIZE.y + UiStyle.SIZE_SMALL + 4.0
+	UiStyle.draw_text(self, Vector2(2.0, name_y), active_w.display_name, UiStyle.SIZE_SMALL, UiStyle.C_YELLOW)
+	if show_skill:
+		var sk: CharacterSkill = player.skill
+		var text: String = player.character.skill_name
+		if sk.is_active():
+			text += " · active"
+		elif not sk.is_ready():
+			text += " · %.1fs" % sk.cooldown_remaining
+		UiStyle.draw_text(self, Vector2(2.0, name_y + UiStyle.SIZE_SMALL + 6.0), text, UiStyle.SIZE_SMALL,
+			UiStyle.C_WHITE if sk.is_ready() else UiStyle.C_DIM)
 
-	var sk: CharacterSkill = player.skill
-	var skill_text: String
-	if sk.is_active():
-		skill_text = "%s active %.1fs" % [player.character.skill_name, sk.active_remaining]
-	elif sk.is_ready():
-		skill_text = "%s ready" % player.character.skill_name
-	else:
-		skill_text = "%s %.1fs" % [player.character.skill_name, sk.cooldown_remaining]
-	draw_string(font, pos, skill_text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, COLOR_TEXT if sk.is_ready() else COLOR_DIM)
 
-	var kd: String = "Kills %d   Deaths %d" % [scores.kills_of(player.player_id), scores.deaths_of(player.player_id)]
-	draw_string(font, Vector2(0.0, MARGIN.y + BIG_FONT_SIZE), kd, HORIZONTAL_ALIGNMENT_CENTER, size.x, BIG_FONT_SIZE, COLOR_TEXT)
+## Icon, then a pixel bar (outline, dark well, two-tone fill, highlight) with "value / max" inside.
+func _bar(pos: Vector2, icon: String, value: int, max_value: int, fill: Color, shade: Color) -> void:
+	UiStyle.draw_icon(self, UiStyle.tex(icon), pos + Vector2(ROW_H, ROW_H) * 0.5, ICON_SCALE)
+	var r := Rect2(pos + Vector2(ROW_H + 4.0, (ROW_H - BAR_H) * 0.5), Vector2(BAR_W - 4.0, BAR_H))
+	draw_rect(r, UiStyle.C_OUTLINE)
+	var inner: Rect2 = r.grow(-2.0)
+	draw_rect(inner, UiStyle.C_SHADOW)
+	var frac: float = clampf(float(value) / float(maxi(1, max_value)), 0.0, 1.0)
+	if frac > 0.0:
+		var f := Rect2(inner.position, Vector2(inner.size.x * frac, inner.size.y))
+		draw_rect(f, fill)
+		draw_rect(Rect2(f.position + Vector2(0, f.size.y * 0.6), Vector2(f.size.x, f.size.y * 0.4)), shade)
+		draw_rect(Rect2(f.position, Vector2(f.size.x, 2.0)), Color(1, 1, 1, 0.35))
+	UiStyle.draw_text(self, Vector2(inner.end.x - BAR_TEXT_PAD, inner.end.y - 4.0), "%d/%d" % [value, max_value],
+		UiStyle.SIZE_TINY, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_RIGHT, -1.0)
 
-	var line_y: float = MARGIN.y + BIG_FONT_SIZE + FONT_SIZE + TEXT_PAD * 2.0
+
+## Top-centre pills: kills and deaths, then the clock (or warm-up) and the kill target.
+func _draw_score() -> void:
+	var id: int = player.player_id
+	var kills: String = str(scores.kills_of(id))
+	var deaths: String = str(scores.deaths_of(id))
+	var item_w: float = ROW_H + 4.0
+	var w: float = PILL_PAD * 2.0 + item_w * 2.0 + UiStyle.text_width(kills, UiStyle.SIZE_HEADING, true) \
+		+ UiStyle.text_width(deaths, UiStyle.SIZE_HEADING, true) + PILL_ITEM_GAP
+	var r := Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, PILL_H))
+	draw_style_box(_panel, r)
+	var x: float = r.position.x + PILL_PAD
+	var mid: float = r.position.y + PILL_H * 0.5
+	for pair: Array in [["icon_kills", kills, UiStyle.C_WHITE], ["icon_deaths", deaths, UiStyle.C_STEEL]]:
+		UiStyle.draw_icon(self, UiStyle.tex(pair[0]), Vector2(x + ROW_H * 0.5, mid), ICON_SCALE)
+		x += item_w
+		UiStyle.draw_text(self, Vector2(x, mid + UiStyle.SIZE_HEADING * 0.35), pair[1], UiStyle.SIZE_HEADING, pair[2],
+			HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
+		x += UiStyle.text_width(pair[1], UiStyle.SIZE_HEADING, true) + PILL_ITEM_GAP
+
 	var st: MatchState = arena.match_state
+	var clock: String
 	if st.phase == MatchState.Phase.PLAYING:
 		var t: int = ceili(st.time_left)
-		var clock: String = "%d:%02d  ·  first to %d" % [t / 60, t % 60, MatchRules.kill_target(st.mode)]
-		draw_string(font, Vector2(0.0, line_y), clock, HORIZONTAL_ALIGNMENT_CENTER, size.x, FONT_SIZE, COLOR_TEXT)
-		line_y += FONT_SIZE + TEXT_PAD
+		clock = "%d:%02d · first to %d" % [t / 60, t % 60, MatchRules.kill_target(st.mode)]
 	elif st.phase == MatchState.Phase.LOBBY:
-		draw_string(font, Vector2(0.0, line_y), "Warm-up", HORIZONTAL_ALIGNMENT_CENTER, size.x, FONT_SIZE, COLOR_DIM)
-		line_y += FONT_SIZE + TEXT_PAD
+		clock = "Warm-up"
+	if clock != "":
+		var y: float = r.end.y + UiStyle.SIZE_SMALL + 6.0
+		var cw: float = UiStyle.text_width(clock, UiStyle.SIZE_SMALL)
+		UiStyle.draw_icon(self, UiStyle.tex("icon_clock"), Vector2((size.x - cw) * 0.5 - 20.0, y - 6.0), 1.0)
+		UiStyle.draw_text(self, Vector2(0.0, y), clock, UiStyle.SIZE_SMALL, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, size.x)
 
-	if status_text != "":
-		draw_string(font, Vector2(0.0, line_y), status_text, HORIZONTAL_ALIGNMENT_CENTER, size.x, FONT_SIZE, COLOR_DIM)
 
+func _draw_messages() -> void:
+	var st: MatchState = arena.match_state
 	if st.phase == MatchState.Phase.COUNTDOWN:
-		draw_string(font, Vector2(0.0, size.y * 0.5), str(maxi(1, ceili(st.time_left))),
-			HORIZONTAL_ALIGNMENT_CENTER, size.x, COUNTDOWN_FONT_SIZE, COLOR_TEXT)
+		UiStyle.draw_text(self, Vector2(0.0, size.y * COUNTDOWN_Y - UiStyle.SIZE_HUGE * 0.6), "GET READY",
+			UiStyle.SIZE_HEADING, UiStyle.C_YELLOW, HORIZONTAL_ALIGNMENT_CENTER, size.x, true)
+		UiStyle.draw_text(self, Vector2(0.0, size.y * COUNTDOWN_Y + UiStyle.SIZE_HUGE * 0.35),
+			str(maxi(1, ceili(st.time_left))), UiStyle.SIZE_HUGE, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, size.x, true)
 	if player.dead and st.phase != MatchState.Phase.RESULTS:
 		var msg: String
 		if st.may_respawn(player.player_id):
 			msg = "Respawning in %.1f" % maxf(0.0, player.respawn_timer)
 		else:
 			msg = "Spectating · you'll play next match"
-		draw_string(font, Vector2(0.0, size.y * 0.5 + BIG_FONT_SIZE * 2.0), msg, HORIZONTAL_ALIGNMENT_CENTER, size.x, BIG_FONT_SIZE, COLOR_TEXT)
-
-
-func _bar(font: Font, pos: Vector2, frac: float, color: Color, text: String) -> void:
-	draw_rect(Rect2(pos, BAR_SIZE), COLOR_BG)
-	draw_rect(Rect2(pos, Vector2(BAR_SIZE.x * clampf(frac, 0.0, 1.0), BAR_SIZE.y)), color)
-	var baseline: Vector2 = pos + Vector2(TEXT_PAD, BAR_SIZE.y - TEXT_PAD * 0.5)
-	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE - 2, COLOR_TEXT)
+		var w: float = UiStyle.text_width(msg, UiStyle.SIZE_HEADING, true) + PILL_PAD * 2.0
+		var r := Rect2(Vector2((size.x - w) * 0.5, size.y * MESSAGE_Y), Vector2(w, PILL_H + 8.0))
+		draw_style_box(_panel, r)
+		UiStyle.draw_text(self, Vector2(r.position.x, r.get_center().y + UiStyle.SIZE_HEADING * 0.35), msg,
+			UiStyle.SIZE_HEADING, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, true)

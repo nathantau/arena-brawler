@@ -208,7 +208,18 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   crystal. `arena/arena_floor.gd` draws floors → decal → walls (Nearest); crates draw their frame from the same
   sheet. Themes per layout in `ArenaLayouts.THEMES`: Pit (stone), Foundry (steel plates, brick, hazard crates),
   **Gym** (new 3rd layout: hardwood court, keys, arcs, hoops on the end-wall stanchions, scorer's tables, ball carts).
-  New arena = layout in `ArenaLayouts` + theme in generate.py `THEMES` (+ optional `DECALS`, sized 40x24 tiles). Not done: bots don't prefer usable pickups; no
+  New arena = layout in `ArenaLayouts` + theme in generate.py `THEMES` (+ optional `DECALS`, sized 40x24 tiles).
+- **UI polish** (2026-10-30): `ui/ui_style.gd` is the shared look. Font: **Pixelify Sans** (OFL, `assets/fonts/`,
+  bold via a FontVariation), installed into Godot's default theme + `ThemeDB.fallback_font` by `UiStyle.install()`
+  (our UI hangs off Nodes/CanvasLayers, which don't inherit a Window theme). Pixel UI kit generated into
+  `assets/ui/` (9-slices pre-scaled x2: panel, card / selected / gold, button / pressed / primary / disabled,
+  field; round touch buttons, joystick, icons for hp/armor/energy/kills/deaths/clock/fire/swap/skills/trophy).
+  Theme variations: PrimaryButton, Card*, HeaderLabel, DimLabel. Text sizes: 18 is the floor (~10 pt on a phone).
+  Every screen keeps clear of the notch / Dynamic Island / home bar via `UiStyle.safe_insets` (`--notch` fakes
+  iPhone insets on desktop). Redone: HUD (icon bars, weapon slots with sprites + cost, kills/deaths pill, clock),
+  touch controls (pixel buttons, skill icon + cooldown, swap shows the other weapon), title screen (tiled court,
+  logo, idling roster), loading room, results (trophy, portraits). Damage numbers / pickup labels outlined.
+  iOS Simulator: Godot's simulator lib is x86_64 only, so build with `ARCHS=x86_64` (runs under Rosetta). Not done: bots don't prefer usable pickups; no
   per-weapon projectile sprites (still circles); the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests

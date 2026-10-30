@@ -7,6 +7,7 @@ extends RefCounted
 ##   --autopilot                      (client) drive + fire automatically, for testing
 ##   --net-debug                      print net stats periodically
 ##   --touch                          show touch controls on desktop
+##   --notch                          fake an iPhone's safe-area insets on desktop (UI layout checks)
 ##   --mode duel|ffa                  (server / offline) starting match mode, default ffa
 ##   --time-limit S                   (server / offline) match length in seconds (dev/testing)
 ##   --arena N                        (server / offline) starting arena index (ArenaLayouts.NAMES)

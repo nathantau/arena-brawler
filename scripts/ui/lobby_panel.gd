@@ -5,28 +5,14 @@ extends PanelContainer
 ## Also shows mode + arena, the roster with ready state and why the match can't start yet.
 ## Cards are rebuilt when the local character changes; highlights follow the synced state.
 
-const PAD: int = 24
 const SPACING: int = 10
-const TITLE_FONT_SIZE: int = 24
-const STEP_FONT_SIZE: int = 18
-const FONT_SIZE: int = 15
-const SMALL_FONT_SIZE: int = 12
-const BUTTON_MIN_SIZE: Vector2 = Vector2(150, 44)
-const READY_MIN_SIZE: Vector2 = Vector2(220, 64)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(190, 196)
-const WEAPON_CARD_SIZE: Vector2 = Vector2(170, 132)
+const BUTTON_MIN_SIZE: Vector2 = Vector2(170, 52)
+const READY_MIN_SIZE: Vector2 = Vector2(240, 64)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(210, 196)
+const WEAPON_CARD_SIZE: Vector2 = Vector2(182, 128)
 const CHARACTER_ART_SCALE: float = 2.0
-const WEAPON_ART_SCALE: float = 2.5
-const CARD_BORDER: int = 3
-const CARD_RADIUS: int = 8
-const COLOR_BG: Color = Color(0.07, 0.07, 0.12, 0.94)
-const COLOR_CARD: Color = Color(1, 1, 1, 0.06)
-const COLOR_CARD_BORDER: Color = Color(1, 1, 1, 0.15)
-const COLOR_SELECTED: Color = Color(0.5, 0.95, 0.5)
-const COLOR_SIGNATURE: Color = Color(1, 0.82, 0.35)
-const COLOR_DIM: Color = Color(1, 1, 1, 0.55)
-const COLOR_READY: Color = Color(0.5, 0.95, 0.5)
-const COLOR_BLOCKER: Color = Color(1, 0.8, 0.45)
+const WEAPON_ART_SCALE: float = 2.0
+const COLOR_BG: Color = Color(0.07, 0.07, 0.13, 0.96)
 
 var arena: Arena
 
@@ -38,7 +24,7 @@ var _character_cards: Dictionary[StringName, Button] = {}
 var _weapon_row: HBoxContainer
 var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
-var _rows: VBoxContainer
+var _rows: HFlowContainer
 var _blocker: Label
 var _ready_button: Button
 ## Last highlighted (character, weapon), so _process only restyles on change.
@@ -47,10 +33,8 @@ var _shown_pick: Array[StringName] = [&"", &""]
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var style := StyleBoxFlat.new()
-	style.bg_color = COLOR_BG
-	style.set_content_margin_all(PAD)
-	add_theme_stylebox_override("panel", style)
+	_apply_background()
+	get_viewport().size_changed.connect(_apply_background)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", SPACING)
@@ -62,37 +46,44 @@ func _ready() -> void:
 	var titles := VBoxContainer.new()
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(titles)
-	_title = _label(titles, TITLE_FONT_SIZE, Color.WHITE)
-	_rules = _label(titles, FONT_SIZE, COLOR_DIM)
+	_title = _label(titles, &"HeaderLabel")
+	_rules = _label(titles, &"DimLabel")
 	_mode_button = _button(header, BUTTON_MIN_SIZE)
 	_mode_button.pressed.connect(_on_mode_pressed)
 	_arena_button = _button(header, BUTTON_MIN_SIZE)
 	_arena_button.pressed.connect(func() -> void:
 		arena.arena_requested.emit((arena.match_state.arena_index + 1) % ArenaLayouts.count()))
 
-	_label(box, STEP_FONT_SIZE, Color.WHITE).text = "1 · Choose your fighter"
+	_label(box, &"HeaderLabel").text = "1 · Choose your fighter"
 	var character_row := _row(box)
 	for c: CharacterData in arena.characters.ordered:
 		var card: Button = _card(character_row, CHARACTER_CARD_SIZE, c.sprite_frames().get_frame_texture(&"idle", 0),
-			CHARACTER_ART_SCALE, [c.display_name, "%s · HP %d · Armor %d" % [c.skill_name, c.max_hp, c.max_armor]])
+			CHARACTER_ART_SCALE, [c.display_name, "%s · HP %d" % [c.skill_name, c.max_hp]])
 		var id: StringName = c.id
 		card.pressed.connect(func() -> void: arena.character_requested.emit(id))
 		_character_cards[id] = card
 
-	_label(box, STEP_FONT_SIZE, Color.WHITE).text = "2 · Choose your weapon"
+	_label(box, &"HeaderLabel").text = "2 · Choose your weapon"
 	_weapon_row = _row(box)
 
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", SPACING)
 	footer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(footer)
-	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	footer.add_child(_rows)
-	_blocker = _label(footer, FONT_SIZE, COLOR_BLOCKER)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.alignment = BoxContainer.ALIGNMENT_END
+	footer.add_child(info)
+	_rows = HFlowContainer.new()
+	_rows.add_theme_constant_override("h_separation", SPACING * 2)
+	info.add_child(_rows)
+	_blocker = _label(info, &"Label")
+	_blocker.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 	_blocker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_ready_button = _button(footer, READY_MIN_SIZE)
+	_ready_button.theme_type_variation = &"PrimaryButton"
+	_ready_button.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
 	_ready_button.size_flags_vertical = Control.SIZE_SHRINK_END
 	_ready_button.pressed.connect(_on_ready_pressed)
 
@@ -121,9 +112,9 @@ func _refresh() -> void:
 		_build_weapon_cards(me.character)
 	_shown_pick = _pick()
 	for id: StringName in _character_cards:
-		_style(_character_cards[id], COLOR_SELECTED if id == _shown_pick[0] else COLOR_CARD_BORDER)
+		_character_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[0] else &"Card"
 	for id: StringName in _weapon_cards:
-		_style(_weapon_cards[id], COLOR_SELECTED if id == _shown_pick[1] else COLOR_CARD_BORDER)
+		_weapon_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[1] else &"Card"
 
 	for child: Node in _rows.get_children():
 		child.queue_free()
@@ -138,14 +129,16 @@ func _refresh() -> void:
 		else:
 			tag = "picking"
 		var you: String = " (you)" if p == me else ""
-		_label(_rows, FONT_SIZE, p.display_color).text = "● %s%s · %s — %s" % [
-			arena.player_name(p.player_id), you, p.character.display_name, tag]
+		var row: Label = _label(_rows, &"Label")
+		row.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		row.add_theme_color_override("font_color", p.display_color)
+		row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
 
 	var picked: bool = _shown_pick[1] != &""
 	_blocker.text = st.blocker if picked or _is_ready() else "Pick a weapon to get ready."
 	_ready_button.disabled = not picked and not _is_ready()
-	_ready_button.text = "Unready" if _is_ready() else "Ready"
-	_ready_button.add_theme_color_override("font_color", Color.WHITE if _is_ready() else COLOR_READY)
+	_ready_button.text = "UNREADY" if _is_ready() else "READY!"
+	_ready_button.theme_type_variation = &"Button" if _is_ready() else &"PrimaryButton"
 
 
 func _build_weapon_cards(c: CharacterData) -> void:
@@ -156,12 +149,13 @@ func _build_weapon_cards(c: CharacterData) -> void:
 	var sig: WeaponData = c.signature_weapon
 	if sig != null:
 		var sig_card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, sig.sprite, WEAPON_ART_SCALE,
-			[sig.display_name, "Signature · always carried"])
+			[sig.display_name, "Signature · always"])
 		sig_card.disabled = true
-		_style(sig_card, COLOR_SIGNATURE)
+		sig_card.theme_type_variation = &"CardGold"
 	for w: WeaponData in arena.starting_weapons_for(c):
 		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, w.sprite, WEAPON_ART_SCALE,
-			[w.display_name, "%d dmg · %s energy" % [w.damage * maxi(1, w.pellets), w.energy_cost]])
+			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
+				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost]])
 		var id: StringName = w.id
 		card.pressed.connect(func() -> void: arena.weapon_requested.emit(id))
 		_weapon_cards[id] = card
@@ -213,27 +207,32 @@ func _card(parent: Node, min_size: Vector2, art: Texture2D, art_scale: float, li
 	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(pic)
 	for i: int in lines.size():
-		var l: Label = _label(box, FONT_SIZE if i == 0 else SMALL_FONT_SIZE, Color.WHITE if i == 0 else COLOR_DIM)
+		var l: Label = _label(box, &"Label" if i == 0 else &"DimLabel")
+		if i == 0:
+			l.add_theme_font_override("font", UiStyle.bold())
+		else:
+			l.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
 		l.text = lines[i]
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return card
 
 
-func _style(card: Button, border: Color) -> void:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = COLOR_CARD
-	sb.border_color = border
-	sb.set_border_width_all(CARD_BORDER)
-	sb.set_corner_radius_all(CARD_RADIUS)
-	for state: String in ["normal", "hover", "pressed", "disabled"]:
-		card.add_theme_stylebox_override(state, sb)
+## Full-screen backdrop; content padded clear of notches / the home bar.
+func _apply_background() -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = COLOR_BG
+	var i: Vector4 = UiStyle.safe_insets(get_viewport())
+	style.content_margin_left = i.x + SPACING
+	style.content_margin_top = i.y + SPACING
+	style.content_margin_right = i.z + SPACING
+	style.content_margin_bottom = i.w
+	add_theme_stylebox_override("panel", style)
 
 
-func _label(parent: Node, font_size: int, color: Color) -> Label:
+func _label(parent: Node, variation: StringName) -> Label:
 	var l := Label.new()
-	l.add_theme_font_size_override("font_size", font_size)
-	l.add_theme_color_override("font_color", color)
+	l.theme_type_variation = variation
 	parent.add_child(l)
 	return l
 
@@ -241,7 +240,6 @@ func _label(parent: Node, font_size: int, color: Color) -> Label:
 func _button(parent: Node, min_size: Vector2) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = min_size
-	b.add_theme_font_size_override("font_size", FONT_SIZE)
 	b.focus_mode = Control.FOCUS_NONE
 	parent.add_child(b)
 	return b

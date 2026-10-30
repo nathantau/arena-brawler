@@ -1,31 +1,37 @@
 class_name TouchControls
 extends Control
-## Multi-touch mobile controls, drawn with primitives:
+## Multi-touch mobile controls inside the safe area, drawn with the pixel UI kit:
 ## - joystick anywhere on the left part of the screen (base fixed where you touch until release)
 ## - attack button (hold = fire with auto-aim; drag off-centre = manual aim)
-## - skill button with cooldown sweep, weapon swap button
+## - skill button (skill icon, cooldown sweep + seconds), swap button (shows the other weapon)
 ## Touches that start on a visible `blockers` control (e.g. lobby buttons) are left to the GUI.
 
 const JOYSTICK_ZONE_FRACTION: float = 0.45
-const JOY_RADIUS: float = 70.0
-const JOY_KNOB_RADIUS: float = 30.0
-const JOY_IDLE_POS_FRACTION: Vector2 = Vector2(0.15, 0.72)
-const ATTACK_RADIUS: float = 64.0
-const ATTACK_MARGIN: Vector2 = Vector2(120, 110)
-const SKILL_RADIUS: float = 40.0
-const SKILL_OFFSET: Vector2 = Vector2(-130, 20)
-const SWAP_RADIUS: float = 32.0
-const SWAP_OFFSET: Vector2 = Vector2(-20, -120)
+## Art is drawn at whole-number scales: joy_base 40 px x4, round 33 px x4 / x3 / x2.
+const JOY_RADIUS: float = 80.0
+const JOY_SCALE: float = 4.0
+const JOY_IDLE_POS_FRACTION: Vector2 = Vector2(0.14, 0.7)
+const ATTACK_RADIUS: float = 66.0
+const ATTACK_SCALE: float = 4.0
+const ATTACK_MARGIN: Vector2 = Vector2(96, 92)
+const SKILL_RADIUS: float = 50.0
+const SKILL_SCALE: float = 3.0
+const SKILL_OFFSET: Vector2 = Vector2(-152, 24)
+const SWAP_RADIUS: float = 33.0
+const SWAP_SCALE: float = 2.0
+const SWAP_OFFSET: Vector2 = Vector2(-14, -128)
 const HIT_SLOP: float = 1.25
-const AIM_LINE_WIDTH: float = 3.0
-const RING_WIDTH: float = 3.0
+const PRESS_DROP: float = 4.0
+const AIM_LINE_WIDTH: float = 4.0
 const SEGMENTS: int = 32
-const LABEL_FONT_SIZE: int = 14
-const COLOR_IDLE: Color = Color(1, 1, 1, 0.18)
-const COLOR_ACTIVE: Color = Color(1, 1, 1, 0.35)
-const COLOR_RING: Color = Color(1, 1, 1, 0.55)
-const COLOR_COOLDOWN: Color = Color(0, 0, 0, 0.55)
-const COLOR_AIM: Color = Color(1, 0.4, 0.4, 0.8)
+const IDLE_ALPHA: float = 0.75
+const COLOR_COOLDOWN: Color = Color(0.1, 0.1, 0.18, 0.7)
+const COLOR_AIM: Color = Color(1, 0.45, 0.4, 0.85)
+const SKILL_ICONS: Dictionary[CharacterData.SkillKind, String] = {
+	CharacterData.SkillKind.DASH: "icon_dash",
+	CharacterData.SkillKind.SHIELD: "icon_barrier",
+	CharacterData.SkillKind.DUAL_WIELD: "icon_dual",
+}
 const NO_FINGER: int = -1
 
 const TOUCH_FLAG: String = "--touch"
@@ -48,7 +54,7 @@ var _swap_finger: int = NO_FINGER
 
 
 func _ready() -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	UiStyle.fit_to_safe_area(self)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
@@ -151,43 +157,55 @@ func _on_release(finger: int) -> void:
 
 
 func _process(_delta: float) -> void:
-	# Skill cooldown sweep changes every frame.
-	if visible and player != null and not player.skill.is_ready():
+	# Cooldown sweep and the swap preview change without input events.
+	if visible:
 		queue_redraw()
 
 
 func _draw() -> void:
-	var font: Font = ThemeDB.fallback_font
 	# Joystick
-	var base: Vector2 = _joy_origin if _joy_finger != NO_FINGER else size * JOY_IDLE_POS_FRACTION
-	var knob: Vector2 = _joy_pos if _joy_finger != NO_FINGER else base
-	draw_arc(base, JOY_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
-	draw_circle(knob, JOY_KNOB_RADIUS, COLOR_ACTIVE if _joy_finger != NO_FINGER else COLOR_IDLE)
+	var active_joy: bool = _joy_finger != NO_FINGER
+	var base: Vector2 = _joy_origin if active_joy else size * JOY_IDLE_POS_FRACTION
+	var knob: Vector2 = _joy_pos if active_joy else base
+	var joy_tint := Color(1, 1, 1, 1.0 if active_joy else IDLE_ALPHA)
+	UiStyle.draw_icon(self, UiStyle.tex("joy_base"), base, JOY_SCALE, joy_tint)
+	UiStyle.draw_icon(self, UiStyle.tex("joy_knob"), knob, JOY_SCALE, joy_tint)
 
 	# Attack
 	var ac: Vector2 = _attack_center()
-	draw_circle(ac, ATTACK_RADIUS, COLOR_ACTIVE if attack_held else COLOR_IDLE)
-	draw_arc(ac, ATTACK_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
 	if attack_aim != Vector2.ZERO:
 		draw_line(ac, ac + attack_aim.limit_length(ATTACK_RADIUS * 2.0), COLOR_AIM, AIM_LINE_WIDTH)
-	_label(font, ac, "FIRE")
+	_round(ac, "round_fire", ATTACK_SCALE, attack_held)
+	UiStyle.draw_icon(self, UiStyle.tex("icon_fire"), ac + _drop(attack_held), ATTACK_SCALE)
 
 	# Skill + cooldown sweep
 	var sc: Vector2 = _skill_center()
-	draw_circle(sc, SKILL_RADIUS, COLOR_ACTIVE if skill_held else COLOR_IDLE)
-	if player != null and not player.skill.is_ready():
-		var frac: float = 1.0 if player.skill.is_active() else player.skill.cooldown_fraction()
-		draw_arc(sc, SKILL_RADIUS * 0.5, -PI * 0.5, -PI * 0.5 + TAU * frac, SEGMENTS, COLOR_COOLDOWN, SKILL_RADIUS)
-	draw_arc(sc, SKILL_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
-	_label(font, sc, player.character.skill_name.to_upper() if player != null else "SKILL")
+	_round(sc, "round", SKILL_SCALE, skill_held)
+	if player != null:
+		var sk: CharacterSkill = player.skill
+		UiStyle.draw_icon(self, UiStyle.tex(SKILL_ICONS[player.character.skill]), sc + _drop(skill_held), SKILL_SCALE)
+		if sk.is_active():
+			draw_arc(sc, SKILL_RADIUS - 2.0, 0.0, TAU, SEGMENTS, UiStyle.C_TEAL_L, 4.0)
+		elif not sk.is_ready():
+			draw_arc(sc, SKILL_RADIUS * 0.45, -PI * 0.5, -PI * 0.5 + TAU * sk.cooldown_fraction(), SEGMENTS,
+				COLOR_COOLDOWN, SKILL_RADIUS * 0.9)
+			UiStyle.draw_text(self, sc + Vector2(0, UiStyle.SIZE_HEADING * 0.35), str(ceili(sk.cooldown_remaining)),
+				UiStyle.SIZE_HEADING, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, -1.0, true)
 
-	# Swap
+	# Swap: the weapon you'd switch to
 	var wc: Vector2 = _swap_center()
-	draw_circle(wc, SWAP_RADIUS, COLOR_ACTIVE if swap_held else COLOR_IDLE)
-	draw_arc(wc, SWAP_RADIUS, 0.0, TAU, SEGMENTS, COLOR_RING, RING_WIDTH)
-	_label(font, wc, "SWAP")
+	_round(wc, "round", SWAP_SCALE, swap_held)
+	if player != null and player.loadout.slots.size() > 1:
+		var lo: Loadout = player.loadout
+		var next: WeaponData = lo.slots[(lo.active_index + 1) % lo.slots.size()].data
+		UiStyle.draw_icon(self, next.sprite, wc + _drop(swap_held), 1.0)
+	UiStyle.draw_icon(self, UiStyle.tex("icon_swap"), wc + Vector2(SWAP_RADIUS * 0.6, SWAP_RADIUS * 0.6), 1.0)
 
 
-func _label(font: Font, center: Vector2, text: String) -> void:
-	var w: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE).x
-	draw_string(font, center + Vector2(-w * 0.5, LABEL_FONT_SIZE * 0.35), text, HORIZONTAL_ALIGNMENT_LEFT, -1, LABEL_FONT_SIZE, COLOR_RING)
+func _round(center: Vector2, art: String, scale_px: float, pressed: bool) -> void:
+	var tint := Color(0.8, 0.8, 0.85, 1.0) if pressed else Color(1, 1, 1, IDLE_ALPHA)
+	UiStyle.draw_icon(self, UiStyle.tex(art), center + _drop(pressed), scale_px, tint)
+
+
+func _drop(pressed: bool) -> Vector2:
+	return Vector2(0.0, PRESS_DROP if pressed else 0.0)

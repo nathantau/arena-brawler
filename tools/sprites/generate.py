@@ -667,6 +667,110 @@ def pickup_art() -> dict[str, Image.Image]:
     return {"pad": outline(pad.img).crop((0, 0, 32, 32)), "energy": outline(crystal.img).crop((0, 0, 16, 24))}
 
 
+# --- UI kit: 9-slice panels/buttons, round touch buttons, icons (assets/ui/) ---------------
+# Drawn at UiStyle.UI_PX canvas units per art pixel. 9-slice margins: UiStyle.SLICE.
+
+UI_OUT = ROOT / "assets" / "ui"
+SLICE_SIZE = 16
+
+
+def slice_box(fill, border, light, lip, lip_h: int = 0, edge=OUTLINE) -> Image.Image:
+    """A 16x16 9-slice: `edge` outline, 1 px light bevel on top, `lip_h` px of `lip` at the bottom."""
+    img = Image.new("RGBA", (SLICE_SIZE, SLICE_SIZE), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    n = SLICE_SIZE - 1
+    d.rounded_rectangle((0, 0, n, n), 3, edge + (255,))
+    d.rounded_rectangle((1, 1, n - 1, n - 1), 2, border + (255,))
+    d.rectangle((2, 2, n - 2, n - 2 - lip_h), fill + (255,))
+    d.rectangle((3, 2, n - 3, 2), light + (255,))
+    if lip_h:
+        d.rectangle((2, n - 1 - lip_h, n - 2, n - 2), lip + (255,))
+    return img
+
+
+def round_button(fill, light, lip, size: int = 32) -> Image.Image:
+    c = Canvas()
+    c.flat(E((1, 2, size - 2, size - 1)), lip)  # lip below
+    c.flat(E((1, 1, size - 2, size - 3)), fill)
+    c.flat(E((5, 3, size - 6, 9)), light)
+    c.flat(E((7, 4, size - 8, 7)), fill)
+    return outline(c.img).crop((0, 0, size + 1, size + 1))
+
+
+def ring(size: int, color, width: int) -> Image.Image:
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((0, 0, size - 1, size - 1), OUTLINE + (255,))
+    d.ellipse((1, 1, size - 2, size - 2), color + (255,))
+    d.ellipse((1 + width, 1 + width, size - 2 - width, size - 2 - width), OUTLINE + (255,))
+    d.ellipse((2 + width, 2 + width, size - 3 - width, size - 3 - width), (0, 0, 0, 0))
+    return img
+
+
+def icon(draw, size: int = 13) -> Image.Image:
+    """`draw` paints into a size x size box; returned with a 1 px outline margin ((size + 2)^2)."""
+    c = Canvas()
+    draw(c)
+    padded = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    padded.paste(c.img, (1, 1))
+    return outline(padded).crop((0, 0, size + 2, size + 2))
+
+
+ICONS = {
+    "hp": lambda c: (c.flat(E((1, 2, 6, 7)), RED), c.flat(E((6, 2, 11, 7)), RED),
+                     c.flat(P([(1, 5), (11, 5), (6, 11)]), RED), c.dot(3, 3, WHITE)),
+    "armor": lambda c: (c.flat(P([(2, 1), (10, 1), (10, 6), (6, 11), (2, 6)]), STEEL),
+                        c.flat(P([(6, 1), (10, 1), (10, 6), (6, 11)]), STEEL_D)),
+    "energy": lambda c: c.flat(P([(7, 1), (3, 7), (6, 7), (5, 11), (10, 5), (7, 5), (8, 1)]), TEAL_L),
+    "kills": lambda c: (c.flat(L([(2, 10), (10, 2)], 2), STEEL), c.flat(L([(2, 2), (10, 10)], 2), STEEL),
+                        c.flat(R((2, 9, 3, 10)), BROWN), c.flat(R((9, 9, 10, 10)), BROWN)),
+    "deaths": lambda c: (c.flat(E((2, 1, 10, 9)), WHITE), c.flat(R((4, 8, 8, 11)), WHITE),
+                         c.flat(R((4, 4, 5, 6)), OUTLINE), c.flat(R((7, 4, 8, 6)), OUTLINE),
+                         c.flat(R((5, 10, 5, 11)), OUTLINE), c.flat(R((7, 10, 7, 11)), OUTLINE)),
+    "clock": lambda c: (c.flat(E((1, 1, 11, 11)), WHITE), c.flat(R((6, 3, 6, 6)), OUTLINE),
+                        c.flat(R((6, 6, 8, 6)), OUTLINE)),
+    "fire": lambda c: (c.flat(E((1, 1, 11, 11)), WHITE), c.flat(E((3, 3, 9, 9)), RED), c.flat(E((5, 5, 7, 7)), WHITE),
+                       c.flat(R((6, 0, 6, 12)), WHITE), c.flat(R((0, 6, 12, 6)), WHITE)),
+    "swap": lambda c: (c.flat(P([(1, 4), (8, 4), (8, 1), (12, 5), (8, 9), (8, 6), (1, 6)]), WHITE),
+                       c.flat(P([(11, 8), (4, 8), (4, 11), (0, 7), (4, 3)]), WHITE)),
+    "dash": lambda c: (c.flat(P([(5, 2), (11, 6), (5, 10), (7, 6)]), WHITE), c.flat(R((1, 3, 4, 3)), TEAL_L),
+                       c.flat(R((0, 6, 4, 6)), TEAL_L), c.flat(R((1, 9, 4, 9)), TEAL_L)),
+    "barrier": lambda c: (c.flat(RR((2, 1, 10, 11), 2), BLUE), c.flat(P([(6, 3), (8, 6), (6, 9), (4, 6)]), YELLOW)),
+    "dual": lambda c: (c.flat(R((1, 3, 8, 5)), STEEL), c.flat(R((1, 5, 3, 8)), BROWN),
+                       c.flat(R((4, 7, 11, 9)), STEEL), c.flat(R((9, 9, 11, 12)), BROWN)),
+    "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
+                         c.flat(R((3, 9, 9, 11)), ORANGE)),
+}
+
+
+UI_SLICE_SCALE = 2  # 9-slices are saved pre-scaled (StyleBoxTexture can't scale); keep in sync with UiStyle.SLICE
+
+
+def ui_kit() -> dict[str, Image.Image]:
+    slices = {
+        "panel": slice_box(NAVY, SHADOW, STEEL_D, SHADOW, 2),
+        "card": slice_box(SHADOW, STEEL_D, STEEL_D, OUTLINE, 2),
+        "card_selected": slice_box(SHADOW, TEAL_L, TEAL_L, TEAL, 2),
+        "card_gold": slice_box(SHADOW, YELLOW, YELLOW, ORANGE, 2),
+        "button": slice_box(STEEL_D, STEEL_D, STEEL, SHADOW, 3),
+        "button_pressed": slice_box(SHADOW, SHADOW, STEEL_D, SHADOW, 0),
+        "button_primary": slice_box(TEAL, TEAL, TEAL_L, NAVY, 3),
+        "button_primary_pressed": slice_box(NAVY, NAVY, TEAL, NAVY, 0),
+        "button_disabled": slice_box(SHADOW, SHADOW, SHADOW, OUTLINE, 3, edge=SHADOW),
+        "field": slice_box(OUTLINE, SHADOW, OUTLINE, OUTLINE, 0),
+    }
+    big = SLICE_SIZE * UI_SLICE_SCALE
+    kit = {k: v.resize((big, big), Image.NEAREST) for k, v in slices.items()}
+    kit |= {
+        "round": round_button(STEEL_D, STEEL, SHADOW),
+        "round_fire": round_button(RED, ORANGE, MAROON),
+        "joy_base": ring(40, STEEL_D, 3),
+        "joy_knob": round_button(STEEL, WHITE, STEEL_D, 18),
+    }
+    kit.update({f"icon_{k}": icon(v) for k, v in ICONS.items()})
+    return kit
+
+
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong}
 AURAS = {"wukong": wukong_clouds}  # optional per-frame effects drawn behind the character
 
@@ -762,6 +866,11 @@ def main() -> None:
         check(img, img.width)
         img.save(ARENA_OUT / f"{name}.png")
     print(f"wrote {len(THEMES)} arena themes to {ARENA_OUT}")
+    UI_OUT.mkdir(exist_ok=True)
+    for name, img in ui_kit().items():
+        check(img, img.width, edges=False)  # UI art is outlined right up to its box
+        img.save(UI_OUT / f"{name}.png")
+    print(f"wrote UI kit to {UI_OUT}")
     # App Store icons must be opaque.
     icon = Image.new("RGBA", (SIZE, SIZE), NAVY + (255,))
     icon.alpha_composite(frames(flicker)[0])
