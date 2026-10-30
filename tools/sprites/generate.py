@@ -175,7 +175,7 @@ def warden(step=None):
     up.part(R((31, 6, 33, 18)), STEEL, line=False)  # crest ridge
     up.part(R((17, 30, 47, 35)), STEEL_D)  # helmet rim
     up.flat(RR((22, 19, 47, 27), 3), OUTLINE)  # visor
-    for x in (34, 41):  # round glowing eyes
+    for x in (32, 42):  # round glowing eyes
         up.flat(RR((x, 20, x + 3, 25), 1), TEAL_L)
         up.flat(R((x, 20, x + 1, 21)), WHITE)
     up.flat(R((30, 27, 32, 27)), ORANGE)  # blush glow on the faceplate
