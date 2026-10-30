@@ -19,7 +19,7 @@ godot --path . --headless --export-release "iOS" build/ios/ArenaBrawler.xcodepro
 archive="$HOME/Library/Developer/Xcode/Archives/$(date +%Y-%m-%d)/ArenaBrawler-build$next.xcarchive"
 xcodebuild archive -project build/ios/ArenaBrawler.xcodeproj -scheme ArenaBrawler \
   -destination 'generic/platform=iOS' -archivePath "$archive" \
-  -allowProvisioningUpdates $auth CODE_SIGN_STYLE=Automatic > "$out/archive.log" 2>&1 \
+  -allowProvisioningUpdates $auth CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" > "$out/archive.log" 2>&1 \
   || { tail -20 "$out/archive.log"; git checkout $presets; exit 1; }
 xcodebuild -exportArchive -archivePath "$archive" \
   -exportOptionsPlist tools/release/ExportOptions.plist \
