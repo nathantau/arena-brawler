@@ -19,28 +19,35 @@ enum StateField {
 	COUNT,
 }
 
-const OUTLINE_WIDTH: float = 2.0
-const OUTLINE_DARKEN: float = 0.5
-const CIRCLE_SEGMENTS: int = 24
-const GUN_LENGTH: float = 14.0
-const GUN_WIDTH: float = 6.0
+const GUN_HOLD_DISTANCE: float = 14.0
 const GUN_RECOIL_PX: float = 4.0
 const RECOIL_TIME: float = 0.06
 const INVULN_ALPHA: float = 0.45
+## Modulate > 1 pushes the sprite towards white for the hit flash.
+const HIT_FLASH_MODULATE: Color = Color(4, 4, 4)
 const BAR_WIDTH: float = 40.0
 const BAR_HEIGHT: float = 4.0
 const BAR_GAP: float = 2.0
 const BAR_OFFSET_Y: float = 10.0
+const RING_WIDTH: float = 2.0
 const TARGET_RING_PAD: float = 8.0
-const TARGET_RING_WIDTH: float = 2.0
+const DUAL_GLOW_PAD: float = 3.0
+## Coloured ellipse under the feet: the player's colour, squashed for a top-down look.
+const FOOT_RING_SQUASH: float = 0.45
+const FOOT_RING_Y: float = 16.0
+const SHADOW_COLOR: Color = Color(0, 0, 0, 0.3)
+const CIRCLE_SEGMENTS: int = 24
 const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
 const COLOR_ARMOR: Color = Color(0.7, 0.75, 0.85)
 const COLOR_BAR_BG: Color = Color(0, 0, 0, 0.5)
 const COLOR_TARGET: Color = Color(1, 0.3, 0.3, 0.9)
-## Small emblem inside the body so characters are told apart at a glance.
-const EMBLEM_SIZE: float = 6.0
-const EMBLEM_DARKEN: float = 0.45
-const DUAL_GLOW_WIDTH: float = 3.0
+## Walk cycle: sprite frames per second, and the on-screen speed (px/s) that counts as walking.
+const WALK_FPS: float = 10.0
+const IDLE_FPS: float = 2.0
+const WALK_MIN_SPEED: float = 30.0
+const WALK_CYCLE: Array[PixelSprites.Frame] = [
+	PixelSprites.Frame.STEP_A, PixelSprites.Frame.BOB, PixelSprites.Frame.STEP_B, PixelSprites.Frame.BOB,
+]
 
 var player_id: int = 0
 var color_index: int = 0
@@ -74,6 +81,9 @@ var _prev_skill: bool = false
 var _prev_swap: bool = false
 var _hit_flash: float = 0.0
 var _recoil: float = 0.0
+var _anim_time: float = 0.0
+var _walking: bool = false
+var _last_draw_pos: Vector2 = Vector2.ZERO
 
 
 func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData], ctrl: PlayerController,
@@ -121,6 +131,11 @@ func _process(delta: float) -> void:
 	_hit_flash = maxf(0.0, _hit_flash - delta)
 	_recoil = maxf(0.0, _recoil - delta)
 	visual_offset *= exp(-Constants.CORRECTION_DECAY * delta)
+	# Animate from on-screen movement so remote (interpolated) players walk too.
+	var moved: float = global_position.distance_to(_last_draw_pos)
+	_last_draw_pos = global_position
+	_walking = delta > 0.0 and moved / delta > WALK_MIN_SPEED
+	_anim_time += delta
 	queue_redraw()
 
 
@@ -304,47 +319,59 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 
 
 func _draw() -> void:
-	draw_set_transform(visual_offset)
-	var body: Color = Color.WHITE if _hit_flash > 0.0 else display_color
-	if stats.is_invulnerable():
-		body.a = INVULN_ALPHA
 	var r: float = Constants.PLAYER_RADIUS
-	var recoil_px: float = GUN_RECOIL_PX * (_recoil / RECOIL_TIME)
-	var gun_start: Vector2 = facing * (r * 0.5 - recoil_px)
-	var gun_end: Vector2 = facing * (r + GUN_LENGTH - recoil_px)
+	var flip: float = -1.0 if facing.x < 0.0 else 1.0
 	var gun_color: Color = loadout.active().data.color
+	var tint: Color = HIT_FLASH_MODULATE if _hit_flash > 0.0 else Color.WHITE
+	if stats.is_invulnerable():
+		tint.a = INVULN_ALPHA
+	# Ground layer: shadow + player-colour foot ring (+ dual-wield glow, target ring).
+	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
+	draw_circle(Vector2.ZERO, r, SHADOW_COLOR)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, CIRCLE_SEGMENTS, display_color, RING_WIDTH)
 	if skill.is_dual_wielding():
-		var side: Vector2 = facing.orthogonal() * character.dual_offset
-		draw_line(gun_start + side, gun_end + side, gun_color, GUN_WIDTH)
-		draw_line(gun_start - side, gun_end - side, gun_color, GUN_WIDTH)
-	else:
-		draw_line(gun_start, gun_end, gun_color, GUN_WIDTH)
-	draw_circle(Vector2.ZERO, r, body)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, CIRCLE_SEGMENTS, display_color.darkened(OUTLINE_DARKEN), OUTLINE_WIDTH)
-	if skill.is_dual_wielding():
-		draw_arc(Vector2.ZERO, r + OUTLINE_WIDTH, 0.0, TAU, CIRCLE_SEGMENTS, gun_color, DUAL_GLOW_WIDTH)
-	_draw_emblem(body.darkened(EMBLEM_DARKEN))
+		draw_arc(Vector2.ZERO, r + DUAL_GLOW_PAD, 0.0, TAU, CIRCLE_SEGMENTS, gun_color, RING_WIDTH)
 	if targeted:
-		draw_arc(Vector2.ZERO, r + TARGET_RING_PAD, 0.0, TAU, CIRCLE_SEGMENTS, COLOR_TARGET, TARGET_RING_WIDTH)
+		draw_arc(Vector2.ZERO, r + TARGET_RING_PAD, 0.0, TAU, CIRCLE_SEGMENTS, COLOR_TARGET, RING_WIDTH)
+	# Guns behind the body when aiming up, in front otherwise.
+	var guns_behind: bool = facing.y < 0.0
+	if guns_behind:
+		_draw_guns(gun_color, tint)
+	var tex: Texture2D = PixelSprites.character_texture(character.id, display_color, _anim_frame())
+	var scale_px: float = PixelSprites.SCALE
+	draw_set_transform(visual_offset, 0.0, Vector2(scale_px * flip, scale_px))
+	draw_texture(tex, -tex.get_size() * 0.5, tint)
+	if not guns_behind:
+		_draw_guns(gun_color, tint)
+	draw_set_transform(visual_offset)
 	if not is_local:
 		_draw_bars(r)
 
 
-func _draw_emblem(c: Color) -> void:
-	var e: float = EMBLEM_SIZE
-	match character.skill:
-		CharacterData.SkillKind.DASH:
-			var tip: Vector2 = facing * e
-			var back: Vector2 = -facing * e * 0.5
-			var side: Vector2 = facing.orthogonal() * e * 0.7
-			draw_line(back + side, tip, c, OUTLINE_WIDTH)
-			draw_line(back - side, tip, c, OUTLINE_WIDTH)
-		CharacterData.SkillKind.SHIELD:
-			draw_rect(Rect2(Vector2(-e, -e) * 0.7, Vector2(e, e) * 1.4), c, false, OUTLINE_WIDTH)
-		CharacterData.SkillKind.DUAL_WIELD:
-			var side2: Vector2 = facing.orthogonal() * e * 0.6
-			draw_circle(side2, e * 0.35, c)
-			draw_circle(-side2, e * 0.35, c)
+func _anim_frame() -> PixelSprites.Frame:
+	if _walking:
+		return WALK_CYCLE[int(_anim_time * WALK_FPS) % WALK_CYCLE.size()]
+	return PixelSprites.Frame.BOB if int(_anim_time * IDLE_FPS) % 2 == 1 else PixelSprites.Frame.IDLE
+
+
+func _draw_guns(gun_color: Color, tint: Color) -> void:
+	if skill.is_dual_wielding():
+		var side: Vector2 = facing.orthogonal() * character.dual_offset
+		_draw_gun(side, gun_color, tint)
+		_draw_gun(-side, gun_color, tint)
+	else:
+		_draw_gun(Vector2.ZERO, gun_color, tint)
+
+
+func _draw_gun(offset: Vector2, gun_color: Color, tint: Color) -> void:
+	var gun: Texture2D = PixelSprites.gun_texture()
+	var recoil_px: float = GUN_RECOIL_PX * (_recoil / RECOIL_TIME)
+	var pos: Vector2 = visual_offset + offset + facing * (GUN_HOLD_DISTANCE - recoil_px)
+	# Mirror vertically when aiming left so the grip stays below the barrel.
+	var flip_v: float = -1.0 if facing.x < 0.0 else 1.0
+	var scale_px: float = PixelSprites.SCALE
+	draw_set_transform(pos, facing.angle(), Vector2(scale_px, scale_px * flip_v))
+	draw_texture(gun, Vector2(0.0, -gun.get_size().y * 0.5), gun_color * tint)
 
 
 func _draw_bars(r: float) -> void:
