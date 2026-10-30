@@ -68,6 +68,13 @@ const BOT_SKILL_CHANCE_PER_SEC: float = 0.4
 
 # --- Feedback ---
 const HIT_FLASH_TIME: float = 0.08
+## Character sprite sheets (tools/sprites/generate.py): 64 px frames, idle frames then hit-flash frames.
+const SPRITE_FRAME_SIZE: int = 64
+const SPRITE_IDLE_FRAMES: int = 4
+const SPRITE_HIT_FRAMES: int = 2
+const SPRITE_IDLE_FPS: float = 6.0
+## On-screen size of a sprite pixel (64 px art -> 80 px tall on a 720 px-high view).
+const SPRITE_SCALE: float = 1.25
 const HAPTIC_HIT_MS: int = 30
 const HAPTIC_KILL_MS: int = 60
 const HAPTIC_EXPLOSION_MS: int = 45

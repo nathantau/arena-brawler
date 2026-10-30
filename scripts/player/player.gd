@@ -23,12 +23,10 @@ const GUN_HOLD_DISTANCE: float = 22.0
 const GUN_RECOIL_PX: float = 4.0
 const RECOIL_TIME: float = 0.06
 const INVULN_ALPHA: float = 0.45
-## Modulate > 1 pushes the sprite towards white for the hit flash.
-const HIT_FLASH_MODULATE: Color = Color(4, 4, 4)
 const BAR_WIDTH: float = 40.0
 const BAR_HEIGHT: float = 4.0
 const BAR_GAP: float = 2.0
-const BAR_OFFSET_Y: float = 10.0
+const BAR_OFFSET_Y: float = 20.0
 const RING_WIDTH: float = 2.0
 const TARGET_RING_PAD: float = 8.0
 const DUAL_GLOW_PAD: float = 3.0
@@ -41,13 +39,6 @@ const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
 const COLOR_ARMOR: Color = Color(0.7, 0.75, 0.85)
 const COLOR_BAR_BG: Color = Color(0, 0, 0, 0.5)
 const COLOR_TARGET: Color = Color(1, 0.3, 0.3, 0.9)
-## Walk cycle: sprite frames per second, and the on-screen speed (px/s) that counts as walking.
-const WALK_FPS: float = 10.0
-const IDLE_FPS: float = 2.0
-const WALK_MIN_SPEED: float = 30.0
-const WALK_CYCLE: Array[PixelSprites.Frame] = [
-	PixelSprites.Frame.STEP_A, PixelSprites.Frame.BOB, PixelSprites.Frame.STEP_B, PixelSprites.Frame.BOB,
-]
 
 var player_id: int = 0
 var color_index: int = 0
@@ -81,9 +72,9 @@ var _prev_skill: bool = false
 var _prev_swap: bool = false
 var _hit_flash: float = 0.0
 var _recoil: float = 0.0
-var _anim_time: float = 0.0
-var _walking: bool = false
-var _last_draw_pos: Vector2 = Vector2.ZERO
+var _sprite := AnimatedSprite2D.new()
+## Drawn after the sprite: the gun when it's in front of the body, and health bars.
+var _overlay := Node2D.new()
 
 
 func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData], ctrl: PlayerController,
@@ -107,6 +98,11 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	_shield.owner_id = id
 	_shield.color = color
 	add_child(_shield)
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_sprite.scale = Vector2.ONE * Constants.SPRITE_SCALE
+	add_child(_sprite)
+	_overlay.draw.connect(_draw_overlay)
+	add_child(_overlay)
 	set_character(p_character)
 
 
@@ -116,6 +112,8 @@ func set_character(data: CharacterData) -> void:
 	stats = PlayerStats.new(data.max_hp, data.max_armor, data.max_energy)
 	skill = CharacterSkill.new(data)
 	_shield.sync(skill, dead)
+	_sprite.sprite_frames = data.sprite_frames()
+	_sprite.play(&"idle")
 
 
 func _physics_process(delta: float) -> void:
@@ -131,12 +129,14 @@ func _process(delta: float) -> void:
 	_hit_flash = maxf(0.0, _hit_flash - delta)
 	_recoil = maxf(0.0, _recoil - delta)
 	visual_offset *= exp(-Constants.CORRECTION_DECAY * delta)
-	# Animate from on-screen movement so remote (interpolated) players walk too.
-	var moved: float = global_position.distance_to(_last_draw_pos)
-	_last_draw_pos = global_position
-	_walking = delta > 0.0 and moved / delta > WALK_MIN_SPEED
-	_anim_time += delta
+	var anim: StringName = &"hit" if _hit_flash > 0.0 else &"idle"
+	if _sprite.animation != anim:
+		_sprite.play(anim)
+	_sprite.position = visual_offset
+	_sprite.flip_h = facing.x < 0.0
+	_sprite.modulate.a = INVULN_ALPHA if stats.is_invulnerable() else 1.0
 	queue_redraw()
+	_overlay.queue_redraw()
 
 
 ## Advance this player by one input. `replay` = re-simulating already-predicted inputs
@@ -318,14 +318,10 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	return true
 
 
+## Ground layer (under the sprite child): shadow, player-colour foot ring, rings, gun when aiming up.
 func _draw() -> void:
 	var r: float = Constants.PLAYER_RADIUS
-	var flip: float = -1.0 if facing.x < 0.0 else 1.0
 	var gun_color: Color = loadout.active().data.color
-	var tint: Color = HIT_FLASH_MODULATE if _hit_flash > 0.0 else Color.WHITE
-	if stats.is_invulnerable():
-		tint.a = INVULN_ALPHA
-	# Ground layer: shadow + player-colour foot ring (+ dual-wield glow, target ring).
 	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
 	draw_circle(Vector2.ZERO, r, SHADOW_COLOR)
 	draw_arc(Vector2.ZERO, r, 0.0, TAU, CIRCLE_SEGMENTS, display_color, RING_WIDTH)
@@ -333,53 +329,46 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, r + DUAL_GLOW_PAD, 0.0, TAU, CIRCLE_SEGMENTS, gun_color, RING_WIDTH)
 	if targeted:
 		draw_arc(Vector2.ZERO, r + TARGET_RING_PAD, 0.0, TAU, CIRCLE_SEGMENTS, COLOR_TARGET, RING_WIDTH)
-	# Guns behind the body when aiming up, in front otherwise.
-	var guns_behind: bool = facing.y < 0.0
-	if guns_behind:
-		_draw_guns(gun_color, tint)
-	var tex: Texture2D = PixelSprites.character_texture(character.id, display_color, _anim_frame())
-	var scale_px: float = PixelSprites.SCALE
-	draw_set_transform(visual_offset, 0.0, Vector2(scale_px * flip, scale_px))
-	draw_texture(tex, -tex.get_size() * 0.5, tint)
-	if not guns_behind:
-		_draw_guns(gun_color, tint)
-	draw_set_transform(visual_offset)
+	if facing.y < 0.0:
+		_draw_guns(self)
+
+
+func _draw_overlay() -> void:
+	if facing.y >= 0.0:
+		_draw_guns(_overlay)
+	_overlay.draw_set_transform(visual_offset)
 	if not is_local:
-		_draw_bars(r)
+		_draw_bars(Constants.PLAYER_RADIUS)
 
 
-func _anim_frame() -> PixelSprites.Frame:
-	if _walking:
-		return WALK_CYCLE[int(_anim_time * WALK_FPS) % WALK_CYCLE.size()]
-	return PixelSprites.Frame.BOB if int(_anim_time * IDLE_FPS) % 2 == 1 else PixelSprites.Frame.IDLE
-
-
-func _draw_guns(gun_color: Color, tint: Color) -> void:
+func _draw_guns(ci: CanvasItem) -> void:
 	if skill.is_dual_wielding():
 		var side: Vector2 = facing.orthogonal() * character.dual_offset
-		_draw_gun(side, gun_color, tint)
-		_draw_gun(-side, gun_color, tint)
+		_draw_gun(ci, side)
+		_draw_gun(ci, -side)
 	else:
-		_draw_gun(Vector2.ZERO, gun_color, tint)
+		_draw_gun(ci, Vector2.ZERO)
 
 
-func _draw_gun(offset: Vector2, gun_color: Color, tint: Color) -> void:
+func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 	var gun: Texture2D = PixelSprites.gun_texture()
 	var recoil_px: float = GUN_RECOIL_PX * (_recoil / RECOIL_TIME)
 	var pos: Vector2 = visual_offset + offset + facing * (GUN_HOLD_DISTANCE - recoil_px)
 	# Mirror vertically when aiming left so the grip stays below the barrel.
 	var flip_v: float = -1.0 if facing.x < 0.0 else 1.0
 	var scale_px: float = PixelSprites.SCALE
-	draw_set_transform(pos, facing.angle(), Vector2(scale_px, scale_px * flip_v))
-	draw_texture(gun, Vector2(0.0, -gun.get_size().y * 0.5), gun_color * tint)
+	var color: Color = loadout.active().data.color
+	color.a = _sprite.modulate.a
+	ci.draw_set_transform(pos, facing.angle(), Vector2(scale_px, scale_px * flip_v))
+	ci.draw_texture(gun, Vector2(0.0, -gun.get_size().y * 0.5), color)
 
 
 func _draw_bars(r: float) -> void:
 	var top_left := Vector2(-BAR_WIDTH * 0.5, -r - BAR_OFFSET_Y - BAR_HEIGHT * 2.0 - BAR_GAP)
 	var armor_frac: float = float(stats.armor) / float(maxi(1, stats.max_armor))
 	var hp_frac: float = float(stats.hp) / float(maxi(1, stats.max_hp))
-	draw_rect(Rect2(top_left, Vector2(BAR_WIDTH, BAR_HEIGHT)), COLOR_BAR_BG)
-	draw_rect(Rect2(top_left, Vector2(BAR_WIDTH * armor_frac, BAR_HEIGHT)), COLOR_ARMOR)
+	_overlay.draw_rect(Rect2(top_left, Vector2(BAR_WIDTH, BAR_HEIGHT)), COLOR_BAR_BG)
+	_overlay.draw_rect(Rect2(top_left, Vector2(BAR_WIDTH * armor_frac, BAR_HEIGHT)), COLOR_ARMOR)
 	var hp_pos: Vector2 = top_left + Vector2(0.0, BAR_HEIGHT + BAR_GAP)
-	draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH, BAR_HEIGHT)), COLOR_BAR_BG)
-	draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH * hp_frac, BAR_HEIGHT)), COLOR_HP)
+	_overlay.draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH, BAR_HEIGHT)), COLOR_BAR_BG)
+	_overlay.draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH * hp_frac, BAR_HEIGHT)), COLOR_HP)

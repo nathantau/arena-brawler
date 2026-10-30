@@ -1,9 +1,11 @@
 [gd_resource type="Resource" script_class="CharacterData" format=3]
 
 [ext_resource type="Script" path="res://scripts/player/character_data.gd" id="1_cd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/flicker.png" id="2_sheet"]
 
 [resource]
 script = ExtResource("1_cd")
+sprite_sheet = ExtResource("2_sheet")
 id = &"flicker"
 display_name = "Flicker"
 skill_name = "Dash"
