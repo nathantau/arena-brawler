@@ -10,8 +10,9 @@ const LAYER_SHIELDS: int = 4
 ## Destructible crates. They also sit on LAYER_WALLS so movement and line of sight treat
 ## them as walls; this extra bit lets projectiles tell them apart.
 const LAYER_CRATES: int = 8
-## A strip along the top of every wall / crate that only players collide with: their feet are drawn
-## WALL_FEET_STRIP below the collision circle's edge, so without it they walk onto the wall's top (3/4 view).
+## Players move against a copy of every wall / crate shifted up by WALL_FEET_STRIP (and not against the walls
+## themselves): their feet are drawn that far below the collision circle's edge, so this is colliding by the feet
+## (3/4 view): feet stop at a wall's top, the head may overlap the wall above, and a one-tile gap fits.
 const LAYER_WALL_FEET: int = 16
 
 # --- Arena ---

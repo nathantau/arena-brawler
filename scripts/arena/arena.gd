@@ -536,17 +536,17 @@ func _on_player_shot(shooter: Player, seq: int, origin: Vector2, facing: Vector2
 	shot_fired.emit(shooter.player_id, seq, origin, facing, weapon_id, dual)
 
 
-## Players-only body along the top edge of each rect (Constants.LAYER_WALL_FEET), in the parent's space.
+## Players-only copy of each rect shifted up by WALL_FEET_STRIP (Constants.LAYER_WALL_FEET), in the parent's space.
 static func feet_strip(rects: Array[Rect2]) -> StaticBody2D:
 	var body := StaticBody2D.new()
 	body.collision_layer = Constants.LAYER_WALL_FEET
 	body.collision_mask = 0
 	for rect: Rect2 in rects:
 		var shape := RectangleShape2D.new()
-		shape.size = Vector2(rect.size.x, Constants.WALL_FEET_STRIP)
+		shape.size = rect.size
 		var cs := CollisionShape2D.new()
 		cs.shape = shape
-		cs.position = Vector2(rect.get_center().x, rect.position.y - Constants.WALL_FEET_STRIP * 0.5)
+		cs.position = rect.get_center() - Vector2(0.0, Constants.WALL_FEET_STRIP)
 		body.add_child(cs)
 	return body
 

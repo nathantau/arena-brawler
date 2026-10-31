@@ -125,7 +125,7 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	projectiles = pool
 	match_seed = p_match_seed
 	collision_layer = Constants.LAYER_PLAYERS
-	collision_mask = Constants.LAYER_WALLS | Constants.LAYER_WALL_FEET
+	collision_mask = Constants.LAYER_WALL_FEET  # walls shifted up to the feet, see Constants
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 	var circle := CircleShape2D.new()
 	circle.radius = Constants.PLAYER_RADIUS

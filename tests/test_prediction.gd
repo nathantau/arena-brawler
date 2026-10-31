@@ -14,7 +14,7 @@ func before_each() -> void:
 	world = Node2D.new()
 	add_child_autofree(world)
 	var wall := StaticBody2D.new()
-	wall.collision_layer = Constants.LAYER_WALLS
+	wall.collision_layer = Constants.LAYER_WALLS | Constants.LAYER_WALL_FEET
 	var shape := RectangleShape2D.new()
 	shape.size = Vector2(40, 2000)
 	var cs := CollisionShape2D.new()
