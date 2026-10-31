@@ -4,6 +4,7 @@ extends Control
 ## then Play vs bots (primary) and join-a-server by IP (direct connect until matchmaking in M6).
 
 signal offline_pressed
+signal host_pressed
 signal join_pressed(address: String)
 
 const DEFAULT_ADDRESS: String = "127.0.0.1:7777"
@@ -24,6 +25,7 @@ const IDLE_FPS: float = 6.0
 var _status: Label
 var _address: LineEdit
 var _join: Button
+var _host: Button
 var _tiles: Texture2D
 var _roster: Array[CharacterData] = []
 var _time: float = 0.0
@@ -62,6 +64,10 @@ func _ready() -> void:
 	_join.pressed.connect(_on_join)
 	join_row.add_child(_join)
 	box.add_child(_centered(join_row))
+
+	_host = _button("HOST A GAME ON THIS WI-FI", Vector2(BUTTON_MIN_SIZE.x, FIELD_MIN_SIZE.y))
+	_host.pressed.connect(host_pressed.emit)
+	box.add_child(_centered(_host))
 
 
 func set_status(text: String) -> void:

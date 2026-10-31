@@ -14,6 +14,8 @@ const CH_SNAPSHOT: int = 1
 const CH_EVENTS: int = 2
 const CH_SHOTS: int = 3
 const CH_INPUT: int = 4
+## ENet's fixed id for the server; a listen-server host plays as this peer.
+const HOST_ID: int = 1
 
 var server: NetServer
 var client: NetClient
@@ -50,6 +52,11 @@ func stop() -> void:
 	if client != null:
 		client.shutdown()
 		client = null
+	if server != null:
+		# Close explicitly so connected clients are told right away instead of timing out.
+		var peer := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+		if peer != null:
+			peer.close()
 	server = null
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 

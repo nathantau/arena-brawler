@@ -66,6 +66,8 @@ var match_seed: int
 var map: ArenaMap
 var players: Array[Player] = []
 var local_player: Player
+## Set on a listen-server host: "ip:port" shown in the loading room so friends can join.
+var host_address: String = ""
 var projectiles: ProjectilePool
 var crates: CrateField
 var layout_index: int = -1

@@ -151,6 +151,8 @@ func _refresh() -> void:
 	_title.text = "LOADING ROOM · %s · %s" % [MatchRules.MODE_NAMES[st.mode], ArenaLayouts.NAMES[st.arena_index]]
 	_rules.text = "First to %d kills · %d:%02d" % [MatchRules.kill_target(st.mode),
 		int(st.time_limit) / 60, int(st.time_limit) % 60]
+	if arena.host_address != "":
+		_rules.text += " · Hosting on %s" % arena.host_address
 	_mode_button.text = "Mode: %s" % ("Duel" if st.mode == MatchRules.Mode.DUEL else "FFA")
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
 	if _weapons_for != me.character.id:
