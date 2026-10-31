@@ -200,7 +200,9 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   Weapons are drawn from their sprite at the character's pixel scale, pivoting on the grip: guns
   kick back and up, melee sweeps the arc from a raised guard, thrusts stab out and back (`Player._draw_gun`).
   Clients don't stop piercing pellets on server hit events.
-  **Loading room** (`ui/lobby_panel.gd`, full screen in the lobby phase): pick a character card, then a starting
+  **Loading room** (`ui/lobby_panel.gd`, full screen in the lobby phase; steps 1 fighter / 2 weapon down the left, 3 special
+  on the right; fighter cards play the idle loop from the sheet's whole cell so everyone stands in the same spot; the
+  font's "fi" ligature is off, `UiStyle._no_ligatures`): pick a character card, then a starting
   weapon card (pickup weapons the character can use; signature shown as always carried), then Ready (disabled
   until a weapon is picked; the server doesn't require one, so autopilot/bots are unaffected). The pick is
   server-validated (`Arena.select_weapon`, `rpc_select_weapon`; lobby only, usable pickup weapon) and becomes

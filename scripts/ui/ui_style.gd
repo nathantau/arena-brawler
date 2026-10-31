@@ -52,7 +52,13 @@ static func bold() -> Font:
 		_bold = FontVariation.new()
 		_bold.base_font = FONT
 		_bold.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): BOLD_WEIGHT}
+		_bold.opentype_features = _no_ligatures()
 	return _bold
+
+
+## Pixelify Sans' "fi" ligature draws as a broken glyph ("fighter" -> "Aghter"): spell every letter out.
+static func _no_ligatures() -> Dictionary:
+	return {TextServerManager.get_primary_interface().name_to_tag("liga"): 0}
 
 
 static func tex(name: String) -> Texture2D:
@@ -90,6 +96,8 @@ static func install() -> void:
 ## Card / CardSelected / CardGold (selectable tiles), HeaderLabel, DimLabel.
 static func build_theme() -> Theme:
 	var t := Theme.new()
+	var font: FontFile = FONT  # (a const can't be assigned to, but the resource itself can)
+	font.opentype_feature_overrides = _no_ligatures()
 	t.default_font = FONT
 	t.default_font_size = SIZE_BODY
 	_button_styles(t, &"Button", "button", "button_pressed")

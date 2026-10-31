@@ -9,12 +9,15 @@ extends PanelContainer
 const SPACING: int = 10
 const BUTTON_MIN_SIZE: Vector2 = Vector2(170, 52)
 const READY_MIN_SIZE: Vector2 = Vector2(240, 64)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(138, 196)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 222)
+## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
+## the cell's body box, so they all stand in the same spot.
+const FIGHTER_ART_SCALE: float = 2.0
+const FIGHTER_ART_SIZE: Vector2 = Vector2(136, 150)
 ## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
-const SKILL_ROW_SIZE: Vector2 = Vector2(300, 56)
+const SKILL_ROW_SIZE: Vector2 = Vector2(320, 66)
 const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
-const WEAPON_CARD_SIZE: Vector2 = Vector2(182, 128)
-const CHARACTER_ART_SCALE: float = 2.0
+const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 128)
 const WEAPON_ART_SCALE: float = 2.0
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 
@@ -74,24 +77,28 @@ func _ready() -> void:
 	steps.add_child(top)
 	var fighters := VBoxContainer.new()
 	fighters.add_theme_constant_override("separation", SPACING)
+	fighters.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # pushes the specials column to the right edge
 	top.add_child(fighters)
 	_label(fighters, &"HeaderLabel").text = "1 · Choose your fighter"
 	var character_row := _row(fighters)
 	for c: CharacterData in arena.characters.ordered:
-		var card: Button = _card(character_row, CHARACTER_CARD_SIZE, c.portrait(),
-			CHARACTER_ART_SCALE, [c.display_name, "HP %d · Armor %d" % [c.max_hp, c.max_armor]])
+		var card: Button = _card(character_row, CHARACTER_CARD_SIZE, _fighter_art(c),
+			[c.display_name, "HP %d · Armor %d" % [c.max_hp, c.max_armor]])
 		var id: StringName = c.id
 		card.pressed.connect(func() -> void: arena.character_requested.emit(id))
 		_character_cards[id] = card
 
 	# Weapons under the fighters, so a character with many specials can't push them below the fold.
-	_label(fighters, &"HeaderLabel").text = "3 · Choose your weapon"
+	var gap := Control.new()
+	gap.custom_minimum_size.y = SPACING
+	fighters.add_child(gap)
+	_label(fighters, &"HeaderLabel").text = "2 · Choose your weapon"
 	_weapon_row = _row(fighters)
 
 	var specials := VBoxContainer.new()
 	specials.add_theme_constant_override("separation", SPACING)
 	top.add_child(specials)
-	_label(specials, &"HeaderLabel").text = "2 · Choose your special"
+	_label(specials, &"HeaderLabel").text = "3 · Choose your special"
 	_special_row = VBoxContainer.new()
 	_special_row.add_theme_constant_override("separation", SPACING)
 	specials.add_child(_special_row)
@@ -179,12 +186,12 @@ func _build_weapon_cards(c: CharacterData) -> void:
 		child.queue_free()
 	var sig: WeaponData = c.signature_weapon
 	if sig != null:
-		var sig_card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, sig.sprite, WEAPON_ART_SCALE,
+		var sig_card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, _art(sig.sprite, WEAPON_ART_SCALE),
 			[sig.display_name, "Signature · always"])
 		sig_card.disabled = true
 		sig_card.theme_type_variation = &"CardGold"
 	for w: WeaponData in arena.starting_weapons_for(c):
-		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, w.sprite, WEAPON_ART_SCALE,
+		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, _art(w.sprite, WEAPON_ART_SCALE),
 			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
 				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost]])
 		var id: StringName = w.id
@@ -265,22 +272,18 @@ func _row(parent: Node) -> HBoxContainer:
 	return row
 
 
-## A tappable card: pixel art (Nearest, scaled) over a bold first line and small lines below.
-func _card(parent: Node, min_size: Vector2, art: Texture2D, art_scale: float, lines: Array[String]) -> Button:
+## A tappable card: art over a bold first line and small lines below.
+func _card(parent: Node, min_size: Vector2, art: Control, lines: Array[String]) -> Button:
 	var card := _button(parent, min_size)
 	var box := VBoxContainer.new()
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, SPACING)
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 2)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(box)
-	var pic := TextureRect.new()
-	pic.texture = art
-	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pic.custom_minimum_size = art.get_size() * art_scale
-	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(pic)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	box.add_child(art)
 	for i: int in lines.size():
 		var l: Label = _label(box, &"Label" if i == 0 else &"DimLabel")
 		if i == 0:
@@ -291,6 +294,33 @@ func _card(parent: Node, min_size: Vector2, art: Texture2D, art_scale: float, li
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return card
+
+
+## Still pixel art (Nearest, scaled).
+func _art(tex: Texture2D, art_scale: float) -> TextureRect:
+	var pic := TextureRect.new()
+	pic.texture = tex
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.custom_minimum_size = tex.get_size() * art_scale
+	return pic
+
+
+## The fighter playing its idle loop: the sheet's whole cell, centred in a clipped window, so every character
+## stands in the same spot.
+func _fighter_art(c: CharacterData) -> Control:
+	var window := Control.new()
+	window.custom_minimum_size = FIGHTER_ART_SIZE
+	window.clip_contents = true
+	var sprite := AnimatedSprite2D.new()
+	sprite.sprite_frames = c.sprite_frames()
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sprite.scale = Vector2.ONE * FIGHTER_ART_SCALE
+	sprite.position = FIGHTER_ART_SIZE * 0.5
+	window.add_child(sprite)
+	sprite.play(&"idle")
+	return window
 
 
 ## Full-screen backdrop; content padded clear of notches / the home bar.
