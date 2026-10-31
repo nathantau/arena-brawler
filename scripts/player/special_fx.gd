@@ -168,7 +168,7 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 	draw_set_transform(at + Player.hand_offset(dir), dir.angle(),
 		Vector2(s, s * flip_v))
 	var tint := Color(1, 1, 1, alpha)
-	draw_texture(w.sprite, -Player.WEAPON_GRIP, tint)
+	w.draw_held(self, Player.WEAPON_GRIP, tint)
 	draw_set_transform(Vector2.ZERO)
 
 

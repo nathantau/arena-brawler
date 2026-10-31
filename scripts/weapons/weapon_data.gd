@@ -34,6 +34,9 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var sfx: StringName = &"shot"
 ## Pixel art from tools/sprites/generate.py, pointing right, held at Player.WEAPON_GRIP.
 @export var sprite: Texture2D
+## Optional in-world loop (generate.py WEAPON_ANIMS): a strip of `sprite`-sized frames played instead of `sprite`
+## while held; the HUD and loading room keep the still `sprite`.
+@export var held_frames: Texture2D
 ## Bullet art (tools/sprites/generate.py PROJECTILES): a 2-frame strip of square frames pointing
 ## right, rotated to the flight direction. Null = a plain circle of `color`.
 @export var projectile_sprite: Texture2D
@@ -76,6 +79,20 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Animate (and draw the hit) as a straight stab instead of a sweep.
 @export var thrust: bool = false
 ## With splash_radius > 0 a melee hit is a slam: one blast at the tip of the reach instead of the arc.
+
+
+const HELD_FPS: float = 8.0
+
+
+## Draws the held art with its grip at the transform's origin, looping `held_frames` when set.
+func draw_held(ci: CanvasItem, grip: Vector2, tint: Color) -> void:
+	if held_frames == null:
+		ci.draw_texture(sprite, -grip, tint)
+		return
+	var size: Vector2 = sprite.get_size()
+	var count: int = maxi(1, int(held_frames.get_width() / size.x))
+	var frame: int = int(Time.get_ticks_msec() / 1000.0 * HELD_FPS) % count
+	ci.draw_texture_rect_region(held_frames, Rect2(-grip, size), Rect2(Vector2(frame * size.x, 0.0), size), tint)
 
 
 ## How far along the aim shots spawn from their origin (the hand holding the gun, Player.shot_origin()).

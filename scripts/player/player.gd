@@ -590,7 +590,7 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 	var hand_at: Vector2 = visual_offset + offset + hand_offset(facing) + facing * hold
 	var tint := Color(1, 1, 1, _sprite.modulate.a)
 	ci.draw_set_transform(hand_at, angle, Vector2(scale_px, scale_px * flip_v))
-	ci.draw_texture(w.sprite, -WEAPON_GRIP, tint)
+	w.draw_held(ci, WEAPON_GRIP, tint)
 
 
 func _draw_bars(r: float) -> void:

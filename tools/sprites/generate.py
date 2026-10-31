@@ -393,14 +393,23 @@ def sakura(step=None, t=0):
 
 
 def flint(step=None, t=0, heat=0.0):
-    """Fire: a soot-black little fire elemental with glowing ember cracks, a molten face and fists of fire. His
-    flaming hair is drawn above the art box (CROWNS: flint_crown). `heat` 0..1 stokes him into his Inferno form:
+    """Fire: a little fire elemental with a molten face, a glowing molten body
+    and legs with pulsing veins and an ember heart, flames curling up him and wisps breaking off, and fists of fire. His flaming hair is drawn above the
+    art box (CROWNS: flint_crown). `heat` 0..1 stokes him into his Inferno form:
     bigger hand flames, white-hot cracks, flames off his shoulders and blazing eyes trailing fire."""
     hot = heat >= 0.5
     crack = (ORANGE, YELLOW)[t % 2] if not hot else (YELLOW, WHITE)[t % 2]  # cracks pulse every tick
     low = Canvas()
-    for x, dy in legs(low, SHADOW, MAROON, step):
-        low.flat(R((x + 2, 47 + dy, x + 2, 50 + dy)), crack)  # ember crack down each leg
+    for k, (x, dy) in enumerate(legs(low, ORANGE if hot else RED, RED, step)):  # molten legs and feet, on fire too
+        low.flat(R((x + 2, 46 + dy, x + 3, 52 + dy)), YELLOW if hot else ORANGE)  # glowing inside
+        low.flat(R((x + 2, 47 + dy, x + 2, 51 + dy)), crack)  # a vein of fire down each
+        low.flat(R((x + 1, 54 + dy, x + 5, 55 + dy)), YELLOW if hot else ORANGE)  # hot toes
+        for j, fx in enumerate((x - 2, x + 7)):  # little flames licking up beside each foot, flickering out of step
+            h = 4 + (t + k + j) % 3 + round(heat * 3)
+            low.part(P([(fx - 2, 57 + dy), (fx + SWAY[(t + j + k) % 4], 57 + dy - h), (fx + 2, 57 + dy)]), RED,
+                     shade=False, line=False)
+            low.part(P([(fx - 1, 57 + dy), (fx, 58 + dy - h + 1), (fx + 1, 57 + dy)]), YELLOW if h > 5 else ORANGE,
+                     shade=False, line=False)
     up = Canvas()
 
     def fist(cx, k):  # a ball of fire for a hand, its flame licking up and flickering every tick
@@ -409,30 +418,59 @@ def flint(step=None, t=0, heat=0.0):
         up.part(E((cx - 3, 41, cx + 3, 47)), ORANGE)
         up.flat(E((cx - 1, 43, cx + 1, 45)), YELLOW if not hot else WHITE)
 
-    if heat > 0:  # fire licking out of him: tongues rooted inside the body (drawn behind it, so no base shows)
-        for k, (root, tip) in enumerate((((24, 47), (5, 47)), ((24, 44), (5, 37)), ((24, 40), (6, 27)),
-                                         ((25, 37), (9, 17)), ((27, 35), (14, 9)))):
-            for side in (1, -1):  # mirrored about the body's centre
-                fl = (t + k + (side < 0)) % 2  # flicker, out of step on each side
-                tx, ty = root[0] + (tip[0] - root[0]) * heat, root[1] + (tip[1] - root[1]) * heat - 2 * fl
-                mx = lambda x: 32 + side * (x - 32)
-                for col, f in ((RED, 1.0), (ORANGE, 0.72), (YELLOW, 0.42)):
-                    px, py = root[0] + (tx - root[0]) * f, root[1] + (ty - root[1]) * f
-                    pts = [(root[0] + 4, root[1] + 4), ((root[0] + px) / 2 - 3, (root[1] + py) / 2 + 3),
-                           (px + SWAY[(t + k) % 4], py), ((root[0] + px) / 2 + 3, (root[1] + py) / 2 - 4),
-                           (root[0] + 4, root[1] - 4)]
-                    up.part(P([(mx(x), y) for x, y in pts]), col, shade=False, line=col == RED)
+    def tongue(root, ctrl, tip, phase, side=1, wide=6.0):
+        """A flowing tongue of flame along a curve root -> ctrl -> tip (a quadratic bezier), mirrored about the
+        body's centre for side -1; a wave rolls up it with `phase`, and it tapers to a flicking tip."""
+        for col, reach, w in ((RED, 1.0, wide), (ORANGE, 0.78, wide * 0.6), (YELLOW, 0.5, wide / 3)):
+            edge_a, edge_b = [], []
+            for i in range(9):
+                v = i / 8 * reach
+                cx = (1 - v) ** 2 * root[0] + 2 * (1 - v) * v * ctrl[0] + v * v * tip[0]
+                cy = (1 - v) ** 2 * root[1] + 2 * (1 - v) * v * ctrl[1] + v * v * tip[1]
+                gx = 2 * (1 - v) * (ctrl[0] - root[0]) + 2 * v * (tip[0] - ctrl[0])
+                gy = 2 * (1 - v) * (ctrl[1] - root[1]) + 2 * v * (tip[1] - ctrl[1])
+                g = math.hypot(gx, gy) or 1.0
+                nx, ny = -gy / g, gx / g  # across the tongue
+                bend = math.sin(v * math.pi * 2 - phase) * wide * 0.37 * v  # the sway grows towards the tip
+                cx, cy = cx + nx * bend, cy + ny * bend
+                half = w * (1 - i / 8) ** 0.6 + 0.3
+                edge_a.append((32 + side * (cx + nx * half - 32), cy + ny * half))
+                edge_b.append((32 + side * (cx - nx * half - 32), cy - ny * half))
+            up.part(P(edge_a + edge_b[::-1]), col, shade=False, line=col == RED)
+
+    grow = lambda root, p: [r + (q - r) * heat for r, q in zip(root, p)]
+    if heat > 0:  # flames flowing out of him: wide tongues rooted inside the body (drawn behind it, so no base
+        # shows) that sweep out and curl up
+        for k, (root, ctrl, tip) in enumerate((((24, 47), (6, 46), (7, 28)), ((24, 41), (7, 37), (10, 15)),
+                                               ((26, 36), (13, 29), (16, 5)))):
+            for side in (1, -1):  # out of step on each side
+                tongue(root, grow(root, ctrl), grow(root, tip), (t + k + (side < 0) * 2) * math.pi / 2, side)
     fist(17, 1)  # back hand, behind the body
-    up.part(RR(BODY, 3), SHADOW)  # sooty body
-    for pts in (((25, 35), (28, 39), (26, 43), (28, 47)), ((38, 34), (36, 38), (39, 42)), ((32, 44), (34, 47))):
-        up.flat(L(pts, 1), crack)  # glowing cracks
-    if heat > 0:
-        for pts in (((22, 40), (24, 44)), ((41, 44), (39, 47)), ((30, 34), (31, 37))):
-            up.flat(L(pts, 1), crack)  # more of him splits open as he heats up
+    # glowing molten body (his shirt long burnt off): a hotter core inside, veins of fire pulsing every tick
+    up.part(RR(BODY, 3), ORANGE if hot else RED)
+    up.flat(RR((25, 37, 39, 45), 3) if hot else RR((23, 36, 41, 46), 3), YELLOW if hot else ORANGE)
+    for k, pts in enumerate((((25, 35), (27, 39), (25, 43), (27, 47)), ((39, 34), (37, 38), (40, 42), (38, 46)),
+                             ((32, 44), (31, 47)), ((22, 38), (24, 41)))):
+        up.flat(L(pts, 1), WHITE if hot else (YELLOW, ORANGE)[(t + k) % 2] if k > 1 else YELLOW)  # veins, flickering
     up.flat(P([(32, 37), (35, 40), (32, 43), (29, 40)]), YELLOW)  # ember heart
     if t % 2 == 0 or hot:
         up.flat(R((31, 39, 33, 41)) if hot else R((32, 40, 32, 40)), WHITE)  # heartbeat
+    reach = 0.55 + 0.45 * heat  # flames curling up over the front of him either side of the heart, taller when hot
+    for k, (root, ctrl, tip) in enumerate((((25, 48), (20, 42), (26, 33)), ((39, 48), (44, 43), (38, 35)))):
+        tongue(root, [r + (q - r) * reach for r, q in zip(root, ctrl)], [r + (q - r) * reach for r, q in zip(root, tip)],
+               (t + k * 2) * math.pi / 2, wide=2.5 + heat)
     fist(47, 3)  # front hand
+    # wisps of flame breaking off him: each rises and shrinks away over 4 ticks, out of step (more when hot)
+    # wisps of flame breaking off his edges: each drifts up and out and shrinks away over 4 ticks, out of step
+    # (more when hot)
+    spots = [(21, 41, -1), (43, 39, 1), (22, 47, -1), (42, 46, 1)] + ([(20, 35, -1), (44, 34, 1)] if heat else [])
+    for k, (wx, wy, out) in enumerate(spots):
+        phase = (t + k * 2 + (k > 3)) % 4
+        r = (3, 2, 1, 0)[phase]
+        if r:
+            wx, wy = wx + out * 2 * phase, wy - 3 * phase
+            up.part(P([(wx - r, wy), (wx + SWAY[(t + k) % 4], wy - 2 * r - 1), (wx + r, wy), (wx, wy + r)]),
+                    (YELLOW, ORANGE, RED)[phase], shade=False, line=False)
     up.part(lambda d, f: (d.ellipse(HEAD, f), d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)  # molten head, face turned right
     up.part(E((MOUTH[0] - 6, 26, MOUTH[0] + 6, 34)), YELLOW, line=False)  # hot glow around the mouth
     if hot and not KO:  # blazing eyes: white-hot with flame trailing back off them
@@ -789,18 +827,26 @@ def blossom_fan(c):  # Sakura: a folding fan, open, ribs fanning out from the ri
     c.dot(7, 12, YELLOW)
 
 
-def ember_palm(c):  # Flint: a burning orb resting just past his palm, a tongue of fire licking forward
-    c.part(P([(16, 8), (30, 11), (16, 15)]), RED, shade=False)
-    c.part(P([(17, 10), (26, 11), (17, 13)]), YELLOW, shade=False, line=False)
-    c.part(E((9, 6, 20, 17)), ORANGE)
-    c.flat(E((12, 9, 17, 14)), YELLOW)
-    c.dot(13, 10, WHITE)
+def ember_palm(c, t=0):  # Flint: a fireball cupped in his hand, flames streaming back off it, its core pulsing
+    s, f = SWAY[t % 4], t % 2
+    tongues = lambda k: [(14, 4), (4 - s, 3 + k), (9, 8), (2 + f, 11 + k // 2), (8, 12), (2 + (1 - f), 14 - k // 2),
+                         (9, 16), (4 + s, 21 - k), (14, 20)]  # jagged tongues trailing back, flickering each tick
+    c.part(lambda d, fill: (d.ellipse((7, 5, 21, 19), fill), d.polygon(tongues(0), fill)), RED, shade=False)
+    c.part(lambda d, fill: (d.ellipse((9, 7, 20, 17), fill), d.polygon(
+        [((x + 14) / 2 + 1, (y + 12) / 2) for x, y in tongues(2)], fill)), ORANGE, shade=False, line=False)
+    c.flat(E((11, 9, 18, 15)), YELLOW)
+    c.flat(R((13, 11, 15, 13)) if f else R((14, 12, 14, 12)), WHITE)  # white-hot core pulses
+    c.dot(12 + (t // 2), 9, WHITE)  # glint
 
 
 WEAPONS = {"pistol": pistol, "bot_blaster": bot_blaster, "smg": smg, "shotgun": shotgun, "sniper": sniper,
            "rocket": rocket, "grenade": grenade, "laser": laser, "sword": sword,
            "flicker_kunai": kunai, "warden_hammer": hammer, "twinshot_revolver": revolver, "wukong_staff": staff, "flint_palm": ember_palm,
            "sakura_fan": blossom_fan}
+
+
+## In-world loops (WeaponData.held_frames): draw(c, t) for t in 0..3, written as <name>_anim.png strips.
+WEAPON_ANIMS = {"flint_palm": ember_palm}
 
 
 def weapon_image(draw) -> Image.Image:
@@ -1885,6 +1931,12 @@ def main() -> None:
         img = weapon_image(draw)
         check(img, WEAPON_W)
         img.save(WEAPON_OUT / f"{name}.png")
+    for name, draw in WEAPON_ANIMS.items():
+        anim = Image.new("RGBA", (WEAPON_W * 4, WEAPON_H), (0, 0, 0, 0))
+        for t in range(4):
+            anim.paste(weapon_image(lambda c, t=t: draw(c, t)), (t * WEAPON_W, 0))
+        check(anim, WEAPON_W)
+        anim.save(WEAPON_OUT / f"{name}_anim.png")
     print(f"wrote {len(WEAPONS)} weapons to {WEAPON_OUT}")
     PROJ_OUT.mkdir(exist_ok=True)
     for name, draw in PROJECTILES.items():

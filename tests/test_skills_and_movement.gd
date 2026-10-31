@@ -339,5 +339,6 @@ func test_flint_inferno_fires_beams() -> void:
 	var inferno: SkillData = flint.signature_skill
 	assert_eq(inferno.kind, SkillData.Kind.TRANSFORM)
 	assert_eq(inferno.form_weapon.kind, WeaponData.Kind.BEAM)
+	assert_lt(inferno.form_weapon.muzzle_distance(), 8.0, "the beam starts at his fist, not out in the air")
 	assert_not_null(inferno.form_frames(), "Inferno sheet loads")
 	assert_true(flint.can_use_skill(skills.get_skill(&"supernova")), "Supernova stays pickable")
