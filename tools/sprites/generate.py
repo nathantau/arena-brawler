@@ -352,12 +352,12 @@ def wukong(step=None, t=0):
     return low, up
 
 
-## Great Ape arm poses: "walk" = knuckle-walking, fists planted in front (idle / walk, like a gorilla); "raise" =
-## fists up high at the sides; "pound" = fists slammed into the ground wide at both sides (the attack).
+## Great Ape arm poses: "walk" = knuckle-walking, fists planted at his sides (idle / walk, like a gorilla); "raise" =
+## both fists up beside his head; "smash" = both slammed into the ground in front, where the slam lands (the attack).
 ## Per pose: (shoulder, elbow, wrist) per arm, then (x, top, thumb dx) per fist. Back arm / fist first.
 APE_POSES = {"walk": ((((15, 26), (13, 36), (17, 44)), ((49, 26), (51, 36), (47, 44))), ((11, 45, -2), (41, 45, 9))),
-             "raise": ((((15, 26), (9, 18), (8, 13)), ((49, 26), (55, 18), (56, 13))), ((2, 2, -2), (50, 2, 9))),
-             "pound": ((((15, 26), (8, 36), (7, 43)), ((49, 26), (56, 36), (57, 43))), ((2, 47, -2), (50, 47, 9)))}
+             "raise": ((((15, 26), (9, 18), (10, 13)), ((49, 26), (55, 18), (54, 13))), ((4, 2, -2), (48, 2, 9))),
+             "smash": ((((15, 26), (28, 36), (40, 44)), ((49, 26), (54, 36), (54, 44))), ((35, 46, -2), (48, 46, 9)))}
 
 
 ## The Great Ape's circlet: Wukong's, tilted askew and cracked; the morph cracks it one line at a time.
@@ -1442,10 +1442,11 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
 CROWNS = {"flint": flint_crown}  # optional per-frame effects drawn behind
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
-## build(None, i, pose). The hit lands the moment the attack starts, so it opens with the fists already coming
-## down, then pounds the ground with the body squashed and settles back into the knuckle-walk.
-ATTACKS = {"wukong_ape": [(("raise", "pound", 0.7), 0), (("pound", "pound", 0), 2), (("pound", "pound", 0), 2),
-                          (("pound", "pound", 0), 1), (("pound", "walk", 0.4), 1), (("pound", "walk", 0.75), 0)]}
+## build(None, i, pose). Fists go up over his head, then smash down in front on frame 3 (the hit lands then:
+## ape_fists windup), the body squashed, and settle back into the knuckle-walk.
+ATTACKS = {"wukong_ape": [(("walk", "raise", 0.6), -1), (("raise", "raise", 0), -3), (("raise", "smash", 0.5), -1),
+                          (("smash", "smash", 0), 2), (("smash", "smash", 0), 2), (("smash", "walk", 0.4), 1),
+                          (("smash", "walk", 0.8), 0)]}
 
 
 # --- frame processing -------------------------------------------------------

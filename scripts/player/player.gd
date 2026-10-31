@@ -100,6 +100,10 @@ var _recoil: float = 0.0
 var _recoil_len: float = RECOIL_TIME
 ## Time left on the sprite's "attack" animation (sheets that have one, e.g. the Great Ape).
 var _attack_anim: float = 0.0
+## A wound-up attack (WeaponData.windup) waiting to land: seconds left (< 0 = none), its seq and weapon.
+var _windup_left: float = -1.0
+var _windup_seq: int = 0
+var _windup_weapon: WeaponData
 var _sprite := AnimatedSprite2D.new()
 ## Drawn after the sprite: the gun when it's in front of the body, and health bars.
 var _overlay := Node2D.new()
@@ -251,6 +255,11 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	elif input.move_vec.length() > Constants.INPUT_DEADZONE:
 		facing = input.move_vec.normalized()
 
+	if _windup_left >= 0.0 and not replay:  # replays re-run inputs already counted: don't land it early
+		_windup_left -= delta
+		if _windup_left <= 0.0:
+			_windup_left = -1.0
+			_release_shot(_windup_seq, _windup_weapon)
 	if input.fire and not is_dashing():
 		_try_fire(input.seq, replay)
 
@@ -323,13 +332,23 @@ func _skill_direction(data: SkillData, input: InputFrame) -> Vector2:
 
 func _try_fire(seq: int, replay: bool) -> void:
 	var weapon: WeaponState = held_weapon()
-	if not weapon.try_fire(stats) or replay:
+	if _windup_left >= 0.0 or not weapon.try_fire(stats) or replay:
 		return
-	var origin: Vector2 = shot_origin(weapon.data)
-	var dual: bool = is_dual_wielding()
-	projectiles.fire_shot(player_id, seq, origin, facing, weapon.data, match_seed, dual, character.dual_offset)
 	play_recoil()
-	shot_fired.emit(self, seq, origin, facing, weapon.data.id, dual)
+	if weapon.data.windup > 0.0:  # the attack animation winds up; the hit lands when it comes down
+		_windup_left = weapon.data.windup
+		_windup_seq = seq
+		_windup_weapon = weapon.data
+		return
+	_release_shot(seq, weapon.data)
+
+
+## Fire from where the player is (and faces) now.
+func _release_shot(seq: int, w: WeaponData) -> void:
+	var origin: Vector2 = shot_origin(w)
+	var dual: bool = is_dual_wielding()
+	projectiles.fire_shot(player_id, seq, origin, facing, w, match_seed, dual, character.dual_offset)
+	shot_fired.emit(self, seq, origin, facing, w.id, dual)
 
 
 ## Guns fire from the hand holding them (shots then spawn at the barrel tip, WeaponData.muzzle_distance);
@@ -338,13 +357,14 @@ func shot_origin(w: WeaponData) -> Vector2:
 	return global_position + (Vector2.ZERO if w.kind == WeaponData.Kind.MELEE else Vector2(0.0, WEAPON_HAND_Y))
 
 
-func play_recoil() -> void:
+## `skip` seconds into the attack animation: remote peers only hear of a wound-up hit when it lands.
+func play_recoil(skip: float = 0.0) -> void:
 	_recoil_len = MELEE_ANIM_TIME if held_weapon().data.kind == WeaponData.Kind.MELEE else RECOIL_TIME
 	_recoil = _recoil_len
 	if _sprite.sprite_frames != null and _sprite.sprite_frames.has_animation(&"attack"):
-		_attack_anim = Constants.SPRITE_ATTACK_FRAMES / Constants.SPRITE_ATTACK_FPS
+		_attack_anim = Constants.SPRITE_ATTACK_FRAMES / Constants.SPRITE_ATTACK_FPS - skip
 		_sprite.play(&"attack")
-		_sprite.frame = 0  # restart on every swing
+		_sprite.frame = roundi(skip * Constants.SPRITE_ATTACK_FPS)  # restart on every swing
 
 
 func flash() -> void:
@@ -401,6 +421,7 @@ func _set_dead(value: bool) -> void:
 	if value == dead:
 		return
 	dead = value
+	_windup_left = -1.0
 	# A real death (sitting out has no respawn timer) leaves the fall animation behind; on every peer.
 	if value and respawn_timer > 0.0 and is_inside_tree():
 		_spawn_corpse()

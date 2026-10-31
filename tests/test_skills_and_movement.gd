@@ -302,3 +302,22 @@ func test_fan_of_blades_fires_a_ring() -> void:
 		if sl.active:
 			spread = spread.expand(sl.pos + sl.vel)
 	assert_true(spread.size.x > 400.0 and spread.size.y > 400.0, "blades fly every way")
+
+
+func test_ape_slam_lands_after_its_windup() -> void:
+	var p: Player = _player(characters.get_character(&"wukong"))
+	p.projectiles = ProjectilePool.new()
+	add_child_autofree(p.projectiles)
+	assert_true(p.special.try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
+	watch_signals(p)
+	var fire := InputFrame.new()
+	fire.fire = true
+	var windup: float = p.held_weapon().data.windup
+	assert_gt(windup, 0.0)
+	p.simulate(fire, Constants.PHYSICS_DT)
+	assert_signal_not_emitted(p, "shot_fired", "fists still going up")
+	var idle := InputFrame.new()
+	for i: int in ceili(windup / Constants.PHYSICS_DT) + 1:  # +1: float steps may leave a sliver
+		p.simulate(idle, Constants.PHYSICS_DT)
+	assert_signal_emit_count(p, "shot_fired", 1, "lands when the fists come down")
+

@@ -4,6 +4,7 @@
 
 [resource]
 script = ExtResource("1_wd")
+windup = 0.3
 id = &"ape_fists"
 display_name = "Ape Fists"
 pickup = false

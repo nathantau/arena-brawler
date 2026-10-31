@@ -37,6 +37,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Bullet art (tools/sprites/generate.py PROJECTILES): a 2-frame strip of square frames pointing
 ## right, rotated to the flight direction. Null = a plain circle of `color`.
 @export var projectile_sprite: Texture2D
+## Melee: the hit lands this long after the attack starts (the attack animation winds up first); 0 = at once.
+@export var windup: float = 0.0
 ## Barrel tip, sprite px along the barrel (x): shots spawn there. 0 = no gun art (skill volleys): just outside
 ## the body.
 @export var muzzle_x: float = 0.0
