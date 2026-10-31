@@ -755,7 +755,10 @@ def flint(step=None, t=0, heat=0.0):
             wx, wy = wx + out * 2 * phase, wy - 3 * phase
             up.part(P([(wx - r, wy), (wx + SWAY[(t + k) % 4], wy - 2 * r - 1), (wx + r, wy), (wx, wy + r)]),
                     (YELLOW, ORANGE, RED)[phase], shade=False, line=False)
-    up.part(lambda d, f: (d.ellipse(HEAD, f), d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)  # molten head, face turned right
+    # molten head, face turned right: a squared-off top (flat crown, tight corners) over a rounded jaw
+    mid_y = (HEAD[1] + HEAD[3]) // 2
+    up.part(lambda d, f: (d.rounded_rectangle((HEAD[0], HEAD[1], HEAD[2], mid_y + 2), 4, f), d.ellipse(HEAD, f),
+                          d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)
     up.part(E((MOUTH[0] - 6, 26, MOUTH[0] + 6, 34)), YELLOW, line=False)  # hot glow around the mouth
     if hot and not KO:  # blazing eyes: white-hot with flame trailing back off them
         for x in EYES_X:
@@ -769,7 +772,7 @@ def flint(step=None, t=0, heat=0.0):
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
     # Tongues licking up from the forehead; orange rim so no red stripe runs across the face.
     mid = (HEAD[0] + HEAD[2]) // 2
-    flame(up, mid - 13, mid + 13, FACE[1] + 5, 10, t + 2, tongues=5, line=False, rim=ORANGE)
+    flame(up, mid - 13, mid + 13, FACE[1] + 5, 8, t + 2, tongues=5, line=False, rim=ORANGE)
     return low, up
 
 
@@ -787,8 +790,25 @@ def flint_crown(t: int, dy: int, heat: float = 0.0) -> Canvas:
     `dy` = the head's bob."""
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
-    mid = PAD + (HEAD[0] + HEAD[2]) // 2  # centred on the head, no wider than the face, or the side tongues read as horns
-    flame(c, mid - 12, mid + 12, top + FACE[1] + 9, 24 + round(heat * 10), t, tongues=5 + round(heat * 2))  # 34 is as tall as the cell allows
+    mid = PAD + (HEAD[0] + HEAD[2]) // 2  # centred on the head
+    base = top + FACE[1] + 9
+    hw = 14  # as wide as the squared head's flat top, so the tufts sit along it like a crown
+    n = 6 + round(heat * 2)
+    sway = (-0.14, 0.1, 0.14, -0.1)  # the whole crown leans left and right as it flickers
+    flame(c, mid - hw, mid + hw, base, 27 + round(heat * 3), t, tongues=n, lean=sway[t % 4])  # tall outer tufts of uneven height
+    flame(c, mid - hw + 3, mid + hw - 3, base, 19 + round(heat * 6), t + 2, tongues=n - 2, line=False, rim=ORANGE, lean=-sway[t % 4])  # inner tufts, out of step, leaning the other way
+    for k in range(3):  # tips breaking off into small flame wisps that rise and shrink over 4 ticks
+        ph = (t + k * 2) % 4
+        wx = mid - hw + 4 + k * (2 * hw - 8) // 2 + SWAY[(t + k) % 4] * 2
+        wy = top + 4 - 3 * ph - round(heat * 2)
+        r = (3, 2, 1, 0)[ph]
+        if r:
+            c.part(P([(wx - r, wy + r), (wx + SWAY[(t + k) % 4], wy - r - 1), (wx + r, wy + r), (wx, wy + r + 1)]),
+                   (YELLOW, ORANGE, RED)[min(ph, 2)], shade=False, line=False)
+    for k in range(3 + round(heat * 2)):  # tiny embers lifting off the tufts and dying out (period 4)
+        ph = (t + k) % 4
+        ex = mid - hw + 3 + (k * 11 + 5) % (2 * hw - 5) + SWAY[(t + k) % 4]
+        c.dot(ex, top + 6 - 4 * ph - (k % 2) * 3 - round(heat * 3), (YELLOW, ORANGE, RED, MAROON)[ph])
     return c
 
 
