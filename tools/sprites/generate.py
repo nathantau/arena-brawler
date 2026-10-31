@@ -371,7 +371,7 @@ def flint(step=None, t=0):
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
     # Tongues licking up from the forehead; orange rim so no red stripe runs across the face.
     mid = (HEAD[0] + HEAD[2]) // 2
-    flame(up, mid - 12, mid + 12, FACE[1] + 4, 7, t + 2, tongues=4, line=False, rim=ORANGE)
+    flame(up, mid - 13, mid + 13, FACE[1] + 5, 10, t + 2, tongues=5, line=False, rim=ORANGE)
     return low, up
 
 
@@ -381,7 +381,7 @@ def flint_crown(t: int, dy: int) -> Canvas:
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
     mid = PAD + (HEAD[0] + HEAD[2]) // 2  # centred on the head, no wider than the face, or the side tongues read as horns
-    flame(c, mid - 11, mid + 11, top + FACE[1] + 9, 26, t, tongues=4)
+    flame(c, mid - 12, mid + 12, top + FACE[1] + 9, 32, t, tongues=5)
     return c
 
 
