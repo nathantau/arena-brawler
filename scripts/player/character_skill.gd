@@ -18,6 +18,7 @@ extends RefCounted
 ## - DRIFT: petals for `duration`; the Player moves faster along the stick (else `direction`), untouchable.
 ## - PILLAR: the line runs from `anchor` (his feet-level centre) to `anchor + direction` (the Player sets `direction` to that
 ##   whole vector, cut short by a wall); the slam lands when `pillar_windup` has passed.
+## - NOVA: charges for `nova_charge`, then the Player sets off `nova_blast` on itself (nothing stored but the active time).
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 const WHIRL_EPSILON: float = 0.0001
@@ -112,6 +113,16 @@ func pillar_winding() -> bool:
 ## PILLAR: the slam lands in the step that ticked from `before` to now.
 func pillar_slammed(before: float) -> bool:
 	return data.kind == SkillData.Kind.PILLAR and before < data.pillar_windup and elapsed() >= data.pillar_windup
+
+
+## NOVA: flaring up, before the burst (he can't move or fire).
+func nova_charging() -> bool:
+	return data.kind == SkillData.Kind.NOVA and is_active() and elapsed() < data.nova_charge
+
+
+## NOVA: the burst goes off in the step that ticked from `before` to now.
+func nova_burst(before: float) -> bool:
+	return data.kind == SkillData.Kind.NOVA and before < data.nova_charge and elapsed() >= data.nova_charge
 
 
 ## 1.0 = just used, 0.0 = ready.

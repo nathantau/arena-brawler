@@ -23,8 +23,10 @@ extends Resource
 ## DRIFT: dissolve into petals and glide (faster, steerable, walls still stop you), untargetable and unhittable, can't fire.
 ## PILLAR: plants the staff, which shoots out along the aim (stopped by walls) and, after `pillar_windup`, slams down
 ## on that line: everyone along it takes damage and is thrown sideways.
+## NOVA: flares up for `nova_charge` (he can't move or fire), then `nova_blast` goes off on him: enemies in range are hit and thrown
+## outward and enemy projectiles in range are destroyed.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, NOVA = 17 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -103,6 +105,13 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export_group("Drift")
 ## Move speed multiplier while drifting (i-frames last the whole `duration`).
 @export var drift_speed_scale: float = 1.6
+
+
+@export_group("Nova")
+## The charge before the burst (`duration` is the whole animation).
+@export var nova_charge: float = 0.25
+## The ring of fire: a `blast` weapon (damage, radius, knockback) with destroys_shots.
+@export var nova_blast: WeaponData
 
 
 @export_group("Pillar")

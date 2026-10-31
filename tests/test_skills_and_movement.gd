@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -1392,3 +1392,113 @@ func test_sky_pillar_cooldown_and_replay_match() -> void:
 	assert_eq(hits.size(), served, "replay damages nothing")
 	assert_eq(foe.stats.hp + foe.stats.armor, foe.stats.max_hp + foe.stats.max_armor - skills.get_skill(&"sky_pillar").pillar_damage)
 	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+
+
+# --- Flint's Flare Burst -------------------------------------------------------------
+
+func _flare_setup() -> Array:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var p: Player = _flint_erupter(world, pool)
+	p.set_skill(1, skills.get_skill(&"flare_burst"))
+	p.global_position = Vector2(300, 300)
+	return [world, pool, p]
+
+
+func test_flare_burst_is_flints_own() -> void:
+	var d: SkillData = skills.get_skill(&"flare_burst")
+	assert_eq(d.kind, SkillData.Kind.NOVA)
+	assert_true(d.nova_blast.blast and d.nova_blast.destroys_shots)
+	assert_gt(d.duration, d.nova_charge)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"flint", String(c.id))
+
+
+func test_flare_burst_waits_for_the_charge_and_roots_him() -> void:
+	var s: Array = _flare_setup()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"flare_burst")
+	var foe: Player = _flint_erupter(s[0], s[1], 2)
+	foe.global_position = Vector2(350, 300)
+	await wait_physics_frames(2)
+	var hits: Array = _hits(s[1])
+	_press_special(p, Vector2.RIGHT)
+	var start: Vector2 = p.global_position
+	for i: int in floori(d.nova_charge / DT) - 3:
+		var f := InputFrame.new()
+		f.seq = 100 + i
+		f.move_vec = Vector2.LEFT
+		f.fire = true
+		p.simulate(f, DT)
+		assert_eq(p.global_position, start, "rooted while charging")
+	assert_eq(hits.size(), 0, "no damage before the charge ends")
+	_idle(p, 6)
+	assert_eq(hits.size(), 1, "bursts once")
+	assert_eq(hits[0], [2, d.nova_blast.damage])
+	_idle(p, 60)
+	assert_eq(hits.size(), 1)
+
+
+func test_flare_burst_hits_and_throws_those_in_range_only() -> void:
+	var s: Array = _flare_setup()
+	var p: Player = s[2]
+	var blast: WeaponData = skills.get_skill(&"flare_burst").nova_blast
+	var near: Player = _flint_erupter(s[0], s[1], 2)
+	near.global_position = Vector2(300 + blast.splash_radius * 0.9, 300)
+	var far: Player = _flint_erupter(s[0], s[1], 3)
+	far.global_position = Vector2(300, 300 - blast.splash_radius - 40.0)
+	var behind_wall: Player = _flint_erupter(s[0], s[1], 4)
+	behind_wall.global_position = Vector2(300 - blast.splash_radius * 0.8, 300)
+	_wall(s[0], Vector2(300 - blast.splash_radius * 0.4, 300), Vector2(12, 200))
+	await wait_physics_frames(2)
+	var hits: Array = _hits(s[1])
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, 40)
+	assert_eq(hits, [[2, blast.damage]], "only the one in range with sight")
+	assert_gt(near.velocity.x, blast.knockback * 0.5, "thrown away from him")
+	assert_eq(far.velocity, Vector2.ZERO)
+	assert_eq(p.stats.hp, p.stats.max_hp, "not himself")
+
+
+func test_flare_burst_destroys_enemy_projectiles_in_range() -> void:
+	var s: Array = _flare_setup()
+	var p: Player = s[2]
+	var blast: WeaponData = skills.get_skill(&"flare_burst").nova_blast
+	var gun: WeaponData = WeaponCatalog.load_all().get_weapon(&"pistol")
+	await wait_physics_frames(2)
+	s[1].fire_shot(2, 1, Vector2(300 + blast.splash_radius * 0.5, 340), Vector2.RIGHT, gun, 3)  # inside
+	s[1].fire_shot(2, 2, Vector2(300 + blast.splash_radius + 80.0, 340), Vector2.RIGHT, gun, 3)  # outside
+	s[1].fire_shot(1, 3, Vector2(300 + blast.splash_radius * 0.5, 260), Vector2.RIGHT, gun, 3)  # his own
+	var before: int = s[1].active_count()
+	assert_eq(before, 3)
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, 18)
+	assert_eq(s[1].active_count(), before - 1, "the enemy's inside the ring is gone, the others stay")
+
+
+func test_flare_burst_cooldown_and_replay_match() -> void:
+	var s: Array = _flare_setup()
+	var a: Player = s[2]
+	var b: Player = _flint_erupter(s[0], s[1], 5)
+	b.set_skill(1, skills.get_skill(&"flare_burst"))
+	var foe: Player = _flint_erupter(s[0], s[1], 2)
+	foe.global_position = Vector2(350, 300)
+	await wait_physics_frames(2)
+	var snapshot: Array = a.capture_state()
+	var hits: Array = _hits(s[1])
+	_press_special(a, Vector2.RIGHT)
+	_idle(a, 40)
+	assert_eq(hits.size(), 1)
+	assert_almost_eq(a.skills[1].cooldown_remaining, skills.get_skill(&"flare_burst").cooldown - 40 * DT, 0.01)
+	assert_true(b.apply_state(snapshot, WeaponCatalog.load_all(), characters))
+	var f := InputFrame.new()
+	f.seq = 10
+	f.aim_vec = Vector2.RIGHT
+	f.special = true
+	b.simulate(f, DT, true)
+	_idle(b, 40, true)
+	assert_eq(hits.size(), 1, "replay damages nothing")
+	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+	assert_eq(b.global_position, a.global_position)
