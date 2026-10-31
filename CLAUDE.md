@@ -347,10 +347,12 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   (cooldown 8 s): every `trail_tick` 0.3 s (derived from the skill's elapsed time, `Player._burn_trail`)
   `ProjectilePool.burn_segment` hits every other player within `trail_radius` 22 px of the segment for `trail_damage` 6
   (authoritative only, replay does nothing, no self-damage, no i-frames, no knockback; keyed `seq + TRAIL_SEQ_OFFSET`).
-  Art (generate.py `blaze_*`, `icon_blaze_run`): 4-frame loop of burning ground (flames from scorched cracks, embers) that
-  `SpecialFx` stamps every `BLAZE_STEP` along the path as he runs it, an 8-frame ignition at takeoff, an 8-frame die-out
-  (flames shrink, cracks cool, smoke, scorch) played stamp by stamp over the last second, and a flame streak behind him
-  while he dashes.
+  Art (generate.py `blaze_*`, `icon_blaze_run`, reworked 2026-10-31): a continuous scorched ground band (`blaze_run_ground`:
+  overlapping elliptical blobs every `BLAZE_GROUND_STEP`, drawn as all rims, all bases, then all cracks so they merge into one
+  outlined strip; 3 crack variants x (4 glow + 8 cooling frames)) with sparse flames on it (`blaze_run_flames`: 4 cluster
+  variants x 4 loop frames + 4 die-out frames; `SpecialFx._draw_blaze` places them by a deterministic per-run hash with jittered
+  spacing, wider on vertical runs, alternating sideways offsets, sorted by y), an 8-frame ignition at takeoff and a flame streak
+  behind him while he dashes. Preview: `tools/blaze_preview.gd` (runs in set directions).
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

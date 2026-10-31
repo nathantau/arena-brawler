@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://belfwddy1dl38"
-path="res://.godot/imported/blaze_run_trail.png-8bf7dd1fb7b4e2c51ff0c39d33fc049b.ctex"
+uid="uid://dy67k3cvwubr0"
+path="res://.godot/imported/blaze_run_ground.png-bb19237e23834b43b7a23feff55f3841.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/fx/blaze_run_trail.png"
-dest_files=["res://.godot/imported/blaze_run_trail.png-8bf7dd1fb7b4e2c51ff0c39d33fc049b.ctex"]
+source_file="res://assets/fx/blaze_run_ground.png"
+dest_files=["res://.godot/imported/blaze_run_ground.png-bb19237e23834b43b7a23feff55f3841.ctex"]
 
 [params]
 
