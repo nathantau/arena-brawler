@@ -31,3 +31,41 @@ static func pick(addresses: PackedStringArray) -> String:
 ## This device's LAN address, or "" when not on a network.
 static func local() -> String:
 	return pick(IP.get_local_addresses())
+
+
+const LAST_JOIN_PATH: String = "user://last_join.cfg"
+
+
+## "192.168.1.42:7777" -> "192.168.1.42" (default port hidden); other ports stay.
+static func friendly(host_address: String) -> String:
+	var suffix: String = ":%d" % Constants.DEFAULT_PORT
+	return host_address.trim_suffix(suffix)
+
+
+## "192.168.1.42" -> "192.168.1." (what a friend on the same Wi-Fi shares); "" if not an IPv4.
+static func subnet_prefix(address: String) -> String:
+	var parts: PackedStringArray = address.split(".")
+	if parts.size() != 4:
+		return ""
+	return "%s.%s.%s." % [parts[0], parts[1], parts[2]]
+
+
+## What the join field starts with: the last address that worked, else this device's subnet.
+static func prefill(last: String, local_address: String) -> String:
+	if last.strip_edges() != "":
+		return last.strip_edges()
+	return subnet_prefix(local_address)
+
+
+static func load_last(path: String = LAST_JOIN_PATH) -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load(path) != OK:
+		return ""
+	return str(cfg.get_value("join", "address", ""))
+
+
+static func save_last(address: String, path: String = LAST_JOIN_PATH) -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("join", "address", address.strip_edges())
+	if cfg.save(path) != OK:
+		push_warning("Could not save last join address")
