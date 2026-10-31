@@ -1042,6 +1042,16 @@ def ape_morph(t: float, scale: float) -> Image.Image:
         x0, y0 = points[0]
         return [pt((x0 + (x - x0) * f, y0 + (y - y0) * f), (x0 + (x - x0) * f, y0 + (y - y0) * f), u) for x, y in points]
 
+    # dark storm clouds gather: ape_storm's puffs drift in from further out, swelling one after another
+    for j, (x, y, r) in enumerate(((9, 28, 6), (14, 19, 5), (8, 39, 5), (10, 48, 4), (21, 11, 4), (55, 20, 4),
+                                   (58, 31, 3), (50, 12, 3))):
+        g = min(1.0, max(0.0, (t - 0.05 * j) / 0.6))  # this puff's growth
+        if g > 0:
+            push = (1 - g) * 10
+            dx = push if x > 32 else -push  # drift in from the sides
+            cx, cy = pt((x + dx, y), (x + dx, y))
+            rr = max(1, r * g * scale)
+            c.part(E((cx - rr, cy - rr, cx + rr, cy + rr)), SHADOW)
     if t < 0.45:  # pheasant feathers retract
         c.part(L(shrink([(25, 10), (16, 4), (6, 6)], 0.45), w(2, 2)), RED, shade=False)
         c.part(L(shrink([(29, 9), (24, 3), (14, 2)], 0.45), w(2, 2)), RED, shade=False)
