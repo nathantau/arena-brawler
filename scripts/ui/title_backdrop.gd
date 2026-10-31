@@ -45,14 +45,12 @@ const TAGLINE_GAP: float = 14.0
 const POSE_IDLE: int = 0
 const POSE_RUN: int = 1
 const POSE_STRIKE: int = 2
-const SLOTS_SMALL: Array[Vector4] = [
-	Vector4(-330.0, -6.0, 3.0, POSE_RUN), Vector4(0.0, 10.0, 3.4, POSE_STRIKE), Vector4(330.0, -6.0, 3.0, POSE_RUN)]
-const SMALL_ROSTER: int = 3
-const FOUR_ROSTER: int = 4
-const SLOTS: Array[Vector4] = [
-	Vector4(-540.0, -40.0, 2.5, POSE_IDLE), Vector4(-310.0, -14.0, 2.9, POSE_RUN),
-	Vector4(-120.0, 6.0, 3.0, POSE_STRIKE), Vector4(120.0, 6.0, 3.0, POSE_STRIKE),
-	Vector4(310.0, -14.0, 2.9, POSE_RUN), Vector4(540.0, -40.0, 2.5, POSE_IDLE)]
+const TEAM_INNER_X: float = 120.0  ## innermost fighter of each team, from the screen centre
+const TEAM_OUTER_X: float = 430.0  ## outermost allowed (clear of the pillars)
+const TEAM_STEP_X: float = 190.0
+## Per rank within a team (0 = frontline): (dy, pixel scale, pose).
+const RANKS: Array[Vector3] = [
+	Vector3(6.0, 3.0, POSE_STRIKE), Vector3(-14.0, 2.9, POSE_RUN), Vector3(-40.0, 2.5, POSE_IDLE)]
 const FLOOR_LINE_ART: float = 14.0  ## fighters stand this many art px (x ART_SCALE) below the horizon
 const CELL_FEET: float = 78.0  ## feet row inside a 96 px sprite cell
 const CELL: float = 96.0
@@ -94,7 +92,7 @@ var _idle: Array = []  ## per slot: Array[Texture2D]
 var _run: Array = []
 var _strike: Array = []
 var _time: float = 0.0
-var _slots: Array[Vector4] = SLOTS
+var _slots: Array[Vector4] = []
 var _insets: Vector4 = Vector4.ZERO
 var _version: String = ""
 var _ex: PackedFloat32Array = PackedFloat32Array()  ## ember x, y (0..1), rise speed, drift, phase, size index
@@ -110,12 +108,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tiles = load(ArenaFloor.ART_DIR + "%s_tiles.png" % FLOOR_THEME)
 	var roster: Array[CharacterData] = CharacterCatalog.load_all().ordered
-	if roster.size() <= SMALL_ROSTER:
-		_slots = SLOTS_SMALL
-	elif roster.size() == FOUR_ROSTER:
-		_slots = SLOTS.slice(1, 5)  # the two runners and the two strikers
-	else:
-		_slots = SLOTS
+	_slots = _layout(roster.size())
 	for i: int in mini(roster.size(), _slots.size()):
 		var f: SpriteFrames = roster[i].sprite_frames()
 		_idle.append(_textures(f, &"idle"))
@@ -283,6 +276,24 @@ func _draw_logo() -> void:
 	var tag_y: float = top + base.y + TAGLINE_GAP + UiStyle.SIZE_BODY
 	UiStyle.draw_text(self, Vector2(0.0, tag_y), TAGLINE, UiStyle.SIZE_BODY, Color(1, 1, 1, logo_alpha),
 		HORIZONTAL_ALIGNMENT_CENTER, size.x)
+
+
+## Two facing teams (left gets the extra fighter), each fanned out from the centre; a lone fighter stands in the middle.
+static func _layout(n: int) -> Array[Vector4]:
+	var out: Array[Vector4] = []
+	if n == 1:
+		out.append(Vector4(0.0, RANKS[0].x, RANKS[0].y, RANKS[0].z))
+		return out
+	var left: int = (n + 1) / 2
+	for i: int in n:
+		var on_left: bool = i < left
+		var team: int = left if on_left else n - left
+		var k: int = i if on_left else i - left
+		var step: float = minf(TEAM_STEP_X, (TEAM_OUTER_X - TEAM_INNER_X) / maxf(1.0, team - 1.0))
+		var r: Vector3 = RANKS[mini(k, RANKS.size() - 1)]
+		var dx: float = TEAM_INNER_X + k * step
+		out.append(Vector4(-dx if on_left else dx, r.x, r.y, r.z))
+	return out
 
 
 static func _textures(f: SpriteFrames, anim: StringName) -> Array[Texture2D]:
