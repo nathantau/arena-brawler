@@ -375,8 +375,13 @@ def wukong_ape(step=None, t=0, pose=None):
         mix = lambda a, b: round(a + (b - a) * pose)
         arms = [[(mix(p[0], q[0]), mix(p[1], q[1])) for p, q in zip(a, b)] for a, b in zip(APE_ARMS[0], APE_ARMS[1])]
         fists = [(mix(a[0], b[0]), mix(a[1], b[1]), a[2]) for a, b in zip(APE_FISTS[0], APE_FISTS[1])]
-    for arm in arms:
-        up.part(L(arm, 7), MAROON)
+    for (sx, sy), (ex, ey), (wx, wy) in arms:  # thick, muscular arms: shoulder, bicep and forearm bulge out
+        up.part(L([(sx, sy), (ex, ey), (wx, wy)], 9), MAROON)
+        up.part(E((sx - 6, sy - 6, sx + 6, sy + 6)), MAROON)  # deltoid
+        bx, by = (sx + ex) // 2, (sy + ey) // 2
+        up.part(E((bx - 6, by - 5, bx + 6, by + 5)), MAROON)  # bicep
+        fx, fy = (ex * 2 + wx) // 3, (ey * 2 + wy) // 3
+        up.part(E((fx - 5, fy - 4, fx + 5, fy + 4)), MAROON)  # forearm
     for x, y, thumb in fists:  # clenched fists, knuckles down; they bob with the stride
         by = y + 12 if pose is not None and pose < 0.5 else y - 4  # golden bracers on the forearm: below a raised fist
         up.part(R((x + 2, by, x + 10, by + 3)), YELLOW)
