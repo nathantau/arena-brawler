@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/player/character_data.gd" id="1_cd"]
 [ext_resource type="Texture2D" path="res://assets/sprites/flint.png" id="2_sheet"]
 [ext_resource type="Resource" path="res://data/weapons/flint_palm.tres" id="3_sig"]
-[ext_resource type="Resource" path="res://data/skills/supernova.tres" id="5_skill"]
+[ext_resource type="Resource" path="res://data/skills/inferno.tres" id="5_skill"]
 
 [resource]
 script = ExtResource("1_cd")

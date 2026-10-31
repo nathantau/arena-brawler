@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"inferno_beam"
+display_name = "Inferno Beam"
+pickup = false
+kind = 1
+damage = 7
+fire_interval = 0.1
+projectile_range = 560.0
+projectile_radius = 16.0
+energy_cost = 0
+crit_chance = 0.05
+knockback = 30.0
+color = Color(1, 0.5, 0.15, 1)
+screen_shake = 0.05
+sfx = &"laser"
+tags = Array[StringName]([&"inferno"])

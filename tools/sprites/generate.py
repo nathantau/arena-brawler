@@ -364,21 +364,56 @@ def sakura(step=None, t=0):
     return low, up
 
 
-def flint(step=None, t=0):
-    """Fire: a soot-black little fire elemental with glowing ember cracks and a molten face. His
-    flaming hair is drawn above the art box (CROWNS: flint_crown)."""
+def flint(step=None, t=0, heat=0.0):
+    """Fire: a soot-black little fire elemental with glowing ember cracks, a molten face and fists of fire. His
+    flaming hair is drawn above the art box (CROWNS: flint_crown). `heat` 0..1 stokes him into his Inferno form:
+    bigger hand flames, white-hot cracks, flames off his shoulders and blazing eyes trailing fire."""
+    hot = heat >= 0.5
+    crack = (ORANGE, YELLOW)[t % 2] if not hot else (YELLOW, WHITE)[t % 2]  # cracks pulse every tick
     low = Canvas()
     for x, dy in legs(low, SHADOW, MAROON, step):
-        low.flat(R((x + 2, 47 + dy, x + 2, 50 + dy)), ORANGE)  # ember crack down each leg
+        low.flat(R((x + 2, 47 + dy, x + 2, 50 + dy)), crack)  # ember crack down each leg
     up = Canvas()
+
+    def fist(cx, k):  # a ball of fire for a hand, its flame licking up and flickering every tick
+        hh = 7 + round(heat * 6) + (t + k) % 2
+        flame(up, cx - 4, cx + 4, 46, hh, t + k, tongues=2)
+        up.part(E((cx - 3, 41, cx + 3, 47)), ORANGE)
+        up.flat(E((cx - 1, 43, cx + 1, 45)), YELLOW if not hot else WHITE)
+
+    if heat > 0:  # fire licking out of him: tongues rooted inside the body (drawn behind it, so no base shows)
+        for k, (root, tip) in enumerate((((24, 47), (5, 47)), ((24, 44), (5, 37)), ((24, 40), (6, 27)),
+                                         ((25, 37), (9, 17)), ((27, 35), (14, 9)))):
+            for side in (1, -1):  # mirrored about the body's centre
+                fl = (t + k + (side < 0)) % 2  # flicker, out of step on each side
+                tx, ty = root[0] + (tip[0] - root[0]) * heat, root[1] + (tip[1] - root[1]) * heat - 2 * fl
+                mx = lambda x: 32 + side * (x - 32)
+                for col, f in ((RED, 1.0), (ORANGE, 0.72), (YELLOW, 0.42)):
+                    px, py = root[0] + (tx - root[0]) * f, root[1] + (ty - root[1]) * f
+                    pts = [(root[0] + 4, root[1] + 4), ((root[0] + px) / 2 - 3, (root[1] + py) / 2 + 3),
+                           (px + SWAY[(t + k) % 4], py), ((root[0] + px) / 2 + 3, (root[1] + py) / 2 - 4),
+                           (root[0] + 4, root[1] - 4)]
+                    up.part(P([(mx(x), y) for x, y in pts]), col, shade=False, line=col == RED)
+    fist(17, 1)  # back hand, behind the body
     up.part(RR(BODY, 3), SHADOW)  # sooty body
     for pts in (((25, 35), (28, 39), (26, 43), (28, 47)), ((38, 34), (36, 38), (39, 42)), ((32, 44), (34, 47))):
-        up.flat(L(pts, 1), ORANGE)  # glowing cracks
+        up.flat(L(pts, 1), crack)  # glowing cracks
+    if heat > 0:
+        for pts in (((22, 40), (24, 44)), ((41, 44), (39, 47)), ((30, 34), (31, 37))):
+            up.flat(L(pts, 1), crack)  # more of him splits open as he heats up
     up.flat(P([(32, 37), (35, 40), (32, 43), (29, 40)]), YELLOW)  # ember heart
-    up.dot(32, 40, WHITE)
+    if t % 2 == 0 or hot:
+        up.flat(R((31, 39, 33, 41)) if hot else R((32, 40, 32, 40)), WHITE)  # heartbeat
+    fist(47, 3)  # front hand
     up.part(lambda d, f: (d.ellipse(HEAD, f), d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)  # molten head, face turned right
     up.part(E((MOUTH[0] - 6, 26, MOUTH[0] + 6, 34)), YELLOW, line=False)  # hot glow around the mouth
-    big_eyes(up, EYES_Y, EYES_X, YELLOW)
+    if hot and not KO:  # blazing eyes: white-hot with flame trailing back off them
+        for x in EYES_X:
+            up.flat(R((x, EYES_Y, x + 3, EYES_Y + 5)), YELLOW)  # same eye shape, lit from inside
+            up.flat(R((x + 1, EYES_Y + 1, x + 2, EYES_Y + 4)), WHITE)
+            up.flat(L([(x + 1, EYES_Y - 1), (x - 1, EYES_Y - 3 - (t % 2))], 1), YELLOW)  # flame flicking up off it
+    else:
+        big_eyes(up, EYES_Y, EYES_X, YELLOW)
     up.flat(R((BLUSH[0], BLUSH[2], BLUSH[0] + 1, BLUSH[2])), RED)  # blush
     up.flat(R((BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])), RED)
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
@@ -388,14 +423,47 @@ def flint(step=None, t=0):
     return low, up
 
 
-def flint_crown(t: int, dy: int) -> Canvas:
-    """Flint's head on fire: an upright flame rising off his head, its tongues flickering every tick.
-    A CELL canvas drawn behind the body before outlining (the face covers its base); `dy` = the head's bob."""
+def flint_crown(t: int, dy: int, heat: float = 0.0) -> Canvas:
+    """Flint's head on fire: an upright flame rising off his head, its tongues flickering every tick, taller and
+    leaping with `heat`. A CELL canvas drawn behind the body before outlining (the face covers its base);
+    `dy` = the head's bob."""
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
     mid = PAD + (HEAD[0] + HEAD[2]) // 2  # centred on the head, no wider than the face, or the side tongues read as horns
-    flame(c, mid - 12, mid + 12, top + FACE[1] + 9, 32, t, tongues=5)
+    flame(c, mid - 12, mid + 12, top + FACE[1] + 9, 24 + round(heat * 10), t, tongues=5 + round(heat * 2))  # 34 is as tall as the cell allows
     return c
+
+
+def flint_embers(i: int, heat: float = 0.0) -> Canvas:
+    """Sparks rising off Flint and fading out (period 4), twice as many in his Inferno form."""
+    c = Canvas()
+    for k, (x, y) in enumerate(((12, 30), (52, 26), (10, 44), (54, 40))):
+        phase = (i + k) % 4
+        c.dot(x + SWAY[(i + k) % 4], y - 3 * phase, (YELLOW, ORANGE, RED, MAROON)[phase])
+    if heat > 0:  # more sparks thrown off the fire around him
+        for k, (x, y) in enumerate(((8, 26), (56, 22), (16, 16), (48, 12))):
+            phase = (i + k + 2) % 4
+            c.dot(x - SWAY[(i + k) % 4], y - 3 * phase, (WHITE, YELLOW, ORANGE, RED)[phase])
+    return c
+
+
+def flint_inferno(step=None, t=0):
+    return flint(step, t, heat=1.0)
+
+
+def flint_inferno_morph() -> Image.Image:
+    """Flint stoking up: his idle frame with heat rising 0 → 1 over 12 frames (no growth: form_scale 1)."""
+    out = []
+    for k in range(12):
+        h = k / 11
+        low, up = flint(None, k % 4, heat=h)
+        f = flint_embers(k % 4, h).img
+        f.alpha_composite(low.img)
+        f.alpha_composite(up.img, (0, UPPER_DY))
+        cell_img = flint_crown(k % 4, 0, h).img
+        cell_img.alpha_composite(f, (PAD, PAD))
+        out.append(outline(cell_img))
+    return strip(out)
 
 
 def wukong(step=None, t=0):
@@ -1042,6 +1110,10 @@ ICONS = {
                                     (6 + round(6 * dx), 6 + round(6 * dy)), (6 + round(5 * dx + 2 * dy), 6 + round(5 * dy - 2 * dx))]),
                                  PINK_L) for dx, dy in ((0, -1), (0.95, -0.31), (0.59, 0.81), (-0.59, 0.81), (-0.95, -0.31))]
                         + [c.flat(E((4, 4, 8, 8)), PINK), c.dot(6, 6, YELLOW)],
+    "inferno": lambda c: (c.flat(P([(6, 0), (9, 4), (11, 2), (11, 8), (9, 11), (3, 11), (1, 8), (1, 3), (3, 5)]), RED),
+                          c.flat(P([(6, 3), (9, 7), (8, 10), (4, 10), (3, 7)]), ORANGE), c.flat(E((5, 7, 7, 10)), YELLOW)),
+    "inferno": lambda c: (c.flat(P([(6, 0), (9, 4), (11, 2), (11, 8), (9, 11), (3, 11), (1, 8), (1, 3), (3, 5)]), RED),
+                          c.flat(P([(6, 3), (9, 7), (8, 10), (4, 10), (3, 7)]), ORANGE), c.flat(E((5, 7, 7, 10)), YELLOW)),
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -1524,17 +1596,19 @@ FX = {
     # 1.35 = great_ape.tres form_scale (keep in sync).
     "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],
                                                    frames(wukong_ape, AURAS["wukong_ape"])[0], 1.35, ape_morph)),
+    "flint_inferno_morph": flint_inferno_morph,
 }
 
 
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint,
               "sakura": sakura}
 ## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
-FORMS = {"wukong_ape": wukong_ape}
-AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
+FORMS = {"wukong_ape": wukong_ape, "flint_inferno": flint_inferno}
+AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers,
+         "flint_inferno": lambda i: flint_embers(i, 1.0)}
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
-CROWNS = {"flint": flint_crown}  # optional per-frame effects drawn behind
+CROWNS = {"flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Fists go up over his head, then smash down in front on frame 3 (the hit lands then:
 ## ape_fists windup), the body squashed, and settle back into the knuckle-walk.

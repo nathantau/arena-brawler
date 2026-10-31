@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_inferno.png" id="2_icon"]
+[ext_resource type="Texture2D" path="res://assets/sprites/flint_inferno.png" id="3_sheet"]
+[ext_resource type="Resource" path="res://data/weapons/inferno_beam.tres" id="4_beam"]
+[ext_resource type="Texture2D" path="res://assets/fx/flint_inferno_morph.png" id="5_morph"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"inferno"
+display_name = "Inferno"
+kind = 3
+special = true
+blurb = "Blaze up and fire giant flame beams"
+tags = Array[StringName]([&"flint"])
+cooldown = 16.0
+duration = 5.0
+form_sprite_sheet = ExtResource("3_sheet")
+form_morph = ExtResource("5_morph")
+form_weapon = ExtResource("4_beam")

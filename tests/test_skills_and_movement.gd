@@ -332,3 +332,12 @@ func test_ape_slam_lands_after_its_windup() -> void:
 		p.simulate(idle, Constants.PHYSICS_DT)
 	assert_signal_emit_count(p, "shot_fired", 1, "lands when the fists come down")
 
+
+
+func test_flint_inferno_fires_beams() -> void:
+	var flint: CharacterData = characters.get_character(&"flint")
+	var inferno: SkillData = flint.signature_skill
+	assert_eq(inferno.kind, SkillData.Kind.TRANSFORM)
+	assert_eq(inferno.form_weapon.kind, WeaponData.Kind.BEAM)
+	assert_not_null(inferno.form_frames(), "Inferno sheet loads")
+	assert_true(flint.can_use_skill(skills.get_skill(&"supernova")), "Supernova stays pickable")
