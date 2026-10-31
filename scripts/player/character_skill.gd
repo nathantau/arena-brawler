@@ -76,6 +76,10 @@ func is_drifting() -> bool:
 	return data.kind == SkillData.Kind.DRIFT and is_active()
 
 
+func is_overdriving() -> bool:
+	return data.kind == SkillData.Kind.OVERDRIVE and is_active()
+
+
 func is_whirling() -> bool:
 	return data.kind == SkillData.Kind.WHIRL and is_active()
 

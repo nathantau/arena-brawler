@@ -13,6 +13,7 @@ Also writes the 1024 px app icon (assets/icon.png) from Flicker's first idle fra
 Run: tools/sprites/.venv/bin/python tools/sprites/generate.py
 """
 
+import functools
 import math
 import random
 from pathlib import Path
@@ -3860,6 +3861,307 @@ KO_CROWNS = {"flicker"}  # crowns that stay on a knocked-out body (Flint's flame
 ATTACKS = {"wukong_ape": [(("walk", "raise", 0.6), 3, 0), (("raise", "raise", 0), -2, -9), (("raise", "smash", 0.5), -1, -12),
                           (("smash", "smash", 0), 3, 0), (("smash", "smash", 0), 2, 0), (("smash", "walk", 0.4), 1, 0),
                           (("smash", "walk", 0.8), 0, 0)]}
+
+
+# --- Bolt: lightning runner (character, Arc Zapper, Overdrive FX) -------------------------------------------------
+# Everything electric is built from jagged arcs: `zig` makes the points, `arc` draws one (cyan glow, white joints).
+def zap_zig(rng, a, b, n=4, jit=2.5):
+    """A jagged lightning path from a to b in n segments, kinks alternating sides."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    ln = math.hypot(dx, dy) or 1.0
+    nx, ny = -dy / ln, dx / ln
+    pts = [(round(a[0]), round(a[1]))]
+    for k in range(1, n):
+        j = jit * (1 if k % 2 else -1) * rng.uniform(0.6, 1.2)
+        pts.append((round(a[0] + dx * k / n + nx * j), round(a[1] + dy * k / n + ny * j)))
+    pts.append((round(b[0]), round(b[1])))
+    return pts
+
+
+def zap_arc(c: Canvas, pts, glow=TEAL_L, core=WHITE, tip=None, w=1):
+    c.flat(L(pts, w), glow)
+    for x, y in pts[1:-1]:
+        sdot(c, x, y, core)
+    if tip is not None:
+        sdot(c, pts[-1][0], pts[-1][1], tip)
+
+
+def arcs_from(c: Canvas, rng, roots, centre, n, reach, forks=0.6, glow=TEAL_L, tip=WHITE, jit=2.2):
+    """n arcs leaping off random `roots` away from `centre`; long ones may fork."""
+    size = c.size
+    clamp = lambda v: min(max(v, 4), size - 5)
+    for _ in range(n):
+        x, y = rng.choice(roots)
+        a = math.atan2(y - centre[1], x - centre[0]) + rng.uniform(-0.7, 0.7)
+        ln = rng.uniform(*reach)
+        end = (clamp(x + math.cos(a) * ln), clamp(y + math.sin(a) * ln))
+        pts = zap_zig(rng, (x, y), end, 3 if ln < 10 else 4, jit)
+        zap_arc(c, pts, glow, tip=tip)
+        if ln > 12 and rng.random() < forks:
+            fx, fy = pts[len(pts) // 2]
+            a2 = a + rng.choice((-1, 1)) * 0.9
+            e2 = (clamp(fx + math.cos(a2) * ln * 0.5), clamp(fy + math.sin(a2) * ln * 0.5))
+            zap_arc(c, zap_zig(rng, (fx, fy), e2, 2, 1.6), glow, tip=YELLOW)
+
+
+BOLT_ROOTS = ((19, 37), (46, 38), (17, 24), (47, 20), (23, 52), (41, 52), (26, 46), (40, 46), (32, 14), (30, 34))
+BOLT_SKIN_ROOTS = ((22, 40), (42, 40), (18, 41), (45, 41), (30, 36), (37, 43))
+
+
+def bolt_aura(i: int) -> Canvas:
+    """Static crackling off his body (behind him; in AURAS): three short arcs and a few loose sparks that jump to new
+    spots every tick, and every 4th tick one long flash with forks. Seeded by the tick, so each frame is fixed."""
+    c = Canvas()
+    rng = random.Random(7000 + i * 31)
+    arcs_from(c, rng, BOLT_ROOTS, (32, 34), 5, (9, 16))
+    if i % 4 == 3:  # the occasional bigger flash
+        arcs_from(c, rng, BOLT_ROOTS, (32, 34), 1, (19, 25), forks=1.0, glow=YELLOW, tip=WHITE, jit=3.0)
+    for _ in range(5):
+        a, r = rng.uniform(0, math.tau), rng.uniform(21, 28)
+        sdot(c, round(32 + math.cos(a) * r), round(34 + math.sin(a) * r * 0.9), rng.choice((WHITE, YELLOW, TEAL_L)))
+    return c
+
+
+def bolt(step=None, t=0):
+    """Bolt: a lightning-quick runner. Swept-back yellow hair with a zig-zag lightning crest (drawn above the art box:
+    CROWNS bolt_crown), goggles pushed up on the brow, a blue runner's suit with a yellow lightning flash on the chest
+    and a belt, white gloves and boots with yellow cuffs, a cyan scarf streaming behind him. Small arcs crackle over
+    the suit and flicker from tick to tick (bolt_aura throws bigger ones off him)."""
+    low = Canvas()
+    for x, dy in legs(low, NAVY, WHITE, step):
+        low.flat(R((x, 52 + dy, x + 5, 52 + dy)), YELLOW)  # boot cuff
+        low.dot(x + 3, 46 + dy, YELLOW)  # a lightning flash zig-zagging down the thigh
+        low.dot(x + 2, 47 + dy, YELLOW)
+        low.dot(x + 3, 48 + dy, YELLOW)
+        low.dot(x + 2, 49 + dy, WHITE)
+        low.flat(R((x + 5, 55 + dy, x + 6, 55 + dy)), YELLOW)  # toe cap
+    up = Canvas()
+    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
+    # scarf, streaming behind him in the wind (wave)
+    up.part(P([(22, 35), (16 - wave(0, 1), 36), (11 - wave(1, 1.5), 39 + SWAY[t % 4]), (8 - wave(2, 2), 45),
+               (13 - wave(2, 1.5), 44), (17 - wave(1, 1), 42), (22, 40)]), TEAL_L)
+    up.flat(L([(18, 38), (12 - wave(1, 1.5), 42 + SWAY[t % 4])], 1), BLUE)  # its stripe
+    arm(up, ARM_X[0], BLUE, WHITE)
+    up.flat(R((ARM_X[0], 41, ARM_X[0] + 5, 41)), YELLOW)  # wrist band
+    up.part(RR(BODY, 3), BLUE)  # suit
+    up.flat(P([(36, 34), (29, 40), (33, 40), (30, 45), (39, 38), (35, 38), (38, 34)]), YELLOW)  # chest flash
+    up.flat(L([(36, 35), (31, 39)], 1), WHITE)  # its lit edge
+    up.flat(R((20, 46, 44, 47)), NAVY)  # belt
+    up.flat(R((31, 46, 34, 47)), YELLOW)  # buckle
+    up.flat(R((21, 33, 43, 33)), WHITE)  # high collar
+    up.dot(24, 36, STEEL)  # suit sheen
+    up.dot(24, 37, STEEL)
+    arm(up, ARM_X[1], BLUE, WHITE)
+    up.flat(R((ARM_X[1], 41, ARM_X[1] + 5, 41)), YELLOW)
+    # hair: the head's back is a spiky yellow mass swept back, ending in jagged points
+    up.part(lambda d, f: (d.ellipse((16, 6, 48, 37), f), d.polygon(
+        [(16, 20), (11, 28), (16, 27), (13, 35), (19, 31), (20, 38), (24, 31), (24, 20)], f)), YELLOW)
+    up.flat(L([(22, 9), (31, 7)], 1), WHITE)  # crown sheen
+    up.flat(L([(17, 22), (16, 27)], 1), WHITE)
+    up.part(RR(FACE, FACE_R), SKIN)  # face
+    # goggles pushed up on the brow: a strap round the head and two lenses
+    up.flat(R((18, 12, 48, 13)), NAVY)
+    for x in (26, 37):
+        up.part(RR((x, 8, x + 6, 14), 2), STEEL_D)
+        up.flat(R((x + 1, 10, x + 4, 12)), TEAL_L)
+        up.dot(x + 1, 10, WHITE)
+    # zig-zag fringe stopping above the eyes
+    up.part(P([(19, 15), (49, 15), (49, 19), (46, 17), (43, 20), (40, 17), (37, 20), (34, 17), (31, 20), (28, 17),
+               (25, 19), (22, 17), (19, 19)]), YELLOW, shade=False)
+    up.part(P([(FACE[2] - 1, 17), (51, 18), (52 + wave(2, 0.5), 28), (49, 25), (49, 27), (FACE[2], 24)]), YELLOW,
+            shade=False)  # a side lock
+    big_eyes(up, EYES_Y, EYES_X, TEAL_L, h=6)
+    face(up, BLUSH, MOUTH)
+    up.dot(MOUTH[0] + 2, MOUTH[1] - 1, MAROON)  # cocky grin
+    if not KO:
+        rng = random.Random(4100 + t * 17)  # tiny arcs crackling over the suit and the hair
+        arcs_from(up, rng, BOLT_SKIN_ROOTS, (32, 40), 3, (4, 8), forks=0, jit=1.5)
+        if t % 4 == 1:
+            sdot(up, 40 + rng.randint(-5, 6), 8 + rng.randint(0, 2), WHITE)
+    return low, up
+
+
+def bolt_crown(t: int, dy: int) -> Canvas:
+    """The lightning crest: three zig-zag spikes rising above the head (swept back, the tips sway with the wind), a
+    spark skipping along them. A CELL canvas drawn behind the body; `dy` = the head's bob."""
+    c = Canvas(CELL)
+    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
+    at = lambda pts: [(PAD + x, PAD + UPPER_DY + dy + y) for x, y in pts]
+    c.part(lambda d, f: (
+        d.polygon(at([(29, 10), (28, 1), (32, 2), (30 - wave(1, 1), -13), (40, 0), (36, 0), (38, 10)]), f),  # tall centre
+        d.polygon(at([(21, 11), (19, 4), (23, 5), (15 - wave(2, 1.5), -5), (28, 9)]), f),  # left, swept back
+        d.polygon(at([(39, 10), (41, 3), (45, 5), (49 - wave(1, 1), -3), (47, 9)]), f)), YELLOW)  # right
+    c.flat(L(at([(30, 9), (30, 3), (31, -4)]), 1), WHITE)  # lit edge of the tall spike
+    spark = at([(31, -9), (36, -2), (21, -2), (16, 3)])[t % 4]
+    sdot(c, spark[0], spark[1], WHITE)
+    return c
+
+
+# --- Arc Zapper (weapon) and its bolt ---
+def arc_zapper(c: Canvas, t: int = 0) -> None:
+    """A short electrode pistol: blue casing ringed with yellow coils, two steel prongs and a spark flickering between
+    their tips (t = frame of the held loop)."""
+    grip(c, NAVY)
+    c.part(RR((3, 7, 21, 14), 2), BLUE)
+    for x in (8, 12, 16):  # coil rings
+        c.flat(R((x, 7, x, 13)), YELLOW)
+    c.part(R((21, 9, 27, 12)), STEEL, shade=False)
+    c.part(P([(27, 6), (40, 5), (40, 7), (29, 9)]), STEEL_D, shade=False)  # upper prong
+    c.part(P([(27, 12), (40, 13), (40, 15), (29, 15)]), STEEL_D, shade=False)  # lower prong
+    rng = random.Random(30 + t)
+    zap_arc(c, zap_zig(rng, (40, 7), (40, 13), 3, 2.5 + t % 2), TEAL_L)  # the spark between the tips
+    sdot(c, 41, 10, WHITE)
+    c.dot(5, 8, TEAL_L)
+
+
+def zap_shot(c: Canvas, f: int) -> None:  # Arc Zapper: a short zig-zag spark; the kinks flip each frame
+    m = PROJ // 2
+    s = -1 if f else 1
+    pts = [(4, m), (6, m - 3 * s), (9, m + 3 * s), (11, m - 3 * s), (13, m + 2 * s), (15, m)]
+    c.flat(L(pts, 2), TEAL_L)
+    c.flat(L(pts, 1), WHITE)
+    c.dot(15, m, YELLOW)
+    c.dot(4, m, BLUE)
+
+
+# --- Overdrive FX (SpecialFx draws them from synced state) ---
+OVERDRIVE_FRAMES = 8
+BOLT_CRACK_FRAMES = 14
+BOLT_FIZZLE_FRAMES = 12
+BOLT_SPARK_FRAMES = 6
+BOLT_GHOST_FRAMES = 4
+
+
+def overdrive_frame(k: int) -> Image.Image:
+    """Overdrive loop (CELL px, centred on him, drawn over him): big arcs leaping off the whole body in every
+    direction, forking, with loose sparks; every frame is a different crackle."""
+    c = Canvas(CELL)
+    rng = random.Random(8100 + k * 53)
+    roots = [(48 + math.cos(a) * 13, 52 + math.sin(a) * 18) for a in (rng.uniform(0, math.tau) for _ in range(14))]
+    arcs_from(c, rng, roots, (48, 52), 6, (14, 27), forks=0.8, jit=3.0)
+    arcs_from(c, rng, roots, (48, 52), 2, (8, 12), forks=0, glow=YELLOW, jit=2.0)
+    for _ in range(10):
+        a, r = rng.uniform(0, math.tau), rng.uniform(24, 41)
+        sdot(c, round(48 + math.cos(a) * r), round(52 + math.sin(a) * r * 0.9), rng.choice((WHITE, YELLOW, TEAL_L)))
+    return outline(c.img)
+
+
+@functools.lru_cache(maxsize=None)
+def bolt_walk_frames() -> tuple:
+    return tuple(frames(bolt, None, bolt_crown)[6:])
+
+
+def bolt_ghost_frame(k: int) -> Image.Image:
+    """An afterimage (CELL px): his walking silhouette dithered blue and cyan (hard pixels, the outline kept), with
+    speed streaks dragging out behind (to the left; SpecialFx mirrors it when he runs left)."""
+    src = bolt_walk_frames()[(k * 2) % 8].copy()
+    px = src.load()
+    for y in range(src.height):
+        for x in range(src.width):
+            r, g, b, a = px[x, y]
+            if a and (r, g, b) != OUTLINE:
+                px[x, y] = (TEAL_L if (x + y + k) % 2 else BLUE) + (255,)
+    rng = random.Random(900 + k)
+    for y in rng.sample(range(34, 80, 2), 9):
+        row = [x for x in range(src.width) if px[x, y][3]]
+        if not row:
+            continue
+        x0, ln = min(row) - 2, rng.randint(7, 24)
+        for x in range(max(x0 - ln, 3), x0):
+            px[x, y] = (WHITE if x > x0 - 3 else TEAL_L if (x + k) % 3 else BLUE) + (255,)
+    return src
+
+
+def bolt_crack_frame(k: int) -> Image.Image:
+    """Overdrive start (128 px, centred on him; his feet sit 25 art px below the centre): a bolt of lightning stabs down
+    on him from above, flash and floor ring, forks leaping off, then the bolt is gone and sparks scatter."""
+    n, m = 128, 64
+    foot = (m, m + 25)
+    c = Canvas(n)
+    rng = random.Random(77)
+    reach = (0.6, 1, 1, 1, 1, 1, 0.9)[k] if k < 7 else 0
+    width = (1, 2, 4, 4, 3, 2, 1)[k] if k < 7 else 0
+    if reach:
+        end = (foot[0], 4 + (foot[1] - 4) * reach)
+        pts = zap_zig(rng, (m + 4, 4), end, 8, 5)
+        c.flat(L(pts, width + 2), TEAL_L)
+        c.flat(L(pts, width), WHITE)
+        for x, y in pts[1:-1:2]:
+            sdot(c, x, y, YELLOW)
+        for j in (2, 5):  # forks
+            fx, fy = pts[j]
+            side = 1 if j == 2 else -1
+            e = (fx + side * rng.randint(12, 20), fy + rng.randint(6, 14))
+            zap_arc(c, zap_zig(rng, (fx, fy), e, 3, 3), TEAL_L if k > 1 else WHITE, tip=YELLOW)
+    if 1 <= k <= 9:  # flash at the feet, then a squashed ring racing out over the floor
+        r = (0, 6, 11, 14, 11, 8, 5, 3, 2, 1)[k]
+        if r:
+            c.flat(E((foot[0] - r, foot[1] - r * 0.5, foot[0] + r, foot[1] + r * 0.5)), WHITE if k < 4 else TEAL_L)
+        rr = 6 + k * 5
+        c.flat(lambda d, f: d.ellipse((foot[0] - rr, foot[1] - rr * 0.35, foot[0] + rr, foot[1] + rr * 0.35),
+                                      outline=f, width=2 if k < 6 else 1), TEAL_L if k < 6 else BLUE)
+    for j in range(10 if k >= 1 else 0):  # sparks thrown out, fading with k
+        a = rng.uniform(-3.1, 0.0)
+        r = (k - 1) * rng.uniform(2.5, 6)
+        life = max(0.0, 1 - k / BOLT_CRACK_FRAMES)
+        if r > 0 and rng.random() < life + 0.2:
+            sdot(c, round(foot[0] + math.cos(a) * r * 1.3), round(foot[1] + math.sin(a) * r * 0.9),
+                 (WHITE, YELLOW, TEAL_L)[j % 3])
+    return outline(c.img)
+
+
+def bolt_fizzle_frame(k: int) -> Image.Image:
+    """Overdrive end (CELL px, over him): the crackle shrinks and gutters out, little puffs of smoke rise off his
+    shoulders and the last sparks drop."""
+    n = BOLT_FIZZLE_FRAMES
+    c = Canvas(CELL)
+    rng = random.Random(55 + k)
+    life = 1 - k / n
+    roots = [(48 + math.cos(a) * 13, 52 + math.sin(a) * 18) for a in (rng.uniform(0, math.tau) for _ in range(10))]
+    if life > 0.25:
+        arcs_from(c, rng, roots, (48, 52), round(5 * life) + 1, (6 * life + 4, 16 * life + 6), forks=0.3, jit=2.0)
+    for j in range(3):  # smoke puffs
+        if k >= 2 + j:
+            age = k - 2 - j
+            px_, py_ = 36 + j * 12, 40 - age * 2
+            r = 2 + min(age, 3)
+            c.flat(E((px_ - r, py_ - r, px_ + r, py_ + r)), STEEL if age < 4 else STEEL_D)
+    for _ in range(6):  # last sparks, dropping
+        x, y = round(48 + rng.uniform(-24, 24)), round(40 + rng.uniform(-10, 14) + k * 2.2)
+        if rng.random() < life + 0.15:
+            sdot(c, x, y, rng.choice((YELLOW, TEAL_L, WHITE)) if k < n - 3 else YELLOW)
+    return outline(c.img)
+
+
+def bolt_spark_frame(k: int) -> Image.Image:
+    """A single arc popping off him while he runs (48 px, one-shot): it lashes out, flickers and winks out."""
+    c = Canvas(48)
+    rng = random.Random(21 + k // 2)  # the shape holds for two frames
+    ln = (7, 13, 16, 15, 9, 4)[k]
+    pts = zap_zig(rng, (24, 24), (24 + ln, 24 - ln * 0.5), 3, 3)
+    zap_arc(c, pts, TEAL_L if k < 4 else BLUE, tip=WHITE if k < 4 else None)
+    if 1 <= k <= 3:
+        zap_arc(c, zap_zig(rng, pts[1], (pts[1][0] - 6, pts[1][1] + 8), 2, 2), TEAL_L, tip=YELLOW)
+    return outline(c.img)
+
+
+CHARACTERS["bolt"] = bolt
+CROWNS["bolt"] = bolt_crown
+AURAS["bolt"] = bolt_aura
+WEAPONS["bolt_zapper"] = arc_zapper
+WEAPON_ANIMS["bolt_zapper"] = arc_zapper
+PROJECTILES["bolt_zapper"] = zap_shot
+ICONS["overdrive"] = lambda c: (c.flat(L([(0, 3), (4, 3)], 1), TEAL_L), c.flat(L([(0, 7), (3, 7)], 1), TEAL_L),
+                                c.flat(L([(1, 10), (4, 10)], 1), TEAL_L),
+                                c.flat(P([(9, 0), (4, 7), (7, 7), (5, 12), (12, 4), (8, 4), (11, 0)]), YELLOW),
+                                c.flat(L([(9, 1), (6, 5)], 1), WHITE))
+FX.update({
+    "bolt_overdrive": lambda: strip([overdrive_frame(k) for k in range(OVERDRIVE_FRAMES)]),
+    "bolt_ghost": lambda: strip([bolt_ghost_frame(k) for k in range(BOLT_GHOST_FRAMES)]),
+    "bolt_crack": lambda: strip([bolt_crack_frame(k) for k in range(BOLT_CRACK_FRAMES)]),
+    "bolt_fizzle": lambda: strip([bolt_fizzle_frame(k) for k in range(BOLT_FIZZLE_FRAMES)]),
+    "bolt_spark": lambda: strip([bolt_spark_frame(k) for k in range(BOLT_SPARK_FRAMES)]),
+})
 
 
 # --- frame processing -------------------------------------------------------

@@ -229,6 +229,25 @@ const DISSOLVE_TIME: float = DRIFT_STRIP_FRAMES / DRIFT_FPS
 const DRIFT_LEAN: float = 0.4
 ## Speed under which the swirl keeps its last heading.
 const DRIFT_MIN_SPEED: float = 20.0
+## Bolt's Overdrive (from synced skill state on every peer): a crack of lightning when it starts, a crackling loop over
+## him while it lasts, electric afterimages dragged behind (under him) and arcs popping off him while he moves, and a
+## fizzle when it ends. All 96 px sheet cells except the 128 px crack and the 48 px spark.
+const OD_ART: Texture2D = preload(FX_DIR + "bolt_overdrive.png")
+const OD_GHOST_ART: Texture2D = preload(FX_DIR + "bolt_ghost.png")
+const OD_CRACK_ART: Texture2D = preload(FX_DIR + "bolt_crack.png")
+const OD_FIZZLE_ART: Texture2D = preload(FX_DIR + "bolt_fizzle.png")
+const OD_SPARK_ART: Texture2D = preload(FX_DIR + "bolt_spark.png")
+const OD_FPS: float = 20.0
+const OD_CRACK_TIME: float = 0.47
+const OD_FIZZLE_TIME: float = 0.4
+const OD_SPARK_TIME: float = 0.16
+const OD_SPARK_INTERVAL: float = 0.07
+const OD_SPARK_REACH: Vector2 = Vector2(26.0, 30.0)
+## Afterimages: one every OD_GHOST_STEP seconds, OD_GHOST_ALPHAS from the newest, skipped while closer than OD_GHOST_MIN.
+const OD_GHOST_STEP: float = 0.045
+const OD_GHOST_ALPHAS: Array[float] = [0.75, 0.6, 0.45, 0.3, 0.18]
+const OD_GHOST_MIN: float = 10.0
+const OD_MIN_SPEED: float = 60.0
 
 
 class Poof:
@@ -313,6 +332,14 @@ var _drift_at: Vector2 = Vector2.ZERO
 var _drift_flip: bool = false
 var _drift_lean: float = 0.0
 var _face_flip: bool = false
+## Overdrive: seconds in (-1 = off), where he is drawn, afterimage positions (newest first) with their mirroring.
+var _od_t: float = -1.0
+var _od_at: Vector2 = Vector2.ZERO
+var _od_ghosts: Array[Vector2] = []
+var _od_flips: Array[bool] = []
+var _od_flip: bool = false
+var _od_ghost_clock: float = 0.0
+var _od_spark_clock: float = 0.0
 ## Storm Cloud while it rains (null = not): the slot, strikes seen, and the bolts in flight (position they land + age).
 var _storm: CharacterSkill
 var _storm_spot: Vector2 = Vector2.ZERO
@@ -390,6 +417,7 @@ func sync(p: Player) -> void:
 	_flare_flip = p.facing.x < 0.0
 	_sync_swing(p)
 	_sync_drift(p)
+	_sync_overdrive(p)
 	_sync_sapling(p)
 	_sync_storm(p)
 	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
@@ -495,6 +523,59 @@ func _bolt(at: Vector2, ground: Vector2) -> void:
 	_bolts.append(b)
 	_poof(ground, STORM_SPARK_ART, STORM_SPARK_TIME)
 	_poof(ground, STORM_SCORCH_ART, STORM_SPARK_TIME, 1.0, true)
+
+
+func _sync_overdrive(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.OVERDRIVE)
+	var on: bool = slot != null and slot.is_overdriving() and not p.dead
+	_od_at = p.global_position + p.visual_offset
+	if on and _od_t < 0.0:
+		_poof(_od_at, OD_CRACK_ART, OD_CRACK_TIME)
+	elif not on and _od_t >= 0.0 and not p.dead:
+		_poof(_od_at, OD_FIZZLE_ART, OD_FIZZLE_TIME)
+	_od_t = slot.elapsed() if on else -1.0
+	if not on:
+		_od_ghosts.clear()
+		_od_flips.clear()
+		return
+	var moving: bool = p.velocity.length() > OD_MIN_SPEED
+	if moving:
+		_od_flip = p.velocity.x < 0.0
+	var dt: float = get_process_delta_time()
+	_od_ghost_clock += dt
+	if _od_ghost_clock >= OD_GHOST_STEP:
+		_od_ghost_clock = 0.0
+		_od_ghosts.push_front(_od_at)
+		_od_flips.push_front(_od_flip)
+		if _od_ghosts.size() > OD_GHOST_ALPHAS.size():
+			_od_ghosts.pop_back()
+			_od_flips.pop_back()
+	_od_spark_clock += dt
+	if moving and _od_spark_clock >= OD_SPARK_INTERVAL:  # arcs popping off him as he runs
+		_od_spark_clock = 0.0
+		_poof(_od_at + Vector2(_rng.randf_range(-1.0, 1.0), _rng.randf_range(-1.0, 0.8)) * OD_SPARK_REACH,
+			OD_SPARK_ART, OD_SPARK_TIME, -1.0 if _rng.randf() < 0.5 else 1.0)
+
+
+## Afterimages, under him.
+func _draw_overdrive_floor() -> void:
+	var px: float = Constants.SPRITE_SCALE
+	var cell: float = OD_GHOST_ART.get_height()
+	var frames: int = OD_GHOST_ART.get_width() / OD_GHOST_ART.get_height()
+	for i: int in _od_ghosts.size():
+		if _od_ghosts[i].distance_to(_od_at) < OD_GHOST_MIN * (i + 1):
+			continue
+		_floor.draw_set_transform(_od_ghosts[i], 0.0, Vector2(-1.0 if _od_flips[i] else 1.0, 1.0))
+		_draw_frame(OD_GHOST_ART, (int(_time * OD_FPS) + i) % frames, cell, Vector2.ZERO, px, OD_GHOST_ALPHAS[i], _floor)
+	_floor.draw_set_transform(Vector2.ZERO)
+
+
+## The crackle over him.
+func _draw_overdrive() -> void:
+	if _od_t < 0.0:
+		return
+	var n: int = OD_ART.get_width() / OD_ART.get_height()
+	_draw_frame(OD_ART, int(_od_t * OD_FPS) % n, OD_ART.get_height(), _od_at, Constants.SPRITE_SCALE)
 
 
 func _sync_drift(p: Player) -> void:
@@ -714,6 +795,7 @@ func _draw() -> void:
 	_draw_flare()
 	_draw_swing()
 	_draw_drift()
+	_draw_overdrive()
 	_draw_snare()
 	_draw_sapling()
 	_draw_blaze()
@@ -750,6 +832,7 @@ func _draw_floor() -> void:
 				STORM_SIZE, centre, px, 1.0, _floor)
 		else:
 			_draw_frame(STORM_FLOOR_ART, int(t * STORM_FPS) % STORM_LOOP_COUNT, STORM_SIZE, centre, px, 1.0, _floor)
+	_draw_overdrive_floor()
 	for pf: Poof in _poofs:
 		if pf.on_floor:
 			var n: int = pf.art.get_width() / pf.art.get_height()

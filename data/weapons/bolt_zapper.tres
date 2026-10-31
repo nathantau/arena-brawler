@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/bolt_zapper.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/bolt_zapper.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/bolt_zapper_anim.png" id="3_anim"]
+
+[resource]
+script = ExtResource("1_wd")
+held_frames = ExtResource("3_anim")
+muzzle_x = 41.0
+projectile_sprite = ExtResource("9_proj")
+id = &"bolt_zapper"
+display_name = "Arc Zapper"
+pickup = false
+damage = 4
+fire_interval = 0.12
+spread_deg = 6.0
+projectile_speed = 950.0
+projectile_range = 300.0
+projectile_radius = 4.0
+energy_cost = 12
+crit_chance = 0.05
+knockback = 8.0
+color = Color(0.49, 0.88, 0.81, 1)
+screen_shake = 0.02
+sfx = &"shot_light"
+bounces = 1
+bounce_damping = 0.9
+homing = 2.5
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"bolt"])

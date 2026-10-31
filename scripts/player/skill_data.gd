@@ -29,8 +29,9 @@ extends Resource
 ## nearest visible enemy within `sapling_range`.
 ## STORM: a thundercloud at a spot ahead along the aim (short of walls) for `duration`: every `storm_interval` a bolt strikes
 ## each enemy within `storm_radius` of the spot that it can see.
+## OVERDRIVE: super speed for `duration`: move speed x`overdrive_speed_scale`, steerable and still able to fire, no i-frames.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -109,6 +110,11 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export_group("Drift")
 ## Move speed multiplier while drifting (i-frames last the whole `duration`).
 @export var drift_speed_scale: float = 1.6
+
+
+@export_group("Overdrive")
+## Move speed multiplier while it runs.
+@export var overdrive_speed_scale: float = 1.9
 
 
 @export_group("Nova")
