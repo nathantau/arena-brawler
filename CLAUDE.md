@@ -269,7 +269,9 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   her; no firing meanwhile); a miss doesn't move her and charges `grapple_miss_cooldown` 1.5 s instead of 6 s.
   `SpecialFx` draws the kunai + chain links, a bite spark, her zip pose (generate.py `flicker_zip`: leaning, arm out,
   ribbons streaming; sprite hidden via `hides_owner()`) and speed lines; a miss (seen as the short cooldown appearing)
-  flies out and snaps back).
+  flies out and snaps back). Polished 2026-10-31: 8-frame zip (ghost trail, speed streaks, snapping ribbons), 8-frame
+  `grapple_chain` glint cycle, 6-frame `grapple_throw` at the hand, 8-frame `grapple_spark` (star, shock ring, trailing sparks, chips),
+  6-frame `grapple_land` dust when the zip ends after a bite.
   Flourishes (`SpecialFx`, detected from synced state changes so remote players show them too): clones appear in
   their own cloud poof in a ring around the player (`CLONE_START_DISTANCE`), fade in, and vanish in poofs; the Great Ape transformation morphs
   (`SkillData.form_morph`: 12-frame 96 px strip, full colour: Wukong, ten in-between creatures

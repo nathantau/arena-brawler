@@ -17,7 +17,7 @@ import math
 import random
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 from palette import (BLUE, BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, PALETTE, PINK, PINK_L, RED,
                      SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, WHITE, YELLOW)
@@ -282,51 +282,206 @@ def lean(img: Image.Image, pivot: int, k: float) -> Image.Image:
     return out
 
 
+ZIP_FRAMES = 8
+
+
 def flicker_zip(i: int) -> Image.Image:
-    """Shade zipping along her chain (period-4 loop, CELL px, facing right): leaning hard forward, arm out along the
-    chain, legs trailing, ribbon tails and topknot streaming straight back and snapping in the wind."""
-    low, up = flicker(0, i, zip_=True)
-    f = flicker_topknot(i, 0).img
+    """Shade zipping along her chain (period-8 loop, CELL px, facing right): leaning hard forward, arm out along the
+    chain, legs trailing, ribbon tails and topknot snapping in the wind, speed streaks and a fading afterimage."""
+    low, up = flicker(0, i % 4, zip_=True)
+    f = flicker_topknot(i % 4, 0).img
+    snap = [0, 1, 2, 1, 0, -1, -2, -1]
+    bob = [0, 0, 1, 1, 0, 0, 1, 1][i]  # the whole body judders a px as the chain tugs
     rib = Canvas(CELL)
-    snap = [0, 1, 0, -1]
     y0 = PAD + UPPER_DY + 10
     for k, (x0, dy) in enumerate(((PAD + 18, 0), (PAD + 20, 3))):
-        w = lambda lag: snap[(i + lag + k) % 4]
+        w = lambda lag: snap[(i + 2 * lag + 3 * k) % 8]
         rib.part(L([(x0, y0 + dy), (x0 - 7, y0 + dy + 3 + w(0)), (x0 - 14, y0 + dy + 6 + w(1)),
                     (x0 - 21, y0 + dy + 10 + w(2)), (x0 - 27, y0 + dy + 12 + w(3))], 2), RED, shade=False)
+        rib.flat(L([(x0 - 14, y0 + dy + 5 + w(1)), (x0 - 20, y0 + dy + 8 + w(2))], 1), ORANGE)  # lit stretch
     f.alpha_composite(rib.img)
     f.alpha_composite(low.img, (PAD - 2, PAD - 1))  # legs trail a little, toes off the floor
     f.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
-    return outline(lean(f, PAD + ZIP_FEET, ZIP_LEAN))
+    body = lean(f, PAD + ZIP_FEET, ZIP_LEAN)
+    if bob:
+        body = ImageChops.offset(body, 0, -1)
+    out = Image.new("RGBA", body.size, (0, 0, 0, 0))
+    # afterimage: two ghost copies of the silhouette, trailing behind, dithered so they read as speed not mass
+    sil = body.getchannel("A")
+    for n, (dx, col) in enumerate(((-9, STEEL_D), (-17, SHADOW))):
+        ghost = Image.new("RGBA", body.size, (0, 0, 0, 0))
+        solid = Image.new("RGBA", body.size, col + (255,))
+        ghost.paste(solid, (dx, 0), sil)
+        gp = ghost.load()
+        for y in range(ghost.height):
+            for x in range(ghost.width):
+                if (x + y + n + i) % 2:
+                    gp[x, y] = (0, 0, 0, 0)
+        out.alpha_composite(ghost)
+    # speed streaks: thin light lines scrolling back past her, a different set each frame
+    rng = random.Random(77)
+    lines = [(rng.randint(30, 78), rng.randint(0, 7), rng.randint(6, 13), rng.choice((WHITE, STEEL, BLUE)))
+             for _ in range(9)]
+    sc = Canvas(CELL)
+    for n, (y, ph, ln, col) in enumerate(lines):
+        x = 4 + (ph * 11 + i * 9 + n * 5) % 36
+        sc.flat(L([(x, y), (x + ln, y)], 1), col)
+    out.alpha_composite(sc.img)
+    out.alpha_composite(body)
+    clear = Image.new("RGBA", (3, CELL), (0, 0, 0, 0))
+    out.paste(clear, (0, 0))  # keep the streaks and ghosts off the frame edge
+    out.paste(clear, (CELL - 3, 0))
+    return outline(out)
 
 
-GRAPPLE_SPARK = 24
-GRAPPLE_SPARK_FRAMES = 6
+def sdot(c: Canvas, x: int, y: int, color) -> None:
+    """A dot kept one px off the frame edge, so far-flung sparks are clipped, not a crash."""
+    if 1 <= x < c.img.width - 1 and 1 <= y < c.img.height - 1:
+        c.dot(x, y, color)
+
+
+def trim(img: Image.Image) -> Image.Image:
+    """Clears the outer 2 px ring, so overshooting sparks are clipped and the outline still fits."""
+    w, h = img.size
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    out.paste(img.crop((2, 2, w - 2, h - 2)), (2, 2))
+    return out
+
+
+GRAPPLE_SPARK = 32
+GRAPPLE_SPARK_FRAMES = 8
 
 
 def grapple_spark(k: int) -> Image.Image:
-    """The kunai biting the wall: a white flash, then sparks flying out and dimming (one-shot)."""
+    """The kunai biting the wall: an impact star + shock ring, then sparks with trails and stone chips flying
+    out and falling, dimming to embers (one-shot, 8 frames)."""
     c = Canvas(GRAPPLE_SPARK)
     m = GRAPPLE_SPARK // 2
-    if k < 2:
-        c.flat(E((m - 3 + k, m - 3 + k, m + 3 - k, m + 3 - k)), WHITE if k == 0 else YELLOW)
-    colour = [WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED][k]
-    for j in range(7):
-        ang = math.tau * j / 7 + 0.3
-        d0, d1 = 2 + 1.6 * k, 4 + 1.8 * k - (0.6 * k if k > 3 else 0)
-        c.flat(L([(m + math.cos(ang) * d0, m + math.sin(ang) * d0), (m + math.cos(ang) * d1, m + math.sin(ang) * d1)], 1),
-               colour)
-    return outline(c.img)
+    rng = random.Random(5)
+    if k == 0:  # flash: a white core with a four-point star
+        c.flat(E((m - 4, m - 4, m + 4, m + 4)), WHITE)
+        c.flat(L([(m - 11, m), (m + 11, m)], 1), YELLOW)
+        c.flat(L([(m, m - 11), (m, m + 11)], 1), YELLOW)
+        c.flat(E((m - 2, m - 2, m + 2, m + 2)), WHITE)
+    elif k == 1:
+        c.flat(E((m - 5, m - 5, m + 5, m + 5)), YELLOW)
+        c.flat(E((m - 3, m - 3, m + 3, m + 3)), WHITE)
+    if 1 <= k <= 4:  # shock ring: a broken pixel ring expanding and thinning
+        r = 4 + 3 * k
+        col = [None, WHITE, YELLOW, ORANGE, ORANGE][k]
+        for j in range(16):
+            if (j + k) % 4 == 3 and k > 2:
+                continue
+            a = math.tau * j / 16
+            sdot(c, round(m + math.cos(a) * r), round(m + math.sin(a) * r), col)
+    colour = [WHITE, WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED, RED][k]
+    for j in range(9):  # sparks: bright heads with a trailing tail, gravity bends them down over time
+        ang = math.tau * j / 9 + rng.uniform(-0.25, 0.25)
+        sp = rng.uniform(0.8, 1.25)
+        d0 = (1.5 + 2.1 * k) * sp
+        d1 = d0 + (4.5 - 0.4 * k) * sp
+        sag = 0.28 * k * k * 0.35
+        p0 = (m + math.cos(ang) * d0, m + math.sin(ang) * d0 + sag)
+        p1 = (m + math.cos(ang) * d1, m + math.sin(ang) * d1 + sag)
+        if k < 7:
+            c.flat(L([p0, p1], 1), colour)
+            sdot(c, round(p1[0]), round(p1[1]), WHITE if k < 3 else YELLOW if k < 5 else colour)
+        elif j % 2:
+            sdot(c, round(p1[0]), round(p1[1]), colour)
+    if k >= 2:  # stone chips: dark flecks tumbling out and dropping
+        for j in range(5):
+            ang = math.tau * j / 5 + 0.6 + rng.uniform(-0.3, 0.3)
+            d = (3 + 1.9 * k) * rng.uniform(0.7, 1.1)
+            x = m + math.cos(ang) * d
+            y = m + math.sin(ang) * d + 0.5 * (k - 2) ** 2
+            c.flat(R((round(x), round(y), round(x) + (1 if j % 2 else 0), round(y))), STEEL if k < 5 else STEEL_D)
+    if 2 <= k <= 6:  # smoke-grey ember dots lingering at the point
+        for dx, dy in ((-1, 1), (1, -1), (0, 0)):
+            if (k + dx) % 2 == 0:
+                sdot(c, m + dx, m + dy, ORANGE if k < 5 else STEEL_D)
+    return outline(trim(c.img))
+
+
+GRAPPLE_THROW = 32
+GRAPPLE_THROW_FRAMES = 6
+
+
+def grapple_throw(k: int) -> Image.Image:
+    """The throw at her hand: a snap flash, a ring of air kicked out ahead (to the right), and a few streaks
+    sliding forward after the kunai (one-shot, 6 frames)."""
+    c = Canvas(GRAPPLE_THROW)
+    m = GRAPPLE_THROW // 2
+    if k == 0:  # coil: a tight white glint gathering at the fingers
+        c.flat(E((m - 2, m - 2, m + 2, m + 2)), WHITE)
+        c.flat(L([(m - 6, m), (m + 6, m)], 1), STEEL)
+        c.flat(L([(m, m - 6), (m, m + 6)], 1), STEEL)
+    elif k == 1:  # snap: flash star
+        c.flat(E((m - 4, m - 4, m + 4, m + 4)), YELLOW)
+        c.flat(E((m - 2, m - 2, m + 2, m + 2)), WHITE)
+        for ang in (0.0, 0.8, -0.8, math.pi):
+            c.flat(L([(m + math.cos(ang) * 5, m + math.sin(ang) * 5), (m + math.cos(ang) * 12, m + math.sin(ang) * 12)], 1), WHITE)
+    else:
+        r = 3 + 2.6 * (k - 1)
+        col = [None, None, WHITE, STEEL, STEEL, STEEL_D][k]
+        for j in range(14):  # forward-leaning crescent of kicked-out air
+            a = -1.25 + 2.5 * j / 13
+            if (j + k) % 3 == 0 and k > 3:
+                continue
+            sdot(c, round(m + 2 + math.cos(a) * r), round(m + math.sin(a) * r * 1.25), col)
+        for n, dy in enumerate((-4, 0, 4)):  # streaks sliding forward behind the kunai
+            x0 = m - 6 + 3 * k + n
+            c.flat(L([(x0, m + dy), (x0 + 5 - k // 2, m + dy)], 1), WHITE if k < 4 else STEEL_D)
+        if k == 2:
+            c.flat(E((m - 2, m - 2, m + 2, m + 2)), YELLOW)
+    return outline(trim(c.img))
+
+
+GRAPPLE_LAND = 40
+GRAPPLE_LAND_FRAMES = 6
+
+
+def grapple_land(k: int) -> Image.Image:
+    """She lands off the zip: a skid of dust kicked forward and a ring of grit, settling (one-shot, 6 frames)."""
+    c = Canvas(GRAPPLE_LAND)
+    rng = random.Random(9)
+    fy = GRAPPLE_LAND - 8  # floor line
+    m = GRAPPLE_LAND // 2
+    spread = 4 + 3.2 * k
+    rise = [2, 4, 5, 5, 4, 3][k]
+    for side in (-1, 1):  # two dust banks sliding outward, flat and low
+        for j in range(3):
+            x = m + side * (spread - 3 * j + rng.uniform(-1, 1))
+            h = max(1, rise - j - (1 if k > 3 else 0))
+            c.part(E((round(x - 3 + j), fy - h * 2, round(x + 3 - j), fy + 1)), WHITE if k < 4 else STEEL, shade=False)
+    if k <= 3:  # skid streaks along the floor
+        c.flat(L([(m - 14 - 2 * k, fy), (m - 4, fy)], 1), STEEL_D)
+    for j in range(6):  # grit hopping up and falling
+        a = math.pi * (0.15 + 0.7 * j / 5)
+        d = 4 + 3.5 * k
+        x = m + math.cos(a) * d * (1 if j % 2 else -1)
+        y = fy - math.sin(a) * d * 0.9 + 0.35 * k * k
+        if k < 5 or j % 2:
+            sdot(c, round(x), round(y), STEEL if k < 4 else STEEL_D)
+    return outline(trim(c.img))
 
 
 def grapple_chain(k: int) -> Image.Image:
-    """One chain link, alternately seen flat (an open oval) and edge-on (a bar): repeated along the throw."""
+    """One chain link of an 8-frame cycle: it spins from flat (an open oval) through edge-on and back, while a
+    glint runs along it, so the chain shimmers as it's paid out and reeled in."""
     c = Canvas(10)
-    if k == 0:
-        c.part(E((2, 3, 7, 6)), STEEL, shade=False)
+    turn = k % 4  # 0 flat, 1 three-quarter, 2 edge-on, 3 three-quarter (the back face)
+    if turn == 0:
+        c.part(E((2, 2, 7, 7)), STEEL, shade=False)
+        c.flat(E((3, 4, 6, 5)), OUTLINE)
+    elif turn in (1, 3):
+        c.part(E((2, 3, 7, 6)), STEEL if turn == 1 else STEEL_D, shade=False)
         c.flat(R((4, 4, 5, 5)), OUTLINE)
     else:
         c.part(R((2, 4, 7, 5)), STEEL_D, shade=False)
+    if k < 4:  # glint on the half of the cycle where this link catches the light
+        c.dot(3, 3 if turn != 2 else 4, WHITE)
+    else:
+        c.dot(6, 5 if turn != 2 else 4, WHITE)
     return outline(c.img)
 
 
@@ -3022,9 +3177,11 @@ FX = {
     "sakura_dissolve": lambda: strip([drift_dissolve_frame(k) for k in range(DRIFT_FRAMES)]),
     "sakura_reform": lambda: strip([drift_reform_frame(k) for k in range(DRIFT_FRAMES)]),
     # Grapple Kunai (SpecialFx): the zip pose loop, the bite spark, chain links.
-    "flicker_zip": lambda: strip([flicker_zip(i) for i in range(4)]),
+    "flicker_zip": lambda: strip([flicker_zip(i) for i in range(ZIP_FRAMES)]),
     "grapple_spark": lambda: strip([grapple_spark(k) for k in range(GRAPPLE_SPARK_FRAMES)]),
-    "grapple_chain": lambda: strip([grapple_chain(k) for k in range(2)]),
+    "grapple_chain": lambda: strip([grapple_chain(k) for k in range(8)]),
+    "grapple_throw": lambda: strip([grapple_throw(k) for k in range(GRAPPLE_THROW_FRAMES)]),
+    "grapple_land": lambda: strip([grapple_land(k) for k in range(GRAPPLE_LAND_FRAMES)]),
     "wukong_swing": lambda: strip([wukong_swing_frame(k) for k in range(SWING_FRAMES)]),
     "leaf_burst": lambda: strip([leaf_burst_frame(k) for k in range(LEAF_FRAMES)]),
     "swing_dust": lambda: strip([dust_frame(k) for k in range(DUST_FRAMES)]),
