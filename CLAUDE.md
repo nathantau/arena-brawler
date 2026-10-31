@@ -230,7 +230,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   room, second button / E / InputFrame `special` flag 8). Specials: Barrier (heavy: Warden, Twinshot), Dual Wield
   (light: Flicker, Twinshot), **Great Ape** (Wukong signature, TRANSFORM: 6 s as a big dark-red ape drawn x1.35
   from `assets/sprites/wukong_ape.png` (generate.py `FORMS`), half damage taken, 0.9 speed, FIRE uses
-  `ape_fists` (melee slam) instead of the loadout, each slam playing the sheet's "attack" strip (generate.py `ATTACKS`: arms up, smash; `Player.play_recoil`); form weapon cooldown is in the snapshot). Snapshots carry both
+  `ape_fists` (melee slam) instead of the loadout, each slam playing the sheet's "attack" strip (generate.py `ATTACKS`: from the knuckle-walk stance, fists up, then a ground pound wide at both sides; `APE_POSES`, `Player.play_recoil`); form weapon cooldown is in the snapshot). Snapshots carry both
   slots (`DASH_*`, `SPECIAL_ID/…`); server validates `rpc_select_special`; `--special ID` CLI. The loading room is
   fighter cards with a special column beside them, then weapons. Removed per-character skill fields (Wukong's
   longer Somersault dash is gone: everyone shares one Dash).

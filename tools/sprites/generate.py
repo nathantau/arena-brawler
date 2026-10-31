@@ -340,19 +340,19 @@ def wukong(step=None, t=0):
     return low, up
 
 
-## Great Ape arms per pose (None = rest, 0 = fists raised for a slam, 1 = fists smashed down in front; a pose in
-## between is interpolated, so the fists sweep down):
-## (shoulder, elbow, wrist) per arm, then (x, top, thumb dx) per fist. Back arm / fist first.
-APE_ARMS = {None: (((15, 26), (11, 36), (11, 44)), ((49, 26), (53, 36), (53, 44))),
-            0: (((15, 26), (9, 18), (8, 13)), ((49, 26), (55, 18), (56, 13))),
-            1: (((15, 26), (28, 36), (36, 44)), ((49, 26), (53, 36), (52, 44)))}
-APE_FISTS = {None: ((5, 42, -2), (47, 42, 9)), 0: ((2, 2, -2), (50, 2, 9)), 1: ((30, 45, -2), (46, 45, 9))}
+## Great Ape arm poses: "walk" = knuckle-walking, fists planted in front (idle / walk, like a gorilla); "raise" =
+## fists up high at the sides; "pound" = fists slammed into the ground wide at both sides (the attack).
+## Per pose: (shoulder, elbow, wrist) per arm, then (x, top, thumb dx) per fist. Back arm / fist first.
+APE_POSES = {"walk": ((((15, 26), (28, 36), (36, 44)), ((49, 26), (53, 36), (52, 44))), ((30, 45, -2), (46, 45, 9))),
+             "raise": ((((15, 26), (9, 18), (8, 13)), ((49, 26), (55, 18), (56, 13))), ((2, 2, -2), (50, 2, 9))),
+             "pound": ((((15, 26), (8, 36), (7, 43)), ((49, 26), (56, 36), (57, 43))), ((2, 47, -2), (50, 47, 9)))}
 
 
 def wukong_ape(step=None, t=0, pose=None):
     """Great Ape (Wukong's special): an angry, dark-red brute. Hunched, broad-shouldered, long arms
     with big fists, glowing red eyes under a heavy scowl, golden circlet and bracers, storm clouds.
-    A transformation form, drawn bigger in game (SkillData.form_scale). `pose`: APE_ARMS (attack frames)."""
+    A transformation form, drawn bigger in game (SkillData.form_scale). `pose` (attack frames): (from, to, mix)
+    between two APE_POSES; None = knuckle-walking."""
     low = Canvas()
     for x, (dx, dy) in zip((21, 35), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
         x += dx  # thick, slightly bowed ape legs with broad flat feet, on the same stride as everyone
@@ -369,12 +369,13 @@ def wukong_ape(step=None, t=0, pose=None):
     up.part(E((22, 26, 44, 43)), BROWN)  # chest
     for x, y in ((14, 18), (20, 13), (27, 11)):
         up.part(P([(x, y + 5), (x + 3, y), (x + 6, y + 5)]), MAROON)  # bristling back fur
-    arms, fists = APE_ARMS[None], APE_FISTS[None]
+    a, b, k = pose or ("walk", "walk", 0)
+    (arms_a, fists_a), (arms_b, fists_b) = APE_POSES[a], APE_POSES[b]
+    mix = lambda u, v: round(u + (v - u) * k)
+    arms = [[(mix(p[0], q[0]), mix(p[1], q[1])) for p, q in zip(u, v)] for u, v in zip(arms_a, arms_b)]
+    fists = [(mix(u[0], v[0]), mix(u[1], v[1]), u[2]) for u, v in zip(fists_a, fists_b)]
     if pose is not None:
         s = 0  # attack poses don't bob
-        mix = lambda a, b: round(a + (b - a) * pose)
-        arms = [[(mix(p[0], q[0]), mix(p[1], q[1])) for p, q in zip(a, b)] for a, b in zip(APE_ARMS[0], APE_ARMS[1])]
-        fists = [(mix(a[0], b[0]), mix(a[1], b[1]), a[2]) for a, b in zip(APE_FISTS[0], APE_FISTS[1])]
     for (sx, sy), (ex, ey), (wx, wy) in arms:  # thick, muscular arms: shoulder, bicep and forearm bulge out
         up.part(L([(sx, sy), (ex, ey), (wx, wy)], 9), MAROON)
         up.part(E((sx - 6, sy - 6, sx + 6, sy + 6)), MAROON)  # deltoid
@@ -382,8 +383,9 @@ def wukong_ape(step=None, t=0, pose=None):
         up.part(E((bx - 6, by - 5, bx + 6, by + 5)), MAROON)  # bicep
         fx, fy = (ex * 2 + wx) // 3, (ey * 2 + wy) // 3
         up.part(E((fx - 5, fy - 4, fx + 5, fy + 4)), MAROON)  # forearm
-    for x, y, thumb in fists:  # clenched fists, knuckles down; they bob with the stride
-        by = y + 12 if pose is not None and pose < 0.5 else y - 4  # golden bracers on the forearm: below a raised fist
+    for i, (x, y, thumb) in enumerate(fists):  # clenched fists, knuckles down; they rock in turn with the stride
+        s = -s if i else s
+        by = y + 12 if y < 26 else y - 4  # golden bracers on the forearm: below a raised fist
         up.part(R((x + 2, by, x + 10, by + 3)), YELLOW)
         up.part(RR((x, y + s, x + 12, y + 11 + s), 3), MAROON)
         up.part(E((x + thumb, y + 1 + s, x + thumb + 5, y + 6 + s)), MAROON)  # thumb wrapped over the fingers
@@ -1057,15 +1059,15 @@ def ape_morph(t: float, scale: float) -> Image.Image:
     # the hunched back swells out from behind the armour
     c.part(E(box((20, 31, 44, 48), (10, 14, 54, 45), u)), fur)
     if t > 0.1:  # the back arm sprouts from the shoulder
-        c.part(L(pts([(22, 36), (20, 40), (20, 42)], [(15, 26), (11, 36), (11, 44)], u), w(2, 7)), fur)
+        c.part(L(pts([(22, 36), (20, 40), (20, 42)], APE_POSES["walk"][0][0], u), w(2, 9)), fur)
     # the golden armour shrinks into the ape's chest
     c.part(RR(box((20, 33, 44, 48), (22, 26, 44, 43), u), w(3, 8)), BROWN if ape else YELLOW)
     if t > 0.1:  # front arm and both fists grow
-        c.part(L(pts([(42, 36), (44, 40), (44, 42)], [(49, 26), (53, 36), (53, 44)], u), w(2, 7)), fur)
-        for x0, x1 in ((18, 5), (40, 47)):
+        c.part(L(pts([(42, 36), (44, 40), (44, 42)], APE_POSES["walk"][0][1], u), w(2, 9)), fur)
+        for x0, (x1, y1, _thumb) in zip((18, 40), APE_POSES["walk"][1]):
             if ape:
-                c.part(R(box((x0 + 1, 41, x0 + 5, 42), (x1 + 2, 38, x1 + 10, 41), u)), YELLOW)
-            c.part(RR(box((x0, 42, x0 + 6, 46), (x1, 42, x1 + 12, 53), u), w(1, 3)), fur)
+                c.part(R(box((x0 + 1, 41, x0 + 5, 42), (x1 + 2, y1 - 4, x1 + 10, y1 - 1), u)), YELLOW)
+            c.part(RR(box((x0, 42, x0 + 6, 46), (x1, y1, x1 + 12, y1 + 11), u), w(1, 3)), fur)
     # head: Wukong's round head pushes forward and shrinks into the ape's
     if t < 0.75:
         c.part(E(box((11, 17, 21, 28), (20, 10, 28, 20), u)), fur)  # ear tucks in
@@ -1420,7 +1422,9 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
 CROWNS = {"flint": flint_crown}  # optional per-frame effects drawn behind
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Wind up high, then smash down with the body squashed.
-ATTACKS = {"wukong_ape": [(0, -2), (0, -3), (0.3, -2), (0.6, 0), (0.85, 1), (1, 2), (1, 2), (1, 1)]}
+ATTACKS = {"wukong_ape": [(("walk", "raise", 0.5), -1), (("raise", "raise", 0), -2), (("raise", "raise", 0), -3),
+                          (("raise", "pound", 0.35), -2), (("raise", "pound", 0.7), 0), (("pound", "pound", 0), 2),
+                          (("pound", "pound", 0), 2), (("pound", "walk", 0.5), 1)]}
 
 
 # --- frame processing -------------------------------------------------------
