@@ -16,7 +16,8 @@ extends Resource
 ## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
 ## ERUPTION: marks a spot on the floor ahead along the aim (short of walls); when `duration` (the telegraph) runs out,
 ## `eruption_blast` goes off there.
-enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10 }
+## TRAIL: dash along the aim (stopped by walls) leaving a burning trail on the floor for the rest of `duration`.
+enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, TRAIL = 12 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -85,6 +86,15 @@ enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GR
 @export var eruption_wall_margin: float = 8.0
 ## The pillar of fire: a `blast` weapon (damage, splash radius + falloff, knockback).
 @export var eruption_blast: WeaponData
+
+@export_group("Trail")
+## The dash covers up to trail_distance in trail_dash_time; the trail (takeoff -> where he stopped) burns until `duration` ends.
+@export var trail_distance: float = 300.0
+@export var trail_dash_time: float = 0.3
+## Enemies within trail_radius of the trail take trail_damage every trail_tick seconds.
+@export var trail_radius: float = 22.0
+@export var trail_damage: int = 6
+@export var trail_tick: float = 0.3
 
 @export_group("Transform")
 ## Sheet laid out like a character's (idle, hit, walk); drawn `form_scale` x the usual size.

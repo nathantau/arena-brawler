@@ -455,6 +455,18 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 			crate.take_damage(CombatRules.splash_damage(s.damage, cdist, s.splash_radius, s.splash_edge))
 
 
+## Fire on the floor along from -> to: everyone within `radius` of the line (not the owner) takes `damage`.
+func burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: float, damage: int) -> void:
+	if not authoritative:
+		return
+	for target: Player in targets:
+		if target.player_id == owner_id or not target.can_be_hit():
+			continue
+		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(target.global_position, from, to)
+		if closest.distance_to(target.global_position) <= radius:
+			_damage_player(target, owner_id, seq, 0, damage, false, Vector2.ZERO, target.global_position)
+
+
 ## `key_owner`: the pellet key's owner (differs from the attacker after a reflection).
 func _damage_player(target: Player, attacker_id: int, seq: int, pellet: int, damage: int, crit: bool,
 		knockback: Vector2, at: Vector2, key_owner: int = -1) -> void:

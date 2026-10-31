@@ -95,6 +95,24 @@ const LEAF_TIME: float = 0.45
 const DUST_TIME: float = 0.4
 ## Takeoff leaves and landing dust sit at his feet, not his middle.
 const SWING_FEET_Y: float = 26.0
+## Blaze Run: burning ground stamped along the trail (generate.py BLAZE_*), an ignition flare at takeoff, the fire dying
+## out over the last BLAZE_DIE_TIME (stamp by stamp from the start), and a streak of flame on the runner while he dashes.
+const BLAZE_TRAIL_ART: Texture2D = preload(FX_DIR + "blaze_run_trail.png")
+const BLAZE_DIE_ART: Texture2D = preload(FX_DIR + "blaze_run_die.png")
+const BLAZE_IGNITE_ART: Texture2D = preload(FX_DIR + "blaze_run_ignite.png")
+const BLAZE_STREAK_ART: Texture2D = preload(FX_DIR + "blaze_run_streak.png")
+const BLAZE_FPS: float = 10.0
+const BLAZE_STREAK_FPS: float = 12.0
+## Distance between stamps along the trail, in px.
+const BLAZE_STEP: float = 32.0
+## Row of a stamp cell the floor spot sits on (generate.py BLAZE_FLOOR_Y); the cell's centre column is the spot's x.
+const BLAZE_FLOOR_Y: float = 36.0
+## From the body's centre to the feet (where the fire burns), in px.
+const BLAZE_FEET_Y: float = 26.0
+const BLAZE_DIE_TIME: float = 1.0
+const BLAZE_DIE_FRAME_TIME: float = 0.6
+const BLAZE_IGNITE_TIME: float = 0.5
+const BLAZE_STREAK_FADE: float = 0.1
 
 
 class Poof:
@@ -146,6 +164,9 @@ var _swing_ground: Vector2 = Vector2.ZERO
 var _swing_linger: float = 0.0
 var _swing_hand: Vector2 = Vector2.ZERO
 var _vine_t: float = -1.0
+## The Blaze Run slot while its trail burns (else null), and where the owner is drawn.
+var _blaze: CharacterSkill
+var _blaze_at: Vector2 = Vector2.ZERO
 
 
 func _init() -> void:
@@ -216,6 +237,7 @@ func sync(p: Player) -> void:
 		c.modulate.a = alpha
 	_smoke_t = smoke.elapsed() if smoke != null and smoke.is_smoking() else -1.0
 	_sync_grapple(p)
+	_sync_blaze(p)
 	var eruption: CharacterSkill = _slot(p, SkillData.Kind.ERUPTION)
 	var erupting: bool = eruption != null and eruption.is_active() and not p.dead
 	if erupting and not _erupt_started and eruption.active_remaining <= ERUPTION_LEAD:  # the pillar comes up
@@ -224,6 +246,20 @@ func sync(p: Player) -> void:
 	_erupt_started = erupting and (_erupt_started or eruption.active_remaining <= ERUPTION_LEAD)
 	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD * 0.5 else null
 	queue_redraw()
+
+
+func _sync_blaze(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.TRAIL)
+	var burning: CharacterSkill = slot if slot != null and slot.is_active() and not p.dead else null
+	if burning != null and _blaze == null:  # the fire catches where he took off
+		_poof(_blaze_floor(burning.anchor), BLAZE_IGNITE_ART, BLAZE_IGNITE_TIME)
+	_blaze = burning
+	_blaze_at = p.global_position + p.visual_offset
+
+
+## The cell centre that puts a stamp's floor spot under the body at `at`.
+func _blaze_floor(at: Vector2) -> Vector2:
+	return at + Vector2(0.0, BLAZE_FEET_Y - (BLAZE_FLOOR_Y - BLAZE_IGNITE_ART.get_height() * 0.5) * Constants.SPRITE_SCALE)
 
 
 func _sync_grapple(p: Player) -> void:
@@ -348,6 +384,7 @@ func _draw() -> void:
 	_draw_morph()
 	_draw_ward()
 	_draw_swing()
+	_draw_blaze()
 	_draw_flourishes()
 	if _owner == null:
 		return
@@ -489,6 +526,40 @@ func _draw_swing() -> void:
 		var k: float = _vine_t / VINE_RETRACT_TIME
 		var spin: float = VINE_OVERSHOOT * k * (-1.0 if rightward else 1.0)
 		_draw_vine(pivot, pivot + (_swing_hand - pivot).rotated(spin) * (1.0 - k))
+
+
+## The trail: stamps of burning ground from takeoff to where he stopped, laid down as he runs; they die out in turn.
+func _draw_blaze() -> void:
+	if _blaze == null:
+		return
+	var d: SkillData = _blaze.data
+	var px: float = Constants.SPRITE_SCALE
+	var size: float = BLAZE_TRAIL_ART.get_height()
+	var run: float = _blaze.direction.length() * _blaze.trail_progress()
+	var count: int = int(_blaze.direction.length() / BLAZE_STEP) + 1
+	var dir: Vector2 = _blaze.direction.normalized() if _blaze.direction != Vector2.ZERO else Vector2.RIGHT
+	var dying: float = BLAZE_DIE_TIME - _blaze.active_remaining
+	var stagger: float = (BLAZE_DIE_TIME - BLAZE_DIE_FRAME_TIME) / maxf(count - 1, 1)
+	var dies: int = BLAZE_DIE_ART.get_width() / BLAZE_DIE_ART.get_height()
+	var loop: int = int(_blaze.elapsed() * BLAZE_FPS)
+	for n: int in count:  # the stamp nearer the camera (lower on screen) goes on top
+		var i: int = n if dir.y >= 0.0 else count - 1 - n
+		var along: float = i * BLAZE_STEP
+		if along > run:
+			continue
+		var at: Vector2 = _blaze_floor(_blaze.anchor + dir * along)
+		var local: float = dying - i * stagger
+		if local >= 0.0:
+			_draw_frame(BLAZE_DIE_ART, mini(int(local / BLAZE_DIE_FRAME_TIME * dies), dies - 1), size, at, px)
+		else:
+			_draw_frame(BLAZE_TRAIL_ART, (loop + i) % 4, size, at, px)
+	var dashing: float = d.trail_dash_time - _blaze.elapsed()
+	if dashing > -BLAZE_STREAK_FADE:  # flame streaming off him, fading once he's stopped
+		var cell: float = BLAZE_STREAK_ART.get_height()
+		draw_set_transform(_blaze_at, dir.angle(), Vector2.ONE)
+		_draw_frame(BLAZE_STREAK_ART, int(_time * BLAZE_STREAK_FPS) % 4, cell, Vector2.ZERO, px,
+			clampf((dashing + BLAZE_STREAK_FADE) / BLAZE_STREAK_FADE, 0.0, 1.0) if dashing < 0.0 else 1.0)
+		draw_set_transform(Vector2.ZERO)
 
 
 ## The vine hanging from `top` down to `end` (cropped to length, never stretched), under its leafy clump.

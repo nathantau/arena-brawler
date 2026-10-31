@@ -12,6 +12,8 @@ extends RefCounted
 ## - SWING: from `anchor` (takeoff) to `anchor + direction` (landing; the Player sets `direction` to that whole
 ##   vector, not a unit one, so both ends are in the snapshot).
 ## - ERUPTION: `anchor` = the marked spot (the Player places it against the walls); it goes off as it ends.
+## - TRAIL: the trail runs from `anchor` (takeoff) to `anchor + direction` (where he stopped; the Player sets `direction`
+##   to that whole vector like SWING). Dash for the first `trail_dash_time`, then the fire burns on.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 var data: SkillData
@@ -71,6 +73,16 @@ func swing_progress() -> float:
 	return (1.0 - cos(PI * clampf(elapsed() / data.duration, 0.0, 1.0))) * 0.5
 
 
+## TRAIL: how far along the trail he is while dashing, 0..1.
+func trail_progress() -> float:
+	return clampf(elapsed() / data.trail_dash_time, 0.0, 1.0)
+
+
+## TRAIL: still in the dash part (the frame it ends counts, so he lands exactly on the trail's end).
+func trail_dashing(delta: float) -> bool:
+	return data.kind == SkillData.Kind.TRAIL and is_active() and elapsed() - delta < data.trail_dash_time
+
+
 ## 1.0 = just used, 0.0 = ready.
 func cooldown_fraction() -> float:
 	if data.cooldown <= 0.0:
@@ -92,7 +104,7 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 			anchor = origin + direction * data.shield_distance
 		SkillData.Kind.SMOKE, SkillData.Kind.CLONES:
 			anchor = origin
-		SkillData.Kind.SWING:
+		SkillData.Kind.SWING, SkillData.Kind.TRAIL:
 			anchor = origin
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.swing_iframes)
 		SkillData.Kind.TRANSFORM:
