@@ -242,7 +242,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   fighter cards with a special column beside them, then weapons. Removed per-character skill fields (Wukong's
   longer Somersault dash is gone: everyone shares one Dash).
 - **Flicker is the ninja** (2026-10-30): navy shroud, steel breastplate, mask peaking at the nose, steel forehead plate, choppy
-  bob with a spiky topknot and red ribbon tails that sway in idle; bare hands. Four Flicker-only specials (tag `flicker`): **Shadow Clones** (signature, CLONES: 3 decoys run out from
+  bob with a big spiky topknot (drawn above the art box: generate.py `CROWNS`, kept on KO via `KO_CROWNS`), its red
+  tie behind her hair, ribbon tails that sway in idle; bare hands. Four Flicker-only specials (tag `flicker`): **Shadow Clones** (signature, CLONES: 3 decoys run out from
   where you stood; positions are a pure function of the synced special state + walls (`Player.clone_points()`),
   drawn by `player/special_fx.gd` with the owner's sprite/weapon; harmless and bullets pass through, but enemy
   auto-aim and bots target them), **Blink** (BLINK: `move_and_collide` hop, walls stop it, i-frames),
@@ -251,9 +252,11 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   with seq + `VOLLEY_SEQ_OFFSET`). Dual Wield is still pickable too.
   Flourishes (`SpecialFx`, detected from synced state changes so remote players show them too): clones appear in
   their own cloud poof in a ring around the player (`CLONE_START_DISTANCE`), fade in, and vanish in poofs; the Great Ape transformation morphs
-  (`SkillData.form_morph`: 8-frame 96 px strip, full colour: Wukong, six in-between creatures
+  (`SkillData.form_morph`: 12-frame 96 px strip, full colour: Wukong, ten in-between creatures
   drawn by generate.py `ape_morph(t, scale)` (every body part's shape interpolated, arms/fists sprout, feathers and
-  collar retract, colours switch in stages, growing), the ape; drawn at the normal sprite scale while the real
+  collar retract, colours switch in stages, growing; both ends' details ride their parts: Wukong's fringe, wraps, sash
+  fade out, the ape's toes, thumbs, knuckles, nostrils come in; the gold armour cracks and breaks away in chunks
+  (`APE_ARMOUR_BREAKS`) and red rises up his face from the chin, dithered), the ape; drawn at the normal sprite scale while the real
   sprite is hidden; his storm clouds live in the sheets, no cloud is drawn over him),
   and morphs back when it ends. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
   (generate.py `FX`: poof / poof_small 10 frames (swell, then burst into wisps), wukong_ape_morph, smoke 4-frame loop; `Canvas(size)`

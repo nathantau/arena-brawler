@@ -169,9 +169,9 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
 def flicker(step=None, t=0):
-    """Shade, a kunoichi: a choppy jagged bob with a short spiky topknot that swings in the wind, red ribbon tails fluttering from its tie, a steel forehead
+    """Shade, a kunoichi: a choppy jagged bob with a big spiky topknot that swings in the wind, red ribbon tails fluttering from its tie, a steel forehead
     plate, big lashed teal eyes over a mask that peaks at the bridge of her nose; fitted navy shroud, a metal
-    breastplate and a red sash."""
+    breastplate and a red sash. The topknot is too big for the art box: it's drawn above it (CROWNS: flicker_topknot)."""
     low = Canvas()
     for x, dy in legs(low, NAVY, SHADOW, step):
         low.flat(R((x, 49 + dy, x + 5, 49 + dy)), SHADOW)  # leg wraps
@@ -188,11 +188,7 @@ def flicker(step=None, t=0):
     for x0, lag in ((18, 1), (21, 2)):
         up.part(L([(x0, 10), (x0 - 7 - wave(lag, 1), 20), (x0 - 12 - wave(lag + 1, 2), 30),
                    (x0 - 13 - wave(lag + 2, 2), 37)], 2), RED, shade=False)
-    # short spiky topknot: three tufts fanning back from the crown; the whole tuft swings, the tips furthest
-    up.part(P([(28, 9), (24 - wave(0, 1), 1), (21 - wave(0, 1), 6), (13 - wave(1, 1.5), 1), (16 - wave(1, 1), 8),
-               (5 - wave(2, 2), 8), (14 - wave(1, 1), 12), (6 - wave(3, 2), 17), (19, 15)]), NAVY)
-    up.flat(L([(22, 8), (15 - wave(1, 1.5), 3)], 1), BLUE)  # its sheen
-    up.flat(L([(17, 11), (9 - wave(2, 2), 9)], 1), BLUE)
+    up.part(RR((14, 8, 20, 13), 2), RED)  # tie round the topknot's base, half hidden behind her hair
     # choppy bob: the head's hair ends in jagged points round the back of her neck
     up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
         [(16, 20), (14, 31), (17, 29), (17, 37), (20, 33), (22, 39), (24, 32), (24, 20)], f)), NAVY)
@@ -205,7 +201,6 @@ def flicker(step=None, t=0):
                (19, 17)]), NAVY, shade=False)  # choppy fringe, over the side lock
     up.part(R((29, 9, 40, 11)), STEEL)  # small forehead plate
     up.flat(R((34, 10, 35, 10)), STEEL_D)  # its engraving
-    up.part(RR((18, 6, 23, 11), 2), RED)  # ribbon tying the topknot
     big_eyes(up, EYES_Y - 1, EYES_X, TEAL_L, h=6)
     if not KO:
         for x in EYES_X:  # lashes flick up and out at the top outer corner
@@ -216,6 +211,20 @@ def flicker(step=None, t=0):
     up.dot(38, 30, NAVY)  # seam under the peak
     up.flat(R((BLUSH[0], 30, BLUSH[0] + 2, 30)), PINK)  # blush above it
     return low, up
+
+
+def flicker_topknot(t: int, dy: int) -> Canvas:
+    """Shade's big spiky topknot: four fat tufts fanning back from her crown, rising above the art box; the whole tuft
+    swings in the wind, the tips furthest. A CELL canvas drawn behind the body; `dy` = the head's bob."""
+    c = Canvas(CELL)
+    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
+    at = lambda pts: [(PAD + x, PAD + UPPER_DY + dy + y) for x, y in pts]  # art px -> cell px
+    c.part(P(at([(29, 9), (25 - wave(0, 1), -4), (19 - wave(0, 1), 3), (9 - wave(1, 1.5), -3), (12 - wave(1, 1), 7),
+                 (-2 - wave(2, 2), 5), (9 - wave(2, 1), 11), (-3 - wave(3, 2), 15), (10 - wave(2, 1), 16),
+                 (2 - wave(3, 1.5), 24), (19, 18)])), NAVY)
+    c.flat(L(at([(22, 6), (12 - wave(1, 1.5), 0)]), 1), BLUE)  # its sheen
+    c.flat(L(at([(15, 10), (2 - wave(2, 2), 9)]), 1), BLUE)
+    return c
 
 def warden(step=None, t=0):
     """Shield: armoured knight with a plume, cape and tower shield."""
@@ -528,6 +537,12 @@ APE_POSES = {"walk": ((((15, 26), (13, 36), (17, 44)), ((49, 26), (51, 36), (47,
              "raise": ((((15, 26), (9, 18), (10, 13)), ((49, 26), (55, 18), (54, 13))), ((4, 2, -2), (48, 2, 9))),
              "smash": ((((15, 26), (28, 36), (40, 44)), ((49, 26), (54, 36), (54, 44))), ((35, 46, -2), (48, 46, 9)))}
 
+
+## Wukong's golden armour breaking in the morph: (crack, chunk that then falls away), in the armour's 24x15 px.
+APE_ARMOUR_BREAKS = [([(6, 0), (8, 4), (6, 7), (9, 10)], [(6, 0), (8, 4), (6, 7), (2, 6), (1, 1)]),
+                     ([(18, 2), (16, 5), (19, 8)], [(18, 2), (16, 5), (19, 8), (23, 7), (23, 2)]),
+                     ([(2, 9), (5, 11), (4, 15)], [(2, 9), (5, 11), (4, 15), (0, 15), (0, 10)]),
+                     ([(12, 6), (14, 10), (12, 14)], [(12, 6), (14, 10), (12, 14), (9, 12), (9, 8)])]
 
 ## The Great Ape's circlet: Wukong's, tilted askew and cracked; the morph cracks it one line at a time.
 APE_CIRCLET = [(23, 8), (47, 4), (47, 9), (23, 13)]
@@ -1235,6 +1250,18 @@ def ape_morph(t: float, scale: float) -> Image.Image:
         x0, y0 = points[0]
         return [pt((x0 + (x - x0) * f, y0 + (y - y0) * f), (x0 + (x - x0) * f, y0 + (y - y0) * f), u) for x, y in points]
 
+    ape_face = (28, 11, 50, 29)
+
+    def on_face(points, ape_side=False):  # face details ride the face as it slides and shrinks into the ape's
+        fa, fb = (ape_face, FACE) if ape_side else (FACE, ape_face)
+        other = [(fb[0] + (x - fa[0]) * (fb[2] - fb[0]) / (fa[2] - fa[0]),
+                  fb[1] + (y - fa[1]) * (fb[3] - fb[1]) / (fa[3] - fa[1])) for x, y in points]
+        return pts(other, points, u) if ape_side else pts(points, other, u)
+
+    def sub_box(b, rel, size):  # rel = (x0, y0, x1, y1) inside a part `size` art px wide/high, mapped onto box b
+        sx, sy = (b[2] - b[0]) / size[0], (b[3] - b[1]) / size[1]
+        return (b[0] + rel[0] * sx, b[1] + rel[1] * sy, b[0] + rel[2] * sx, b[1] + rel[3] * sy)
+
     # dark storm clouds gather: ape_storm's puffs drift in from further out, swelling one after another
     for j, (x, y, r) in enumerate(((9, 28, 6), (14, 19, 5), (8, 39, 5), (10, 48, 4), (21, 11, 4), (55, 20, 4),
                                    (58, 31, 3), (50, 12, 3))):
@@ -1258,11 +1285,33 @@ def ape_morph(t: float, scale: float) -> Image.Image:
     for x0, x1 in ((24, 21), (34, 35)):  # legs thicken and splay; feet broaden
         c.part(P(pts([(x0, 45), (x0 + 5, 45), (x0 + 5, 54), (x0, 54)],
                      [(x1, 44), (x1 + 8, 44), (x1 + 9, 54), (x1 - 1, 54)])), MAROON if ape else RED)
-        c.part(RR(box((x0 - 1, 53, x0 + 7, 57), (x1 - 2, 53, x1 + 10, 58)), w(2, 2)), BROWN)
+        if not ape:
+            c.flat(R(box((x0, 50, x0 + 6, 50), (x1, 50, x1 + 8, 50))), YELLOW)  # leg wraps
+        if t > 0.4:  # the big toe splays out
+            c.part(E(box((x0 + 1, 54, x0 + 2, 57), (x1 - 5, 54, x1, 58))), BROWN)
+        foot = box((x0 - 1, 53, x0 + 7, 57), (x1 - 2, 53, x1 + 10, 58))
+        c.part(RR(foot, w(2, 2)), BROWN)
+        c.flat(R((foot[0] + scale, foot[3], foot[2] - scale, foot[3])), SHADOW)  # sole
+        if ape:
+            for tx in (6, 9):  # toe creases
+                c.flat(R(sub_box(foot, (tx, 3, tx, 5), (12, 5))), OUTLINE)
     # the hunched back swells out from behind the armour
     c.part(E(box((20, 31, 44, 48), (10, 14, 54, 45), u)), fur)
     # the golden armour shrinks into the ape's chest
     c.part(RR(box((20, 33, 44, 48), (22, 26, 44, 43), u), w(3, 8)), BROWN if ape else YELLOW)
+    if not ape:
+        armour = box((20, 33, 44, 48), (22, 26, 44, 43), u)
+        on_armour = lambda q: [(armour[0] + x * (armour[2] - armour[0]) / 24, armour[1] + y * (armour[3] - armour[1]) / 15)
+                               for x, y in q]
+        c.flat(R(box((31, 36, 33, 44), (32, 30, 34, 39), u)), ORANGE)  # the armour's centre line
+        # the armour cracks, then chunks break away one by one, showing the dark fur swelling underneath
+        for j, (crack, chunk) in enumerate(APE_ARMOUR_BREAKS):
+            if t > 0.15 + 0.07 * j:
+                c.flat(L(on_armour(crack), max(1, round(scale))), OUTLINE)
+            if t > 0.3 + 0.07 * j:
+                c.part(P(on_armour(chunk)), BROWN if j % 2 else MAROON)
+        c.part(R(box((20, 44, 44, 46), (22, 40, 44, 42), u)), RED, line=False)  # sash
+        c.part(P(shrink([(22, 45), (17, 52), (21, 52), (25, 46)], 0.55)), RED)  # sash tail tucks away
     # arms and fists grow out from the sides of the body, poking out on the first in-between; the back arm
     # swings across the chest into the ape's knuckle-walk
     for start, arm in zip(([(21, 35), (16, 39), (15, 43)], [(43, 35), (48, 39), (49, 43)]), APE_POSES["walk"][0]):
@@ -1275,13 +1324,47 @@ def ape_morph(t: float, scale: float) -> Image.Image:
     for x0, (x1, y1, _thumb) in zip((11, 46), APE_POSES["walk"][1]):
         if ape:
             c.part(R(box((x0 + 1, 41, x0 + 6, 42), (x1 + 2, y1 - 4, x1 + 10, y1 - 1), u)), YELLOW)
-        c.part(RR(box((x0, 42, x0 + 7, 48), (x1, y1, x1 + 12, y1 + 11), u), w(2, 3)), fur)
-        c.flat(RR(box((x0 + 1, 45, x0 + 6, 48), (x1 + 1, y1 + 6, x1 + 11, y1 + 11), u), w(1, 1)), BROWN)  # curled fingers
+        fist = box((x0, 42, x0 + 7, 48), (x1, y1, x1 + 12, y1 + 11), u)
+        c.part(RR(fist, w(2, 3)), SKIN if t < 0.3 else fur)  # Wukong's hands, then furry fists
+        if t >= 0.3:
+            c.part(E(sub_box(fist, (_thumb, 1, _thumb + 5, 6), (12, 11))), fur)  # thumb over the fingers
+        c.flat(RR(box((x0 + 1, 45, x0 + 6, 48), (x1 + 1, y1 + 6, x1 + 11, y1 + 11), u), w(1, 1)),
+               SKIN_D if t < 0.3 else BROWN)  # curled fingers
+        if ape:
+            c.flat(R(sub_box(fist, (1, 6, 11, 6), (12, 11))), OUTLINE)
+            for kx in (4, 7):  # knuckle splits
+                c.flat(R(sub_box(fist, (kx, 6, kx, 11), (12, 11))), OUTLINE)
     # head: Wukong's round head pushes forward and shrinks into the ape's
     if t < 0.75:
         c.part(E(box((11, 17, 21, 28), (20, 10, 28, 20), u)), fur)  # ear tucks in
+        c.flat(E(box((14, 20, 18, 25), (22, 13, 26, 17), u)), SKIN_D if t < 0.4 else BROWN)
+    for x in (24, 31, 38):  # Wukong's fur tufts flatten into the ape's head
+        c.part(P(shrink([(x + 3, 9), (x, 9), (x + 3, 4), (x + 6, 9)], 0.6)[1:]), fur) if t < 0.6 else None
     c.part(E(box((15, 6, 49, 38), (24, 3, 50, 29), u)), fur)
-    c.part(RR(box(FACE, (28, 11, 50, 29), u), w(FACE_R, FACE_R)), face_c)
+    fb = box(FACE, ape_face, u)
+    c.part(RR(fb, w(FACE_R, FACE_R)), face_c)
+    if not ape:  # red rises up his face from the chin as his rage builds, its edge dithered so it climbs smoothly
+        level = fb[3] - (fb[3] - fb[1] + 4) * min(1.0, max(0.0, (t - 0.1) / 0.35))
+        flush = {SKIN: RED, SKIN_D: MAROON, WHITE: ORANGE}
+        px = c.img.load()
+        for y in range(int(fb[1]), int(fb[3]) + 1):
+            for x in range(int(fb[0]), int(fb[2]) + 1):
+                col = px[x, y][:3]
+                if px[x, y][3] and col in flush and y + 4 * BAYER[y % 4][x % 4] / 16 > level:
+                    px[x, y] = flush[col] + (255,)
+    if not ape:  # spiky fringe, blush and mouth ride the face
+        c.part(P(on_face([(23, 16), (47, 16), (47, 18), (43, 19), (39, 17), (35, 19), (30, 17), (26, 19), (23, 18)])),
+               fur, shade=False)
+        if t < 0.15:  # his blush, until the anger takes over
+            for bx in ((BLUSH[0], BLUSH[2], BLUSH[0] + 2, BLUSH[2]), (BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])):
+                c.flat(R(tuple(v for q in on_face([bx[:2], bx[2:]]) for v in q)), ORANGE)
+        c.flat(R(tuple(v for q in on_face([MOUTH, (MOUTH[0] + 1, MOUTH[1])]) for v in q)), OUTLINE if t >= 0.3 else MAROON)
+        if t > 0.2:  # angry brows come down, slanting in towards the middle
+            for brow in ([(EYES_X[0] - 1, 18), (EYES_X[0] + 4, 20)], [(EYES_X[1] + 4, 18), (EYES_X[1] - 1, 20)]):
+                c.flat(L(on_face(brow), w(1, 1)), OUTLINE)
+    else:  # nostrils and grim mouth push in
+        for bx in ((38, 21, 39, 21), (42, 21, 43, 21), (34, 25, 46, 26)):
+            c.flat(R(tuple(v for q in on_face([bx[:2], bx[2:]], ape_side=True) for v in q)), OUTLINE)
     collar = ((11, 31, 3), (15, 35, 5), (21, 38, 4), (26, 39, 3), (43, 38, 3), (47, 36, 4))
     for x, y, r in collar:  # the cloud collar puffs away
         rr = r * scale * (1 - t / 0.5)
@@ -1299,6 +1382,9 @@ def ape_morph(t: float, scale: float) -> Image.Image:
     for j, crack in enumerate(APE_CRACKS):
         if t > 0.25 + 0.15 * j:
             c.flat(L(pts([on_wukong_band(x, y) for x, y in crack], crack, u), max(1, round(scale))), OUTLINE)
+    if t > 0.85:  # a corner chips off
+        chip = [(43, 4), (47, 4), (47, 6)]
+        c.flat(P(pts([on_wukong_band(x, y) for x, y in chip], chip, u)), OUTLINE)
     for x0, x1 in ((EYES_X[0], 32), (EYES_X[1], 42)):  # eyes slide and narrow; turn red and angry halfway
         ex, ey = pt((x0, 22), (x1, 14), u)
         eh = w(6, 3)
@@ -1306,6 +1392,7 @@ def ape_morph(t: float, scale: float) -> Image.Image:
         if ape:
             c.flat(R((ex, ey, ex + ew, ey + eh)), OUTLINE)
             c.flat(R((ex, ey + 1, ex + ew, ey + eh - 1)), RED)
+            c.dot(round(ex + scale), round(ey + 1), ORANGE)  # glow
         else:
             c.flat(R((ex, ey, ex + ew, ey + eh)), OUTLINE)
             c.flat(R((ex, ey + eh - 2, ex + ew, ey + eh - 1)), YELLOW)
@@ -1629,7 +1716,8 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers
          "flint_inferno": lambda i: flint_embers(i, 1.0)}
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
-CROWNS = {"flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
+CROWNS = {"flicker": flicker_topknot, "flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
+KO_CROWNS = {"flicker"}  # crowns that stay on a knocked-out body (Flint's flame goes out)
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Fists go up over his head, then smash down in front on frame 3 (the hit lands then:
 ## ape_fists windup), the body squashed, and settle back into the knuckle-walk.
@@ -1711,7 +1799,7 @@ def cell(img: Image.Image) -> Image.Image:
     return out
 
 
-def death_frames(build) -> list[Image.Image]:
+def death_frames(build, crown=None) -> list[Image.Image]:
     """8 CELL-sized frames, knocked out (X eyes, no aura): white flash, pops up, topples backwards (it
     faces right, so the head lands on the left), bounces, lies dizzy under circling stars, then
     dissolves (ordered dither) before the respawn."""
@@ -1721,7 +1809,7 @@ def death_frames(build) -> list[Image.Image]:
         low, up = build(None, 0)
     finally:
         KO = False
-    ko = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    ko = crown(0, 0).img if crown else Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
     ko.alpha_composite(low.img, (PAD, PAD))
     ko.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
     ground = ko.getbbox()[3]
@@ -1774,7 +1862,7 @@ def main() -> None:
             fs = frames(build, AURAS.get(name), CROWNS[name])
         else:
             fs = [cell(f) for f in frames(build, AURAS.get(name))]
-        fs += death_frames(build)
+        fs += death_frames(build, CROWNS.get(name) if name in KO_CROWNS else None)
         fs += [cell(f) for f in attack_frames(build, AURAS.get(name), ATTACKS.get(name, []))]
         sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
         for i, f in enumerate(fs):
