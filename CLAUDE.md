@@ -392,6 +392,18 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   square strips `sapling_grow` (8) / `sapling_idle` (4, loop) / `sapling_fire` (4) / `sapling_wilt` (8) + `icon_cherry_sapling`;
   `SpecialFx._draw_sapling` picks the strip from the synced skill time (grow first, wilt over the last 0.67 s; the firing flourish
   plays when a shot falls due, even if nothing was in range).
+- **Storm Cloud** (2026-10-31, Apex special, `storm_cloud`, kind STORM = 16): summons a dark thundercloud at a spot
+  `storm_distance` 240 px ahead along the aim (`Player.storm_spot` = `spot_ahead`, the same wall-shortened ray as
+  `eruption_spot`; stored in the synced `anchor`). For `duration` 3.1 s (cooldown 10 s) every `storm_interval` 0.6 s (the first
+  one interval after the press; `CharacterSkill.storm_tick_due(before)` from the synced active time, no new synced field,
+  the last step counts) `ProjectilePool.strike` hits every other player within `storm_radius` 90 px of the spot with line of
+  sight from it for `storm_damage` 12, pushed `storm_knockback` 80 away from the spot, no stun. Authoritative only, replay
+  does nothing, no self-damage, keyed `seq + STORM_SEQ_OFFSET` (1 << 29); blurb "Lightning cloud" (<= 20 chars: the loading-room row
+  cuts longer ones). Art (generate.py `storm_*`, `icon_storm_cloud`): `storm_cloud` period-8 loop (navy-grey lumps churning,
+  gold light flickering inside, rain streaks, dithered floor shadow), `storm_cloud_form` / `storm_cloud_end` 8 frames, `storm_bolt`
+  5-frame bolt strip (36x144 art px, bottom-anchored and cropped to length), `storm_spark` 6-frame flash + scorch. `SpecialFx._sync_storm`
+  draws all of it from the synced active time on every peer: a bolt per tick at each enemy within the radius on the local view
+  (else at the cloud's spot).
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

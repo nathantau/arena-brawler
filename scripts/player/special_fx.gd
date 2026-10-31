@@ -107,6 +107,27 @@ const FLARE_CHARGE_ART: Texture2D = preload(FX_DIR + "flint_flare.png")
 const FLARE_RING_ART: Texture2D = preload(FX_DIR + "flare_ring.png")
 const FLARE_RING_TIME: float = 0.7
 const FLARE_ART_RADIUS: float = 80.0
+## Storm Cloud (generate.py STORM_*): the cloud forms (STORM_FRAMES at STORM_FPS), loops while it rains, disperses; its
+## art is STORM_SIZE px square with the spot on the floor at row STORM_FLOOR_Y and the cloud's underside at row
+## STORM_BASE_Y. Bolts (BOLT_W x BOLT_H art px per frame, ending BOLT_END_Y rows down) are cropped to length, never stretched.
+const STORM_ART: Texture2D = preload(FX_DIR + "storm_cloud.png")
+const STORM_FORM_ART: Texture2D = preload(FX_DIR + "storm_cloud_form.png")
+const STORM_END_ART: Texture2D = preload(FX_DIR + "storm_cloud_end.png")
+const STORM_SPARK_ART: Texture2D = preload(FX_DIR + "storm_spark.png")
+const STORM_BOLT_ART: Texture2D = preload(FX_DIR + "storm_bolt.png")
+const STORM_SIZE: float = 136.0
+const STORM_FLOOR_Y: float = 112.0
+const STORM_BASE_Y: float = 62.0
+const STORM_FPS: float = 10.0
+const STORM_FRAME_COUNT: int = 8
+const STORM_FORM_TIME: float = STORM_FRAME_COUNT / 12.0
+const STORM_END_TIME: float = 0.6
+const BOLT_W: float = 36.0
+const BOLT_END_Y: float = 136.0
+const BOLT_FPS: float = 20.0
+const BOLT_TIME: float = 0.25
+const BOLT_MIN_LENGTH: float = 16.0
+const STORM_SPARK_TIME: float = 0.35
 ## Her outstretched hand in the zip pose (generate.py flicker_zip), from the sprite's centre, facing right.
 const ZIP_HAND: Vector2 = Vector2(35, 14)
 ## Art px from the kunai sprite's centre to its tip and to its ring (generate.py kunai).
@@ -270,6 +291,11 @@ var _drift_at: Vector2 = Vector2.ZERO
 var _drift_flip: bool = false
 var _drift_lean: float = 0.0
 var _face_flip: bool = false
+## Storm Cloud while it rains (null = not): the slot, strikes seen, and the bolts in flight (position they land + age).
+var _storm: CharacterSkill
+var _storm_spot: Vector2 = Vector2.ZERO
+var _storm_ticks: int = 0
+var _bolts: Array[Poof] = []
 
 
 func _init() -> void:
@@ -328,6 +354,7 @@ func sync(p: Player) -> void:
 	_sync_swing(p)
 	_sync_drift(p)
 	_sync_sapling(p)
+	_sync_storm(p)
 	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
 	if slow > _snare_left + SNARE_NEW_MARGIN:  # a snare landed (or was refreshed): petals burst
 		_poof(p.global_position + p.visual_offset, SNARE_BURST_ART, SNARE_BURST_TIME)
@@ -383,6 +410,47 @@ func _sync_sapling(p: Player) -> void:
 	if shots > _sapling_shots:
 		_sapling_fire_t = 0.0
 	_sapling_shots = shots
+
+
+## Storm Cloud: puff and dispersal from the synced active state, a bolt on every strike tick (every peer sees the same
+## times; the targets are whoever stands within the radius on this peer's view, else the cloud's own spot).
+func _sync_storm(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.STORM)
+	var raining: CharacterSkill = slot if slot != null and slot.is_active() and not p.dead else null
+	if raining != null:
+		var ticks: int = floori(raining.elapsed() / raining.data.storm_interval)
+		if _storm != null and ticks > _storm_ticks:
+			_strike(p, raining)
+		_storm_ticks = ticks
+		_storm_spot = raining.anchor
+	elif _storm != null and not p.dead:
+		_poof(_storm_art_centre(_storm_spot), STORM_END_ART, STORM_END_TIME)
+	_storm = raining
+
+
+func _storm_art_centre(spot: Vector2) -> Vector2:
+	return spot + Vector2(0.0, (STORM_SIZE * 0.5 - STORM_FLOOR_Y) * Constants.SPRITE_SCALE)
+
+
+func _strike(p: Player, slot: CharacterSkill) -> void:
+	var hit: bool = false
+	for node: Node in p.get_parent().get_children():
+		var target := node as Player
+		if target != null and target != p and not target.dead \
+				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius:
+			_bolt(target.global_position + target.visual_offset, target.global_position + target.visual_offset
+				+ Vector2(0.0, Player.FOOT_RING_Y))
+			hit = true
+	if not hit:
+		_bolt(slot.anchor, slot.anchor)
+
+
+func _bolt(at: Vector2, ground: Vector2) -> void:
+	var b := Poof.new()
+	b.pos = at
+	b.duration = BOLT_TIME
+	_bolts.append(b)
+	_poof(ground, STORM_SPARK_ART, STORM_SPARK_TIME)
 
 
 func _sync_drift(p: Player) -> void:
@@ -451,6 +519,9 @@ func _sync_grapple(p: Player) -> void:
 func _process(delta: float) -> void:
 	for pf: Poof in _poofs:
 		pf.t += delta
+	for b: Poof in _bolts:
+		b.t += delta
+	_bolts = _bolts.filter(func(b: Poof) -> bool: return b.t < b.duration)
 	_poofs = _poofs.filter(func(pf: Poof) -> bool: return pf.t < pf.duration)
 	_time += delta
 	if _miss_t >= 0.0:
@@ -588,6 +659,7 @@ func _draw() -> void:
 	_draw_snare()
 	_draw_sapling()
 	_draw_blaze()
+	_draw_storm()
 	_draw_flourishes()
 	if _owner == null:
 		return
@@ -684,6 +756,27 @@ func _draw_snare() -> void:
 
 
 ## Poofs play their strip once.
+## The cloud over its spot (forming, then looping), the bolts falling from its underside to where they landed.
+func _draw_storm() -> void:
+	var px: float = Constants.SPRITE_SCALE
+	if _storm != null:
+		var t: float = _storm.elapsed()
+		var centre: Vector2 = _storm_art_centre(_storm.anchor)
+		if t < STORM_FORM_TIME:
+			_draw_frame(STORM_FORM_ART, mini(int(t / STORM_FORM_TIME * STORM_FRAME_COUNT), STORM_FRAME_COUNT - 1),
+				STORM_SIZE, centre, px)
+		else:
+			_draw_frame(STORM_ART, int(t * STORM_FPS) % STORM_FRAME_COUNT, STORM_SIZE, centre, px)
+	var h: float = STORM_BOLT_ART.get_height()
+	var frames: int = int(STORM_BOLT_ART.get_width() / BOLT_W)
+	for b: Poof in _bolts:
+		var base: float = _storm_spot.y + (STORM_BASE_Y - STORM_FLOOR_Y) * px
+		var length: float = clampf((b.pos.y - base) / px, BOLT_MIN_LENGTH, BOLT_END_Y - 8.0)
+		var frame: int = mini(int(b.t / BOLT_TIME * frames), frames - 1)
+		draw_texture_rect_region(STORM_BOLT_ART, Rect2(Vector2(b.pos.x - BOLT_W * 0.5 * px, b.pos.y - length * px),
+			Vector2(BOLT_W, length) * px), Rect2(frame * BOLT_W, BOLT_END_Y - length, BOLT_W, length))
+
+
 func _draw_flourishes() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for pf: Poof in _poofs:

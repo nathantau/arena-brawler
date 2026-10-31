@@ -27,8 +27,10 @@ extends Resource
 ## outward and enemy projectiles in range are destroyed.
 ## SAPLING: plants a cherry tree at her feet for `duration`; every `sapling_interval` it shoots `sapling_weapon` at the
 ## nearest visible enemy within `sapling_range`.
+## STORM: a thundercloud at a spot ahead along the aim (short of walls) for `duration`: every `storm_interval` a bolt strikes
+## each enemy within `storm_radius` of the spot that it can see.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, NOVA = 17, SAPLING = 18 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -131,6 +133,18 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 ## The petals leave the canopy this far above the planting spot.
 @export var sapling_muzzle_height: float = 38.0
 @export var sapling_weapon: WeaponData
+
+
+@export_group("Storm")
+## How far ahead along the aim the cloud's spot is (pulled back `storm_wall_margin` off a wall in the way).
+@export var storm_distance: float = 240.0
+@export var storm_wall_margin: float = 8.0
+@export var storm_radius: float = 90.0
+@export var storm_damage: int = 12
+## Seconds between strikes (the first lands one interval after the press).
+@export var storm_interval: float = 0.6
+## Push away from the spot per strike (no stun).
+@export var storm_knockback: float = 80.0
 
 @export_group("Trail")
 ## The dash covers up to trail_distance in trail_dash_time; the trail (takeoff -> where he stopped) burns until `duration` ends.

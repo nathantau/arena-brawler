@@ -498,6 +498,20 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 			crate.take_damage(CombatRules.splash_damage(s.damage, cdist, s.splash_radius, s.splash_edge))
 
 
+## Storm Cloud: lightning strikes every other player within `radius` of `origin` that is in sight of it, pushed away from it.
+func strike(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
+	if not authoritative:
+		return
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	for target: Player in targets:
+		if target.player_id == owner_id or not target.can_be_hit() \
+				or target.global_position.distance_to(origin) > radius \
+				or not AutoAim.has_line_of_sight(space, _los_query, origin, target.global_position):
+			continue
+		var push: Vector2 = (target.global_position - origin).normalized() * knockback
+		_damage_player(target, owner_id, seq, 0, damage, false, push, target.global_position)
+
+
 ## Fire on the floor along from -> to: everyone within `radius` of the line (not the owner) takes `damage`,
 ## pushed `knockback` away from the line (along it if they stand right on it, sideways).
 func burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: float, damage: int,

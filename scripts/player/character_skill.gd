@@ -20,6 +20,7 @@ extends RefCounted
 ##   whole vector, cut short by a wall); the slam lands when `pillar_windup` has passed.
 ## - NOVA: charges for `nova_charge`, then the Player sets off `nova_blast` on itself (nothing stored but the active time).
 ## - SAPLING: the tree stands at `anchor` for `duration`; the Player shoots from it.
+## - STORM: `anchor` = the cloud's spot (the Player places it against the walls); strikes fall due every `storm_interval`.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 const WHIRL_EPSILON: float = 0.0001
@@ -92,6 +93,13 @@ func sapling_shot_due(before: float) -> bool:
 		return false
 	var interval: float = data.sapling_interval
 	return floori((elapsed() + WHIRL_EPSILON) / interval) > floori((before + WHIRL_EPSILON) / interval)
+
+
+## STORM: a strike falls due in the step that ticked from `before` to now (the cloud's last step counts).
+func storm_tick_due(before: float) -> bool:
+	var interval: float = data.storm_interval
+	return data.kind == SkillData.Kind.STORM and floori((elapsed() + WHIRL_EPSILON) / interval) \
+		> floori((before + WHIRL_EPSILON) / interval)
 
 
 ## Seconds since activation (drives clone paths).
