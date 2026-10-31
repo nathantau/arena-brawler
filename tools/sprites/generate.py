@@ -8,7 +8,7 @@ Characters also get `t` (frame tick) for small loops: fluttering scarves, swayin
 Each frame is 64x64, transparent, palette-only colours, with an automatic 1 px outline.
 Characters are built from "parts": each part is auto-shaded (dark band on its bottom/right
 edge, highlight on its top/left edge) and can draw a dark line where it overlaps earlier parts.
-Also writes the 1024 px app icon (assets/icon.png) from Flicker's first idle frame.
+Also writes the 1024 px app icon (assets/icon.png) (see ICON_STYLE: monogram / weapons / emblem).
 
 Run: tools/sprites/.venv/bin/python tools/sprites/generate.py
 """
@@ -18,7 +18,7 @@ import math
 import random
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from palette import (BLUE, BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, PALETTE, PINK, PINK_L, RED,
                      SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, WHITE, YELLOW)
@@ -5123,6 +5123,202 @@ def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
             assert not (edges and a and on_edge), f"sprite touches frame edge at {x},{y}"
 
 
+# --- App icon: 3 concepts drawn at 128 art px, scaled x8 NEAREST to 1024 (ICON_STYLE picks the one in assets/icon.png) ---
+
+ICON_STYLE = "monogram"  # "monogram" | "weapons" | "emblem"
+ICON_ART = 128  # art px; ICON_SIZE / ICON_ART = 8 px per art px. Keep art inside ~12..116 (iOS rounds the corners)
+
+
+def _icon_bg(bands: list, centre: tuple[float, float], rays: int = 0, spread: float = 84.0) -> Image.Image:
+    """Dither-banded radial gradient (bands darkest at the rim -> lightest), optional sunburst wedges one step lighter."""
+    img = Image.new("RGB", (ICON_ART, ICON_ART))
+    px = img.load()
+    n = len(bands)
+    for y in range(ICON_ART):
+        for x in range(ICON_ART):
+            dx, dy = x - centre[0], y - centre[1]
+            v = 1 - min(1.0, math.hypot(dx, dy) / spread)  # 0 rim .. 1 centre
+            if rays and int((math.atan2(dy, dx) / math.tau + 1) * rays * 2) % 2:
+                v += 0.16
+            f = v * (n - 1) + (BAYER4[y % 4][x % 4] / 16 - 0.5) * 0.9
+            px[x, y] = bands[max(0, min(n - 1, round(f)))]
+    return img
+
+
+def _icon_poly(d: ImageDraw.ImageDraw, pts: list, fill: tuple, edge: int = 0) -> None:
+    if edge:
+        d.line(list(pts) + [pts[0]], fill=OUTLINE, width=edge * 2 + 1, joint="curve")
+    d.polygon(pts, fill=fill)
+
+
+def _icon_bar(d, p0, p1, w: float, fill: tuple, edge: int = 2) -> None:
+    a = math.atan2(p1[1] - p0[1], p1[0] - p0[0]) + math.pi / 2
+    ox, oy = math.cos(a) * w / 2, math.sin(a) * w / 2
+    _icon_poly(d, [(p0[0] + ox, p0[1] + oy), (p1[0] + ox, p1[1] + oy), (p1[0] - ox, p1[1] - oy), (p0[0] - ox, p0[1] - oy)], fill, edge)
+
+
+def _icon_blob(cx, cy, length, width, angle, lean=0.0, bulb=0.5, pointy=1.0) -> list:
+    """Outline of a flame / petal along an axis (t 0 base .. 1 tip), widest at `bulb`, tip leaning sideways."""
+    ca, sa = math.cos(angle), math.sin(angle)
+    left, right = [], []
+    for i in range(25):
+        t = i / 24
+        hw = width / 2 * (math.sin(math.pi / 2 * t / bulb) if t < bulb else (1 - (t - bulb) / (1 - bulb)) ** pointy)
+        off = lean * t * t
+        ax, ay = cx + ca * length * t, cy + sa * length * t
+        left.append((ax - sa * (hw + off), ay + ca * (hw + off)))
+        right.append((ax + sa * (hw - off), ay - ca * (hw - off)))
+    return left + right[::-1]
+
+
+def _icon_flame(d, cx, cy, size) -> None:
+    """Upright flame, base at (cx, cy), layered red / orange / yellow / white."""
+    for k, (col, s) in enumerate(zip((RED, ORANGE, YELLOW, WHITE), (1.0, 0.76, 0.5, 0.28))):
+        _icon_poly(d, _icon_blob(cx, cy - size * 0.03 * k, size * s, size * 0.66 * s, -math.pi / 2, lean=size * 0.22 * s,
+                                 bulb=0.3, pointy=1.2), col, 2 if k == 0 else 0)
+
+
+def _icon_bolt(d, cx, cy, s) -> None:
+    pts = [(cx + 0.28 * s, cy - 0.5 * s), (cx - 0.36 * s, cy + 0.06 * s), (cx - 0.02 * s, cy + 0.06 * s),
+           (cx - 0.28 * s, cy + 0.5 * s), (cx + 0.38 * s, cy - 0.1 * s), (cx + 0.04 * s, cy - 0.1 * s)]
+    _icon_poly(d, pts, YELLOW, 2)
+    d.polygon([(cx + 0.24 * s, cy - 0.42 * s), (cx - 0.22 * s, cy), (cx, cy)], fill=WHITE)
+
+
+def icon_monogram() -> Image.Image:
+    """(a) 'BB' in the title logo's pixel font: banded face, white bevel, maroon extrusion, outline, shine, on a sunburst."""
+    img = _icon_bg([OUTLINE, SHADOW, NAVY, BLUE, TEAL], (64, 58), rays=8)
+    k = 8
+    gw = 5 * k
+    x0 = (ICON_ART - (2 * gw + k)) // 2
+    y0 = 33
+    h = 7 * k
+    fp_img = Image.new("L", (ICON_ART, ICON_ART), 0)
+    fp = fp_img.load()
+    for i in range(2):
+        for gy, row in enumerate(GLYPHS["B"]):
+            for gx, bit in enumerate(row):
+                if bit == "1":
+                    for dy in range(k):
+                        for dx in range(k):
+                            fp[x0 + i * (gw + k) + gx * k + dx, y0 + gy * k + dy] = 255
+    depth = 7
+    solid_img = Image.new("L", (ICON_ART, ICON_ART), 0)
+    sp = solid_img.load()
+    for y in range(ICON_ART):
+        for x in range(ICON_ART):
+            if any(y - d >= 0 and fp[x, y - d] for d in range(depth + 1)):
+                sp[x, y] = 255
+    cut = solid_img.filter(ImageFilter.MaxFilter(5)).load()  # 2 px outline
+    px = img.load()
+    for y in range(ICON_ART):
+        for x in range(ICON_ART):
+            if y >= 5 and sp[x, y - 5] and (x + y) % 2 == 0:
+                px[x, y] = OUTLINE  # dithered drop shadow
+    for y in range(ICON_ART):
+        for x in range(ICON_ART):
+            if cut[x, y]:
+                px[x, y] = OUTLINE
+            if sp[x, y]:
+                px[x, y] = MAROON
+    shade = {YELLOW: ORANGE, ORANGE: RED, RED: MAROON}
+    for y in range(ICON_ART):
+        for x in range(ICON_ART):
+            if not fp[x, y]:
+                continue
+            v = y - y0
+            c = YELLOW if v < h * 0.42 else ORANGE if v < h * 0.74 else RED
+            if not fp[x, y - 1]:
+                c = WHITE  # lit top edge
+            elif not fp[x - 1, y]:
+                c = WHITE if v < h * 0.74 else YELLOW  # lit left edge
+            elif not fp[x, y + 1] or not fp[x + 1, y]:
+                c = shade[c]  # shaded bottom / right edge
+            if fp[x, y] and 0 <= (x - x0) + (y - y0) * 0.9 - 12 < 5 and v < h * 0.5 and c != WHITE:
+                c = WHITE  # diagonal shine streak
+            px[x, y] = c
+    d = ImageDraw.Draw(img)
+    for sx, sy, r in ((x0 - 5, y0 - 5, 6), (x0 + 2 * gw + k + 6, y0 + 2, 4), (x0 + 2 * gw - 4, y0 - 11, 3)):  # sparkles
+        d.polygon([(sx, sy - r), (sx + 1, sy - 1), (sx + r, sy), (sx + 1, sy + 1), (sx, sy + r), (sx - 1, sy + 1),
+                   (sx - r, sy), (sx - 1, sy - 1)], fill=WHITE)
+    return img
+
+
+def icon_weapons() -> Image.Image:
+    """(b) Cloud staff and ripple kunai crossed over a burst of fire."""
+    img = _icon_bg([OUTLINE, MAROON, RED, ORANGE], (64, 64), rays=10, spread=70)
+    d = ImageDraw.Draw(img)
+    rng = random.Random(7)
+    for rad, col, edge in ((50, ORANGE, 2), (40, YELLOW, 0), (27, WHITE, 0)):  # nested starbursts
+        pts = []
+        for i in range(24):
+            a = math.tau * i / 24 + 0.15
+            r = rad * (1.0 if i % 2 == 0 else 0.6) + rng.random() * 3
+            pts.append((64 + math.cos(a) * r, 64 + math.sin(a) * r))
+        _icon_poly(d, pts, col, edge)
+    a, b = (100, 24), (28, 104)  # staff, top right to bottom left
+    _icon_bar(d, a, b, 12, RED, 2)
+    _icon_bar(d, (a[0] - 2, a[1] + 2), (b[0] - 2, b[1] + 2), 3, ORANGE, 0)
+    for t in (0.0, 0.16, 0.84, 1.0):
+        p = (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+        d.ellipse([p[0] - 8, p[1] - 8, p[0] + 8, p[1] + 8], fill=OUTLINE)
+        d.ellipse([p[0] - 6, p[1] - 6, p[0] + 6, p[1] + 6], fill=YELLOW)
+        d.ellipse([p[0] - 5, p[1] - 5, p[0] + 1, p[1] + 1], fill=WHITE)
+    tip, base, ring = (24, 24), (66, 66), (100, 100)  # kunai, top left to bottom right
+    ang = math.atan2(base[1] - tip[1], base[0] - tip[0])
+    nx, ny = -math.sin(ang), math.cos(ang)
+    pl, pr = (base[0] + nx * 12, base[1] + ny * 12), (base[0] - nx * 12, base[1] - ny * 12)
+    _icon_poly(d, [tip, pl, pr], STEEL, 2)
+    d.polygon([tip, pl, base], fill=WHITE)
+    d.polygon([tip, pr, base], fill=STEEL_D)
+    _icon_bar(d, base, (ring[0] - 8, ring[1] - 8), 10, NAVY, 2)
+    _icon_bar(d, (base[0] + 3, base[1] + 3), (base[0] + 10, base[1] + 10), 15, RED, 2)
+    d.ellipse([ring[0] - 13, ring[1] - 13, ring[0] + 5, ring[1] + 5], fill=OUTLINE)
+    d.ellipse([ring[0] - 10, ring[1] - 10, ring[0] + 2, ring[1] + 2], fill=STEEL)
+    d.ellipse([ring[0] - 5, ring[1] - 5, ring[0] - 1, ring[1] - 1], fill=MAROON)
+    return img
+
+
+def icon_emblem() -> Image.Image:
+    """(c) Shield badge: flame | petal fields split by a lightning bolt."""
+    img = _icon_bg([OUTLINE, SHADOW, NAVY, BLUE], (64, 60), spread=90)
+    d = ImageDraw.Draw(img)
+    sh = [(22, 18), (106, 18), (106, 70), (98, 92), (64, 114), (30, 92), (22, 70)]
+    _icon_poly(d, [(x, y + 4) for x, y in sh], SHADOW, 2)
+    _icon_poly(d, sh, YELLOW, 2)
+    inner = [(29, 25), (99, 25), (99, 69), (92, 87), (64, 107), (36, 87), (29, 69)]
+    field = Image.new("RGB", (ICON_ART, ICON_ART), RED)
+    fd = ImageDraw.Draw(field)
+    fd.rectangle([64, 0, 128, 128], fill=PINK)
+    fd.polygon([(0, 128), (0, 66), (64, 50), (64, 128)], fill=MAROON)
+    fd.polygon([(128, 128), (128, 66), (64, 50), (64, 128)], fill=PINK_L)
+    fd.rectangle([0, 0, 128, 33], fill=ORANGE)
+    fd.rectangle([64, 0, 128, 33], fill=PINK_L)
+    mask = Image.new("L", (ICON_ART, ICON_ART), 0)
+    ImageDraw.Draw(mask).polygon(inner, fill=255)
+    img.paste(field, (0, 0), mask)
+    d = ImageDraw.Draw(img)
+    d.line(inner + [inner[0]], fill=OUTLINE, width=3)
+    _icon_flame(d, 45, 94, 56)
+    pet = _icon_blob(0, 0, 44, 24, 0, bulb=0.45)
+    ca, sa = math.cos(-0.9), math.sin(-0.9)
+    place = lambda pts, s: [(79 + (x - 22) * s * ca - y * s * sa, 80 + (x - 22) * s * sa + y * s * ca) for x, y in pts]
+    _icon_poly(d, place(pet, 1.0), WHITE, 2)
+    d.polygon(place(pet, 0.62), fill=PINK)
+    _icon_bolt(d, 64, 64, 66)
+    return img
+
+
+ICON_STYLES = {"monogram": icon_monogram, "weapons": icon_weapons, "emblem": icon_emblem}
+
+
+def app_icon(style: str | None = None) -> Image.Image:
+    """Opaque 1024 px RGB icon in the chosen style (nearest-scaled from the 128 px art)."""
+    art = ICON_STYLES[style or ICON_STYLE]()
+    assert set(art.getdata()) <= set(PALETTE), "icon colour off palette"
+    return art.resize((ICON_SIZE, ICON_SIZE), Image.NEAREST)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
@@ -5191,9 +5387,7 @@ def main() -> None:
         img.save(FX_OUT / f"{name}.png")
     print(f"wrote {len(FX)} effect strips to {FX_OUT}")
     # App Store icons must be opaque.
-    icon = Image.new("RGBA", (SIZE, SIZE), NAVY + (255,))
-    icon.alpha_composite(frames(flicker)[0])  # the app icon follows Flicker's look
-    icon.convert("RGB").resize((ICON_SIZE, ICON_SIZE), Image.NEAREST).save(ROOT / "assets" / "icon.png")
+    app_icon().save(ROOT / "assets" / "icon.png")  # ICON_STYLE picks the concept
     print("wrote assets/icon.png")
 
 
