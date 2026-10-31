@@ -630,20 +630,25 @@ def flint_inferno_morph() -> Image.Image:
     return strip(out)
 
 
-def wukong(step=None, t=0):
-    """Dash: monkey king with a golden circlet, pheasant feathers and a lopsided cloud collar."""
+def wukong(step=None, t=0, swing=False):
+    """Dash: monkey king with a golden circlet, pheasant feathers and a lopsided cloud collar.
+    `swing` (Vine Swing poses): tail curled up tight, no front arm (wukong_swing_frame raises it to the vine)."""
     low = Canvas()
     for x, dy in legs(low, RED, BROWN, step):
         low.flat(R((x, 50 + dy, x + 6, 50 + dy)), YELLOW)  # leg wraps
     up = Canvas()
     s = SWAY[t % 4]
-    up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11 + s, 31)], 3), BROWN)  # curly tail, tip wags
+    if swing:  # curled into a spiral so it doesn't snag
+        up.part(L([(21, 44), (13, 47), (7, 43), (7, 36), (12, 33), (16, 36), (15, 41), (11, 41)], 3), BROWN)
+    else:
+        up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11 + s, 31)], 3), BROWN)  # curly tail, tip wags
     arm(up, ARM_X[0], YELLOW, SKIN)
     up.part(RR(BODY, 3), YELLOW)  # golden armour
     up.flat(R((31, 36, 33, 44)), ORANGE)
     up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
     up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
-    arm(up, ARM_X[1], YELLOW, SKIN)
+    if not swing:
+        arm(up, ARM_X[1], YELLOW, SKIN)
     up.part(L([(25, 10), (16, 4), (6, 6 + s)], 2), RED, shade=False)  # pheasant feathers sway
     up.part(L([(29, 9), (24, 3), (14 + s, 2)], 2), RED, shade=False)
     up.part(E((11, 17, 21, 28)), BROWN)  # ear
@@ -1304,6 +1309,11 @@ ICONS = {
                                         PINK_L if i % 2 else WHITE)
                                  for i, (dx, dy) in enumerate(((0, -1), (0.87, -0.5), (0.87, 0.5), (0, 1), (-0.87, 0.5), (-0.87, -0.5)))]
                               + [c.flat(E((4, 4, 8, 8)), PINK_L), c.dot(6, 6, YELLOW)],
+    "vine_swing": lambda c: (c.flat(L([(2, 0), (2, 3), (4, 6), (7, 7)], 1), BROWN),  # vine, his head hanging off it
+                             c.flat(P([(3, 1), (6, 0), (5, 3)]), TEAL_L), c.flat(P([(1, 4), (0, 7), (2, 6)]), TEAL),
+                             c.flat(E((4, 5, 12, 12)), BROWN), c.flat(E((6, 7, 12, 12)), SKIN),
+                             c.flat(R((4, 6, 12, 7)), YELLOW), c.dot(8, 9, OUTLINE), c.dot(10, 9, OUTLINE),
+                             c.flat(L([(9, 0), (11, 1)], 1), RED)),
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -1388,6 +1398,128 @@ def poof_frame(size: int, k: int, color) -> Image.Image:
             arm = 2 if t < 0.5 and size >= 64 else 1
             c.flat(R((x - arm, y, x + arm, y)), WHITE if i % 2 else STEEL)
             c.flat(R((x, y - arm, x, y + arm)), WHITE if i % 2 else STEEL)
+    return outline(c.img)
+
+
+## Vine Swing (Apex): his pose along the swing, a vine to hang it from, a leafy burst at takeoff, dust on landing.
+SWING_FRAMES = 8
+SWING_HAND = (65, 13)  # the gripping fist in a CELL frame; every frame pivots on it. Keep in sync with SpecialFx
+SWING_TILT = (-20, 20)  # body angle (deg, + = legs swung forward) at takeoff and at landing
+VINE_W, VINE_LEN = 19, 240
+LEAF_FRAMES = 10
+DUST_FRAMES = 8
+
+
+def wukong_swing_frame(k: int) -> Image.Image:
+    """Apex hanging from the vine by his raised front fist, legs tucked up and tail curled. The body swings on the
+    fist: trailing behind at takeoff, tucked tightest mid-air, legs reaching forward for the landing."""
+    t = k / (SWING_FRAMES - 1)
+    arc = math.sin(math.pi * t)
+    low, up = wukong(None, k % 4, swing=True)
+    c = Canvas(CELL)
+    c.img.alpha_composite(wukong_clouds(k % 4).img, (PAD, PAD + 2))  # cloud trailing behind him
+    # Legs trail at takeoff, knees tuck up in front mid-air, then reach forward and down for the landing.
+    c.img.alpha_composite(low.img, (PAD + round(-3 + 7 * t + 3 * arc), PAD - round(1 + 4 * arc)))
+    c.img.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
+    c.px = c.img.load()
+    hx, hy = SWING_HAND
+    sx, sy = PAD + 45, PAD + UPPER_DY + 38  # front shoulder
+    ex, ey = sx + 4, sy - 16  # elbow beside his cheek
+    c.part(L([(sx, sy), (ex, ey)], 5), YELLOW)  # golden sleeve
+    c.part(L([(ex, ey), (hx, hy + 3)], 4), SKIN)  # bare forearm reaching up past his head
+    c.part(R((ex - 2, ey - 2, ex + 2, ey)), RED, shade=False)  # cuff wrap
+    c.part(E((hx - 3, hy - 3, hx + 3, hy + 3)), SKIN)  # fist round the vine
+    c.flat(R((hx - 1, hy - 1, hx + 1, hy - 1)), SKIN_D)  # curled fingers
+    a = SWING_TILT[0] + (SWING_TILT[1] - SWING_TILT[0]) * t
+    img = c.img.rotate(a, Image.NEAREST, center=SWING_HAND)
+    return outline(img)
+
+
+def vine() -> Image.Image:
+    """A hanging jungle vine, top (pivot) to bottom: a twisting brown stem with paired leaves and curling tendrils.
+    Drawn from the pivot down to his fist, cropped to length."""
+    c = Canvas(VINE_LEN + 2)
+    m = VINE_W // 2
+    sx = lambda y: m + round(1.5 * math.sin(y / 9))  # the stem wanders a little
+    c.part(L([(sx(y), y) for y in range(3, VINE_LEN)], 3), BROWN, shade=False)
+    for y in range(4, VINE_LEN, 6):  # bark twist
+        c.dot(sx(y) + (y // 6) % 2 - 1, y, MAROON)
+    for i, y in enumerate(range(10, VINE_LEN - 8, 17)):
+        x = sx(y)
+        side = 1 if i % 2 else -1
+        tip = (x + side * 5, y + 4)
+        c.part(P([(x, y), (x + side * 3, y - 1), tip, (x + side * 2, y + 4)]), TEAL)
+        c.flat(L([(x + side, y + 1), (x + side * 4, y + 3)], 1), TEAL_L)  # leaf vein catching the light
+        if i % 3 == 2:  # a tendril curling off the other side
+            c.flat(L([(x - side, y + 6), (x - side * 3, y + 7), (x - side * 4, y + 5), (x - side * 3, y + 4)], 1), TEAL)
+    return outline(c.img).crop((0, 0, VINE_W, VINE_LEN + 2))
+
+
+def vine_top() -> Image.Image:
+    """The leafy clump the vine hangs from, drawn over the pivot: a mass of leaves round a stub of branch."""
+    c = Canvas(48)
+    c.part(L([(4, 22), (18, 20), (30, 22), (44, 19)], 3), BROWN)
+    rng = random.Random(7)
+    clumps = [(24 + rng.randint(-16, 16), 21 + rng.randint(-6, 5), rng.randint(4, 7)) for _ in range(11)]
+    c.part(blobs([(x + 1, y + 2, r) for x, y, r in clumps]), NAVY, shade=False)
+    c.part(blobs(clumps), TEAL)
+    for x, y, r in clumps[::2]:
+        c.part(E((x - r // 2, y - r // 2 - 1, x + r // 3, y)), TEAL_L, shade=False, line=False)
+    return outline(c.img).crop((0, 8, 48, 40))
+
+
+def leaf_burst_frame(k: int) -> Image.Image:
+    """Takeoff: a cloud puff swells where he pushes off, then bursts, flinging leaves out that tumble and drift
+    down while the puff breaks into wisps."""
+    size = 64
+    rng = random.Random(11)
+    leaves = [(math.tau * i / 9 + rng.uniform(-0.3, 0.3), rng.uniform(0.7, 1.1), rng.randint(0, 3)) for i in range(9)]
+    c = Canvas(size)
+    m = size // 2
+    grow = min(1.0, (k + 1) / 3)
+    burst = max(0.0, (k - 1) / (LEAF_FRAMES - 2))
+    lumps = [(m + math.cos(a) * size * (0.1 + 0.18 * burst), m + 6 + math.sin(a) * size * (0.06 + 0.1 * burst),
+              round(size * 0.12 * grow * (1 - 0.85 * burst))) for a in (0.3, 1.5, 2.6, 3.7, 4.9, 5.8)]
+    lumps = [p for p in lumps if p[2] >= 1]
+    if lumps:
+        c.part(blobs(lumps), WHITE)
+    if burst > 0.0:
+        for a, reach, spin in leaves:
+            d = size * (0.12 + 0.3 * reach * math.sqrt(burst))
+            x, y = m + math.cos(a) * d, m + math.sin(a) * d * 0.8 + size * 0.12 * burst * burst  # flutter down
+            if burst > 0.85 and spin % 2:
+                continue  # the last ones drift off out of sight
+            ang = a + (spin + k) * 0.9
+            dx, dy = math.cos(ang), math.sin(ang)
+            pts = [(x - dx * 3, y - dy * 3), (x - dy * 1.5, y + dx * 1.5), (x + dx * 3, y + dy * 3),
+                   (x + dy * 1.5, y - dx * 1.5)]
+            c.part(P([(round(px), round(py)) for px, py in pts]), TEAL_L if spin == 0 else TEAL, shade=False)
+    return outline(c.img)
+
+
+def dust_frame(k: int) -> Image.Image:
+    """Landing: a low ring of dust puffed out sideways along the floor from under his feet, a few pebbles hop out,
+    and it thins away (squashed for the 3/4 view)."""
+    size = 64
+    rng = random.Random(3)
+    puffs = [(rng.choice((-1, 1)) * rng.uniform(0.2, 1.0), rng.uniform(0.8, 1.2)) for _ in range(8)]
+    c = Canvas(size)
+    m = size // 2
+    t = k / (DUST_FRAMES - 1)
+    spread = size * (0.1 + 0.22 * math.sqrt(t))
+    r = size * 0.1 * (1.15 - t) if k else size * 0.06
+    pts = [(m + side * spread, m + 8 - size * 0.06 * t * abs(side), round(r * rr)) for side, rr in puffs]
+    pts = [p for p in pts if p[2] >= 1]
+    if pts:
+        c.part(blobs([(x + 1, y + 1, rr) for x, y, rr in pts]), STEEL_D, shade=False)
+        c.part(blobs(pts), STEEL)
+        if t < 0.5:
+            c.part(blobs([(x, y - 1, max(1, rr // 2)) for x, y, rr in pts[::2]]), WHITE, shade=False, line=False)
+    if 0.0 < t < 0.8:
+        for i, side in enumerate((-1, 1, -1, 1)):
+            x = m + side * size * (0.12 + 0.1 * i / 3 + 0.18 * t)
+            y = m + 6 - size * 0.25 * math.sin(math.pi * t) * (0.6 + 0.2 * i)
+            c.flat(R((round(x), round(y), round(x) + 1, round(y))), BROWN)
     return outline(c.img)
 
 
@@ -2044,7 +2176,12 @@ FX = {
     "flicker_zip": lambda: strip([flicker_zip(i) for i in range(4)]),
     "grapple_spark": lambda: strip([grapple_spark(k) for k in range(GRAPPLE_SPARK_FRAMES)]),
     "grapple_chain": lambda: strip([grapple_chain(k) for k in range(2)]),
+    "wukong_swing": lambda: strip([wukong_swing_frame(k) for k in range(SWING_FRAMES)]),
+    "leaf_burst": lambda: strip([leaf_burst_frame(k) for k in range(LEAF_FRAMES)]),
+    "swing_dust": lambda: strip([dust_frame(k) for k in range(DUST_FRAMES)]),
 }
+## Not square strips: single images (checked whole).
+FX_IMAGES = {"vine": vine, "vine_top": vine_top}
 
 
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint,
@@ -2253,6 +2390,10 @@ def main() -> None:
     for name, make in FX.items():
         img = make()
         check(img, img.height)
+        img.save(FX_OUT / f"{name}.png")
+    for name, make in FX_IMAGES.items():
+        img = make()
+        check(img, img.width)
         img.save(FX_OUT / f"{name}.png")
     print(f"wrote {len(FX)} effect strips to {FX_OUT}")
     # App Store icons must be opaque.

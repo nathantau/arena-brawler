@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"blink", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -466,3 +466,166 @@ func test_blossom_ward_is_sakuras_and_expires() -> void:
 	skill.tick(ward.duration + 0.01)
 	assert_false(skill.is_warding(), "expired")
 	assert_false(skill.try_activate(Vector2.RIGHT, Vector2.ZERO, stats), "on cooldown")
+
+
+# --- Apex's Vine Swing ------------------------------------------------------
+
+const SWING_FROM: Vector2 = Vector2(150, 300)
+
+
+func _swinger(world: Node2D) -> Player:
+	var p := Player.new()
+	p.setup(1, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, null, 3,
+		characters.get_character(&"wukong"))
+	world.add_child(p)
+	p.set_skill(1, skills.get_skill(&"vine_swing"))
+	p.global_position = SWING_FROM
+	return p
+
+
+func _swing_world() -> Node2D:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	return world
+
+
+## Press, then hold still until the swing is over; returns where it was headed.
+func _swing(p: Player, aim: Vector2) -> Vector2:
+	_press_special(p, aim)
+	var landing: Vector2 = p.skills[1].anchor + p.skills[1].direction
+	var idle := InputFrame.new()
+	idle.aim_vec = aim
+	for i: int in ceili(p.skills[1].data.duration / DT) + 1:
+		p.simulate(idle, DT)
+	return landing
+
+
+func _fits(p: Player, at: Vector2) -> bool:
+	var q := PhysicsShapeQueryParameters2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = Constants.PLAYER_RADIUS
+	q.shape = circle
+	q.collision_mask = Constants.LAYER_WALL_FEET
+	q.transform = Transform2D(0.0, at)
+	return p.get_world_2d().direct_space_state.intersect_shape(q, 1).is_empty()
+
+
+func test_vine_swing_is_apex_only() -> void:
+	var sw: SkillData = skills.get_skill(&"vine_swing")
+	assert_eq(sw.kind, SkillData.Kind.SWING)
+	assert_eq(int(SkillData.Kind.SWING), 7)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(sw), c.id == &"wukong", String(c.id))
+
+
+func test_vine_swing_lands_past_a_wall_that_blocks_walking() -> void:
+	var world: Node2D = _swing_world()
+	_wall(world, Vector2(300, 300), Vector2(24, 800))
+	var walker: Player = _swinger(world)
+	await wait_physics_frames(2)
+	for i: int in 120:
+		walker.velocity = Vector2(400, 0)
+		walker.move_and_slide()
+	assert_lt(walker.global_position.x, 300.0, "walking is blocked")
+	walker.global_position = SWING_FROM
+	var sw: SkillData = walker.skills[1].data
+	var landing: Vector2 = _swing(walker, Vector2.RIGHT)
+	assert_almost_eq(landing.x, SWING_FROM.x + sw.swing_range, 0.01, "nothing in the way at full range")
+	assert_eq(walker.global_position, landing, "landed exactly on the spot")
+	assert_gt(walker.global_position.x, 300.0 + Constants.PLAYER_RADIUS, "over the wall")
+	assert_false(walker.skills[1].is_active())
+	assert_gt(walker.skills[1].cooldown_remaining, 0.0)
+	assert_eq(walker.velocity, Vector2.ZERO)
+
+
+func test_vine_swing_goes_up_and_over_mid_flight() -> void:
+	var world: Node2D = _swing_world()
+	var p: Player = _swinger(world)
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	assert_true(p.stats.is_invulnerable(), "i-frames at takeoff")
+	var idle := InputFrame.new()
+	for i: int in 15:
+		p.simulate(idle, DT)
+	assert_false(p.stats.is_invulnerable(), "hittable in the air")
+	assert_true(p.skills[1].is_active())
+	var x: float = p.global_position.x
+	assert_true(x > SWING_FROM.x + 40.0 and x < SWING_FROM.x + 320.0, "partway: %s" % x)
+
+
+func test_vine_swing_never_lands_in_walls_or_crates() -> void:
+	var world: Node2D = _swing_world()
+	_wall(world, Vector2(480, 300), Vector2(200, 200))  # covers the full-range spot (510)
+	var crate := Crate.new()
+	crate.setup(0, Vector2(150, 660), Constants.TILE_SIZE)  # straight down, at the full-range spot
+	world.add_child(crate)
+	var p: Player = _swinger(world)
+	await wait_physics_frames(2)
+	var landing: Vector2 = _swing(p, Vector2.RIGHT)
+	assert_lt(landing.x, 380.0 - Constants.PLAYER_RADIUS + 0.01, "short of the wall")
+	assert_gt(landing.x, SWING_FROM.x + 150.0, "as far as it fits")
+	assert_true(_fits(p, landing))
+	p.skills[1].reset()
+	p.global_position = SWING_FROM
+	landing = _swing(p, Vector2.DOWN)
+	assert_true(_fits(p, landing), "not in the crate: %s" % landing)
+	assert_lt(landing.y, 660.0, "stopped short of the crate")
+	assert_gt(landing.y, SWING_FROM.y + 200.0)
+
+
+func test_vine_swing_stays_inside_the_arena() -> void:
+	var world: Node2D = _swing_world()
+	var p: Player = _swinger(world)
+	p.arena_bounds = Rect2(48, 48, 352, 504)  # right border wall starts at x 400
+	await wait_physics_frames(2)
+	var landing: Vector2 = _swing(p, Vector2(1, -0.2))
+	assert_true(p.arena_bounds.grow(-Constants.PLAYER_RADIUS + 0.01).has_point(landing), "inside: %s" % landing)
+	assert_gt(landing.x, 300.0, "still swung as far as the border allows")
+
+
+func test_vine_swing_without_a_landing_does_nothing() -> void:
+	var world: Node2D = _swing_world()
+	_wall(world, Vector2(380, 300), Vector2(360, 800))  # x 200..560: every spot from 80 to 360 px out is inside it
+	var p: Player = _swinger(world)
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	assert_false(p.skills[1].is_active(), "no swing")
+	assert_eq(p.skills[1].cooldown_remaining, 0.0, "no cooldown spent")
+	assert_false(p.stats.is_invulnerable())
+	assert_eq(p.global_position, SWING_FROM)
+
+
+func test_vine_swing_replay_from_captured_state_matches() -> void:
+	var world: Node2D = _swing_world()
+	_wall(world, Vector2(300, 300), Vector2(24, 800))
+	_wall(world, Vector2(480, 300), Vector2(60, 60))
+	var a: Player = _swinger(world)
+	var b: Player = _swinger(world)
+	b.player_id = 2
+	await wait_physics_frames(2)
+	var catalog := WeaponCatalog.load_all()
+	var inputs: Array[InputFrame] = []
+	for i: int in 60:
+		var f := InputFrame.new()
+		f.seq = i + 1
+		f.aim_vec = Vector2(1, 0.3)
+		f.move_vec = Vector2(0, 1) if i > 45 else Vector2.ZERO
+		f.special = i >= 5 and i < 8
+		inputs.append(f)
+	# From before the press (b recomputes the landing) and from mid-swing (b takes it from the snapshot).
+	for cut: int in [2, 15]:
+		a.global_position = SWING_FROM
+		a.skills[1].reset()
+		var snapshot: Array = []
+		for i: int in inputs.size():
+			a.simulate(inputs[i], DT)
+			if i == cut:
+				snapshot = a.capture_state()
+		assert_true(b.apply_state(snapshot, catalog, characters))
+		for i: int in range(cut + 1, inputs.size()):
+			b.simulate(inputs[i], DT, true)
+		assert_gt(a.global_position.x, 300.0, "a swung over the wall")
+		assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01), "cut %d" % cut)
+		assert_eq(b.skills[1].anchor, a.skills[1].anchor)
+		assert_eq(b.skills[1].direction, a.skills[1].direction)
+		assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)

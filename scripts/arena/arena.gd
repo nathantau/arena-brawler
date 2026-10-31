@@ -150,6 +150,13 @@ func _load_layout(index: int) -> void:
 	_floor.setup(map, ArenaLayouts.THEMES[index])
 	crates.setup(map, _floor.tiles)
 	projectiles.clear()
+	for p: Player in players:
+		p.arena_bounds = play_area()
+
+
+## The floor inside the border walls (one tile thick in every layout).
+func play_area() -> Rect2:
+	return Rect2(Vector2.ZERO, map.size).grow(-Constants.TILE_SIZE)
 
 
 func add_player(id: int, color_index: int, ctrl: PlayerController,
@@ -163,6 +170,7 @@ func add_player(id: int, color_index: int, ctrl: PlayerController,
 		character = characters.ordered[id % characters.ordered.size()]
 	p.setup(id, color_index, color, catalog.resolve([FALLBACK_WEAPON]), ctrl, projectiles, match_seed, character)
 	add_child(p)
+	p.arena_bounds = play_area()
 	p.global_position = _pick_spawn_for(p)
 	p.frozen = match_state.inputs_locked()
 	if mode != Mode.CLIENT and not match_state.may_respawn(id):
@@ -416,7 +424,7 @@ func _on_skill_used(user: Player, skill: SkillData) -> void:
 	effects.burst(user.global_position, user.display_color, BURST_SKILL_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE,
 		PARTICLE_LIFE)
 	match skill.kind:
-		SkillData.Kind.DASH, SkillData.Kind.GRAPPLE:
+		SkillData.Kind.DASH, SkillData.Kind.GRAPPLE, SkillData.Kind.SWING:
 			sfx.play(&"dash", user.global_position)
 		SkillData.Kind.SHIELD, SkillData.Kind.WARD:
 			sfx.play(&"shield", user.global_position)

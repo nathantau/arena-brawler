@@ -296,6 +296,17 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   (`SpecialFx.petal_pop`, every peer). Art (generate.py `blossom_ward*`, `petal_pop`, `icon_blossom_ward`): period-4
   ring loop (16 orbiting petals that wobble and turn over pink/white, an inner band turning the other way, drifters
   peeling off; seamless because petal i's look is a function of 4i + k), 8-frame opening bloom, 8-frame scatter on end.
+- **Vine Swing** (2026-10-31, Apex special, `vine_swing`, kind SWING = 7): swings along the aim to the farthest spot up
+  to `swing_range` 360 px where a player fits on the floor (`Player.swing_landing`: circle queries on `LAYER_WALL_FEET`
+  every `SWING_SAMPLE_STEP` 8 px from full range inwards, inside `Player.arena_bounds` = `Arena.play_area()`), over any
+  walls/crates in between; nothing past `swing_min_range` 80 px = no swing, no cooldown. 0.5 s in the air (position =
+  `anchor + direction * swing_progress()`, a cosine ease; `direction` holds the whole takeoff→landing vector so both
+  ends are in the snapshot; no move_and_slide, no other special meanwhile), i-frames only at takeoff (0.15 s), no
+  damage, cooldown 7 s. `SpecialFx` hides his sprite and draws the swing pose (generate.py `wukong_swing_frame`: fist up
+  on the vine, knees tucked, tail curled, body pivoting on the fist) raised along the arc, hanging from a pixel vine
+  (`vine`, cropped to length, never stretched) whose leafy clump (`vine_top`) sits above the arc's midpoint; leaf burst
+  at takeoff, dust puff on landing, then the vine swings on and pulls up. Progress is read from the drawn position on
+  the takeoff→landing line, so interpolated remote players stay in step.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

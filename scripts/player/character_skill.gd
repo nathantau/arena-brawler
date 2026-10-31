@@ -9,6 +9,8 @@ extends RefCounted
 ## - WARD: a ring round the player (wherever they are now) that catches enemy projectiles.
 ## - GRAPPLE: the Player casts the kunai; on a bite `anchor` is where the pull stops, on a miss it ends at once
 ##   with the short cooldown. `duration` only caps the pull.
+## - SWING: from `anchor` (takeoff) to `anchor + direction` (landing; the Player sets `direction` to that whole
+##   vector, not a unit one, so both ends are in the snapshot).
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 var data: SkillData
@@ -63,6 +65,11 @@ func elapsed() -> float:
 	return data.duration - active_remaining
 
 
+## SWING: how far along the takeoff -> landing line he is, 0..1, slow at both ends like a swing.
+func swing_progress() -> float:
+	return (1.0 - cos(PI * clampf(elapsed() / data.duration, 0.0, 1.0))) * 0.5
+
+
 ## 1.0 = just used, 0.0 = ready.
 func cooldown_fraction() -> float:
 	if data.cooldown <= 0.0:
@@ -84,6 +91,9 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 			anchor = origin + direction * data.shield_distance
 		SkillData.Kind.SMOKE, SkillData.Kind.CLONES:
 			anchor = origin
+		SkillData.Kind.SWING:
+			anchor = origin
+			stats.invulnerable_time = maxf(stats.invulnerable_time, data.swing_iframes)
 		SkillData.Kind.TRANSFORM:
 			form_weapon.cooldown = 0.0
 	return true

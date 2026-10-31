@@ -13,7 +13,8 @@ extends Resource
 ## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
 ## WARD: a ring round you that moves with you and catches enemy projectiles (not beams or melee).
 ## GRAPPLE: a kunai on a chain thrown along the aim; if it bites a wall you're pulled straight to it.
-enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, GRAPPLE = 8, WARD = 10 }
+## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
+enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GRAPPLE = 8, WARD = 10 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -48,6 +49,14 @@ enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, GRAPPLE = 8, 
 @export var grapple_bite_time: float = 0.08
 ## Cooldown charged instead of `cooldown` when the kunai hits nothing.
 @export var grapple_miss_cooldown: float = 1.5
+
+
+@export_group("Swing")
+## Lands on the farthest free floor along the aim up to swing_range; nothing past swing_min_range = no swing
+## (and no cooldown). Takes `duration` in the air; i-frames only at takeoff.
+@export var swing_range: float = 360.0
+@export var swing_min_range: float = 80.0
+@export var swing_iframes: float = 0.15
 
 @export_group("Smoke")
 @export var smoke_radius: float = 90.0
