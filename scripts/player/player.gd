@@ -317,8 +317,6 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 	match slot.data.kind:
 		SkillData.Kind.SWING:
 			slot.direction = landing - global_position
-		SkillData.Kind.BLINK:
-			move_and_collide(slot.direction * slot.data.blink_distance)  # walls stop the hop
 		SkillData.Kind.GRAPPLE:
 			_throw_grapple(slot)
 		SkillData.Kind.ERUPTION:
@@ -474,7 +472,7 @@ func held_weapon() -> WeaponState:
 
 ## Dash goes where you're moving (else where you face); the barrier goes where you aim.
 func _skill_direction(data: SkillData, input: InputFrame) -> Vector2:
-	var moves: bool = data.kind == SkillData.Kind.DASH or data.kind == SkillData.Kind.BLINK
+	var moves: bool = data.kind == SkillData.Kind.DASH
 	if moves and input.move_vec.length() > Constants.INPUT_DEADZONE:
 		return input.move_vec
 	if input.aim_vec.length_squared() > 0.0:

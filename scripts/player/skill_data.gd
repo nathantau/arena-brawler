@@ -8,7 +8,7 @@ extends Resource
 ## DASH: burst of speed with i-frames. SHIELD: a barrier in front that blocks enemy shots.
 ## TRANSFORM: a stronger form for a while
 ## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
-## BLINK: instant hop (stopped by walls) with i-frames. SMOKE: a cloud where you stand; inside it
+## SMOKE: a cloud where you stand; inside it
 ## enemy auto-aim and bots can't lock on. VOLLEY: fires `volley_weapon` once (e.g. a ring of
 ## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
 ## WARD: a ring round you that moves with you and catches enemy projectiles (not beams or melee).
@@ -16,7 +16,8 @@ extends Resource
 ## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
 ## ERUPTION: marks a spot on the floor ahead along the aim (short of walls); when `duration` (the telegraph) runs out,
 ## `eruption_blast` goes off there.
-enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10 }
+## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -40,9 +41,6 @@ enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GR
 ## Length of the deployed barrier and how far in front of the player it appears.
 @export var shield_width: float = 110.0
 @export var shield_distance: float = 44.0
-
-@export_group("Blink")
-@export var blink_distance: float = 200.0
 
 @export_group("Grapple")
 ## How far the kunai flies, how fast the chain pulls you, and how long it takes to bite before the pull starts.

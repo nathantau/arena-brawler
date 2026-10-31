@@ -4,7 +4,7 @@ extends RefCounted
 ## - DASH: burst of speed in `direction` with i-frames (movement reads is_dashing()).
 ## - SHIELD: a barrier centred on `anchor`, facing `direction`, that blocks enemy projectiles.
 ## - TRANSFORM: a stronger form; fires `form_weapon` (its cooldown is snapshotted).
-## - BLINK: like a dash's i-frames; the Player does the hop. VOLLEY: the Player fires it.
+## - VOLLEY: the Player fires it.
 ## - SMOKE / CLONES: centred on `anchor` (where you stood), aimed along `direction`.
 ## - WARD: a ring round the player (wherever they are now) that catches enemy projectiles.
 ## - GRAPPLE: the Player casts the kunai; on a bite `anchor` is where the pull stops, on a miss it ends at once
@@ -86,7 +86,7 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 	active_remaining = data.duration
 	cooldown_remaining = data.cooldown
 	match data.kind:
-		SkillData.Kind.DASH, SkillData.Kind.BLINK:
+		SkillData.Kind.DASH:
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.dash_iframes)
 		SkillData.Kind.SHIELD:
 			anchor = origin + direction * data.shield_distance
