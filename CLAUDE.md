@@ -74,6 +74,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - Match options (server / offline): `--mode duel|ffa` (starting mode; players can switch it in the lobby),
   `--arena N` (0 = Pit, 1 = Foundry), `--time-limit S` (shorter matches for testing)
 - Pick a character (client / offline): `--character flicker|warden|twinshot|wukong|flint`
+  (ids; shown as Shade / Warden / Gunnar / Apex / Flint: `display_name` only, ids, files and art keep the old names)
 - Render frames to check visuals without a screen: `godot --path . --write-movie /tmp/f.png --fixed-fps 30 --quit-after 300 -- --offline --autopilot --touch`
 - Net debugging: add `--net-debug` (prints server/client net stats every second, logs reconciliation corrections);
   `--autopilot` makes a client drive + fire on its own, e.g. two headless autopilot clients for soak tests:
