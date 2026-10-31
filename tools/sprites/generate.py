@@ -3122,35 +3122,71 @@ def blaze_embers(c: Canvas, m: int, k: int, n: int = 4, rise: int = 6, seed: int
             c.dot(x0 + SWAY[(k + i) % 4], y, (YELLOW, ORANGE, RED)[ph])
 
 
-def blaze_trail_frame(k: int) -> Image.Image:
-    """Burning ground, a period-4 loop: flames licking up from scorched, glowing cracks, embers drifting up."""
+# Flame stamp variants (tongue x offsets, heights, width): different cluster shapes and sizes so the trail never
+# repeats; SpecialFx picks one per flame and offsets its phase.
+BLAZE_FLAME_VARIANTS = (
+    ((-10, 0, 10), (17, 26, 15), 4.5),
+    ((-5, 6), (21, 14), 4.8),
+    ((0, 9), (27, 10), 5.0),
+    ((-8, 1, 9), (11, 18, 12), 3.8),
+)
+BLAZE_FLAME_DIE = (0.85, 0.62, 0.4, 0.2)  # flame scale per frame of the die-out, after which it's gone
+BLAZE_GROUND_CELL = 32  # art px: one blob of the continuous scorched band, centred on its floor spot
+BLAZE_GROUND_VARIANTS = 3
+BLAZE_GROUND_RX = (11, 12, 13)
+BLAZE_GROUND_RY = 7
+BLAZE_GROUND_COOL = (YELLOW, ORANGE, ORANGE, RED, RED, MAROON, MAROON, MAROON)  # crack colour per die frame
+
+
+def blaze_flame_frame(v: int, k: int, scale: float = 1.0, embers: bool = True) -> Image.Image:
+    """One flame stamp (variant `v`): a few flowing tongues on the floor spot, swaying (period 4 in k)."""
     c = Canvas(BLAZE_CELL)
     m = BLAZE_CELL // 2
-    blaze_ground(c, m, 21, (ORANGE, YELLOW, YELLOW, ORANGE)[k])
-    blaze_flames(c, m, k, 1.0)
-    blaze_embers(c, m, k)
+    xs, heights, wide = BLAZE_FLAME_VARIANTS[v]
+    blaze_flames(c, m, k, scale, xs, heights, wide)
+    if embers:
+        blaze_embers(c, m, k, 2, 6, 3 + v)
     return outline(c.img)
 
 
-def blaze_die_frame(k: int) -> Image.Image:
-    """The fire dying out: flames shrink to nothing, the cracks cool from yellow to red, embers and smoke drift off
-    the scorch, which is all that's left."""
-    c = Canvas(BLAZE_CELL)
-    m = BLAZE_CELL // 2
-    if k == BLAZE_DIE_FRAMES - 1:  # a couple of last embers over the cool scorch
-        c.part(E((m - 21, BLAZE_FLOOR_Y - 7, m + 21, BLAZE_FLOOR_Y + 7)), SHADOW, shade=False)
-        c.dot(m - 5, BLAZE_FLOOR_Y - 9, RED)
-        c.dot(m + 8, BLAZE_FLOOR_Y - 14, MAROON)
-        return outline(c.img)
-    blaze_ground(c, m, 21, (YELLOW, ORANGE, ORANGE, RED, RED, MAROON, MAROON)[k])
-    blaze_flames(c, m, k, (1.0, 0.8, 0.6, 0.42, 0.26, 0.0, 0.0)[k])
-    if k >= 2:
-        for i, x in enumerate((-9, 4, 13)):  # smoke
-            y = BLAZE_FLOOR_Y - 8 - (k - 2) * 4 - i * 3
-            r = 3 if k < 6 else 2
-            c.flat(E((m + x - r, y - r, m + x + r, y + r)), SHADOW if k < 5 else STEEL_D)
-    blaze_embers(c, m, k, 3 if k < 5 else 2)
-    return outline(c.img)
+def blaze_ground_layer(layer: str, v: int = 0, glow=ORANGE) -> Image.Image:
+    """One blob of the scorched ground band. SpecialFx draws all rims, then all bases, then all cracks, so overlapping
+    blobs merge into one outlined strip with the cracks on top of it. layer: rim | base | cracks."""
+    n = BLAZE_GROUND_CELL
+    c = Canvas(n)
+    m, y = n // 2, n // 2
+    rx, ry = BLAZE_GROUND_RX[v], BLAZE_GROUND_RY
+    if layer == "rim":
+        c.flat(E((m - rx - 1, y - ry - 1, m + rx + 1, y + ry + 1)), OUTLINE)
+    elif layer == "base":
+        c.flat(E((m - rx, y - ry, m + rx, y + ry)), SHADOW)
+    else:
+        rng = random.Random(40 + v)
+        for _ in range(2):  # darker scorch smudges
+            sx, sy = rng.randint(-rx + 4, rx - 4), rng.randint(-2, 2)
+            c.flat(E((m + sx - 3, y + sy - 1, m + sx + 3, y + sy + 1)), MAROON)
+        for _ in range(4):  # cracks: short zigzags
+            x0, y0 = m + rng.randint(-rx + 3, rx - 6), y + rng.randint(-ry + 2, ry - 2)
+            pts = [(x0, y0)]
+            for _ in range(rng.randint(2, 3)):
+                x0 += rng.randint(2, 4)
+                y0 = max(y - ry + 1, min(y + ry - 1, y0 + rng.randint(-2, 2)))
+                pts.append((x0, y0))
+            c.flat(L(pts, 1), glow)
+        for _ in range(4):  # glowing specks, gone once it's cold
+            sx, sy = m + rng.randint(-rx + 3, rx - 3), y + rng.randint(-ry + 2, ry - 2)
+            if glow != MAROON:
+                c.dot(sx, sy, YELLOW)
+    return c.img
+
+
+def blaze_ground_strip() -> Image.Image:
+    """Frame 0 rim, 1 base, then per variant: 4 crack-glow loop frames and BLAZE_DIE_FRAMES cooling frames."""
+    fs = [blaze_ground_layer("rim"), blaze_ground_layer("base")]
+    for v in range(BLAZE_GROUND_VARIANTS):
+        fs += [blaze_ground_layer("cracks", v, (ORANGE, YELLOW, YELLOW, ORANGE)[k]) for k in range(4)]
+        fs += [blaze_ground_layer("cracks", v, BLAZE_GROUND_COOL[k]) for k in range(BLAZE_DIE_FRAMES)]
+    return strip(fs)
 
 
 def blaze_ignite_frame(k: int) -> Image.Image:
@@ -3186,8 +3222,11 @@ def blaze_streak_frame(k: int) -> Image.Image:
 
 
 FX.update({
-    "blaze_run_trail": lambda: strip([blaze_trail_frame(k) for k in range(4)]),
-    "blaze_run_die": lambda: strip([blaze_die_frame(k) for k in range(BLAZE_DIE_FRAMES)]),
+    "blaze_run_ground": blaze_ground_strip,
+    # per variant: 4 loop frames; then per variant the die-out (shrinking flames)
+    "blaze_run_flames": lambda: strip([blaze_flame_frame(v, k) for v in range(len(BLAZE_FLAME_VARIANTS)) for k in range(4)]
+                                      + [blaze_flame_frame(v, i, s, False) for v in range(len(BLAZE_FLAME_VARIANTS))
+                                         for i, s in enumerate(BLAZE_FLAME_DIE)]),
     "blaze_run_ignite": lambda: strip([blaze_ignite_frame(k) for k in range(BLAZE_IGNITE_FRAMES)]),
     "blaze_run_streak": lambda: strip([blaze_streak_frame(k) for k in range(4)]),
 })
