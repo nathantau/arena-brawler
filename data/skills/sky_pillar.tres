@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_sky_pillar.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"sky_pillar"
+display_name = "Sky Pillar"
+kind = 14
+special = true
+blurb = "Slam a giant staff down a line"
+tags = Array[StringName]([&"wukong"])
+cooldown = 8.0
+duration = 0.75
+pillar_length = 320.0
+pillar_width = 36.0
+pillar_windup = 0.25
+pillar_damage = 30
+pillar_knockback = 260.0

@@ -43,6 +43,8 @@ const ERUPTION_SEQ_OFFSET: int = 1 << 25
 const WHIRL_SEQ_OFFSET: int = 1 << 26
 ## Trail burn ticks are keyed too (several can land in one input).
 const TRAIL_SEQ_OFFSET: int = 1 << 27
+## Sky Pillar slams are keyed too.
+const PILLAR_SEQ_OFFSET: int = 1 << 28
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
@@ -261,10 +263,16 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var erupting: CharacterSkill = active_skill(SkillData.Kind.ERUPTION)
 	var burning: CharacterSkill = active_skill(SkillData.Kind.TRAIL)
 	var burn_before: float = burning.elapsed() if burning != null else 0.0
+	var pillar: CharacterSkill = active_skill(SkillData.Kind.PILLAR)
+	var pillar_before: float = pillar.elapsed() if pillar != null else 0.0
 	for slot: CharacterSkill in skills:
 		slot.tick(delta)
 	if burning != null and not replay:
 		_burn_trail(burning, burn_before, input.seq)
+	if pillar != null and not replay and pillar.pillar_slammed(pillar_before):
+		var d: SkillData = pillar.data
+		projectiles.line_hit(player_id, input.seq + PILLAR_SEQ_OFFSET, pillar.anchor, pillar.anchor + pillar.direction,
+			d.pillar_width * 0.5, d.pillar_damage, d.pillar_knockback)
 	weapon.tick(delta)
 	var pressed: Array[bool] = [input.skill, input.special]
 	if frozen:
@@ -283,6 +291,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 
 	var grapple: CharacterSkill = active_skill(SkillData.Kind.GRAPPLE)
 	var whirl: CharacterSkill = active_skill(SkillData.Kind.WHIRL)
+	var planting: CharacterSkill = active_skill(SkillData.Kind.PILLAR)  # just pressed counts
+	var rooted: bool = planting != null and planting.pillar_winding()
 	if swing == null:
 		swing = active_skill(SkillData.Kind.SWING)  # just pressed
 	if swing != null:  # in the air: placed along the arc, over whatever is in between
@@ -290,6 +300,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		velocity = Vector2.ZERO
 	elif grapple != null:
 		_pull(grapple, delta)
+	elif rooted:
+		velocity = Vector2.ZERO
 	elif _trail_dash(delta) != null:  # runs the burning line, walls were measured at takeoff
 		var run: CharacterSkill = _trail_dash(delta)
 		global_position = run.anchor + run.direction * run.trail_progress()
@@ -317,7 +329,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		if _windup_left <= 0.0:
 			_windup_left = -1.0
 			_release_shot(_windup_seq, _windup_weapon)
-	if input.fire and not is_dashing() and grapple == null and whirl == null:  # both hands on the chain
+	if input.fire and not is_dashing() and grapple == null and whirl == null and not rooted:  # both hands on the chain
 		_try_fire(input.seq, replay)
 
 
@@ -338,6 +350,12 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 		SkillData.Kind.TRAIL:  # how far he gets before a wall (measured, not moved: the dash does that)
 			var hit: KinematicCollision2D = move_and_collide(slot.direction * slot.data.trail_distance, true)
 			slot.direction = hit.get_travel() if hit != null else slot.direction * slot.data.trail_distance
+		SkillData.Kind.PILLAR:  # the line is fixed now: up to its length, short of the first wall
+			slot.anchor = global_position
+			_sight_query.from = global_position
+			_sight_query.to = global_position + slot.direction * slot.data.pillar_length
+			var wall: Dictionary = get_world_2d().direct_space_state.intersect_ray(_sight_query)
+			slot.direction = (wall.position if not wall.is_empty() else _sight_query.to) - global_position
 		SkillData.Kind.GRAPPLE:
 			_throw_grapple(slot)
 		SkillData.Kind.ERUPTION:
@@ -779,7 +797,8 @@ func _draw() -> void:
 
 
 func _draw_overlay() -> void:
-	if held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null:  # the staff is in the spin pose
+	if held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null \
+			and active_skill(SkillData.Kind.PILLAR) == null:  # the staff is in the spin / plant pose
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)

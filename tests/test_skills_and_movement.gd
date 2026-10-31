@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"sky_pillar"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -1110,3 +1110,145 @@ func test_blaze_run_replay_matches_and_damages_nothing() -> void:
 	assert_eq(hits.size(), served, "replay damages nothing")
 	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
 	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
+
+
+# --- Apex's Sky Pillar --------------------------------------------------------------
+
+func _pillar_player(world: Node2D, pool: ProjectilePool, id: int, at: Vector2) -> Player:
+	var p: Player = _whirler(world, pool, id, at)
+	p.set_skill(1, skills.get_skill(&"sky_pillar"))
+	pool.targets.append(p)
+	return p
+
+
+func _pillar_setup(walls: bool = false) -> Array:
+	var w: Array = _whirl_world()
+	if walls:
+		_wall(w[0], Vector2(250, 300), Vector2(20, 400))
+	return [w[0], w[1], _pillar_player(w[0], w[1], 1, Vector2(100, 300))]
+
+
+func test_sky_pillar_is_apexs_own() -> void:
+	var d: SkillData = skills.get_skill(&"sky_pillar")
+	assert_eq(d.kind, SkillData.Kind.PILLAR)
+	assert_eq(int(d.kind), 14)
+	assert_gt(d.duration, d.pillar_windup)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"wukong", String(c.id))
+
+
+func test_sky_pillar_hits_the_line_not_beside_it_or_the_caster_after_the_windup() -> void:
+	var s: Array = _pillar_setup()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"sky_pillar")
+	_pillar_player(s[0], s[1], 2, Vector2(300, 300 + d.pillar_width * 0.25))
+	_pillar_player(s[0], s[1], 3, Vector2(100 + d.pillar_length - 10.0, 300))
+	var beside: Player = _pillar_player(s[0], s[1], 4, Vector2(300, 300 + d.pillar_width * 0.5 + 12.0))
+	var past: Player = _pillar_player(s[0], s[1], 5, Vector2(100 + d.pillar_length + 60.0, 300))
+	await wait_physics_frames(2)
+	var hits: Array = _hits(s[1])
+	_press_special(p, Vector2.RIGHT)
+	var slot: CharacterSkill = p.skills[1]
+	assert_eq(slot.anchor, Vector2(100, 300))
+	assert_almost_eq(slot.direction, Vector2(d.pillar_length, 0), Vector2(0.1, 0.1))
+	var windup: int = floori(d.pillar_windup / DT)
+	_idle(p, windup - 3)
+	assert_eq(hits.size(), 0, "nothing before the slam")
+	_idle(p, 6)
+	assert_eq(hits.size(), 2, "the two on the line")
+	assert_true(hits.has([2, d.pillar_damage]) and hits.has([3, d.pillar_damage]))
+	assert_eq(beside.stats.hp, beside.stats.max_hp, "beside the line")
+	assert_eq(past.stats.hp, past.stats.max_hp, "past its end")
+	assert_eq(p.stats.hp, p.stats.max_hp, "not the caster")
+	_idle(p, 30)
+	assert_eq(hits.size(), 2, "one slam only")
+
+
+func test_sky_pillar_throws_the_hit_sideways() -> void:
+	var s: Array = _pillar_setup()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"sky_pillar")
+	var foe: Player = _pillar_player(s[0], s[1], 2, Vector2(250, 300 + 10.0))
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, ceili(d.pillar_windup / DT) + 2)
+	assert_gt(foe.velocity.y, 0.0, "pushed away from the line (down)")
+	assert_lt(absf(foe.velocity.x), 1.0, "not along it")
+
+
+func test_sky_pillar_roots_him_during_the_windup() -> void:
+	var s: Array = _pillar_setup()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"sky_pillar")
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT, Vector2.DOWN)
+	var f := InputFrame.new()
+	f.move_vec = Vector2.DOWN
+	for i: int in floori(d.pillar_windup / DT) - 3:
+		f.seq = 100 + i
+		p.simulate(f, DT)
+	assert_eq(p.global_position, Vector2(100, 300), "can't move while planting")
+	for i: int in 40:
+		f.seq = 200 + i
+		p.simulate(f, DT)
+	assert_gt(p.global_position.y, 300.0, "free again afterwards")
+
+
+func test_sky_pillar_stops_at_walls() -> void:
+	var s: Array = _pillar_setup(true)
+	var p: Player = s[2]
+	var behind: Player = _pillar_player(s[0], s[1], 2, Vector2(400, 300))
+	var before: Player = _pillar_player(s[0], s[1], 3, Vector2(200, 300))
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	var slot: CharacterSkill = p.skills[1]
+	assert_almost_eq(slot.direction.x, 140.0, 0.5, "ends at the wall face (x = 240)")
+	_idle(p, 30)
+	assert_lt(before.stats.hp + before.stats.armor, before.stats.max_hp + before.stats.max_armor, "in front of the wall")
+	assert_eq(behind.stats.hp + behind.stats.armor, behind.stats.max_hp + behind.stats.max_armor, "behind the wall")
+
+
+func test_sky_pillar_damages_crates_on_the_line() -> void:
+	var s: Array = _pillar_setup()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"sky_pillar")
+	var on_line := Crate.new()
+	on_line.setup(0, Vector2(250, 300), Constants.TILE_SIZE)
+	s[0].add_child(on_line)
+	var beside := Crate.new()
+	beside.setup(0, Vector2(250, 300 + Constants.TILE_SIZE * 2.0), Constants.TILE_SIZE)
+	s[0].add_child(beside)
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	assert_lt(p.skills[1].direction.x, 150.0, "the crate stops the line")
+	_idle(p, ceili(d.pillar_windup / DT) + 2)
+	assert_eq(on_line.hp, Constants.CRATE_HP - d.pillar_damage)
+	assert_eq(beside.hp, Constants.CRATE_HP)
+
+
+func test_sky_pillar_cooldown_and_replay_match() -> void:
+	var s: Array = _pillar_setup(true)
+	var a: Player = s[2]
+	var foe: Player = _pillar_player(s[0], s[1], 2, Vector2(200, 300))
+	var b: Player = _pillar_player(s[0], s[1], 5, Vector2(100, 300))
+	s[1].targets.erase(b)
+	await wait_physics_frames(2)
+	var snapshot: Array = a.capture_state()
+	var hits: Array = _hits(s[1])
+	_press_special(a, Vector2.RIGHT)
+	_idle(a, 60)
+	var served: int = hits.size()
+	assert_eq(served, 1)
+	assert_gt(a.skills[1].cooldown_remaining, 0.0)
+	assert_true(b.apply_state(snapshot, WeaponCatalog.load_all(), characters))
+	var f := InputFrame.new()
+	f.seq = 10
+	f.aim_vec = Vector2.RIGHT
+	f.special = true
+	b.simulate(f, DT, true)
+	assert_eq(b.skills[1].anchor, a.skills[1].anchor)
+	assert_eq(b.skills[1].direction, a.skills[1].direction, "same line")
+	_idle(b, 60, true)
+	assert_eq(hits.size(), served, "replay damages nothing")
+	assert_eq(foe.stats.hp + foe.stats.armor, foe.stats.max_hp + foe.stats.max_armor - skills.get_skill(&"sky_pillar").pillar_damage)
+	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
