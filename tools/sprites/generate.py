@@ -1350,6 +1350,10 @@ ICONS = {
                                + [c.flat(E((x - 2, y - 2, x + 2, y + 2)), PINK_L if i % 2 else WHITE)
                                   for i, (x, y) in enumerate(((6, 2), (9, 4), (8, 7), (4, 7), (3, 4)))]
                                + [c.flat(E((5, 3, 7, 5)), PINK), c.dot(6, 4, YELLOW)],
+    "cherry_sapling": lambda c: [c.flat(R((5, 6, 6, 11)), BROWN), c.flat(R((3, 11, 8, 11)), BROWN),
+                                 c.flat(E((1, 1, 7, 7)), PINK), c.flat(E((5, 1, 11, 7)), PINK),
+                                 c.flat(E((3, 0, 9, 5)), PINK_L), c.dot(4, 3, WHITE), c.dot(8, 3, WHITE),
+                                 c.dot(6, 5, WHITE)],
     "petal_drift": lambda c: [ward_petal(c, 6 + 4.5 * math.cos(a), 6 + 4.5 * math.sin(a), a + 1.8, 6, 1.0, col)
                               for a, col in ((0.3, PINK_L), (2.4, WHITE), (4.5, PINK_L))]
                              + [c.flat(E((4, 4, 8, 8)), PINK), c.dot(6, 6, YELLOW)],
@@ -3293,6 +3297,102 @@ FX.update({
                                          for i, s in enumerate(BLAZE_FLAME_DIE)]),
     "blaze_run_ignite": lambda: strip([blaze_ignite_frame(k) for k in range(BLAZE_IGNITE_FRAMES)]),
     "blaze_run_streak": lambda: strip([blaze_streak_frame(k) for k in range(4)]),
+})
+
+
+# --- Cherry Sapling (Sakura): a small cherry tree that grows from the floor, sways, flicks petals at enemies, wilts ---
+SAPLING_W = 64  # square frames
+SAPLING_BASE = 56  # row the trunk stands on (SpecialFx.SAPLING_BASE_Y)
+SAPLING_TRUNK = 22
+SAPLING_GROW_FRAMES = 8
+SAPLING_WILT_FRAMES = 8
+SAPLING_FIRE_FRAMES = 4
+# canopy blobs (dx, dy from the canopy centre, radius, colour); small white blossoms on top
+SAPLING_BLOBS = [(-9, 3, 7, PINK), (9, 3, 7, PINK), (0, 5, 8, PINK), (-5, -5, 7, PINK), (6, -5, 7, PINK),
+                 (0, -9, 6, PINK_L), (-8, -2, 4, PINK_L), (4, -3, 4, PINK_L)]
+SAPLING_BLOSSOMS = [(-9, 1), (-3, -8), (5, -6), (9, 3), (1, 4), (-5, 6), (8, -1)]
+
+
+def sapling_frame(trunk: float = 1.0, canopy: float = 1.0, sway: int = 0, petals: float = 0.0, burst: float = 0.0,
+                  falling: float = 0.0, bud: bool = False) -> Image.Image:
+    """One frame. trunk/canopy 0..1 = how grown; sway = canopy offset in px; petals 0..1 = one petal drifting off the
+    canopy; burst 0..1 = a flick of petals flung out; falling 0..1 = petals dropping to the ground (wilt)."""
+    c = Canvas(SAPLING_W)
+    m = SAPLING_W // 2
+    base = SAPLING_BASE
+    h = round(SAPLING_TRUNK * trunk)
+    c.flat(E((m - 9, base - 2, m + 9, base + 3)), SHADOW)  # shadow on the ground
+    if h >= 1:
+        w = 2 if h < 8 else 3
+        c.part(P([(m - w, base), (m - w + 1, base - h), (m + w - 1, base - h), (m + w, base)]), BROWN)
+        if h >= 12 and canopy > 0:  # a side branch to a blossom clump
+            c.flat(L([(m, base - h * 0.55), (m + 7 * canopy, base - h * 0.85)], 1), BROWN)
+    top = base - h
+    if bud:
+        c.flat(E((m - 2, top - 4, m + 2, top)), PINK_L)
+    if canopy > 0:
+        cx, cy = m + sway, top - 6 * canopy
+        for dx, dy, r, col in SAPLING_BLOBS:
+            rr = r * canopy
+            if rr >= 1:
+                c.flat(E((cx + dx * canopy - rr, cy + dy * canopy - rr, cx + dx * canopy + rr, cy + dy * canopy + rr)), col)
+        for i, (dx, dy) in enumerate(SAPLING_BLOSSOMS):
+            if canopy >= 0.6:
+                c.dot(round(cx + dx * canopy), round(cy + dy * canopy), WHITE)
+                if canopy >= 0.9 and i % 2 == 0:
+                    c.dot(round(cx + dx * canopy), round(cy + dy * canopy) + 1, WHITE)
+        if canopy >= 0.9:
+            c.dot(round(cx - 2), round(cy - 2), YELLOW)
+        if petals > 0:  # a petal peels off the right side and drifts down and away
+            ward_petal(c, cx + 10 + 8 * petals, cy + 2 + 12 * petals * petals + 4 * petals, 0.6 + 2.5 * petals, 5,
+                       math.cos(petals * 6), PINK_L)
+        if burst > 0:  # the flick: petals fly out and up
+            for i, a in enumerate((-2.6, -1.9, -1.2, -0.5)):
+                d = 6 + 16 * burst
+                ward_petal(c, cx + math.cos(a) * (10 + d), cy + math.sin(a) * (8 + d) + 5 * burst * burst, a + 3 * burst,
+                           max(3.0, 6 - 3 * burst), math.cos(4 * burst + i), WHITE if i % 2 else PINK_L)
+        if falling > 0:
+            for i in range(6):
+                x0 = cx + (-14 + 5.6 * i) * canopy
+                y0 = cy + 2
+                fall = min(1.0, falling * 1.4 - 0.1 * i)
+                if fall <= 0 or fall >= 1:
+                    continue
+                ward_petal(c, x0 + 3 * math.sin(fall * 7 + i), y0 + (base - y0 - 1) * fall, 1.5 + fall * 5, 5,
+                           math.cos(fall * 9 + i), PINK_L if i % 2 else WHITE)
+    return outline(c.img)
+
+
+def sapling_grow_frame(k: int) -> Image.Image:
+    """Grow-in (8 frames): a sprout pushes up with a bud, the trunk thickens, the canopy swells and blooms."""
+    trunk = (0.12, 0.3, 0.55, 0.8, 1.0, 1.0, 1.0, 1.0)[k]
+    canopy = (0.0, 0.0, 0.0, 0.3, 0.55, 0.8, 1.0, 1.0)[k]
+    return sapling_frame(trunk, canopy, bud=k in (1, 2))
+
+
+def sapling_idle_frame(k: int) -> Image.Image:
+    """Idle loop (4 frames): the blossoms sway, one petal drifts off and the next starts as the loop closes."""
+    return sapling_frame(sway=(0, 1, 0, -1)[k], petals=(0.0, 0.35, 0.7, 1.0)[k] if k else 0.0)
+
+
+def sapling_fire_frame(k: int) -> Image.Image:
+    """Firing flourish (4 frames): the canopy snaps to the side and a burst of petals is flicked out."""
+    return sapling_frame(sway=(-2, 2, 1, 0)[k], burst=(0.1, 0.45, 0.8, 1.0)[k])
+
+
+def sapling_wilt_frame(k: int) -> Image.Image:
+    """Wilt (8 frames): petals drop, the canopy thins out and the tree shrinks into the ground."""
+    t = k / (SAPLING_WILT_FRAMES - 1)
+    canopy = max(0.0, 1.0 - t / 0.55)
+    trunk = 1.0 if t < 0.5 else max(0.0, 1.0 - (t - 0.5) / 0.5)
+    return sapling_frame(trunk, canopy, sway=(0, 1, 0, 1, 0, 0, 0, 0)[k], falling=min(1.0, t / 0.7))
+
+
+FX.update({
+    "sapling_grow": lambda: strip([sapling_grow_frame(k) for k in range(SAPLING_GROW_FRAMES)]),
+    "sapling_idle": lambda: strip([sapling_idle_frame(k) for k in range(4)]),
+    "sapling_fire": lambda: strip([sapling_fire_frame(k) for k in range(SAPLING_FIRE_FRAMES)]),
+    "sapling_wilt": lambda: strip([sapling_wilt_frame(k) for k in range(SAPLING_WILT_FRAMES)]),
 })
 
 

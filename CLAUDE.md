@@ -384,6 +384,14 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `flare_ring_frame` 12 frames of 192 px: flash, a ring of flame tongues racing out along the floor over a scorched band, then
   embers and smoke, `icon_flare_burst`): `SpecialFx` hides his sprite and draws the charge pose, then plays the ring as a poof at
   his feet scaled to the blast radius.
+  Sakura's **Cherry Sapling** (`SkillData.Kind.SAPLING = 18`, `cherry_sapling.tres`, 12 s cooldown, 6 s tree): plants a tree at her
+  feet (`anchor`, no new synced state); every `sapling_interval` (0.5 s, `CharacterSkill.sapling_shot_due`) `Player._sapling_shoot`
+  fires `cherry_petal` (5 dmg) from the canopy at the nearest visible enemy within 360 px (shadow clones count, smoked/dead skipped,
+  ties go to the earlier player; wall line-of-sight checked), keyed `seq + SAPLING_SEQ_OFFSET` (1 << 22) and relayed via
+  `shot_fired`. Authoritative/non-replay only; the tree isn't hittable and `_die` ends it. Art (generate.py `SAPLING_*`): 64 px
+  square strips `sapling_grow` (8) / `sapling_idle` (4, loop) / `sapling_fire` (4) / `sapling_wilt` (8) + `icon_cherry_sapling`;
+  `SpecialFx._draw_sapling` picks the strip from the synced skill time (grow first, wilt over the last 0.67 s; the firing flourish
+  plays when a shot falls due, even if nothing was in range).
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

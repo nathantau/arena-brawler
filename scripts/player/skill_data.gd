@@ -25,8 +25,10 @@ extends Resource
 ## on that line: everyone along it takes damage and is thrown sideways.
 ## NOVA: flares up for `nova_charge` (he can't move or fire), then `nova_blast` goes off on him: enemies in range are hit and thrown
 ## outward and enemy projectiles in range are destroyed.
+## SAPLING: plants a cherry tree at her feet for `duration`; every `sapling_interval` it shoots `sapling_weapon` at the
+## nearest visible enemy within `sapling_range`.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, NOVA = 17 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, NOVA = 17, SAPLING = 18 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -122,6 +124,13 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var pillar_damage: int = 30
 ## Push away from the line (sideways).
 @export var pillar_knockback: float = 260.0
+
+@export_group("Sapling")
+@export var sapling_range: float = 360.0
+@export var sapling_interval: float = 0.5
+## The petals leave the canopy this far above the planting spot.
+@export var sapling_muzzle_height: float = 38.0
+@export var sapling_weapon: WeaponData
 
 @export_group("Trail")
 ## The dash covers up to trail_distance in trail_dash_time; the trail (takeoff -> where he stopped) burns until `duration` ends.

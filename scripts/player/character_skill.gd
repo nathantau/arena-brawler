@@ -19,6 +19,7 @@ extends RefCounted
 ## - PILLAR: the line runs from `anchor` (his feet-level centre) to `anchor + direction` (the Player sets `direction` to that
 ##   whole vector, cut short by a wall); the slam lands when `pillar_windup` has passed.
 ## - NOVA: charges for `nova_charge`, then the Player sets off `nova_blast` on itself (nothing stored but the active time).
+## - SAPLING: the tree stands at `anchor` for `duration`; the Player shoots from it.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 const WHIRL_EPSILON: float = 0.0001
@@ -83,6 +84,14 @@ func whirl_tick_due(delta: float) -> bool:
 	var interval: float = data.whirl_interval
 	var t: float = elapsed() + WHIRL_EPSILON  # float noise must not tip a frame over a boundary
 	return floori(t / interval) != floori((t - delta) / interval)
+
+
+## SAPLING: a shot falls due in the step that ticked from `before` (elapsed) to now.
+func sapling_shot_due(before: float) -> bool:
+	if data.kind != SkillData.Kind.SAPLING:
+		return false
+	var interval: float = data.sapling_interval
+	return floori((elapsed() + WHIRL_EPSILON) / interval) > floori((before + WHIRL_EPSILON) / interval)
 
 
 ## Seconds since activation (drives clone paths).

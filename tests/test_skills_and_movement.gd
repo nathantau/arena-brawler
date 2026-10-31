@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst", &"cherry_sapling"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -1502,3 +1502,114 @@ func test_flare_burst_cooldown_and_replay_match() -> void:
 	assert_eq(hits.size(), 1, "replay damages nothing")
 	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
 	assert_eq(b.global_position, a.global_position)
+
+
+# --- Sakura's Cherry Sapling --------------------------------------------------------
+
+func _sapling_setup(foes: Array[Vector2], walls: bool = false) -> Array:
+	var w: Array = _whirl_world()
+	if walls:
+		_wall(w[0], Vector2(250, 300), Vector2(20, 400))
+	var p: Player = _whirler(w[0], w[1], 1, Vector2(100, 300))
+	p.set_skill(1, skills.get_skill(&"cherry_sapling"))
+	var shots: Array = []  # [seq, direction]
+	p.shot_fired.connect(func(_who: Player, seq: int, _o: Vector2, dir: Vector2, _id: StringName) -> void:
+		shots.append([seq, dir]))
+	var foe_list: Array[Player] = []
+	for i: int in foes.size():
+		var f: Player = _whirler(w[0], w[1], 2 + i, foes[i])
+		w[1].targets.append(f)
+		foe_list.append(f)
+	w[1].targets.append(p)
+	return [w[0], w[1], p, shots, foe_list]
+
+
+func test_cherry_sapling_is_sakuras_own() -> void:
+	var d: SkillData = skills.get_skill(&"cherry_sapling")
+	assert_eq(d.kind, SkillData.Kind.SAPLING)
+	assert_eq(int(d.kind), 18)
+	assert_lte(d.blurb.length(), 20)
+	assert_eq(d.sapling_weapon.damage, 5)
+	assert_lt(Player.SAPLING_SEQ_OFFSET, Player.VOLLEY_SEQ_OFFSET)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"sakura", String(c.id))
+
+
+func test_cherry_sapling_shoots_the_nearest_visible_enemy_on_schedule() -> void:
+	var s: Array = _sapling_setup([Vector2(100, 560), Vector2(300, 300), Vector2(700, 300)])
+	var p: Player = s[2]
+	var shots: Array = s[3]
+	var d: SkillData = skills.get_skill(&"cherry_sapling")
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.LEFT)
+	assert_eq(p.skills[1].anchor, Vector2(100, 300 + Player.FOOT_RING_Y), "planted at her feet")
+	assert_eq(shots.size(), 0, "nothing on the press")
+	_idle(p, floori(d.sapling_interval / DT) - 3)
+	assert_eq(shots.size(), 0, "not before the first interval")
+	_idle(p, 6)
+	assert_eq(shots.size(), 1)
+	var dir: Vector2 = shots[0][1]
+	var muzzle := Vector2(100, 300 + Player.FOOT_RING_Y - d.sapling_muzzle_height)
+	assert_almost_eq(dir, (Vector2(300, 300) - muzzle).normalized(), Vector2(0.05, 0.05), "at the near one, not her or the far ones")
+	assert_gte(int(shots[0][0]), Player.SAPLING_SEQ_OFFSET)
+	assert_lt(int(shots[0][0]), Player.VOLLEY_SEQ_OFFSET)
+	assert_eq(s[1].active_count(), 1, "a petal is in the air")
+	assert_eq(p.stats.hp, p.stats.max_hp, "never hurts her")
+
+
+func test_cherry_sapling_ignores_walled_off_and_out_of_range_enemies() -> void:
+	var s: Array = _sapling_setup([Vector2(400, 300), Vector2(100 + 500, 300 - 300)], true)
+	var p: Player = s[2]
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, 90)
+	assert_eq(s[3].size(), 0, "one is behind the wall, one is out of range")
+
+
+func test_cherry_sapling_keeps_shooting_until_it_expires() -> void:
+	var s: Array = _sapling_setup([Vector2(300, 300)])
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"cherry_sapling")
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, ceili(d.duration / DT) + 5)
+	var n: int = s[3].size()
+	assert_eq(n, floori(d.duration / d.sapling_interval), "one per interval over its life")
+	assert_false(p.skills[1].is_active(), "the tree is gone")
+	assert_gt(p.skills[1].cooldown_remaining, 0.0, "cooldown outlasts it")
+	_idle(p, 60)
+	assert_eq(s[3].size(), n, "no more shots")
+
+
+func test_cherry_sapling_is_removed_when_she_dies() -> void:
+	var s: Array = _sapling_setup([Vector2(300, 300)])
+	var p: Player = s[2]
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, 40)
+	var n: int = s[3].size()
+	assert_gt(n, 0)
+	p.take_hit(9999, false, Vector2.ZERO, 2)
+	assert_true(p.dead)
+	assert_false(p.skills[1].is_active(), "the tree goes with her")
+	_idle(p, 90)
+	assert_eq(s[3].size(), n, "and stops shooting")
+
+
+func test_cherry_sapling_replay_fires_nothing_and_matches() -> void:
+	var s: Array = _sapling_setup([Vector2(300, 300)])
+	var p: Player = s[2]
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, 90)
+	var served: int = s[3].size()
+	assert_gt(served, 0)
+	var b: Player = _whirler(s[0], s[1], 9, Vector2(100, 300))
+	b.set_skill(1, skills.get_skill(&"cherry_sapling"))
+	var again: Array = []
+	b.shot_fired.connect(func(_who: Player, seq: int, _o: Vector2, _d: Vector2, _id: StringName) -> void: again.append(seq))
+	_press_special(b, Vector2.RIGHT)
+	_idle(b, 90, true)
+	assert_eq(again.size(), 0, "replay fires nothing")
+	assert_almost_eq(b.skills[1].active_remaining, p.skills[1].active_remaining, 0.0001)
+	assert_eq(b.skills[1].anchor, p.skills[1].anchor)
