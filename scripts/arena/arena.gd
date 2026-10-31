@@ -416,7 +416,7 @@ func _on_skill_used(user: Player, skill: SkillData) -> void:
 	effects.burst(user.global_position, user.display_color, BURST_SKILL_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE,
 		PARTICLE_LIFE)
 	match skill.kind:
-		SkillData.Kind.DASH:
+		SkillData.Kind.DASH, SkillData.Kind.GRAPPLE:
 			sfx.play(&"dash", user.global_position)
 		SkillData.Kind.SHIELD:
 			sfx.play(&"shield", user.global_position)

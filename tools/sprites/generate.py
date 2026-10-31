@@ -168,7 +168,7 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
-def flicker(step=None, t=0):
+def flicker(step=None, t=0, zip_=False):
     """Shade, a kunoichi: a choppy jagged bob with a big spiky topknot that swings in the wind, red ribbon tails fluttering from its tie, a steel forehead
     plate, big lashed teal eyes over a mask that peaks at the bridge of her nose; fitted navy shroud, a metal
     breastplate and a red sash. The topknot is too big for the art box: it's drawn above it (CROWNS: flicker_topknot)."""
@@ -183,9 +183,13 @@ def flicker(step=None, t=0):
     up.part(P([(24, 36), (41, 36), (42, 40), (38, 44), (27, 44), (23, 40)]), STEEL)  # metal breastplate
     up.flat(L([(33, 37), (33, 43)], 1), STEEL_D)  # its centre ridge
     up.part(R((20, 45, 44, 46)), RED, shade=False, line=False)  # thin sash
-    arm(up, ARM_X[1], NAVY, SKIN)
+    if zip_:  # Grapple Kunai: the front arm reaches forward along the chain (ribbons stream back: flicker_zip)
+        up.part(RR((40, 37, 50, 41), 2), NAVY)
+        up.part(E((48, 37, 53, 42)), SKIN)
+    else:
+        arm(up, ARM_X[1], NAVY, SKIN)
     # ribbon tails: two thin red streamers hanging from the topknot's tie, fluttering behind her head
-    for x0, lag in ((18, 1), (21, 2)):
+    for x0, lag in ((18, 1), (21, 2)) if not zip_ else ():
         up.part(L([(x0, 10), (x0 - 7 - wave(lag, 1), 20), (x0 - 12 - wave(lag + 1, 2), 30),
                    (x0 - 13 - wave(lag + 2, 2), 37)], 2), RED, shade=False)
     up.part(RR((14, 8, 20, 13), 2), RED)  # tie round the topknot's base, half hidden behind her hair
@@ -225,6 +229,68 @@ def flicker_topknot(t: int, dy: int) -> Canvas:
     c.flat(L(at([(22, 6), (12 - wave(1, 1.5), 0)]), 1), BLUE)  # its sheen
     c.flat(L(at([(15, 10), (2 - wave(2, 2), 9)]), 1), BLUE)
     return c
+
+
+ZIP_LEAN = 0.3  # Grapple Kunai pose: px a row leans forward per row above her feet
+ZIP_FEET = 57  # art row of her soles: the lean pivots there
+
+
+def lean(img: Image.Image, pivot: int, k: float) -> Image.Image:
+    """Shears whole rows forward (right) the higher they are above `pivot`: a crisp lean, no resampling."""
+    out = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    for y in range(min(pivot, img.height)):
+        out.paste(img.crop((0, y, img.width, y + 1)), (round((pivot - y) * k), y))
+    out.paste(img.crop((0, pivot, img.width, img.height)), (0, pivot))
+    return out
+
+
+def flicker_zip(i: int) -> Image.Image:
+    """Shade zipping along her chain (period-4 loop, CELL px, facing right): leaning hard forward, arm out along the
+    chain, legs trailing, ribbon tails and topknot streaming straight back and snapping in the wind."""
+    low, up = flicker(0, i, zip_=True)
+    f = flicker_topknot(i, 0).img
+    rib = Canvas(CELL)
+    snap = [0, 1, 0, -1]
+    y0 = PAD + UPPER_DY + 10
+    for k, (x0, dy) in enumerate(((PAD + 18, 0), (PAD + 20, 3))):
+        w = lambda lag: snap[(i + lag + k) % 4]
+        rib.part(L([(x0, y0 + dy), (x0 - 7, y0 + dy + 3 + w(0)), (x0 - 14, y0 + dy + 6 + w(1)),
+                    (x0 - 21, y0 + dy + 10 + w(2)), (x0 - 27, y0 + dy + 12 + w(3))], 2), RED, shade=False)
+    f.alpha_composite(rib.img)
+    f.alpha_composite(low.img, (PAD - 2, PAD - 1))  # legs trail a little, toes off the floor
+    f.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
+    return outline(lean(f, PAD + ZIP_FEET, ZIP_LEAN))
+
+
+GRAPPLE_SPARK = 24
+GRAPPLE_SPARK_FRAMES = 6
+
+
+def grapple_spark(k: int) -> Image.Image:
+    """The kunai biting the wall: a white flash, then sparks flying out and dimming (one-shot)."""
+    c = Canvas(GRAPPLE_SPARK)
+    m = GRAPPLE_SPARK // 2
+    if k < 2:
+        c.flat(E((m - 3 + k, m - 3 + k, m + 3 - k, m + 3 - k)), WHITE if k == 0 else YELLOW)
+    colour = [WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED][k]
+    for j in range(7):
+        ang = math.tau * j / 7 + 0.3
+        d0, d1 = 2 + 1.6 * k, 4 + 1.8 * k - (0.6 * k if k > 3 else 0)
+        c.flat(L([(m + math.cos(ang) * d0, m + math.sin(ang) * d0), (m + math.cos(ang) * d1, m + math.sin(ang) * d1)], 1),
+               colour)
+    return outline(c.img)
+
+
+def grapple_chain(k: int) -> Image.Image:
+    """One chain link, alternately seen flat (an open oval) and edge-on (a bar): repeated along the throw."""
+    c = Canvas(10)
+    if k == 0:
+        c.part(E((2, 3, 7, 6)), STEEL, shade=False)
+        c.flat(R((4, 4, 5, 5)), OUTLINE)
+    else:
+        c.part(R((2, 4, 7, 5)), STEEL_D, shade=False)
+    return outline(c.img)
+
 
 def warden(step=None, t=0):
     """Shield: armoured knight with a plume, cape and tower shield."""
@@ -1212,6 +1278,9 @@ ICONS = {
                          c.flat(R((7, 3, 11, 4)), SKIN), c.flat(R((1, 4, 5, 5)), STEEL_D)),
     "blink": lambda c: (c.flat(P([(6, 0), (8, 4), (12, 6), (8, 8), (6, 12), (4, 8), (0, 6), (4, 4)]), TEAL_L),
                         c.flat(E((5, 5, 7, 7)), WHITE)),
+    "grapple_kunai": lambda c: (c.flat(P([(12, 0), (10, 6), (8, 4), (6, 2)]), STEEL), c.flat(L([(8, 4), (11, 1)], 1), WHITE),
+                                c.flat(L([(7, 5), (5, 7)], 2), RED), c.flat(E((3, 7, 6, 10)), STEEL_D), c.dot(4, 8, OUTLINE),
+                                [c.dot(x, y, STEEL if x % 2 else STEEL_D) for x, y in ((3, 10), (2, 11), (1, 12), (2, 12), (0, 12))]),
     "smoke": lambda c: (c.flat(E((0, 5, 7, 12)), STEEL_D), c.flat(E((4, 2, 12, 10)), STEEL),
                         c.flat(E((6, 6, 12, 12)), STEEL_D), c.flat(R((4, 1, 5, 2)), RED)),
     "volley": lambda c: [c.flat(L([(6 + round(2 * dx), 6 + round(2 * dy)), (6 + round(6 * dx), 6 + round(6 * dy))], 1), STEEL)
@@ -1820,6 +1889,10 @@ FX = {
     "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],
                                                    frames(wukong_ape, AURAS["wukong_ape"])[0], 1.35, ape_morph)),
     "flint_inferno_morph": flint_inferno_morph,
+    # Grapple Kunai (SpecialFx): the zip pose loop, the bite spark, chain links.
+    "flicker_zip": lambda: strip([flicker_zip(i) for i in range(4)]),
+    "grapple_spark": lambda: strip([grapple_spark(k) for k in range(GRAPPLE_SPARK_FRAMES)]),
+    "grapple_chain": lambda: strip([grapple_chain(k) for k in range(2)]),
 }
 
 

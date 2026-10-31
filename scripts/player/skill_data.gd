@@ -11,7 +11,8 @@ extends Resource
 ## BLINK: instant hop (stopped by walls) with i-frames. SMOKE: a cloud where you stand; inside it
 ## enemy auto-aim and bots can't lock on. VOLLEY: fires `volley_weapon` once (e.g. a ring of
 ## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
-enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
+## GRAPPLE: a kunai on a chain thrown along the aim; if it bites a wall you're pulled straight to it.
+enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, GRAPPLE = 8 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -38,6 +39,14 @@ enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
 
 @export_group("Blink")
 @export var blink_distance: float = 200.0
+
+@export_group("Grapple")
+## How far the kunai flies, how fast the chain pulls you, and how long it takes to bite before the pull starts.
+@export var grapple_range: float = 420.0
+@export var grapple_speed: float = 1100.0
+@export var grapple_bite_time: float = 0.08
+## Cooldown charged instead of `cooldown` when the kunai hits nothing.
+@export var grapple_miss_cooldown: float = 1.5
 
 @export_group("Smoke")
 @export var smoke_radius: float = 90.0

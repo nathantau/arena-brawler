@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_grapple_kunai.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"grapple_kunai"
+display_name = "Grapple Kunai"
+kind = 8
+special = true
+blurb = "Chain kunai: zip to a wall"
+tags = Array[StringName]([&"flicker"])
+cooldown = 6.0
+duration = 0.6
+grapple_range = 420.0
+grapple_speed = 1100.0
+grapple_bite_time = 0.08
+grapple_miss_cooldown = 1.5

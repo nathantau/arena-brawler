@@ -6,6 +6,8 @@ extends RefCounted
 ## - TRANSFORM: a stronger form; fires `form_weapon` (its cooldown is snapshotted).
 ## - BLINK: like a dash's i-frames; the Player does the hop. VOLLEY: the Player fires it.
 ## - SMOKE / CLONES: centred on `anchor` (where you stood), aimed along `direction`.
+## - GRAPPLE: the Player casts the kunai; on a bite `anchor` is where the pull stops, on a miss it ends at once
+##   with the short cooldown. `duration` only caps the pull.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 var data: SkillData

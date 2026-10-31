@@ -257,7 +257,14 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   auto-aim and bots target them), **Blink** (BLINK: `move_and_collide` hop, walls stop it, i-frames),
   **Smoke Bomb** (SMOKE: cloud at your feet; while inside it `is_hidden()` and enemy auto-aim / bots skip you),
   **Fan of Blades** (VOLLEY: fires `blade_fan`, 12 piercing kunai in a ring, through the normal shot pipeline
-  with seq + `VOLLEY_SEQ_OFFSET`).
+  with seq + `VOLLEY_SEQ_OFFSET`), **Grapple Kunai** (GRAPPLE = 8, 2026-10-31: a chained kunai along the aim, cast
+  once at activation against `LAYER_WALL_FEET` up to `grapple_range` 420; a bite stores the stop point (a player radius +
+  `GRAPPLE_STANDOFF` short of the wall) in the slot's `anchor`, she's held still for `grapple_bite_time` 0.08 s, then
+  `Player._pull` drags her straight there at `grapple_speed` 1100 px/s with `move_and_collide` (walls on the way stop
+  her; no firing meanwhile); a miss doesn't move her and charges `grapple_miss_cooldown` 1.5 s instead of 6 s.
+  `SpecialFx` draws the kunai + chain links, a bite spark, her zip pose (generate.py `flicker_zip`: leaning, arm out,
+  ribbons streaming; sprite hidden via `hides_owner()`) and speed lines; a miss (seen as the short cooldown appearing)
+  flies out and snaps back).
   Flourishes (`SpecialFx`, detected from synced state changes so remote players show them too): clones appear in
   their own cloud poof in a ring around the player (`CLONE_START_DISTANCE`), fade in, and vanish in poofs; the Great Ape transformation morphs
   (`SkillData.form_morph`: 12-frame 96 px strip, full colour: Wukong, ten in-between creatures

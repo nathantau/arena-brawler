@@ -86,6 +86,39 @@ func _check_replay(character: StringName) -> void:
 	await wait_physics_frames(1)
 
 
+func test_grapple_replay_from_captured_state_matches() -> void:
+	await wait_physics_frames(2)
+	var a: Player = _player(1)
+	var b: Player = _player(2)
+	var grapple: SkillData = SkillCatalog.shared().get_skill(&"grapple_kunai")
+	a.set_skill(1, grapple)
+	b.set_skill(1, grapple)
+	a.global_position = Vector2(60, 30)
+	var inputs: Array[InputFrame] = []
+	for i: int in 40:
+		var f := InputFrame.new()
+		f.seq = i + 1
+		f.aim_vec = Vector2(1, 0.2).normalized()
+		f.move_vec = Vector2(0, 1)  # ignored while pulled
+		f.special = i < 2
+		inputs.append(f)
+	var snapshot: Array = []
+	for i: int in inputs.size():
+		a.simulate(inputs[i], Constants.PHYSICS_DT)
+		if i == 9:  # mid-pull
+			snapshot = a.capture_state()
+			assert_true(a.skills[1].is_active(), "pulling when captured")
+	assert_true(b.apply_state(snapshot, catalog, characters))
+	for i: int in range(10, inputs.size()):
+		b.simulate(inputs[i], Constants.PHYSICS_DT, true)
+	assert_almost_eq(b.global_position.x, a.global_position.x, 0.01)
+	assert_almost_eq(b.global_position.y, a.global_position.y, 0.01)
+	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+	assert_eq(b.skills[1].anchor, a.skills[1].anchor)
+	assert_gt(a.global_position.x, 300.0, "zipped toward the wall")
+	assert_lt(a.global_position.x, WALL_X - 20.0 - Constants.PLAYER_RADIUS + 0.5, "and stopped short of it")
+
+
 func test_state_roundtrip() -> void:
 	var a: Player = _player(1)
 	a.global_position = Vector2(12, 34)
