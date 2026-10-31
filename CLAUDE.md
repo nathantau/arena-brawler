@@ -443,3 +443,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   0.1 s) gets `supernova_burst` (16 frames: embers rush in, white core, ring of 16 flame spokes + sparks) played by `SpecialFx` as a
   poof on the rising edge of the slot (`_slot_id`); Inferno: `flint_inferno_aura` (flames licking up beside him + sparks, period 4) on
   the form sheet, morph 24 frames (flames build, spark burst at the end).
+- **Floor layer for special FX** (2026-10-31, fix): marks on the floor drew over players (`SpecialFx` is z 1). `SpecialFx._floor` is a child
+  node at `Effects.GROUND_Z` (above the arena floor, under players) drawn by `_draw_floor`: the Storm Cloud's shadow + rain splashes
+  (generate.py `storm_cloud_art(floor_layer=True)` -> `storm_floor` / `_form` / `_end` strips, same frames as the cloud strips, which now hold only
+  cloud + falling rain), a strike's scorch (`storm_scorch`, `Poof.on_floor`), the Eruption telegraph crack and the Staff Whirl ring.
+  Left above players on purpose: tall art (Sky Pillar, Blaze flames, Flare ring tongues, ward dome, sapling, snare vines, smoke).

@@ -124,6 +124,11 @@ const STORM_ART: Texture2D = preload(FX_DIR + "storm_cloud.png")
 const STORM_FORM_ART: Texture2D = preload(FX_DIR + "storm_cloud_form.png")
 const STORM_END_ART: Texture2D = preload(FX_DIR + "storm_cloud_end.png")
 const STORM_SPARK_ART: Texture2D = preload(FX_DIR + "storm_spark.png")
+## The cloud's floor shadow and a strike's scorch are their own strips (same frames), drawn on the floor layer.
+const STORM_FLOOR_ART: Texture2D = preload(FX_DIR + "storm_floor.png")
+const STORM_FLOOR_FORM_ART: Texture2D = preload(FX_DIR + "storm_floor_form.png")
+const STORM_FLOOR_END_ART: Texture2D = preload(FX_DIR + "storm_floor_end.png")
+const STORM_SCORCH_ART: Texture2D = preload(FX_DIR + "storm_scorch.png")
 const STORM_BOLT_ART: Texture2D = preload(FX_DIR + "storm_bolt.png")
 const STORM_SIZE: float = 136.0
 const STORM_FLOOR_Y: float = 112.0
@@ -231,6 +236,7 @@ class Poof:
 	var t: float = 0.0
 	var duration: float = POOF_TIME
 	var scale: float = 1.0
+	var on_floor: bool = false  # drawn on the floor layer, under the players
 
 
 var _clones: Array[AnimatedSprite2D] = []
@@ -313,10 +319,18 @@ var _storm_ticks: int = 0
 var _bolts: Array[Poof] = []
 
 
+## Marks on the floor (the cloud's shadow, a strike's scorch) draw here: above the arena floor, under the players.
+var _floor := Node2D.new()
+
+
 func _init() -> void:
 	top_level = true
 	z_index = 1
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_floor.z_as_relative = false
+	_floor.z_index = Effects.GROUND_Z
+	_floor.draw.connect(_draw_floor)
+	add_child(_floor)
 
 
 func sync(p: Player) -> void:
@@ -415,6 +429,7 @@ func sync(p: Player) -> void:
 	_erupt_started = erupting and (_erupt_started or eruption.active_remaining <= ERUPTION_LEAD)
 	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD else null
 	queue_redraw()
+	_floor.queue_redraw()
 
 
 ## The tree is drawn from the synced skill time (grow, idle loop, wilt over the last strip's length); a flourish
@@ -445,6 +460,7 @@ func _sync_storm(p: Player) -> void:
 		_storm_spot = raining.anchor
 	elif _storm != null and not p.dead:
 		_poof(_storm_art_centre(_storm_spot), STORM_END_ART, STORM_END_TIME)
+		_poof(_storm_art_centre(_storm_spot), STORM_FLOOR_END_ART, STORM_END_TIME, 1.0, true)
 	_storm = raining
 
 
@@ -475,6 +491,7 @@ func _bolt(at: Vector2, ground: Vector2) -> void:
 	b.duration = BOLT_TIME
 	_bolts.append(b)
 	_poof(ground, STORM_SPARK_ART, STORM_SPARK_TIME)
+	_poof(ground, STORM_SCORCH_ART, STORM_SPARK_TIME, 1.0, true)
 
 
 func _sync_drift(p: Player) -> void:
@@ -657,12 +674,13 @@ func _start_morph(p: Player, back: bool) -> void:
 	_morph_t = 0.0
 
 
-func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME, scale: float = 1.0) -> void:
+func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME, scale: float = 1.0, on_floor: bool = false) -> void:
 	var pf := Poof.new()
 	pf.pos = at
 	pf.art = art
 	pf.duration = duration
 	pf.scale = scale
+	pf.on_floor = on_floor
 	_poofs.append(pf)
 
 
@@ -676,10 +694,11 @@ func _ward_scale() -> float:
 
 
 ## Frame `frame` of a horizontal strip of square frames, centred on `at`, at the sprite scale.
-func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_px: float, alpha: float = 1.0) -> void:
+func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_px: float, alpha: float = 1.0,
+		on: CanvasItem = self) -> void:
 	var h: float = art.get_height()
 	var size := Vector2(frame_w, h) * scale_px
-	draw_texture_rect_region(art, Rect2(at - size * 0.5, size), Rect2(frame * frame_w, 0, frame_w, h),
+	on.draw_texture_rect_region(art, Rect2(at - size * 0.5, size), Rect2(frame * frame_w, 0, frame_w, h),
 		Color(1, 1, 1, alpha))
 
 
@@ -701,11 +720,6 @@ func _draw() -> void:
 		return
 	for i: int in _points.size():
 		_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
-	if _crack != null:
-		var n: int = CRACK_ART.get_width() / CRACK_ART.get_height()
-		var k: float = _crack.data.eruption_blast.splash_radius / ERUPTION_ART_RADIUS
-		_draw_frame(CRACK_ART, int(_crack.elapsed() * CRACK_FPS) % n, CRACK_ART.get_height(), _crack.anchor,
-			Constants.SPRITE_SCALE * k)
 	if _smoke_t >= 0.0:
 		var frame: int = int(_smoke_t * SMOKE_FPS) % (SMOKE_ART.get_width() / SMOKE_ART.get_height())
 		var swell: float = lerpf(SMOKE_SWELL_FROM, 1.0, clampf(_smoke_t / SMOKE_SWELL_TIME, 0.0, 1.0))
@@ -713,6 +727,32 @@ func _draw() -> void:
 		var fade: float = clampf(_smoke.active_remaining / FADE_TIME, 0.0, 1.0)
 		_draw_frame(SMOKE_ART, frame, SMOKE_ART.get_height(), _smoke.anchor, Constants.SPRITE_SCALE * k,
 			SMOKE_ALPHA * fade)
+
+
+func _draw_floor() -> void:
+	var px: float = Constants.SPRITE_SCALE
+	if _crack != null:
+		var n: int = CRACK_ART.get_width() / CRACK_ART.get_height()
+		var k: float = _crack.data.eruption_blast.splash_radius / ERUPTION_ART_RADIUS
+		_draw_frame(CRACK_ART, int(_crack.elapsed() * CRACK_FPS) % n, CRACK_ART.get_height(), _crack.anchor,
+			px * k, 1.0, _floor)
+	if _whirl_t >= 0.0:
+		_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
+			WHIRL_RING_ART.get_height(), _whirl_at, px * _whirl_radius / WHIRL_ART_RADIUS, 1.0, _floor)
+	if _storm != null:  # the cloud's shadow and rain splashes, same frames as the cloud itself
+		var t: float = _storm.elapsed()
+		var centre: Vector2 = _storm_art_centre(_storm.anchor)
+		if t < STORM_FORM_TIME:
+			_draw_frame(STORM_FLOOR_FORM_ART, mini(int(t / STORM_FORM_TIME * STORM_FRAME_COUNT), STORM_FRAME_COUNT - 1),
+				STORM_SIZE, centre, px, 1.0, _floor)
+		else:
+			_draw_frame(STORM_FLOOR_ART, int(t * STORM_FPS) % STORM_LOOP_COUNT, STORM_SIZE, centre, px, 1.0, _floor)
+	for pf: Poof in _poofs:
+		if pf.on_floor:
+			var n: int = pf.art.get_width() / pf.art.get_height()
+			_draw_frame(pf.art, mini(int(pf.t / pf.duration * n), n - 1), pf.art.get_height(), pf.pos, px * pf.scale,
+				1.0, _floor)
+
 
 ## The clone holds the owner's current weapon (and hand), pointing the way it runs.
 func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
@@ -816,6 +856,8 @@ func _draw_storm() -> void:
 func _draw_flourishes() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for pf: Poof in _poofs:
+		if pf.on_floor:
+			continue
 		var n: int = pf.art.get_width() / pf.art.get_height()
 		var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
 		if pf.scale < 0.0:  # a negative scale mirrors the strip (faces left)
@@ -884,9 +926,6 @@ func _draw_whirl() -> void:
 	if _whirl_t < 0.0:
 		return
 	var px: float = Constants.SPRITE_SCALE
-	var ring: float = _whirl_radius / WHIRL_ART_RADIUS
-	_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
-		WHIRL_RING_ART.get_height(), _whirl_at, px * ring)
 	draw_set_transform(_whirl_at, 0.0, Vector2(-1.0 if _whirl_flip else 1.0, 1.0))
 	_draw_frame(WHIRL_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_ART.get_width() / WHIRL_ART.get_height()),
 		WHIRL_ART.get_height(), Vector2.ZERO, px)
