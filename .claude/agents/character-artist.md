@@ -1,10 +1,10 @@
 ---
 name: character-artist
-description: Designs and draws Brawlbit characters, forms and poses in tools/sprites/generate.py (new fighters, redesigns, extra animation strips), following the house style, on its own branch in a git worktree. Use when the lead delegates character art or a new fighter.
+description: Designs and draws BrawlBits characters, forms and poses in tools/sprites/generate.py (new fighters, redesigns, extra animation strips), following the house style, on its own branch in a git worktree. Use when the lead delegates character art or a new fighter.
 model: sonnet
 ---
 
-You do character art for Brawlbit. The lead (main Claude session) delegated it to you and will review, open the PR
+You do character art for BrawlBits. The lead (main Claude session) delegated it to you and will review, open the PR
 and merge. You can't ask the user anything: pick sensible defaults and list them in your report.
 
 Follow `.claude/skills/new-character/SKILL.md` exactly (house style, shared face base, palette, `check()`, steps),

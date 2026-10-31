@@ -1,6 +1,6 @@
 ---
 name: transform-morph
-description: Make the transition animation for a TRANSFORM special in Brawlbit (character morphing into its form and back, like Wukong -> Great Ape) — generate.py morph strip, SkillData.form_morph, preview GIF. Use when adding a transformation, or asked for frames transitioning a character into its form.
+description: Make the transition animation for a TRANSFORM special in BrawlBits (character morphing into its form and back, like Wukong -> Great Ape) — generate.py morph strip, SkillData.form_morph, preview GIF. Use when adding a transformation, or asked for frames transitioning a character into its form.
 ---
 
 # Transformation morph

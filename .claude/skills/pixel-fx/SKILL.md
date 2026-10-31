@@ -1,6 +1,6 @@
 ---
 name: pixel-fx
-description: Add or polish a pixel-art effect animation in Brawlbit — cloud poofs, lightning, smoke, bursts, sparks for skills/specials (tools/sprites/generate.py FX strips played by scripts/player/special_fx.gd), then preview it as a GIF. Use when asked to make an effect/animation/flourish, add frames to one, or make an effect look more premium.
+description: Add or polish a pixel-art effect animation in BrawlBits — cloud poofs, lightning, smoke, bursts, sparks for skills/specials (tools/sprites/generate.py FX strips played by scripts/player/special_fx.gd), then preview it as a GIF. Use when asked to make an effect/animation/flourish, add frames to one, or make an effect look more premium.
 ---
 
 # Pixel-art effect strip

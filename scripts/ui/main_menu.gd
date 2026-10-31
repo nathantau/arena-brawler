@@ -87,7 +87,7 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), VEIL)
 
 	var top: float = UiStyle.safe_insets(get_viewport()).y + LOGO_SIZE + 20.0
-	UiStyle.draw_text(self, Vector2(0, top), "BRAWLBIT", LOGO_SIZE, UiStyle.C_YELLOW, HORIZONTAL_ALIGNMENT_CENTER,
+	UiStyle.draw_text(self, Vector2(0, top), "BRAWLBITS", LOGO_SIZE, UiStyle.C_YELLOW, HORIZONTAL_ALIGNMENT_CENTER,
 		size.x, true)
 	UiStyle.draw_text(self, Vector2(0, top + UiStyle.SIZE_BODY + 18.0), TAGLINE, UiStyle.SIZE_BODY, UiStyle.C_WHITE,
 		HORIZONTAL_ALIGNMENT_CENTER, size.x)
