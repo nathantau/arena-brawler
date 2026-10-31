@@ -249,7 +249,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - **Flicker is the ninja** (2026-10-30): navy shroud, steel breastplate, mask peaking at the nose, steel forehead plate, choppy
   bob with a big spiky topknot (drawn above the art box: generate.py `CROWNS`, kept on KO via `KO_CROWNS`), its red
   tie behind her hair, ribbon tails that sway in idle; bare hands. Four Flicker-only specials (tag `flicker`): **Shadow Clones** (signature, CLONES: 3 decoys run out from
-  where you stood; positions are a pure function of the synced special state + walls (`Player.clone_points()`),
+  where you stood; positions are a pure function of the synced special state + walls (`Player.clone_points()`, raycast against the
+  feet-level walls players move in, so casting from under a wall can't send them through it),
   drawn by `player/special_fx.gd` with the owner's sprite/weapon; harmless and bullets pass through, but enemy
   auto-aim and bots target them), **Blink** (BLINK: `move_and_collide` hop, walls stop it, i-frames),
   **Smoke Bomb** (SMOKE: cloud at your feet; while inside it `is_hidden()` and enemy auto-aim / bots skip you),

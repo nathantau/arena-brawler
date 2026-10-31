@@ -136,7 +136,9 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
 	add_child(_special_fx)
-	_clone_query.collision_mask = Constants.LAYER_WALLS
+	# The walls players move against (shifted to the feet): standing under a wall puts the centre inside the wall
+	# itself, and a ray starting inside a wall misses it, so clones ran out through it (even past the border).
+	_clone_query.collision_mask = Constants.LAYER_WALL_FEET
 	set_character(p_character)
 
 
@@ -299,7 +301,7 @@ func clone_points() -> PackedVector2Array:
 		_clone_query.to = target
 		var hit: Dictionary = space.intersect_ray(_clone_query)
 		if not hit.is_empty():
-			target = hit.position - run * Constants.PLAYER_RADIUS
+			target = hit.position + hit.normal * Constants.PLAYER_RADIUS  # as close as a player can stand
 		out.append(target)
 	return out
 

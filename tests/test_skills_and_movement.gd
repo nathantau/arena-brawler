@@ -204,6 +204,7 @@ func test_switching_character_keeps_a_usable_special() -> void:
 
 # --- Flicker's ninja specials ------------------------------------------------------
 
+## A wall as the arena builds one: the wall itself plus its players-only copy shifted to the feet.
 func _wall(world: Node2D, center: Vector2, size: Vector2) -> void:
 	var body := StaticBody2D.new()
 	body.collision_layer = Constants.LAYER_WALLS
@@ -212,6 +213,7 @@ func _wall(world: Node2D, center: Vector2, size: Vector2) -> void:
 	var cs := CollisionShape2D.new()
 	cs.shape = shape
 	body.add_child(cs)
+	body.add_child(Arena.feet_strip([Rect2(-size * 0.5, size)] as Array[Rect2]))
 	body.position = center
 	world.add_child(body)
 
@@ -287,6 +289,23 @@ func test_shadow_clones_run_out_and_stop_at_walls() -> void:
 		assert_lt(c.x, 300.0, "clones don't run through walls")
 		assert_gt(c.distance_to(Vector2(150, 200)), 50.0, "clones moved away")
 	assert_eq(p.clone_points(), points, "deterministic: same state, same clones")
+
+
+func test_shadow_clones_stay_in_when_cast_from_under_a_wall() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	_wall(world, Vector2(300, 0), Vector2(800, 48))  # like the arena's top border: spans y -24..24
+	var p: Player = _flicker_in(world, &"shadow_clones")
+	p.global_position = Vector2(300, 400)
+	await wait_physics_frames(2)
+	for i: int in 120:  # walk up until pressed against it: the centre ends up inside the wall
+		p.velocity = Vector2(0, -400)
+		p.move_and_slide()
+	assert_lt(p.global_position.y, 24.0, "feet-based collision lets the centre into the wall")
+	_press_special(p, Vector2.UP)
+	p.special.active_remaining -= 2.0
+	for c: Vector2 in p.clone_points():
+		assert_gt(c.y, p.global_position.y - 1.0, "clones don't run up through the wall: %s" % c)
 
 
 func test_fan_of_blades_fires_a_ring() -> void:
