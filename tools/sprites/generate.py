@@ -1472,49 +1472,70 @@ def poof_frame(size: int, k: int, color) -> Image.Image:
 
 
 ## Vine Swing (Apex): his pose along the swing, a vine to hang it from, a leafy burst at takeoff, dust on landing.
-SWING_FRAMES = 8
+SWING_FRAMES = 12
 SWING_HAND = (65, 13)  # the gripping fist in a CELL frame; every frame pivots on it. Keep in sync with SpecialFx
 SWING_TILT = (-20, 20)  # body angle (deg, + = legs swung forward) at takeoff and at landing
 VINE_W, VINE_LEN = 19, 240
-LEAF_FRAMES = 10
-DUST_FRAMES = 8
+LEAF_FRAMES = 14
+DUST_FRAMES = 12
 
 
 def wukong_swing_frame(k: int) -> Image.Image:
-    """Apex hanging from the vine by his raised front fist, legs tucked up and tail curled. The body swings on the
-    fist: trailing behind at takeoff, tucked tightest mid-air, legs reaching forward for the landing."""
+    """Apex hanging from the vine by his raised front fist, legs tucked up and tail curled (12 frames). The body swings
+    on the fist: trailing behind at takeoff, tucked tightest mid-air, legs reaching forward for the landing; the vine's
+    end wraps his fist with a leaf fluttering off it, circlet tails and cloud stream behind, wind streaks mid-swing."""
     t = k / (SWING_FRAMES - 1)
     arc = math.sin(math.pi * t)
     low, up = wukong(None, k % 4, swing=True)
     c = Canvas(CELL)
-    c.img.alpha_composite(wukong_clouds(k % 4).img, (PAD, PAD + 2))  # cloud trailing behind him
+    c.img.alpha_composite(wukong_clouds(k % 4).img, (PAD - round(3 * arc), PAD + 2))  # cloud trailing behind him
     # Legs trail at takeoff, knees tuck up in front mid-air, then reach forward and down for the landing.
     c.img.alpha_composite(low.img, (PAD + round(-3 + 7 * t + 3 * arc), PAD - round(1 + 4 * arc)))
     c.img.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
     c.px = c.img.load()
     hx, hy = SWING_HAND
-    sx, sy = PAD + 45, PAD + UPPER_DY + 38  # front shoulder
+    ox, oy = PAD, PAD + UPPER_DY
+    for i in range(7):  # circlet tails streaming back, longer in the fast part of the swing
+        x = ox + 17 - 2 * i - round(2 * arc)
+        y = oy + 14 + round((0.8 + 0.25 * i) * math.sin(0.9 * i + k * 1.1))
+        c.flat(R((x - 1, y, x, y + 1)), RED if i < 5 else MAROON)
+    sx, sy = ox + 45, oy + 38  # front shoulder
     ex, ey = sx + 4, sy - 16  # elbow beside his cheek
     c.part(L([(sx, sy), (ex, ey)], 5), YELLOW)  # golden sleeve
+    c.flat(L([(sx + 1, sy + 2), (ex + 1, ey + 1)], 1), ORANGE)
     c.part(L([(ex, ey), (hx, hy + 3)], 4), SKIN)  # bare forearm reaching up past his head
     c.part(R((ex - 2, ey - 2, ex + 2, ey)), RED, shade=False)  # cuff wrap
-    c.part(E((hx - 3, hy - 3, hx + 3, hy + 3)), SKIN)  # fist round the vine
-    c.flat(R((hx - 1, hy - 1, hx + 1, hy - 1)), SKIN_D)  # curled fingers
-    a = SWING_TILT[0] + (SWING_TILT[1] - SWING_TILT[0]) * t
-    img = c.img.rotate(a, Image.NEAREST, center=SWING_HAND)
-    return outline(img)
+    c.part(E((hx - 3, hy - 3, hx + 3, hy + 3)), SKIN)  # the fist
+    for dy in (-3, 0):  # the vine's end wound round it
+        c.flat(R((hx - 3, hy + dy, hx + 3, hy + dy + 1)), BROWN)
+        c.dot(hx - 3, hy + dy, SKIN_D)
+    flutter = round(2 * math.sin(k * 1.3))
+    c.part(P([(hx + 3, hy - 3), (hx + 8, hy - 5 + flutter), (hx + 9, hy - 2 + flutter), (hx + 4, hy - 1)]), TEAL)  # leaf
+    c.flat(L([(hx + 4, hy - 3), (hx + 8, hy - 4 + flutter)], 1), TEAL_L)
+    for j in range(3):  # leaves shaken loose, drifting down behind
+        ph = (t * 1.6 + j / 3) % 1.0
+        x, y = hx - 5 - 12 * ph - j * 3, hy + 8 + 34 * ph + 3 * math.sin(ph * 9 + j)
+        if ph < 0.85:
+            c.flat(R((round(x), round(y), round(x) + 1, round(y))), TEAL_L if j % 2 else TEAL)
+    if 0.12 < t < 0.88:  # wind streaks off his body, strongest at the bottom of the swing
+        n = round(2 + 5 * arc)
+        for j in range(n):
+            y = PAD + UPPER_DY + 10 + j * 7 + (k % 2) * 2
+            x = PAD - 2 - (j * 5 + k * 3) % 9
+            c.flat(R((x - 4, y, x, y)), STEEL if j % 2 else WHITE)
+    return outline(c.img)
 
 
 ## Staff Whirl (Apex): the spin pose loop (8 frames, staff blurring round him), a ring of motion arcs and dust puffs
 ## on the floor (WHIRL_R art px = whirl_radius / SPRITE_SCALE; keep in sync with SpecialFx), and hit sparks.
-WHIRL_FRAMES = 8
+WHIRL_FRAMES = 12
 WHIRL_HAND = (50, 59)  # his fists on the staff's middle, in a CELL frame
 WHIRL_STAFF = 26  # half the staff's length
 WHIRL_SQUASH = 0.5  # the spin is flat on the floor in the 3/4 view
 WHIRL_R = 46
 WHIRL_RING = 112
 WHIRL_SPARK = 20
-WHIRL_SPARK_FRAMES = 5
+WHIRL_SPARK_FRAMES = 7
 
 
 def whirl_ends(a: float, reach: float = 1.0):
@@ -1524,150 +1545,246 @@ def whirl_ends(a: float, reach: float = 1.0):
     return (hx + dx, hy + dy), (hx - dx, hy - dy)
 
 
+def staff_bar(c, p0, p1, thick: int = 3, caps: bool = True):
+    """The Cloud Staff between two points: a lit red shaft (dark underside, orange highlight), gold bands and caps,
+    and a white glint on each cap."""
+    (x0, y0), (x1, y1) = p0, p1
+    c.flat(L([(x0, y0 + 1), (x1, y1 + 1)], thick), MAROON)
+    c.flat(L([(x0, y0), (x1, y1)], thick), RED)
+    c.flat(L([(x0, y0 - 1), (x1, y1 - 1)], 1), ORANGE)
+    ln = math.hypot(x1 - x0, y1 - y0) or 1
+    for u in (0.25, 0.75):  # gold bands
+        bx, by = x0 + (x1 - x0) * u, y0 + (y1 - y0) * u
+        c.flat(R((round(bx) - 1, round(by) - 1, round(bx), round(by) + 1)), YELLOW)
+    if caps:
+        for x, y in ((x0, y0), (x1, y1)):
+            c.flat(R((round(x) - 1, round(y) - 1, round(x) + 1, round(y) + 1)), YELLOW)
+            c.dot(round(x) - 1, round(y) - 1, WHITE)
+
+
 def wukong_whirl_frame(k: int) -> Image.Image:
-    """Apex spinning his staff: legs braced and stepping, body twisting side to side, circlet tails flying back,
-    the staff a blur with fading ghosts trailing behind each tip."""
+    """Apex spinning his staff (12-frame loop): legs braced and stepping, body twisting side to side, circlet tails
+    and collar cloud flying back, the staff a lit shaft with a dithered wedge of motion blur dissolving behind each tip,
+    glints on the caps and loose sparks / dust thrown off."""
     _, up = wukong(None, k % 4, swing=True)
-    twist = (0, 2, 3, 2, 0, -2, -3, -2)[k]
+    tw = math.sin(math.tau * k / WHIRL_FRAMES)
+    twist = round(3 * tw)
     c = Canvas(CELL)
     c.img.alpha_composite(wukong_clouds(k % 4).img, (PAD, PAD + 2))
-    low, _ = wukong(k, k % 4, swing=True)  # legs stepping
+    low, _ = wukong(k * 8 // WHIRL_FRAMES, k % 4, swing=True)  # legs stepping
     c.img.alpha_composite(low.img, (PAD, PAD))
     c.img.alpha_composite(up.img, (PAD + twist, PAD + UPPER_DY))
     c.px = c.img.load()
     ox, oy = PAD + twist, PAD + UPPER_DY
     hx, hy = WHIRL_HAND
     c.part(L([(ox + 45, oy + 38), (hx + 2, hy - 2)], 5), YELLOW)  # front sleeve reaching across to the staff
-    for t in range(6):  # circlet tails whipping back
+    c.flat(L([(ox + 45, oy + 41), (hx + 1, hy + 1)], 1), ORANGE)  # sleeve's shaded underside
+    for t in range(7):  # circlet tails whipping back, rippling along their length
         x = ox + 17 - 2 * t
-        c.flat(R((x - 1, oy + 14 + round(2.2 * math.sin(0.9 * t + 1.3 * k)), x, oy + 15 + round(2.2 * math.sin(0.9 * t + 1.3 * k)))), RED)
-    a0 = math.tau * k / WHIRL_FRAMES / 2 * 1.0
-    for g, col in ((3, ORANGE), (2, ORANGE), (1, YELLOW)):  # ghosts trailing behind the leading edge, dotted
-        (x0, y0), (x1, y1) = whirl_ends(a0 - 0.32 * g)
-        for i in range(0, 27, 2):
+        y = oy + 14 + round((1.0 + 0.3 * t) * math.sin(0.9 * t + math.tau * k / WHIRL_FRAMES * 2))
+        c.flat(R((x - 1, y, x, y + 1)), RED if t < 5 else MAROON)
+    a0 = math.pi * k / WHIRL_FRAMES
+    # motion blur: a dithered wedge sweeping back from the leading edge, thinning and cooling the further behind it is
+    for step in range(1, 14):
+        d = step * 0.045
+        (x0, y0), (x1, y1) = whirl_ends(a0 - d)
+        col = YELLOW if d < 0.3 else ORANGE if d < 0.65 else RED
+        for i in range(0, 27):
             u = i / 26
-            c.dot(round(x0 + (x1 - x0) * u), round(y0 + (y1 - y0) * u) + (i // 2 + g) % 2, col)
+            x, y = round(x0 + (x1 - x0) * u), round(y0 + (y1 - y0) * u)
+            if abs(u - 0.5) > 0.22 and BAYER[y % 4][x % 4] / 16 < 0.8 - d * 1.2 and (x + y + step) % 2 == 0:
+                c.dot(x, y, col)
     (x0, y0), (x1, y1) = whirl_ends(a0)
-    c.flat(L([(x0, y0), (x1, y1)], 3), RED)
-    c.flat(L([(x0, y0 - 1), (x1, y1 - 1)], 1), ORANGE)
-    for x, y in ((x0, y0), (x1, y1)):
-        c.flat(R((round(x) - 1, round(y) - 1, round(x) + 1, round(y) + 1)), YELLOW)
+    staff_bar(c, (x0, y0), (x1, y1), 3)
+    for i, (x, y) in enumerate(((x0, y0), (x1, y1))):  # glint flaring on whichever cap faces the light
+        if (k + i * 3) % 6 < 2:
+            xr, yr = round(x), round(y)
+            c.flat(L([(xr - 3, yr), (xr + 3, yr)], 1), WHITE)
+            c.flat(L([(xr, yr - 3), (xr, yr + 3)], 1), WHITE)
     c.part(E((hx - 4, hy - 4, hx + 4, hy + 3)), SKIN)  # fists gripping the middle
     c.flat(R((hx - 2, hy - 1, hx + 2, hy - 1)), SKIN_D)
+    c.flat(R((hx - 4, hy + 1, hx + 3, hy + 1)), YELLOW)  # cuff
+    rng = random.Random(33)
+    for i in range(7):  # sparks shaken loose, flying off tangentially and cooling
+        ph = (k / WHIRL_FRAMES + i / 7) % 1.0
+        a = a0 + rng.uniform(0, math.tau)
+        dist = WHIRL_STAFF * (0.6 + 0.9 * ph)
+        x, y = hx + math.cos(a) * dist, hy + math.sin(a) * dist * WHIRL_SQUASH
+        c.dot(round(x), round(y), (WHITE, YELLOW, YELLOW, ORANGE, RED)[min(4, int(ph * 5))])
     return outline(c.img)
 
 
 ## Sky Pillar (Apex): the plant / slam pose strip (CELL frames), the pillar strip itself (PILLAR_W x PILLAR_H frames: a
 ## gold-banded red staff that grows from his hand along the line, crashes down with dust and floor cracks, then shrinks
 ## away; drawn rotated along the line and cropped to its length by SpecialFx, so keep PILLAR_W in sync) and the icon.
-PILLAR_POSE_FRAMES = 6
-PILLAR_FRAMES = 12
+PILLAR_POSE_FRAMES = 9
+PILLAR_FRAMES = 18
 PILLAR_W, PILLAR_H = 228, 64
 PILLAR_X0 = 8  # the staff's base: the line's start sits here (SpecialFx PILLAR_BASE_X)
 PILLAR_LEN = 213  # 320 px / SPRITE_SCALE
 PILLAR_T = 24  # 36 px wide
 
 
+PILLAR_HANDS = ((50, 52), (51, 53), (53, 55), (56, 58), (57, 58), (57, 58), (57, 58), (57, 58), (56, 57))
+PILLAR_TIPS = ((50, 22, 50, 74), (50, 26, 52, 70), (42, 46, 76, 66), (30, 58, 90, 58), (28, 58, 91, 58),
+               (28, 58, 91, 58), (28, 58, 91, 58), (28, 58, 91, 58), (30, 57, 90, 57))
+
+
 def wukong_pillar_frame(k: int) -> Image.Image:
-    """Apex planting the staff: crouched with it held high, then thrusting it out along the aim (to the right, mirrored by
-    SpecialFx) while his body leans into it."""
+    """Apex planting the staff (9 frames): crouched with it held high, coiling, then thrusting it out along the aim (to
+    the right, mirrored by SpecialFx) while his body leans into it, recoiling on the slam and settling. The shaft is lit,
+    with gold bands, cap glints, speed lines on the thrust and sparks shed from the tip."""
     _, up = wukong(None, k % 4, swing=True)
-    lean = (0, 0, 1, 2, 2, 2)[k]
+    lean = (0, 0, 1, 2, 3, 3, 2, 2, 2)[k]
+    crouch = 2 if k < 3 else 0
     c = Canvas(CELL)
-    c.img.alpha_composite(wukong_clouds(k % 4).img, (PAD, PAD + 2))
+    c.img.alpha_composite(wukong_clouds(k % 4).img, (PAD - (2 if 2 <= k <= 4 else 0), PAD + 2))
     low, _ = wukong(None, k % 4, swing=True)
-    c.img.alpha_composite(low.img, (PAD, PAD + (2 if k < 2 else 0)))
-    c.img.alpha_composite(up.img, (PAD + lean, PAD + UPPER_DY + (2 if k < 2 else 0)))
+    c.img.alpha_composite(low.img, (PAD, PAD + crouch))
+    recoil = 1 if k == 4 else 0
+    c.img.alpha_composite(up.img, (PAD + lean, PAD + UPPER_DY + crouch + recoil))
     c.px = c.img.load()
-    ox, oy = PAD + lean, PAD + UPPER_DY
-    hand = ((50, 52), (54, 56), (56, 58), (57, 58), (57, 58), (57, 58))[k]
-    tips = ((50, 22, 50, 74), (52, 36, 66, 74), (30, 58, 90, 58), (28, 58, 91, 58), (28, 58, 91, 58), (28, 58, 91, 58))[k]
-    hx, hy = hand
+    ox, oy = PAD + lean, PAD + UPPER_DY + crouch + recoil
+    hx, hy = PILLAR_HANDS[k]
+    x0, y0, x1, y1 = PILLAR_TIPS[k]
+    for i in range(6):  # circlet tails whipping back with the thrust
+        x = ox + 17 - 2 * i - (2 if k in (3, 4) else 0)
+        y = oy + 14 + round((0.8 + 0.3 * i) * math.sin(0.9 * i + k))
+        c.flat(R((x - 1, y, x, y + 1)), RED if i < 4 else MAROON)
     c.part(L([(ox + 45, oy + 38), (hx, hy - 2)], 5), YELLOW)  # front sleeve reaching the staff
-    x0, y0, x1, y1 = tips
-    c.part(L([(x0, y0), (x1, y1)], 4), RED)
-    for x, y in ((x0, y0), (x1, y1)):
-        c.flat(R((x - 2, y - 2, x + 2, y + 2)), YELLOW)
+    c.flat(L([(ox + 45, oy + 41), (hx - 1, hy + 1)], 1), ORANGE)
+    if k in (2, 3):  # speed lines streaking along the thrust
+        for i in range(4):
+            c.flat(R((x0 - 8 + i * 3, y0 + (i - 2) * 5 + 8, x0 - 3 + i * 3, y0 + (i - 2) * 5 + 8)), WHITE if i % 2 else STEEL)
+    staff_bar(c, (x0, y0), (x1, y1), 3)
     c.part(E((hx - 4, hy - 4, hx + 4, hy + 3)), SKIN)  # fists gripping
     c.flat(R((hx - 2, hy - 1, hx + 2, hy - 1)), SKIN_D)
-    if k >= 3:  # a few sparks at the tip as it leaves
-        for i, (dx, dy) in enumerate(((-3, -6), (2, 5), (-1, 8))):
-            c.dot(x1 + dx - 2, y1 + dy, (YELLOW, WHITE, ORANGE)[(i + k) % 3])
+    c.flat(R((hx - 4, hy + 1, hx + 3, hy + 1)), YELLOW)
+    if k >= 3:  # sparks shed from the tip as it leaves, rising and cooling
+        for i, (dx, dy) in enumerate(((-3, -6), (2, 5), (-1, 8), (3, -3), (-4, 2))):
+            ph = (k - 3 + i * 0.7) % 4
+            c.dot(x1 + dx - 5 + round(ph), y1 + dy - round(ph), (WHITE, YELLOW, ORANGE, RED)[min(3, int(ph))])
     return outline(c.img)
 
 
+# Sky Pillar strip (18 frames): the staff grows out of his hand lifting off the floor (0-5), slams down flat on frame 6
+# (u = 1/3 of the skill: the windup), the impact rings out with dust, cracks and flying chips (7-9), then it shrinks
+# away while cracks cool and dust settles (10-16), last wisps (17).
+PILLAR_LEN_K = (36, 76, 116, 156, 196, PILLAR_LEN, PILLAR_LEN, PILLAR_LEN, PILLAR_LEN, PILLAR_LEN, 190, 160, 125, 90, 55, 25, 0, 0)
+PILLAR_THICK_K = (5, 8, 11, 14, 18, 21, PILLAR_T, PILLAR_T, PILLAR_T, PILLAR_T, 20, 17, 14, 10, 7, 4, 0, 0)
+PILLAR_LIFT_K = (12, 12, 12, 11, 9, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+
 def sky_pillar_frame(k: int) -> Image.Image:
-    """Frame k of 12: the staff grows (0-3, lifting off the floor), slams down (4: flash), dust and cracks along
-    the line (5-7), then it shrinks back to nothing while the cracks and dust fade (8-11)."""
-    import random
     n = PILLAR_W
     c = Canvas(n)
     m = n // 2
-    length, thick = ((40, 6), (110, 12), (180, 18), (PILLAR_LEN, PILLAR_T), (PILLAR_LEN, PILLAR_T),
-                     (PILLAR_LEN, PILLAR_T), (PILLAR_LEN, PILLAR_T), (PILLAR_LEN, PILLAR_T), (160, 18), (100, 12),
-                     (45, 6), (0, 0))[k]
-    lift = (10, 10, 10, 8, 0, 0, 0, 0, 0, 0, 0, 0)[k]  # drawn this far above the floor line while airborne
+    length, thick, lift = PILLAR_LEN_K[k], PILLAR_THICK_K[k], PILLAR_LIFT_K[k]
     x0 = PILLAR_X0
-    # cracks in the floor along both edges of the line, from the slam on, healing nothing: they just fade out
-    if 4 <= k <= 11:
+    age = k - 6  # frames since the slam
+    # cracks in the floor along both edges of the line, from the slam on: they glow, cool and fade out
+    if age >= 0:
         rng = random.Random(11)
-        reach = (4, 6, 8, 9, 9, 8, 6, 4)[k - 4]
-        for i in range(0, PILLAR_LEN - 6, 14):
+        reach = (4, 6, 8, 9, 9, 9, 8, 7, 6, 5, 4, 3)[age]
+        for i in range(0, PILLAR_LEN - 6, 12):
             for side in (-1, 1):
                 x = x0 + 8 + i + rng.randint(-3, 3)
-                if k >= 8 and rng.random() < (k - 7) * 0.2:
+                if age >= 5 and rng.random() < (age - 4) * 0.12:
                     continue
                 y = m + side * (PILLAR_T // 2)
                 pts = [(x, y)]
-                for j in range(3):
+                for j in range(4):
                     x += rng.randint(-3, 3)
                     y += side * max(2, reach // 3)
                     pts.append((x, y))
-                c.flat(L(pts, 1), SHADOW if k < 10 else STEEL_D)
-        if k <= 7:
+                col = ORANGE if age < 2 else RED if age < 4 else SHADOW if age < 9 else STEEL_D
+                c.flat(L(pts, 1), OUTLINE if age >= 4 else col)
+                if age < 4:
+                    c.flat(L(pts[:3], 1), YELLOW if age < 1 else col)
+                if rng.random() < 0.3 and age < 8:  # a side crack
+                    bx, by = pts[2]
+                    c.flat(L([(bx, by), (bx + rng.randint(-4, 4), by + side * 3)], 1), OUTLINE if age >= 4 else RED)
+        if age < 6:
             c.flat(R((x0, m - PILLAR_T // 2 - 1, x0 + PILLAR_LEN, m + PILLAR_T // 2 + 1)), SHADOW)  # scorched under the staff
     if length > 0:
-        if lift:  # the shadow it casts on the floor
-            c.flat(R((x0 + 4, m - thick // 2 + 2, x0 + length - 4, m + thick // 2 + 2)), SHADOW)
         cy = m - lift
         top, bot = cy - thick // 2, cy + thick // 2 - 1
+        if lift:  # the shadow it casts on the floor, shrinking as it comes down
+            c.flat(R((x0 + 4, m - thick // 2 + 3, x0 + length - 4, m + thick // 2 + 3)), SHADOW)
+        if k < 6:  # a trail of embers streaming behind the growing tip
+            for i in range(9):
+                tx = x0 + length - 6 - i * 9
+                if tx > x0 + 6:
+                    c.dot(tx, cy + ((i * 5 + k * 3) % 7) - 3, (WHITE, YELLOW, ORANGE, RED)[min(3, i // 2)])
         c.part(R((x0, top, x0 + length, bot)), RED)
         c.flat(R((x0 + 3, top + 2, x0 + length - 3, top + 3)), ORANGE)  # the light running along the top
+        c.flat(R((x0 + 3, top + 4, x0 + length - 3, top + 4)), YELLOW) if thick >= 16 else None
+        c.flat(R((x0 + 2, bot - 2, x0 + length - 2, bot - 1)), MAROON)  # shaded underside
         for x in range(x0 + 20, x0 + length - 10, 40):  # gold bands
             w = max(2, thick // 5)
             c.part(R((x, top - 1, x + w, bot + 1)), YELLOW)
+            c.flat(R((x, top - 1, x, top - 1)), WHITE)
         c.part(R((x0 + length - 8, top - 1, x0 + length, bot + 1)), YELLOW)  # tip cap
         c.part(R((x0 - 6, top - 1, x0, bot + 1)), YELLOW)  # grip cap, where his fists were
-        if k == 4:  # slam flash: white edges and a burst at the tip
+        if 10 > k >= 6 and length == PILLAR_LEN:  # lightning crackling along the shaft after the slam
+            rng = random.Random(k)
+            for j in range(3):
+                lx = x0 + 15 + j * 70 + rng.randint(-10, 10)
+                pts = [(lx, top - 1)] + [(lx + rng.randint(-3, 3), top - 1 - s * 2) for s in range(1, 4)]
+                if age < 3:
+                    c.flat(L(pts, 1), WHITE if age < 1 else YELLOW)
+        if k == 6:  # slam flash: white edges, bright staff and a burst at the tip
             c.flat(R((x0, top, x0 + length, top)), WHITE)
             c.flat(R((x0, bot, x0 + length, bot)), WHITE)
-            for i in range(6):
-                c.dot(x0 + length + 2 + i % 3, cy - 6 + i * 2, WHITE if i % 2 else YELLOW)
-    if 4 <= k <= 10:  # dust kicked up along both sides, rising and thinning
+            c.flat(R((x0 + 3, top + 2, x0 + length - 3, top + 3)), WHITE)
+            for i in range(8):
+                c.dot(x0 + length + 2 + i % 2, cy - 8 + i * 2, WHITE if i % 2 else YELLOW)
+    if age >= 0 and age <= 5:  # shock ring racing out of the tip, squashed for the 3/4 view
+        rx, ry = 6 + 6 * age, 3 + 2 * age
+        tipx = x0 + PILLAR_LEN - 4
+        for a in range(0, 24):
+            ang = math.tau * a / 24
+            if tipx + math.cos(ang) * rx < n - 3:
+                c.dot(round(tipx + math.cos(ang) * rx), round(m + math.sin(ang) * ry), (WHITE, YELLOW, STEEL, STEEL, STEEL_D, SHADOW)[age])
+    if 0 <= age <= 8:  # dust kicked up along both sides, rising and thinning
         rng = random.Random(5)
-        age = k - 4
-        for i in range(0, PILLAR_LEN - 10, 26):
+        for i in range(0, PILLAR_LEN - 30, 20):
             for side in (-1, 1):
-                r = round((5 + rng.randint(0, 2)) * (1.0 - age / 8))
+                r = round((5 + rng.randint(0, 3)) * (1.0 - age / 10))
                 px = x0 + 10 + i + rng.randint(-4, 4)
                 py = m + side * (PILLAR_T // 2 + 3 + age) - age * (2 if side < 0 else 1)
                 py = min(max(py, m - PILLAR_H // 2 + r + 3), m + PILLAR_H // 2 - r - 4)
                 if r >= 1:
-                    c.part(blobs([(px, py, r)]), WHITE if age < 3 else STEEL, shade=False, line=False)
-    if k == 11:  # last wisps
+                    c.part(blobs([(px, py, r), (px - r, py + 1, max(1, r - 2)), (px + r - 1, py + 1, max(1, r - 3))]),
+                           WHITE if age < 3 else STEEL, shade=age > 1, line=False)
+    if 0 <= age <= 5:  # chips of floor flung up from the cracks, arcing back down
+        rng = random.Random(8)
+        for j in range(12):
+            bx = x0 + 12 + rng.randint(0, PILLAR_LEN - 30)
+            side = 1 if j % 2 else -1
+            up = 10 + rng.randint(0, 8)
+            y = m + side * (PILLAR_T // 2 + 2) - side * (up * age - 2.2 * age * age) * 0.5
+            if 8 < y < PILLAR_H + m - 8 and abs(y - m) < PILLAR_H // 2 - 4:
+                c.dot(bx + age * side, round(y), BROWN if j % 3 else STEEL)
+    if k == 17:  # last wisps
         for i in range(8):
             c.dot(x0 + 20 + i * 24, m - 14 + (i % 3) * 14, STEEL)
     return outline(c.img.crop((0, m - PILLAR_H // 2, n, m + PILLAR_H // 2)))
 
 
 def whirl_ring_frame(k: int) -> Image.Image:
-    """The spin seen from above, flat on the floor: three tapering arcs racing round the rim, a faint dashed inner
-    ring, and dust / cloud puffs kicked up, drifting out and shrinking. Loops: frame k+8 = frame 0."""
+    """The spin seen from above, flat on the floor (12-frame loop): a scuffed floor ring, three tapering arcs racing
+    round the rim with glints on their heads, a faint dashed inner ring turning the other way, and dust / cloud puffs
+    kicked up that drift out, swell and thin. Loops: frame k+12 = frame 0."""
     size = WHIRL_RING
     c = Canvas(size)
     m = size // 2
     rx, ry = WHIRL_R, WHIRL_R * 0.8
     spin = math.tau * k / WHIRL_FRAMES
+    for n in range(72):  # a dithered scuff band on the floor just inside the rim
+        a = math.tau * n / 72
+        if n % 2 == 0:
+            c.dot(round(m + math.cos(a) * (rx - 5)), round(m + math.sin(a) * (ry - 4)), SHADOW)
     for i in range(3):  # arcs: a bright head with a tail fading behind it
         head = spin + math.tau * i / 3
         for j, col in enumerate((WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED)):
@@ -1677,54 +1794,74 @@ def whirl_ring_frame(k: int) -> Image.Image:
                 c.dot(round(m + math.cos(a) * (rx - 1.5)), round(m + math.sin(a) * (ry - 1.5)), col)
                 if j < 4:
                     c.dot(round(m + math.cos(a) * (rx + 1.5)), round(m + math.sin(a) * (ry + 1.5)), col)
+        hxx, hyy = round(m + math.cos(head) * rx), round(m + math.sin(head) * ry)
+        c.flat(L([(hxx - 2, hyy), (hxx + 2, hyy)], 1), WHITE)  # glint on the head
+        c.dot(hxx, hyy - 2, WHITE)
+        c.dot(hxx, hyy + 2, YELLOW)
     for n in range(24):  # inner dashes turning the other way
         if n % 2:
             continue
         a = -spin + math.tau * n / 24
-        c.dot(round(m + math.cos(a) * rx * 0.72), round(m + math.sin(a) * ry * 0.72), STEEL)
-    for i in range(5):  # puffs: born at the rim, drift outward and shrink; each lives the whole loop
-        ph = ((k + 1.6 * i) % WHIRL_FRAMES) / WHIRL_FRAMES
-        a = 1.1 + math.tau * i / 5 * 1.0
-        d = 0.85 + 0.2 * ph
-        r = round(4 * (1 - ph)) + (1 if ph < 0.8 else 0)
-        pts = [(m + math.cos(a) * rx * d, m + math.sin(a) * ry * d + 4 - 5 * ph, r)]
+        c.dot(round(m + math.cos(a) * rx * 0.72), round(m + math.sin(a) * ry * 0.72), STEEL if n % 4 else STEEL_D)
+    for i in range(7):  # puffs: born at the rim, drift outward, swell then shrink; each lives the whole loop
+        ph = ((k + WHIRL_FRAMES / 7 * i * 1.0) % WHIRL_FRAMES) / WHIRL_FRAMES
+        a = 1.1 + math.tau * i / 7
+        d = 0.85 + 0.22 * ph
+        r = round(1 + 4 * math.sin(math.pi * min(1.0, ph * 1.15)))
+        x, y = m + math.cos(a) * rx * d, m + math.sin(a) * ry * d + 4 - 7 * ph
         if r >= 1:
-            c.part(blobs(pts), WHITE if ph < 0.6 else STEEL, shade=False, line=False)
+            c.part(blobs([(x + 1, y + 1, r)]), STEEL_D, shade=False, line=False)
+            c.part(blobs([(x, y, r)]), WHITE if ph < 0.6 else STEEL, shade=r >= 3, line=False)
     return outline(c.img)
 
 
 def whirl_spark_frame(k: int) -> Image.Image:
-    """A small hit spark: a flash, then a cross of chips flying out and dimming."""
+    """A hit spark (7 frames): a white flash and ring, then a burst of chips with tails flying out, dimming and falling."""
     c = Canvas(WHIRL_SPARK)
     m = WHIRL_SPARK // 2
-    if k == 0:
-        c.flat(E((m - 2, m - 2, m + 2, m + 2)), WHITE)
-    col = (WHITE, YELLOW, YELLOW, ORANGE, RED)[k]
-    for j in range(6):
-        ang = math.tau * j / 6 + 0.5
-        d0, d1 = 1 + 1.0 * k, 2.5 + 1.1 * k
-        c.flat(L([(m + math.cos(ang) * d0, m + math.sin(ang) * d0), (m + math.cos(ang) * d1, m + math.sin(ang) * d1)], 1),
-               col)
+    if k < 3:
+        c.flat(E((m - 3 + k, m - 3 + k, m + 3 - k, m + 3 - k)), WHITE)
+    col = (WHITE, WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED)[k]
+    for j in range(8):
+        ang = math.tau * j / 8 + 0.5
+        d0, d1 = 1 + 0.5 * k, 2 + 0.6 * k
+        fall = 0.06 * k * k
+        c.flat(L([(m + math.cos(ang) * d0, m + math.sin(ang) * d0 + fall),
+                  (m + math.cos(ang) * d1, m + math.sin(ang) * d1 + fall)], 1), col if j % 2 else (WHITE if k < 3 else col))
     return outline(c.img)
 
 
 def vine() -> Image.Image:
-    """A hanging jungle vine, top (pivot) to bottom: a twisting brown stem with paired leaves and curling tendrils.
+    """A hanging jungle vine, top (pivot) to bottom: a twisting, lit brown stem (light edge on the left, dark on the
+    right, knots and bark twist) with paired two-tone leaves, curling tendrils, and the odd red berry.
     Drawn from the pivot down to his fist, cropped to length."""
     c = Canvas(VINE_LEN + 2)
     m = VINE_W // 2
     sx = lambda y: m + round(1.5 * math.sin(y / 9))  # the stem wanders a little
     c.part(L([(sx(y), y) for y in range(3, VINE_LEN)], 3), BROWN, shade=False)
+    for y in range(3, VINE_LEN):
+        c.dot(sx(y) - 1, y, SKIN_D)  # light catching the left edge
+        c.dot(sx(y) + 1, y, MAROON)  # shade down the right
     for y in range(4, VINE_LEN, 6):  # bark twist
         c.dot(sx(y) + (y // 6) % 2 - 1, y, MAROON)
+        c.dot(sx(y) + (y // 6) % 2, y + 1, SKIN_D)
+    for y in range(20, VINE_LEN - 10, 37):  # knots
+        c.flat(R((sx(y) - 2, y, sx(y) + 2, y + 2)), BROWN)
+        c.dot(sx(y) - 2, y, SKIN_D)
+        c.dot(sx(y) + 2, y + 2, MAROON)
     for i, y in enumerate(range(10, VINE_LEN - 8, 17)):
         x = sx(y)
         side = 1 if i % 2 else -1
-        tip = (x + side * 5, y + 4)
-        c.part(P([(x, y), (x + side * 3, y - 1), tip, (x + side * 2, y + 4)]), TEAL)
-        c.flat(L([(x + side, y + 1), (x + side * 4, y + 3)], 1), TEAL_L)  # leaf vein catching the light
+        tip = (x + side * 6, y + 5)
+        c.part(P([(x, y), (x + side * 3, y - 2), tip, (x + side * 2, y + 4)]), TEAL)
+        c.flat(P([(x + side, y), (x + side * 3, y - 1), (x + side * 5, y + 3), (x + side * 2, y + 1)]), TEAL_L)  # lit half
+        c.flat(L([(x + side, y + 1), (x + side * 5, y + 4)], 1), TEAL_L if i % 2 else TEAL)  # leaf vein
         if i % 3 == 2:  # a tendril curling off the other side
             c.flat(L([(x - side, y + 6), (x - side * 3, y + 7), (x - side * 4, y + 5), (x - side * 3, y + 4)], 1), TEAL)
+        if i % 4 == 1:  # a berry on a short stalk
+            c.flat(L([(x - side, y + 3), (x - side * 3, y + 5)], 1), BROWN)
+            c.flat(E((x - side * 5, y + 5, x - side * 3, y + 7)), RED)
+            c.dot(x - side * 5, y + 5, ORANGE)
     return outline(c.img).crop((0, 0, VINE_W, VINE_LEN + 2))
 
 
@@ -1746,7 +1883,7 @@ def leaf_burst_frame(k: int) -> Image.Image:
     down while the puff breaks into wisps."""
     size = 64
     rng = random.Random(11)
-    leaves = [(math.tau * i / 9 + rng.uniform(-0.3, 0.3), rng.uniform(0.7, 1.1), rng.randint(0, 3)) for i in range(9)]
+    leaves = [(math.tau * i / 14 + rng.uniform(-0.2, 0.2), rng.uniform(0.7, 1.1), rng.randint(0, 3)) for i in range(14)]
     c = Canvas(size)
     m = size // 2
     grow = min(1.0, (k + 1) / 3)
@@ -1760,6 +1897,8 @@ def leaf_burst_frame(k: int) -> Image.Image:
         for a, reach, spin in leaves:
             d = size * (0.12 + 0.3 * reach * math.sqrt(burst))
             x, y = m + math.cos(a) * d, m + math.sin(a) * d * 0.8 + size * 0.12 * burst * burst  # flutter down
+            if y > size - 6 or x < 5 or x > size - 6:
+                continue
             if burst > 0.85 and spin % 2:
                 continue  # the last ones drift off out of sight
             ang = a + (spin + k) * 0.9
@@ -1767,6 +1906,9 @@ def leaf_burst_frame(k: int) -> Image.Image:
             pts = [(x - dx * 3, y - dy * 3), (x - dy * 1.5, y + dx * 1.5), (x + dx * 3, y + dy * 3),
                    (x + dy * 1.5, y - dx * 1.5)]
             c.part(P([(round(px), round(py)) for px, py in pts]), TEAL_L if spin == 0 else TEAL, shade=False)
+            c.dot(round(x), round(y), TEAL if spin == 0 else TEAL_L)  # vein / lit midrib
+            if k < 4 and spin % 2:
+                c.dot(round(x + dy * 3), round(y - dx * 3), WHITE if k % 2 else YELLOW)  # glints
     return outline(c.img)
 
 
@@ -1775,7 +1917,7 @@ def dust_frame(k: int) -> Image.Image:
     and it thins away (squashed for the 3/4 view)."""
     size = 64
     rng = random.Random(3)
-    puffs = [(rng.choice((-1, 1)) * rng.uniform(0.2, 1.0), rng.uniform(0.8, 1.2)) for _ in range(8)]
+    puffs = [(rng.choice((-1, 1)) * rng.uniform(0.2, 1.0), rng.uniform(0.8, 1.2)) for _ in range(12)]
     c = Canvas(size)
     m = size // 2
     t = k / (DUST_FRAMES - 1)
@@ -1789,8 +1931,8 @@ def dust_frame(k: int) -> Image.Image:
         if t < 0.5:
             c.part(blobs([(x, y - 1, max(1, rr // 2)) for x, y, rr in pts[::2]]), WHITE, shade=False, line=False)
     if 0.0 < t < 0.8:
-        for i, side in enumerate((-1, 1, -1, 1)):
-            x = m + side * size * (0.12 + 0.1 * i / 3 + 0.18 * t)
+        for i, side in enumerate((-1, 1, -1, 1, -1, 1)):
+            x = m + side * size * (0.12 + 0.1 * i / 5 + 0.18 * t)
             y = m + 6 - size * 0.25 * math.sin(math.pi * t) * (0.6 + 0.2 * i)
             c.flat(R((round(x), round(y), round(x) + 1, round(y))), BROWN)
     return outline(c.img)
@@ -3401,9 +3543,10 @@ FX.update({
 STORM_SIZE = 136  # art px square; the spot on the floor is (centre, STORM_FLOOR_Y), SpecialFx.STORM_FLOOR_Y
 STORM_FLOOR_Y = 112
 STORM_CLOUD_Y = 36  # row of the cloud's middle
-STORM_FRAMES = 8  # loop / forming / dispersing strips
-BOLT_W, BOLT_H, BOLT_FRAMES, BOLT_END_Y = 36, 144, 5, 136
-STORM_SPARK, STORM_SPARK_FRAMES = 32, 6
+STORM_FRAMES = 8  # forming / dispersing strips
+STORM_LOOP = 12  # the raining loop
+BOLT_W, BOLT_H, BOLT_FRAMES, BOLT_END_Y = 36, 144, 8, 136
+STORM_SPARK, STORM_SPARK_FRAMES = 32, 8
 STORM_RAIN_COLS = list(range(-44, 46, 9))
 
 
@@ -3427,42 +3570,107 @@ def storm_lumps(phase: float, grow: float, lift: float) -> list:
     return sorted(lumps, key=lambda p: p[1])
 
 
-def storm_cloud_art(k: int, grow: float = 1.0, rain: float = 1.0, lift: float = 0.0, fade: float = 0.0) -> Image.Image:
-    """One frame of the cloud (loop frame `k` of STORM_FRAMES): `grow` scales it, `rain` is the share of rain columns
-    falling, `lift` raises it, `fade` dithers it away."""
+def storm_cloud_art(k: int, grow: float = 1.0, rain: float = 1.0, lift: float = 0.0, fade: float = 0.0,
+                    flash: int = 0, loop: int = STORM_LOOP) -> Image.Image:
+    """One frame of the cloud (loop frame `k` of `loop`): `grow` scales it, `rain` is the share of rain columns
+    falling, `lift` raises it, `fade` dithers it away. One merged mass (no balloon outlines): lit crescents on the upper
+    left of every billow, shadowed lower right, a flat dark underside, small puffs drifting off its edges, and gold light
+    that flares inside it in the loop's flash frames (`flash`: 2 = bright, 1 = dim)."""
     n = STORM_SIZE
     m = n // 2
-    lumps = storm_lumps(k / STORM_FRAMES, grow, lift)
-    c = Canvas(n)
+    phase = k / loop
+    lumps = storm_lumps(phase, grow, lift)
+    cy = STORM_CLOUD_Y - lift
+    base = round(cy + 4 + 22 * grow)
+    for i in range(4):  # puffs shed from the edges, drifting up and out, each living one loop
+        ph = (phase + i / 4) % 1.0
+        side = 1 if i % 2 else -1
+        lumps.append((m + side * (46 + 9 * ph) * grow, cy - 2 + (6 - 16 * ph) * grow, round((1 + 3.5 * math.sin(math.pi * ph)) * grow)))
+    mass = Image.new("1", (n, n), 0)
+    d = ImageDraw.Draw(mass)
     for x, y, r in lumps:
         if r >= 1:
-            c.part(E((x - r, y - r, x + r, y + r)), SHADOW)
-    for x, y, r in lumps:
-        if r >= 5 and x + y < 2 * m + 20:  # light catching the tops facing up-left
-            c.flat(E((x - r * 0.55, y - r * 0.7, x - r * 0.1, y - r * 0.45)), STEEL_D)
-    for i, (x, y, r) in enumerate(lumps[-9:]):  # the flickering heart: gold light inside a few lumps
-        if r >= 8 and (k + 3 * i) % 8 in (0, 1):
-            c.flat(E((x - 5, y - 2, x + 5, y + 2)), YELLOW)
-            c.flat(E((x - 2, y - 1, x + 2, y + 1)), WHITE)
-            c.flat(L([(x + 3, y + 2), (x + 1, y + 5)], 1), YELLOW)
-    cloud = outline(c.img)
+            d.ellipse((x - r, y - r, x + r, y + r), fill=1)
+    d.rectangle((0, base, n, n), fill=0)
+    mp = mass.load()
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    px = img.load()
+
+    def inside(x, y):
+        return 0 <= x < n and 0 <= y < n and mp[x, y]
+
+    def disc(x, y, r, dx=0.0, dy=0.0):
+        return lambda xx, yy: (xx - x - dx) ** 2 + (yy - y - dy) ** 2 <= r * r
+
+    for x, y, r in sorted(lumps, key=lambda p: p[1]):  # back to front
+        if r < 2:
+            continue
+        me, hi, lo = disc(x, y, r), disc(x, y, r, 2.2, 2.2), disc(x, y, r, -3.2, -3.2)
+        top = y < cy - 4
+        for yy in range(max(0, int(y - r) - 1), min(n, int(y + r) + 2)):
+            for xx in range(max(0, int(x - r) - 1), min(n, int(x + r) + 2)):
+                if not (inside(xx, yy) and me(xx, yy)):
+                    continue
+                col = NAVY
+                if not hi(xx, yy):
+                    col = STEEL if top and not disc(x, y, r, 1.2, 1.2)(xx, yy) else STEEL_D
+                elif not lo(xx, yy) and r >= 6:
+                    col = SHADOW if (xx + yy) % 2 == 0 or yy > y else NAVY
+                px[xx, yy] = col + (255,)
+    for yy in range(n):  # the dark underside: dithered, then solid, with a ragged lower edge
+        for xx in range(n):
+            if inside(xx, yy):
+                if yy >= base - 2 or (yy >= base - 5 and (xx + yy) % 2 == 0 and px[xx, yy][:3] == NAVY):
+                    px[xx, yy] = SHADOW + (255,)
+                if not inside(xx - 1, yy - 1) and yy < cy + 6 and px[xx, yy][:3] != SHADOW:
+                    px[xx, yy] = STEEL + (255,)  # rim light along the top-left silhouette
+    if flash and grow > 0.9:  # gold light flaring inside: a glow, a crackling arc, the underside lit up
+        rng = random.Random(40 + k)
+        gx, gy = m + (-16 if k % 6 < 3 else 18) + rng.randint(-2, 2), cy + 4
+        for yy in range(n):
+            for xx in range(n):
+                if inside(xx, yy):
+                    dd = math.hypot((xx - gx) * 0.8, (yy - gy) * 1.3)
+                    if dd < (17 if flash > 1 else 10) and (dd < 9 or (xx + yy) % 2 == 0):
+                        px[xx, yy] = (STEEL if dd < 6 and flash > 1 else STEEL_D) + (255,)
+        c = Canvas(n)
+        c.img, c.px = img, px
+        pts, x, y = [(gx, gy - 8)], gx, gy - 8
+        for _ in range(4):
+            x += rng.randint(-4, 4)
+            y += 5
+            pts.append((x, y))
+        if flash > 1:
+            c.flat(L(pts, 2), YELLOW)
+            c.flat(L(pts, 1), WHITE)
+            for xx in range(int(gx) - 12, int(gx) + 13):  # the flat belly glowing
+                if inside(xx, base - 1):
+                    px[xx, base - 1] = (YELLOW if abs(xx - gx) < 7 else ORANGE) + (255,)
+        else:
+            c.flat(L(pts[:3], 1), YELLOW)
+    cloud = outline(img)
     out = Image.new("RGBA", (n, n), (0, 0, 0, 0))
-    if grow > 0.5:  # a dithered shadow on the floor under the rain
+    floor = STORM_FLOOR_Y
+    if grow > 0.5:  # a dithered shadow on the floor under the rain, darker at its heart
         sh = Canvas(n)
-        floor = STORM_FLOOR_Y
         for y in range(floor - 8, floor + 9):
             for x in range(m - 46, m + 47):
-                if (x + y) % 2 == 0 and ((x - m) / 46) ** 2 + ((y - floor) / 8) ** 2 <= 1:
+                e = ((x - m) / 46) ** 2 + ((y - floor) / 8) ** 2
+                if e <= 1 and ((x + y) % 2 == 0 or e < 0.35):
                     sh.dot(x, y, SHADOW)
         out.alpha_composite(outline(sh.img))
     rn = Canvas(n)
     cols = STORM_RAIN_COLS[:round(len(STORM_RAIN_COLS) * rain)]
     for j, dx in enumerate(cols):
-        for rep in range(2):
-            y = 52 + (k * 8 + j * 11 + rep * 32) % 64
-            if y + 7 <= STORM_FLOOR_Y + 4:
-                rn.flat(L([(m + dx, y), (m + dx - 2, y + 6)], 1), STEEL)
-                rn.dot(m + dx - 2, y + 6, WHITE)
+        for rep, (speed, col, head, length) in enumerate(((5, STEEL, WHITE, 6), (5, STEEL_D, STEEL, 4))):
+            y = 52 + (j * 17 + rep * 31 + k * speed * 12 // loop) % 60
+            x = m + dx + (4 if rep else 0)
+            if y + length < floor - 1:
+                rn.flat(L([(x, y), (x - 2 * length // 6 - 1, y + length)], 1), col)
+                rn.dot(x - 2 * length // 6 - 1, y + length, head)
+            elif y < floor + 2 and rep == 0:  # lands: a little splash on the floor
+                for sx, sy in ((-2, -1), (2, -1), (-3, 0), (3, 0)):
+                    rn.dot(x + sx, floor - 2 + sy + (y > floor - 2), WHITE if abs(sx) < 3 else STEEL)
     out.alpha_composite(rn.img)
     out.alpha_composite(cloud)
     px = out.load()
@@ -3473,88 +3681,124 @@ def storm_cloud_art(k: int, grow: float = 1.0, rain: float = 1.0, lift: float = 
     return out
 
 
+STORM_FLASH = {3: 2, 4: 1, 9: 2, 10: 1}  # loop frame -> flash strength
+
+
+def storm_loop_frame(k: int) -> Image.Image:
+    return storm_cloud_art(k, flash=STORM_FLASH.get(k, 0))
+
+
 def storm_form_frame(j: int) -> Image.Image:
     t = (j + 1) / STORM_FRAMES
     e = 1 - (1 - t) ** 2
-    img = storm_cloud_art(j, 0.2 + 0.8 * e, max(0.0, (j - 3) / 4), 14 * (1 - e))
-    if j < 3:  # white puffs of vapour as it gathers
+    img = storm_cloud_art(j * STORM_LOOP // STORM_FRAMES, 0.2 + 0.8 * e, max(0.0, (j - 3) / 4), 14 * (1 - e))
+    if j < 4:  # white vapour streaming in as it gathers, then a spark of gold as it takes hold
         c = Canvas(STORM_SIZE)
         m = STORM_SIZE // 2
-        for a in range(6):
-            ang = math.tau * a / 6 + j
-            c.dot(round(m + math.cos(ang) * (10 + 8 * j)), round(STORM_CLOUD_Y + math.sin(ang) * (5 + 3 * j)), WHITE)
+        for a in range(8):
+            ang = math.tau * a / 8 + j * 0.5
+            d = (34 - 7 * j) if j < 3 else 8
+            c.dot(round(m + math.cos(ang) * d), round(STORM_CLOUD_Y + math.sin(ang) * d * 0.4), WHITE if a % 2 else STEEL)
         img.alpha_composite(outline(c.img))
     return img
 
 
 def storm_end_frame(j: int) -> Image.Image:
     t = (j + 1) / STORM_FRAMES
-    return storm_cloud_art(j, 1 - 0.45 * t, max(0.0, 1 - j / 3), -10 * t, t * 0.95)
+    img = storm_cloud_art(j * STORM_LOOP // STORM_FRAMES, 1 - 0.45 * t, max(0.0, 1 - j / 3), -10 * t, t * 0.95)
+    if j < 5:  # a last rumble of gold light as it breaks up
+        px = img.load()
+        rng = random.Random(7 + j)
+        for _ in range(4):
+            x, y = STORM_SIZE // 2 + rng.randint(-24, 24), STORM_CLOUD_Y + 10 * t + rng.randint(-8, 6)
+            if px[x, y][3]:
+                px[x, y] = YELLOW + (255,)
+    return img
 
 
 def storm_bolt_frame(k: int) -> Image.Image:
-    """A lightning bolt from the top of the frame to BOLT_END_Y, glowing then fading. The shape is the same in every
-    frame; drawn bottom-anchored and cropped to length, never stretched."""
+    """A lightning bolt from the top of the frame to BOLT_END_Y (8 frames): strikes white and fat with a crackling
+    jitter, a sheath of gold and orange round a white core, forks that grow and stab, then thins and flickers out
+    into embers. Drawn bottom-anchored and cropped to length, never stretched."""
     rng = random.Random(21)
     x = BOLT_W // 2
     path = [(x, 7)]
     for y in range(14, BOLT_END_Y, 14):
-        x = max(9, min(BOLT_W - 10, x + rng.randint(-7, 7)))
+        x = max(10, min(BOLT_W - 11, x + rng.randint(-7, 7)))
         path.append((x, y))
     path.append((BOLT_W // 2 + rng.randint(-3, 3), BOLT_END_Y))
-    branches = [[path[3], (path[3][0] + 7, path[3][1] + 8), (path[3][0] + 8, path[3][1] + 17)],
-                [path[6], (path[6][0] - 7, path[6][1] + 7), (path[6][0] - 8, path[6][1] + 15)]]
-    c = Canvas(BOLT_H)
+    jit = random.Random(90 + k)
+    if k < 4:  # crackle: the middle of the path wobbles a pixel or two from frame to frame
+        path = [(px_ + (jit.randint(-1, 1) if 0 < i < len(path) - 1 else 0), py_) for i, (px_, py_) in enumerate(path)]
+    reach = (0.5, 1.0, 1.0, 1.0, 0.9, 0.7, 0.4, 0.0)[k]  # how far the forks have stabbed
+    forks = []
+    for idx, side in ((3, 1), (6, -1), (8, 1)):
+        a = path[idx]
+        forks.append([a, (a[0] + side * round(7 * reach), a[1] + round(8 * reach)),
+                      (a[0] + side * round(8 * reach), a[1] + round(17 * reach))])
     img = Image.new("RGBA", (BOLT_W, BOLT_H), (0, 0, 0, 0))
+    c = Canvas(BOLT_H)
     c.img, c.px = img, img.load()
-    glow = (WHITE, YELLOW, ORANGE, None, None)[k]
-    core = (WHITE, WHITE, YELLOW, ORANGE, None)[k]
-    width = (5, 3, 2, 1, 1)[k]
-    if glow:
-        c.flat(L(path, width + 2), glow)
-        for b in branches:
-            c.flat(L(b, width), glow)
-    if core:
-        c.flat(L(path, max(1, width - 2)), core)
-        for b in branches:
-            c.flat(L(b, 1), core)
-    if k == 4:  # fading embers along the path
-        for px_, py_ in path[::2]:
-            c.dot(px_, py_, ORANGE)
-    if k < 2:
-        c.flat(E((BOLT_W // 2 - 6, BOLT_END_Y - 3, BOLT_W // 2 + 6, BOLT_END_Y + 3)), WHITE if k == 0 else YELLOW)
-    if k == 3:  # thin out into a dither
+    halo = (ORANGE, YELLOW, YELLOW, ORANGE, ORANGE, RED, None, None)[k]
+    mid = (YELLOW, WHITE, WHITE, YELLOW, YELLOW, ORANGE, ORANGE, None)[k]
+    core = (WHITE, WHITE, WHITE, WHITE, YELLOW, YELLOW, ORANGE, ORANGE)[k]
+    width = (7, 5, 4, 3, 2, 2, 1, 1)[k]
+    if halo and k < 6:
+        c.flat(L(path, width + 4), halo)
+    if mid:
+        c.flat(L(path, width + 2), mid)
+        for f in forks:
+            c.flat(L(f, max(1, width - 1)), mid)
+    c.flat(L(path, max(1, width - 1)), core)
+    for f in forks:
+        c.flat(L(f, 1), core)
+    if k >= 5:  # flicker out: gaps break the path, embers hang along it
         p = img.load()
         for yy in range(BOLT_H):
             for xx in range(BOLT_W):
-                if (xx + yy) % 2:
+                if p[xx, yy][3] and ((xx + yy // 3 + k) % (k - 3)) == 0:
                     p[xx, yy] = (0, 0, 0, 0)
+        for i, (px_, py_) in enumerate(path[::2]):
+            c.dot(px_ + (i % 3) - 1, py_ + k - 4, ORANGE if k < 7 else RED)
+    if k < 6:  # the strike point: a flash that swells and sinks into a scorch
+        rr = (8, 7, 6, 5, 4, 3)[k]
+        c.flat(E((BOLT_W // 2 - rr, BOLT_END_Y - rr // 2, BOLT_W // 2 + rr, BOLT_END_Y + rr // 2)), WHITE if k < 2 else YELLOW if k < 4 else ORANGE)
+        if k < 4:
+            for i in range(6):
+                a = math.tau * i / 6 + 0.3
+                c.dot(round(BOLT_W // 2 + math.cos(a) * (rr + 3 + k)), round(BOLT_END_Y + math.sin(a) * (rr * 0.25 + 1 + k * 0.5)), WHITE)
     return outline(img)
 
 
 def storm_spark_frame(k: int) -> Image.Image:
-    """Where a bolt struck: a flash and flying chips over a dithered scorch mark that shrinks away."""
+    """Where a bolt struck (8 frames): a white flash and ring, chips flying out and falling under gravity, a puff of
+    smoke rising off, over a dithered scorch mark that shrinks away."""
     n = STORM_SPARK
     m = n // 2
     c = Canvas(n)
-    for y in range(m - 4, m + 5):
-        for x in range(m - 10, m + 11):
-            if (x + y) % 2 == 0 and ((x - m) / 10) ** 2 + ((y - m) / 4) ** 2 <= 1 - 0.17 * k:
-                c.dot(x, y, SHADOW)
-    if k == 0:
-        c.flat(E((m - 4, m - 4, m + 4, m + 2)), WHITE)
-    if k < 4:
-        col = (WHITE, YELLOW, YELLOW, ORANGE)[k]
-        for j in range(6):
-            ang = math.tau * j / 6 + 0.4
-            d0, d1 = 3 + 2.5 * k, 5 + 3 * k
-            c.flat(L([(m + math.cos(ang) * d0, m + math.sin(ang) * d0 * 0.7),
-                      (m + math.cos(ang) * d1, m + math.sin(ang) * d1 * 0.7)], 1), col)
+    sc = 1 - 0.09 * k  # the scorch shrinks away: a solid pool with a dithered rim
+    c.flat(E((m - 10 * sc, m - 3.5 * sc, m + 10 * sc, m + 3.5 * sc)), SHADOW)
+    if k < 3:  # flash and shock ring
+        c.flat(E((m - 5 + k, m - 4 + k, m + 5 - k, m + 3 - k)), WHITE if k < 2 else YELLOW)
+        rr = 5 + 3 * k
+        for i in range(12):
+            a = math.tau * i / 12
+            c.dot(round(m + math.cos(a) * rr), round(m + math.sin(a) * rr * 0.55), YELLOW if k else WHITE)
+    if k < 6:
+        col = (WHITE, WHITE, YELLOW, YELLOW, ORANGE, RED)[k]
+        for j in range(7):
+            ang = math.tau * j / 7 + 0.4
+            d = 3 + 1.8 * k
+            x, y = m + math.cos(ang) * d, m + math.sin(ang) * d * 0.7 - 3 * k * 0.3 + 0.35 * k * k
+            c.flat(L([(x - math.cos(ang) * 1.5, y - math.sin(ang)), (x, y)], 1), col)
+    if 2 <= k <= 6:  # smoke curling up off the scorch
+        for i in range(4):
+            c.dot(m - 6 + i * 4 + (k + i) % 2, round(m - 1 - (k - 2) * 1.6 - i % 2 * 2), STEEL if k < 5 else STEEL_D)
     return outline(c.img)
 
 
 FX.update({
-    "storm_cloud": lambda: strip([storm_cloud_art(k) for k in range(STORM_FRAMES)]),
+    "storm_cloud": lambda: strip([storm_loop_frame(k) for k in range(STORM_LOOP)]),
     "storm_cloud_form": lambda: strip([storm_form_frame(j) for j in range(STORM_FRAMES)]),
     "storm_cloud_end": lambda: strip([storm_end_frame(j) for j in range(STORM_FRAMES)]),
     "storm_spark": lambda: strip([storm_spark_frame(k) for k in range(STORM_SPARK_FRAMES)]),
