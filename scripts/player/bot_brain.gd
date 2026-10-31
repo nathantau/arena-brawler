@@ -21,9 +21,15 @@ func _init(p_arena: Arena, bot_seed: int) -> void:
 func get_input(player: Player, delta: float) -> InputFrame:
 	_frame.seq += 1
 	_decision_timer -= delta
-	if _decision_timer <= 0.0 or player.get_slide_collision_count() > 0:
+	# Only a wall we're walking into forces a new direction; re-rolling on every touch made bots jitter in place.
+	var wall := Vector2.ZERO  # summed, so a corner counts as one wall
+	for i: int in player.get_slide_collision_count():
+		wall += player.get_slide_collision(i).get_normal()
+	if _decision_timer <= 0.0 or _wander_dir.dot(wall) < 0.0:
 		_decision_timer = rng.randf_range(Constants.BOT_DECISION_MIN, Constants.BOT_DECISION_MAX)
 		_wander_dir = Vector2.RIGHT.rotated(rng.randf() * TAU)
+		if _wander_dir.dot(wall) < 0.0:
+			_wander_dir = _wander_dir.bounce(wall.normalized())
 		_strafe_sign = 1.0 if rng.randf() < 0.5 else -1.0
 
 	_frame.move_vec = _wander_dir * Constants.BOT_MOVE_SCALE

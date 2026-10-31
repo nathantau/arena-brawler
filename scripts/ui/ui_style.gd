@@ -156,6 +156,8 @@ static func text_width(text: String, font_size: int, heavy: bool = false) -> flo
 
 ## A pixel-art texture centred on `center`, scaled by a whole number so pixels stay square.
 static func draw_icon(ci: CanvasItem, art: Texture2D, center: Vector2, scale_px: float, tint: Color = Color.WHITE) -> void:
+	if art == null:  # e.g. form weapons (Great Ape's fists, Inferno's beam) have no sprite
+		return
 	var s: Vector2 = art.get_size() * scale_px
 	ci.draw_texture_rect(art, Rect2(center - s * 0.5, s), false, tint)
 
