@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -850,3 +850,131 @@ func test_own_snare_shot_does_not_snare_the_caster() -> void:
 	await wait_physics_frames(10)
 	assert_eq(a.stats.slow_remaining, 0.0)
 	assert_eq(a.stats.hp, a.stats.max_hp)
+
+
+# --- Apex's Staff Whirl -----------------------------------------------------
+
+func _whirler(world: Node2D, pool: ProjectilePool, id: int = 1, at: Vector2 = Vector2(300, 300)) -> Player:
+	var p := Player.new()
+	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
+		characters.get_character(&"wukong"))
+	world.add_child(p)
+	p.set_skill(1, skills.get_skill(&"staff_whirl"))
+	p.global_position = at
+	return p
+
+
+func _whirl_world() -> Array:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	return [world, pool]
+
+
+func test_staff_whirl_is_apexs_own() -> void:
+	var d: SkillData = skills.get_skill(&"staff_whirl")
+	assert_eq(d.kind, SkillData.Kind.WHIRL)
+	assert_eq(int(SkillData.Kind.WHIRL), 11)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"wukong", String(c.id))
+
+
+func test_staff_whirl_damages_in_range_on_ticks_only() -> void:
+	var w: Array = _whirl_world()
+	var d: SkillData = skills.get_skill(&"staff_whirl")
+	var p: Player = _whirler(w[0], w[1])
+	var near: Player = _whirler(w[0], w[1], 2, Vector2(300 + d.whirl_radius * 0.6, 300))
+	var far: Player = _whirler(w[0], w[1], 3, Vector2(300 + d.whirl_radius + 60.0, 300))
+	await wait_physics_frames(2)
+	var hits: Array = _hits(w[1])
+	_press_special(p, Vector2.RIGHT)
+	assert_eq(hits.size(), 1, "first tick on the press")
+	assert_eq(hits[0], [2, d.whirl_damage])
+	assert_gt(near.velocity.x, 0.0, "pushed outward")
+	_idle(p, 5)
+	assert_eq(hits.size(), 1, "nothing between ticks")
+	_idle(p, ceili(d.whirl_interval / DT))
+	assert_eq(hits.size(), 2, "next tick")
+	assert_eq(far.stats.hp, far.stats.max_hp, "out of range")
+	assert_eq(p.stats.hp, p.stats.max_hp, "not himself")
+	assert_eq(p.stats.armor, p.stats.max_armor)
+
+
+func test_staff_whirl_reflects_enemy_projectiles() -> void:
+	var w: Array = _whirl_world()
+	var pool: ProjectilePool = w[1]
+	var p: Player = _whirler(w[0], pool)
+	await wait_physics_frames(2)
+	var blaster: WeaponData = WeaponCatalog.load_all().get_weapon(&"pistol")
+	pool.fire_shot(2, 5, Vector2(300 + 150, 300), Vector2.LEFT, blaster, 3)
+	var slot: ProjectilePool.Slot = null
+	for s: ProjectilePool.Slot in pool.debug_slots():
+		if s.active:
+			slot = s
+	assert_not_null(slot)
+	slot.pos = Vector2(300 + 40, 300)  # inside the spin
+	assert_lt(slot.vel.x, 0.0)
+	_press_special(p, Vector2.RIGHT)
+	assert_gt(slot.vel.x, 0.0, "sent back")
+	assert_eq(slot.attacker_id, 1, "now his")
+
+
+func test_staff_whirl_slows_blocks_firing_and_expires() -> void:
+	var w: Array = _whirl_world()
+	var d: SkillData = skills.get_skill(&"staff_whirl")
+	var p: Player = _whirler(w[0], w[1])
+	var q: Player = _whirler(w[0], w[1], 2, Vector2(300, 600))
+	await wait_physics_frames(2)
+	var go := InputFrame.new()
+	go.move_vec = Vector2.RIGHT
+	for i: int in 30:  # q walks normally
+		q.simulate(go, DT)
+	var normal: float = q.velocity.x
+	watch_signals(p)
+	var f := InputFrame.new()
+	f.seq = 10
+	f.special = true
+	f.fire = true
+	f.move_vec = Vector2.RIGHT
+	f.aim_vec = Vector2.RIGHT
+	p.simulate(f, DT)
+	f.special = false
+	for i: int in 30:
+		p.simulate(f, DT)
+	assert_almost_eq(p.velocity.x, normal * d.whirl_speed_scale, 1.0, "slower")
+	assert_signal_not_emitted(p, "shot_fired", "no shots while spinning")
+	for i: int in ceili(d.duration / DT) + 2:
+		p.simulate(go, DT)
+	assert_false(p.skills[1].is_active(), "ran out")
+	assert_gt(p.skills[1].cooldown_remaining, 0.0)
+	for i: int in ceili(p.held_weapon().data.windup / DT) + 2:  # the staff's stab winds up first
+		p.simulate(f, DT)
+	assert_signal_emitted(p, "shot_fired", "can fire again")
+
+
+func test_staff_whirl_replay_matches_and_hurts_nobody() -> void:
+	var w: Array = _whirl_world()
+	var a: Player = _whirler(w[0], w[1])
+	var b: Player = _whirler(w[0], w[1], 2, Vector2(100, 100))
+	var victim: Player = _whirler(w[0], w[1], 3, Vector2(330, 300))
+	await wait_physics_frames(2)
+	var snapshot: Array = a.capture_state()
+	var f := InputFrame.new()
+	f.seq = 10
+	f.special = true
+	f.move_vec = Vector2.RIGHT
+	a.simulate(f, DT)
+	var health: int = victim.stats.hp + victim.stats.armor
+	assert_lt(health, victim.stats.max_hp + victim.stats.max_armor, "a hurt him")
+	assert_true(b.apply_state(snapshot, WeaponCatalog.load_all(), characters))
+	b.simulate(f, DT, true)
+	f.special = false
+	for i: int in 40:
+		b.simulate(f, DT, true)
+	assert_eq(victim.stats.hp + victim.stats.armor, health, "replay damages nobody")
+	for i: int in 40:
+		a.simulate(f, DT)
+	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
+	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
+	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)

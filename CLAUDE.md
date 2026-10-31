@@ -325,6 +325,17 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   and covered by the replay test. `SpecialFx` draws, from the synced slow state on every peer, a petal burst when it jumps up
   and looping pink vines round the victim's feet while it lasts. Art (generate.py `blossom_shot` 4-frame projectile (the pool now
   reads any frame count from the strip), `snare_vines` period 4, `snare_burst` 8 frames, `icon_blossom_snare`).
+- **Staff Whirl** (2026-10-31, Apex special, `staff_whirl`, kind WHIRL = 11): spins the Cloud Staff round him for
+  `duration` 1.5 s (cooldown 9 s): every `whirl_interval` 0.25 s (first tick on the press; `CharacterSkill.whirl_tick_due`
+  from the synced active time, no new synced field) enemies and crates within `whirl_radius` 70 px with line of sight take
+  `whirl_damage` 8, pushed outward `whirl_knockback` 120; enemy projectiles touching the spin are sent back outward and
+  become his (`ProjectilePool.whirl`, same attacker swap as the Arc Blade); he moves at `whirl_speed_scale` 0.75 and
+  can't fire. Only the authoritative pool damages and replay does nothing (`Player._whirl`, key seq + `WHIRL_SEQ_OFFSET`);
+  reflection runs on the owner's own peer only (remote players on clients are interpolated, not simulated), the server's
+  hit events stay the truth. Art (generate.py `wukong_whirl_frame`, `whirl_ring_frame`, `whirl_spark_frame`,
+  `icon_staff_whirl`): 8-frame spin pose (staff a blur with ghosts, body twisting, circlet tails flying), 8-frame loop
+  ring of motion arcs and dust puffs, 5-frame sparks off the rim on each tick; `SpecialFx` hides his sprite + held staff
+  meanwhile and draws them from synced state.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

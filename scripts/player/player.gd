@@ -39,6 +39,8 @@ const INVULN_ALPHA: float = 0.45
 const VOLLEY_SEQ_OFFSET: int = 1 << 24
 ## Eruptions go off frames after the press, so they get theirs too (a volley can be fired the frame one goes off).
 const ERUPTION_SEQ_OFFSET: int = 1 << 25
+## Key of a Staff Whirl damage tick (no bullet to match, only the hit event's identity).
+const WHIRL_SEQ_OFFSET: int = 1 << 26
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
@@ -274,6 +276,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	_prev_skills = pressed
 
 	var grapple: CharacterSkill = active_skill(SkillData.Kind.GRAPPLE)
+	var whirl: CharacterSkill = active_skill(SkillData.Kind.WHIRL)
 	if swing == null:
 		swing = active_skill(SkillData.Kind.SWING)  # just pressed
 	if swing != null:  # in the air: placed along the arc, over whatever is in between
@@ -286,9 +289,13 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		var tf: CharacterSkill = form()
 		var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0) \
 			* stats.speed_scale()
+		if whirl != null:
+			speed *= whirl.data.whirl_speed_scale
 		velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed, delta)
 		move_and_slide()
 	_sync_shields()
+	if whirl != null:
+		_whirl(whirl, input.seq, delta, replay)
 
 	if input.aim_vec.length_squared() > 0.0:
 		facing = input.aim_vec.normalized()
@@ -300,7 +307,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		if _windup_left <= 0.0:
 			_windup_left = -1.0
 			_release_shot(_windup_seq, _windup_weapon)
-	if input.fire and not is_dashing() and grapple == null:  # both hands on the chain
+	if input.fire and not is_dashing() and grapple == null and whirl == null:  # both hands on the chain
 		_try_fire(input.seq, replay)
 
 
@@ -329,6 +336,15 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 				shot_fired.emit(self, seq, global_position, slot.direction, slot.data.volley_weapon.id)
 	if not replay:
 		skill_used.emit(self, slot.data)
+
+
+## The staff is spinning: shots touching it go back, and a damage tick lands when due. Replay changes nothing.
+func _whirl(slot: CharacterSkill, seq: int, delta: float, replay: bool) -> void:
+	if replay or projectiles == null:
+		return
+	var d: SkillData = slot.data
+	projectiles.whirl(player_id, seq + WHIRL_SEQ_OFFSET, global_position, d.whirl_radius,
+		d.whirl_damage if slot.whirl_tick_due(delta) else 0, d.whirl_knockback)
 
 
 ## The telegraph ran out: the pillar of fire goes off at the marked spot.
@@ -734,7 +750,7 @@ func _draw() -> void:
 
 
 func _draw_overlay() -> void:
-	if held_weapon().data.sprite != null and held_weapon().data.held_art:
+	if held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null:  # the staff is in the spin pose
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)

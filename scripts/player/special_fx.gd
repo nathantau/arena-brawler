@@ -69,6 +69,19 @@ const SPARK_ART: Texture2D = preload(FX_DIR + "grapple_spark.png")
 const CHAIN_ART: Texture2D = preload(FX_DIR + "grapple_chain.png")
 const KUNAI_ART: Texture2D = preload("res://assets/sprites/projectiles/flicker_kunai.png")
 const ZIP_FPS: float = 12.0
+## Staff Whirl: the spin pose and the ring on the floor loop at WHIRL_FPS; the ring art is drawn for this radius
+## (generate.py WHIRL_R art px x SPRITE_SCALE), other radii scale it. Sparks fly off the rim on every damage tick.
+const WHIRL_ART: Texture2D = preload(FX_DIR + "wukong_whirl.png")
+const WHIRL_RING_ART: Texture2D = preload(FX_DIR + "whirl_ring.png")
+const WHIRL_SPARK_ART: Texture2D = preload(FX_DIR + "whirl_spark.png")
+const WHIRL_FPS: float = 16.0
+const WHIRL_ART_RADIUS: float = 69.0
+const WHIRL_SPARK_TIME: float = 0.25
+## The start / end dust is a small poof at his feet, shrunk so it does not hide him.
+const WHIRL_DUST_SCALE: float = 0.6
+## Where the sparks sit on the rim, as a fraction of the radius (the ring is squashed like the art).
+const WHIRL_SPARK_REACH: float = 0.9
+const WHIRL_RING_SQUASH: float = 0.8
 ## Her outstretched hand in the zip pose (generate.py flicker_zip), from the sprite's centre, facing right.
 const ZIP_HAND: Vector2 = Vector2(35, 14)
 ## Art px from the kunai sprite's centre to its tip and to its ring (generate.py kunai).
@@ -138,6 +151,12 @@ var _morph_flip: bool = false
 var _ward_t: float = -1.0
 var _ward_radius: float = 0.0
 var _ward_at: Vector2 = Vector2.ZERO
+## Staff Whirl: seconds spinning (-1 = not), its radius, where he's drawn, which way he faces, damage ticks seen.
+var _whirl_t: float = -1.0
+var _whirl_radius: float = 0.0
+var _whirl_at: Vector2 = Vector2.ZERO
+var _whirl_flip: bool = false
+var _whirl_ticks: int = 0
 var _grapple: CharacterSkill
 var _grapple_at: Vector2 = Vector2.ZERO
 var _grapple_bit: bool = false
@@ -202,6 +221,7 @@ func sync(p: Player) -> void:
 	if p.dead:
 		_morph_t = -1.0
 	_morph_at = p.global_position + p.visual_offset
+	_sync_whirl(p)
 	_sync_swing(p)
 	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
 	if slow > _snare_left + SNARE_NEW_MARGIN:  # a snare landed (or was refreshed): petals burst
@@ -292,12 +312,34 @@ static func _slot(p: Player, kind: SkillData.Kind) -> CharacterSkill:
 
 ## The owner's sprite is hidden while a morph or the grapple zip pose plays (Player).
 func hides_owner() -> bool:
-	return _morph_t >= 0.0 or _grapple != null
+	return _morph_t >= 0.0 or _grapple != null or _whirl_t >= 0.0
 
 
 ## The owner's sprite is hidden while the swing pose is drawn instead (Player).
 func is_swinging() -> bool:
 	return _swing_on
+
+
+## Staff Whirl: dust at his feet as it starts and ends, sparks off the rim on each damage tick (from synced state).
+func _sync_whirl(p: Player) -> void:
+	var whirl: CharacterSkill = _slot(p, SkillData.Kind.WHIRL)
+	var on: bool = whirl != null and whirl.is_whirling() and not p.dead
+	_whirl_at = p.global_position + p.visual_offset
+	_whirl_flip = p.facing.x < 0.0
+	if on:
+		_whirl_radius = whirl.data.whirl_radius
+		var ticks: int = floori(whirl.elapsed() / whirl.data.whirl_interval)
+		if _whirl_t < 0.0:
+			_poof(_whirl_at + Vector2(0.0, SWING_FEET_Y), POOF_SMALL, POOF_TIME, WHIRL_DUST_SCALE)
+		elif ticks != _whirl_ticks:
+			for side: float in [-1.0, 1.0]:  # two opposite spots, turning a quarter each tick
+				var a: float = ticks * PI * 0.5 + (0.0 if side < 0.0 else PI)
+				_poof(_whirl_at + Vector2(cos(a), sin(a) * WHIRL_RING_SQUASH) * _whirl_radius * WHIRL_SPARK_REACH,
+					WHIRL_SPARK_ART, WHIRL_SPARK_TIME)
+		_whirl_ticks = ticks
+	elif _whirl_t >= 0.0 and not p.dead:
+		_poof(_whirl_at + Vector2(0.0, SWING_FEET_Y), POOF_SMALL, POOF_TIME, WHIRL_DUST_SCALE)
+	_whirl_t = whirl.elapsed() if on else -1.0
 
 
 func _sync_swing(p: Player) -> void:
@@ -365,6 +407,7 @@ func _draw() -> void:
 	_draw_grapple()
 	_draw_morph()
 	_draw_ward()
+	_draw_whirl()
 	_draw_swing()
 	_draw_snare()
 	_draw_flourishes()
@@ -497,6 +540,19 @@ func _draw_chain(hand: Vector2, tip: Vector2) -> void:
 	var kh: float = KUNAI_ART.get_height()
 	draw_set_transform(tip - dir * KUNAI_TIP * s, dir.angle(), Vector2(s, s))
 	draw_texture_rect_region(KUNAI_ART, Rect2(-kh * 0.5, -kh * 0.5, kh, kh), Rect2(0, 0, kh, kh))
+	draw_set_transform(Vector2.ZERO)
+
+
+func _draw_whirl() -> void:
+	if _whirl_t < 0.0:
+		return
+	var px: float = Constants.SPRITE_SCALE
+	var ring: float = _whirl_radius / WHIRL_ART_RADIUS
+	_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
+		WHIRL_RING_ART.get_height(), _whirl_at, px * ring)
+	draw_set_transform(_whirl_at, 0.0, Vector2(-1.0 if _whirl_flip else 1.0, 1.0))
+	_draw_frame(WHIRL_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_ART.get_width() / WHIRL_ART.get_height()),
+		WHIRL_ART.get_height(), Vector2.ZERO, px)
 	draw_set_transform(Vector2.ZERO)
 
 

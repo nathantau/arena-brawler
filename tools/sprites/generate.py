@@ -1318,6 +1318,9 @@ ICONS = {
                              c.flat(E((4, 5, 12, 12)), BROWN), c.flat(E((6, 7, 12, 12)), SKIN),
                              c.flat(R((4, 6, 12, 7)), YELLOW), c.dot(8, 9, OUTLINE), c.dot(10, 9, OUTLINE),
                              c.flat(L([(9, 0), (11, 1)], 1), RED)),
+    "staff_whirl": lambda c: (c.flat(lambda d, f: d.ellipse((0, 2, 12, 10), outline=f, width=1), YELLOW),
+                              c.flat(L([(1, 10), (11, 2)], 3), RED), c.flat(R((0, 9, 2, 11)), YELLOW),
+                              c.flat(R((10, 1, 12, 3)), YELLOW), c.dot(2, 3, WHITE), c.dot(10, 9, WHITE)),
     "eruption": lambda c: (c.flat(P([(0, 11), (4, 9), (8, 9), (12, 11)]), MAROON),
                            c.flat(P([(3, 10), (4, 3), (5, 5), (6, 0), (7, 4), (8, 2), (9, 10)]), RED),
                            c.flat(P([(4, 10), (5, 6), (6, 3), (7, 6), (8, 10)]), ORANGE),
@@ -1443,6 +1446,106 @@ def wukong_swing_frame(k: int) -> Image.Image:
     a = SWING_TILT[0] + (SWING_TILT[1] - SWING_TILT[0]) * t
     img = c.img.rotate(a, Image.NEAREST, center=SWING_HAND)
     return outline(img)
+
+
+## Staff Whirl (Apex): the spin pose loop (8 frames, staff blurring round him), a ring of motion arcs and dust puffs
+## on the floor (WHIRL_R art px = whirl_radius / SPRITE_SCALE; keep in sync with SpecialFx), and hit sparks.
+WHIRL_FRAMES = 8
+WHIRL_HAND = (50, 59)  # his fists on the staff's middle, in a CELL frame
+WHIRL_STAFF = 26  # half the staff's length
+WHIRL_SQUASH = 0.5  # the spin is flat on the floor in the 3/4 view
+WHIRL_R = 46
+WHIRL_RING = 112
+WHIRL_SPARK = 20
+WHIRL_SPARK_FRAMES = 5
+
+
+def whirl_ends(a: float, reach: float = 1.0):
+    """The staff's two tips for spin angle `a` (radians) round WHIRL_HAND."""
+    hx, hy = WHIRL_HAND
+    dx, dy = math.cos(a) * WHIRL_STAFF * reach, math.sin(a) * WHIRL_STAFF * reach * WHIRL_SQUASH
+    return (hx + dx, hy + dy), (hx - dx, hy - dy)
+
+
+def wukong_whirl_frame(k: int) -> Image.Image:
+    """Apex spinning his staff: legs braced and stepping, body twisting side to side, circlet tails flying back,
+    the staff a blur with fading ghosts trailing behind each tip."""
+    _, up = wukong(None, k % 4, swing=True)
+    twist = (0, 2, 3, 2, 0, -2, -3, -2)[k]
+    c = Canvas(CELL)
+    c.img.alpha_composite(wukong_clouds(k % 4).img, (PAD, PAD + 2))
+    low, _ = wukong(k, k % 4, swing=True)  # legs stepping
+    c.img.alpha_composite(low.img, (PAD, PAD))
+    c.img.alpha_composite(up.img, (PAD + twist, PAD + UPPER_DY))
+    c.px = c.img.load()
+    ox, oy = PAD + twist, PAD + UPPER_DY
+    hx, hy = WHIRL_HAND
+    c.part(L([(ox + 45, oy + 38), (hx + 2, hy - 2)], 5), YELLOW)  # front sleeve reaching across to the staff
+    for t in range(6):  # circlet tails whipping back
+        x = ox + 17 - 2 * t
+        c.flat(R((x - 1, oy + 14 + round(2.2 * math.sin(0.9 * t + 1.3 * k)), x, oy + 15 + round(2.2 * math.sin(0.9 * t + 1.3 * k)))), RED)
+    a0 = math.tau * k / WHIRL_FRAMES / 2 * 1.0
+    for g, col in ((3, ORANGE), (2, ORANGE), (1, YELLOW)):  # ghosts trailing behind the leading edge, dotted
+        (x0, y0), (x1, y1) = whirl_ends(a0 - 0.32 * g)
+        for i in range(0, 27, 2):
+            u = i / 26
+            c.dot(round(x0 + (x1 - x0) * u), round(y0 + (y1 - y0) * u) + (i // 2 + g) % 2, col)
+    (x0, y0), (x1, y1) = whirl_ends(a0)
+    c.flat(L([(x0, y0), (x1, y1)], 3), RED)
+    c.flat(L([(x0, y0 - 1), (x1, y1 - 1)], 1), ORANGE)
+    for x, y in ((x0, y0), (x1, y1)):
+        c.flat(R((round(x) - 1, round(y) - 1, round(x) + 1, round(y) + 1)), YELLOW)
+    c.part(E((hx - 4, hy - 4, hx + 4, hy + 3)), SKIN)  # fists gripping the middle
+    c.flat(R((hx - 2, hy - 1, hx + 2, hy - 1)), SKIN_D)
+    return outline(c.img)
+
+
+def whirl_ring_frame(k: int) -> Image.Image:
+    """The spin seen from above, flat on the floor: three tapering arcs racing round the rim, a faint dashed inner
+    ring, and dust / cloud puffs kicked up, drifting out and shrinking. Loops: frame k+8 = frame 0."""
+    size = WHIRL_RING
+    c = Canvas(size)
+    m = size // 2
+    rx, ry = WHIRL_R, WHIRL_R * 0.8
+    spin = math.tau * k / WHIRL_FRAMES
+    for i in range(3):  # arcs: a bright head with a tail fading behind it
+        head = spin + math.tau * i / 3
+        for j, col in enumerate((WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED)):
+            for sub in range(6):
+                a = head - (j * 6 + sub) * 0.035
+                c.dot(round(m + math.cos(a) * rx), round(m + math.sin(a) * ry), col)
+                c.dot(round(m + math.cos(a) * (rx - 1.5)), round(m + math.sin(a) * (ry - 1.5)), col)
+                if j < 4:
+                    c.dot(round(m + math.cos(a) * (rx + 1.5)), round(m + math.sin(a) * (ry + 1.5)), col)
+    for n in range(24):  # inner dashes turning the other way
+        if n % 2:
+            continue
+        a = -spin + math.tau * n / 24
+        c.dot(round(m + math.cos(a) * rx * 0.72), round(m + math.sin(a) * ry * 0.72), STEEL)
+    for i in range(5):  # puffs: born at the rim, drift outward and shrink; each lives the whole loop
+        ph = ((k + 1.6 * i) % WHIRL_FRAMES) / WHIRL_FRAMES
+        a = 1.1 + math.tau * i / 5 * 1.0
+        d = 0.85 + 0.2 * ph
+        r = round(4 * (1 - ph)) + (1 if ph < 0.8 else 0)
+        pts = [(m + math.cos(a) * rx * d, m + math.sin(a) * ry * d + 4 - 5 * ph, r)]
+        if r >= 1:
+            c.part(blobs(pts), WHITE if ph < 0.6 else STEEL, shade=False, line=False)
+    return outline(c.img)
+
+
+def whirl_spark_frame(k: int) -> Image.Image:
+    """A small hit spark: a flash, then a cross of chips flying out and dimming."""
+    c = Canvas(WHIRL_SPARK)
+    m = WHIRL_SPARK // 2
+    if k == 0:
+        c.flat(E((m - 2, m - 2, m + 2, m + 2)), WHITE)
+    col = (WHITE, YELLOW, YELLOW, ORANGE, RED)[k]
+    for j in range(6):
+        ang = math.tau * j / 6 + 0.5
+        d0, d1 = 1 + 1.0 * k, 2.5 + 1.1 * k
+        c.flat(L([(m + math.cos(ang) * d0, m + math.sin(ang) * d0), (m + math.cos(ang) * d1, m + math.sin(ang) * d1)], 1),
+               col)
+    return outline(c.img)
 
 
 def vine() -> Image.Image:
@@ -2435,6 +2538,9 @@ FX = {
     "wukong_swing": lambda: strip([wukong_swing_frame(k) for k in range(SWING_FRAMES)]),
     "leaf_burst": lambda: strip([leaf_burst_frame(k) for k in range(LEAF_FRAMES)]),
     "swing_dust": lambda: strip([dust_frame(k) for k in range(DUST_FRAMES)]),
+    "wukong_whirl": lambda: strip([wukong_whirl_frame(k) for k in range(WHIRL_FRAMES)]),
+    "whirl_ring": lambda: strip([whirl_ring_frame(k) for k in range(WHIRL_FRAMES)]),
+    "whirl_spark": lambda: strip([whirl_spark_frame(k) for k in range(WHIRL_SPARK_FRAMES)]),
 }
 ## Not square strips: single images (checked whole).
 FX_IMAGES = {"vine": vine, "vine_top": vine_top}
