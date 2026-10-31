@@ -340,7 +340,8 @@ def wukong(step=None, t=0):
     return low, up
 
 
-## Great Ape arms per pose (None = rest, 0 = fists raised for a slam, 1 = fists smashed down in front):
+## Great Ape arms per pose (None = rest, 0 = fists raised for a slam, 1 = fists smashed down in front; a pose in
+## between is interpolated, so the fists sweep down):
 ## (shoulder, elbow, wrist) per arm, then (x, top, thumb dx) per fist. Back arm / fist first.
 APE_ARMS = {None: (((15, 26), (11, 36), (11, 44)), ((49, 26), (53, 36), (53, 44))),
             0: (((15, 26), (9, 18), (8, 13)), ((49, 26), (55, 18), (56, 13))),
@@ -368,12 +369,16 @@ def wukong_ape(step=None, t=0, pose=None):
     up.part(E((22, 26, 44, 43)), BROWN)  # chest
     for x, y in ((14, 18), (20, 13), (27, 11)):
         up.part(P([(x, y + 5), (x + 3, y), (x + 6, y + 5)]), MAROON)  # bristling back fur
-    for arm in APE_ARMS[pose]:
-        up.part(L(arm, 7), MAROON)
+    arms, fists = APE_ARMS[None], APE_FISTS[None]
     if pose is not None:
         s = 0  # attack poses don't bob
-    for x, y, thumb in APE_FISTS[pose]:  # clenched fists, knuckles down; they bob with the stride
-        by = y + 12 if pose == 0 else y - 4  # golden bracers on the forearm: below a raised fist
+        mix = lambda a, b: round(a + (b - a) * pose)
+        arms = [[(mix(p[0], q[0]), mix(p[1], q[1])) for p, q in zip(a, b)] for a, b in zip(APE_ARMS[0], APE_ARMS[1])]
+        fists = [(mix(a[0], b[0]), mix(a[1], b[1]), a[2]) for a, b in zip(APE_FISTS[0], APE_FISTS[1])]
+    for arm in arms:
+        up.part(L(arm, 7), MAROON)
+    for x, y, thumb in fists:  # clenched fists, knuckles down; they bob with the stride
+        by = y + 12 if pose is not None and pose < 0.5 else y - 4  # golden bracers on the forearm: below a raised fist
         up.part(R((x + 2, by, x + 10, by + 3)), YELLOW)
         up.part(RR((x, y + s, x + 12, y + 11 + s), 3), MAROON)
         up.part(E((x + thumb, y + 1 + s, x + thumb + 5, y + 6 + s)), MAROON)  # thumb wrapped over the fingers
@@ -1410,7 +1415,7 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
 CROWNS = {"flint": flint_crown}  # optional per-frame effects drawn behind
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Wind up high, then smash down with the body squashed.
-ATTACKS = {"wukong_ape": [(0, -2), (0, -3), (1, 2), (1, 2), (1, 1)]}
+ATTACKS = {"wukong_ape": [(0, -2), (0, -3), (0.3, -2), (0.6, 0), (0.85, 1), (1, 2), (1, 2), (1, 1)]}
 
 
 # --- frame processing -------------------------------------------------------
