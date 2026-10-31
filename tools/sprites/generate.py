@@ -3562,14 +3562,16 @@ def flare_tongues() -> list:
     return out
 
 
-def flare_ring_frame(k: int) -> Image.Image:
+def flare_ring_frame(k: int, floor_layer: bool = False) -> Image.Image:
     """Frame k of FLARE_FRAMES: a white flash, a wall of uneven flame tongues (tall and stubby, each catching, flickering
     and dying on its own beat, with a low bed of flame between and embers snapping off the tips) racing out along the
     floor over a scorched band while the flash cools in the middle; then the wall tears into free licks of flame that
     lift off, shrink and cool to embers, the scorch cracks glow and dither away, and smoke wisps and ash drift up and
-    out, a spray of sparks flying all the way through. Designed in 18 "old" frames (u) and sampled finer."""
+    out, a spray of sparks flying all the way through. `floor_layer` returns just the flat floor parts (flash, scorch band,
+    glow, cracks). Designed in 18 "old" frames (u) and sampled finer."""
     n = FLARE_W
     c = Canvas(n)
+    fl = Canvas(n)  # the flat floor parts, split out so they draw under the players
     ov = Canvas(n)
     m = n // 2
     rng = random.Random(41)
@@ -3582,7 +3584,7 @@ def flare_ring_frame(k: int) -> Image.Image:
     d_age = max(0.0, u - 9)
     if 2 <= u <= 14.99:  # a scorched band on the floor behind the front, thinning to dots as it cools
         band = 18 if u <= 9 else 7
-        d = ImageDraw.Draw(c.img)
+        d = ImageDraw.Draw(fl.img)
         for rr, col in ((r, MAROON if u < 11 else SHADOW), (r - band, None)):
             if rr > 2:
                 d.ellipse((m - rr, m - rr * sq, m + rr, m + rr * sq), fill=(col + (255,)) if col else (0, 0, 0, 0))
@@ -3590,17 +3592,17 @@ def flare_ring_frame(k: int) -> Image.Image:
             mod = 2 + int(u - 10) // 2
             for y in range(n):
                 for x in range(n):
-                    if c.px[x, y][3] and (x + y * 2) % mod != 0:
-                        c.px[x, y] = (0, 0, 0, 0)
+                    if fl.px[x, y][3] and (x + y * 2) % mod != 0:
+                        fl.px[x, y] = (0, 0, 0, 0)
         if u < 7:  # the flash cooling at the middle
             fr = (26, 21, 16, 12, 8)[ui - 2] if ui - 2 < 5 else 5
-            c.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), (WHITE, WHITE, YELLOW, ORANGE, RED)[min(4, ui - 2)])
+            fl.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), (WHITE, WHITE, YELLOW, ORANGE, RED)[min(4, ui - 2)])
         if 3 <= u < 10:  # the inner edge glows, a hot highlight lower down on the far side
             ri = r - band + 3
-            c.flat(lambda dd, f: dd.ellipse((m - ri, m - ri * sq, m + ri, m + ri * sq), outline=f, width=2),
+            fl.flat(lambda dd, f: dd.ellipse((m - ri, m - ri * sq, m + ri, m + ri * sq), outline=f, width=2),
                    ORANGE if u < 8 else RED)
             if u < 9:
-                c.flat(lambda dd, f: dd.arc((m - ri + 2, m - (ri - 2) * sq, m + ri - 2, m + (ri - 2) * sq), 20, 160, fill=f,
+                fl.flat(lambda dd, f: dd.arc((m - ri + 2, m - (ri - 2) * sq, m + ri - 2, m + (ri - 2) * sq), 20, 160, fill=f,
                                             width=1), YELLOW)
         if 7 <= u < 14:  # glowing cracks in the scorch, cooling
             col = (YELLOW, ORANGE, ORANGE, RED, RED, MAROON, MAROON)[ui - 7]
@@ -3609,16 +3611,16 @@ def flare_ring_frame(k: int) -> Image.Image:
                 a = cr.uniform(0, math.tau)
                 rad = cr.uniform(0.25, 0.95) * r
                 x0, y0 = m + math.cos(a) * rad, m + math.sin(a) * rad * sq
-                c.flat(L([(x0, y0), (x0 + cr.uniform(-5, 5), y0 + cr.uniform(-2, 2)),
+                fl.flat(L([(x0, y0), (x0 + cr.uniform(-5, 5), y0 + cr.uniform(-2, 2)),
                           (x0 + cr.uniform(-9, 9), y0 + cr.uniform(-3, 3))], 1), col)
     if u < 2:  # the flash: a white-hot disc with rays
         fr = (16, 30)[ui]
-        c.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), YELLOW)
-        c.flat(E((m - fr + 5, m - (fr - 5) * sq, m + fr - 5, m + (fr - 5) * sq)), WHITE)
+        fl.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), YELLOW)
+        fl.flat(E((m - fr + 5, m - (fr - 5) * sq, m + fr - 5, m + (fr - 5) * sq)), WHITE)
         if ui == 1:
             for a in range(0, 360, 45):
                 ca, sa = math.cos(math.radians(a)), math.sin(math.radians(a))
-                c.flat(L([(m + ca * (fr + 2), m + sa * (fr + 2) * sq), (m + ca * (fr + 16), m + sa * (fr + 16) * sq)], 2),
+                fl.flat(L([(m + ca * (fr + 2), m + sa * (fr + 2) * sq), (m + ca * (fr + 16), m + sa * (fr + 16) * sq)], 2),
                        WHITE)
     tongues = flare_tongues()
     for a, hv, wv, lean_j, appear, burn, rate, ph0, big in tongues:  # the wall, back to front
@@ -3690,6 +3692,8 @@ def flare_ring_frame(k: int) -> Image.Image:
         rb = ring_r(birth) * sr_.uniform(0.7, 1.05)
         ca, sa = math.cos(a), math.sin(a)
         ember_spark(ov, m + ca * rb, m + sa * rb * sq - 4, ca * sp, sa * sp * sq - sr_.uniform(0.6, 2.0), u - birth, lf, 0.07, 3)
+    if floor_layer:
+        return finish(fl, Canvas(n))
     return finish(c, ov)
 
 
@@ -3743,7 +3747,8 @@ FX = {
 ## (sky_pillar: frames are wider than tall, so it is checked whole; frames keep clear of their edges by construction.)
 FX_IMAGES = {"vine": vine, "vine_top": vine_top,
              "sky_pillar": lambda: strip([sky_pillar_frame(k) for k in range(PILLAR_FRAMES)]),
-             "flare_ring": lambda: strip([flare_ring_frame(k) for k in range(FLARE_FRAMES)])}
+             "flare_ring": lambda: strip([flare_ring_frame(k) for k in range(FLARE_FRAMES)]),
+             "flare_ring_floor": lambda: strip([flare_ring_frame(k, True) for k in range(FLARE_FRAMES)])}
 
 
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint,

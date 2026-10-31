@@ -112,6 +112,7 @@ const PILLAR_BASE_X: float = 8.0
 ## (FLARE_FRAMES square frames, centred on his feet, its reach FLARE_ART_RADIUS art px = the blast's radius / SPRITE_SCALE).
 const FLARE_CHARGE_ART: Texture2D = preload(FX_DIR + "flint_flare.png")
 const FLARE_RING_ART: Texture2D = preload(FX_DIR + "flare_ring.png")
+const FLARE_RING_FLOOR_ART: Texture2D = preload(FX_DIR + "flare_ring_floor.png")  # its scorch and glow, under the players
 const FLARE_RING_TIME: float = 0.7
 const FLARE_ART_RADIUS: float = 80.0
 ## Supernova (VOLLEY of 16 fireballs, generate.py SUPERNOVA_*): a burst of fire and sparks centred on him the step it goes off.
@@ -376,7 +377,9 @@ func sync(p: Player) -> void:
 	var charging: bool = nova != null and nova.nova_charging() and not p.dead
 	if _flare != null and not charging and nova != null and nova.is_active() and not p.dead:  # the ring goes off
 		var k: float = nova.data.nova_blast.splash_radius / (FLARE_ART_RADIUS * Constants.SPRITE_SCALE)
-		_poof(p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y), FLARE_RING_ART, FLARE_RING_TIME, k)
+		var at: Vector2 = p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y)
+		_poof(at, FLARE_RING_ART, FLARE_RING_TIME, k)
+		_poof(at, FLARE_RING_FLOOR_ART, FLARE_RING_TIME, k, true)
 	_flare = nova if charging else null
 	var supernova: CharacterSkill = _slot_id(p, &"supernova")
 	var bursting: bool = supernova != null and supernova.is_active() and not p.dead
