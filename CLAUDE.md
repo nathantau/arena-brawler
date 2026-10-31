@@ -316,6 +316,15 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   the art; sound, sparks, shake stay). Art (generate.py `eruption_crack` period-4 telegraph with a ring of embers at the
   blast's reach, 12-frame `eruption` strip started `ERUPTION_LEAD` before the blast so the floor bulges into the burst,
   `icon_eruption`; `flame_tongue()` is Flint's tongue helper, now module level), played by `SpecialFx` from synced state.
+- **Blossom Snare** (2026-10-31, Sakura special, `blossom_snare`, kind SNARE = 13): throws one big spinning blossom along the
+  aim (`blossom_snare` weapon via `volley_weapon`, seq + `VOLLEY_SEQ_OFFSET`, 650 px/s, 640 px range, radius 9); the first
+  enemy hit takes 10 dmg and is snared: move speed x0.45 for 2 s (`WeaponData.snare_time/snare_factor`, applied in
+  `ProjectilePool._damage_player` on the authority only; own shots never hit their owner). Cooldown 9 s. Minimal slow status:
+  `PlayerStats.slow_remaining/slow_factor` (one at a time, a new snare refreshes it, ticks down in `stats.tick`, cleared by
+  `reset()` on respawn, multiplies speed in `Player.simulate`; dash isn't slowed), synced as `StateField.SLOW_REMAINING/FACTOR`
+  and covered by the replay test. `SpecialFx` draws, from the synced slow state on every peer, a petal burst when it jumps up
+  and looping pink vines round the victim's feet while it lasts. Art (generate.py `blossom_shot` 4-frame projectile (the pool now
+  reads any frame count from the strip), `snare_vines` period 4, `snare_burst` 8 frames, `icon_blossom_snare`).
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

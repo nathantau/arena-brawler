@@ -67,6 +67,8 @@ class Slot:
 	var drag: float = 0.0
 	var homing: float = 0.0
 	var pierce_left: int = 0
+	var snare_time: float = 0.0
+	var snare_factor: float = 1.0
 	## Clients let piercing pellets fly on after server hit events (they stop where they stop locally).
 	var piercing: bool = false
 	var sprite: Texture2D
@@ -191,6 +193,8 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.homing = weapon.homing
 	slot.pierce_left = weapon.pierce
 	slot.piercing = weapon.pierce > 0
+	slot.snare_time = weapon.snare_time
+	slot.snare_factor = weapon.snare_factor
 	if not AutoAim.has_line_of_sight(space, _los_query, origin, muzzle):
 		_stop(slot, muzzle)
 
@@ -334,7 +338,7 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 			else:
 				if authoritative:
 					_damage_player(target, s.attacker_id, s.shot_seq, s.pellet, s.damage, s.crit,
-						s.vel.normalized() * s.knockback, hit.position, s.owner_id)
+						s.vel.normalized() * s.knockback, hit.position, s.owner_id, s.snare_time, s.snare_factor)
 				if s.pierce_left > 0:
 					s.pierce_left -= 1
 					_add_impact(hit.position, s.radius, s.color)
@@ -457,9 +461,11 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 
 ## `key_owner`: the pellet key's owner (differs from the attacker after a reflection).
 func _damage_player(target: Player, attacker_id: int, seq: int, pellet: int, damage: int, crit: bool,
-		knockback: Vector2, at: Vector2, key_owner: int = -1) -> void:
+		knockback: Vector2, at: Vector2, key_owner: int = -1, snare_time: float = 0.0, snare_factor: float = 1.0) -> void:
 	var dealt: int = target.take_hit(damage, crit, knockback, attacker_id)
 	if dealt > 0:
+		if snare_time > 0.0:
+			target.stats.apply_slow(snare_time, snare_factor)
 		player_hit.emit(key_owner if key_owner >= 0 else attacker_id, seq, pellet, target.player_id, dealt, crit, at)
 
 
@@ -500,9 +506,10 @@ func _draw() -> void:
 			draw_rect(Rect2(at - Vector2(size, size) * 0.5, Vector2(size, size)),
 				CRIT_SPARKLE_COLOR if s.crit and (tick + i) % 2 == 0 else s.color)
 		var h: float = s.sprite.get_height()
+		var frames: int = int(s.sprite.get_width() / h)
 		var scale_px: float = px * (CRIT_SPRITE_SCALE if s.crit else 1.0)
 		draw_set_transform(s.pos, s.vel.angle(), Vector2(scale_px, scale_px))
-		draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % 2) * h, 0, h, h),
+		draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
 			CRIT_FLASH if s.crit and tick % 2 == 0 else Color.WHITE)
 		draw_set_transform(Vector2.ZERO)
 	for imp: Impact in _impacts:

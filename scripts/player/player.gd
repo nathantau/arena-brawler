@@ -14,7 +14,7 @@ enum StateField {
 	ID, POSITION, VELOCITY, FACING,
 	HP, ARMOR, ENERGY, ENERGY_ACCUM, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
 	CHARACTER, SKILL_IDS, SKILL_COOLDOWNS, SKILL_ACTIVE, SKILL_DIRECTIONS, SKILL_ANCHORS, SKILL_WEAPON_COOLDOWNS,
-	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ,
+	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ, SLOW_REMAINING, SLOW_FACTOR,
 	COUNT,
 }
 
@@ -284,7 +284,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	else:
 		var mover: CharacterSkill = active_skill(SkillData.Kind.DASH)
 		var tf: CharacterSkill = form()
-		var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0)
+		var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0) \
+			* stats.speed_scale()
 		velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed, delta)
 		move_and_slide()
 	_sync_shields()
@@ -321,7 +322,7 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			_throw_grapple(slot)
 		SkillData.Kind.ERUPTION:
 			slot.anchor = eruption_spot(slot.direction, slot.data)
-		SkillData.Kind.VOLLEY:
+		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
 				projectiles.fire_shot(player_id, seq, global_position, slot.direction, slot.data.volley_weapon, match_seed)
@@ -671,6 +672,8 @@ func capture_state() -> Array:
 	s[StateField.DEAD] = dead
 	s[StateField.RESPAWN_TIMER] = respawn_timer
 	s[StateField.LAST_INPUT_SEQ] = last_input_seq
+	s[StateField.SLOW_REMAINING] = stats.slow_remaining
+	s[StateField.SLOW_FACTOR] = stats.slow_factor
 	return s
 
 
@@ -717,6 +720,8 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 		_prev_skills[i] = prev[i]
 	respawn_timer = s[StateField.RESPAWN_TIMER]
 	last_input_seq = s[StateField.LAST_INPUT_SEQ]
+	stats.slow_remaining = s[StateField.SLOW_REMAINING]
+	stats.slow_factor = s[StateField.SLOW_FACTOR]
 	_set_dead(s[StateField.DEAD])
 	_sync_shields()
 	return true

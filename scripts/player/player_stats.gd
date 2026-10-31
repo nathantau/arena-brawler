@@ -15,6 +15,9 @@ var invulnerable_time: float = 0.0
 var regen_accum: float = 0.0
 ## Fractional energy regen carried between ticks.
 var energy_accum: float = 0.0
+## Snare: move speed is multiplied by slow_factor while slow_remaining > 0. Set only on the authority, synced.
+var slow_remaining: float = 0.0
+var slow_factor: float = 1.0
 
 
 func _init(
@@ -36,6 +39,8 @@ func reset() -> void:
 	invulnerable_time = 0.0
 	regen_accum = 0.0
 	energy_accum = 0.0
+	slow_remaining = 0.0
+	slow_factor = 1.0
 
 
 func is_dead() -> bool:
@@ -61,6 +66,7 @@ func apply_damage(amount: int) -> int:
 
 func tick(delta: float) -> void:
 	invulnerable_time = maxf(0.0, invulnerable_time - delta)
+	slow_remaining = maxf(0.0, slow_remaining - delta)
 	if is_dead():
 		return
 	if energy < max_energy:
@@ -81,6 +87,16 @@ func tick(delta: float) -> void:
 	if whole > 0:
 		armor = mini(max_armor, armor + whole)
 		regen_accum -= whole
+
+
+## A new snare replaces the current one (refreshes it).
+func apply_slow(time: float, factor: float) -> void:
+	slow_remaining = time
+	slow_factor = factor
+
+
+func speed_scale() -> float:
+	return slow_factor if slow_remaining > 0.0 else 1.0
 
 
 func try_spend_energy(cost: int) -> bool:

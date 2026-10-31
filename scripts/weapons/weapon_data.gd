@@ -77,6 +77,11 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Turn rate (rad/s) toward the nearest enemy; 0 = flies straight (Sakura's petal storm).
 @export var homing: float = 0.0
 
+@export_group("Snare")
+## A direct hit slows the victim to `snare_factor` x move speed for `snare_time` seconds (0 = no snare).
+@export var snare_time: float = 0.0
+@export_range(0.0, 1.0) var snare_factor: float = 1.0
+
 @export_group("Melee")
 @export var melee_range: float = 64.0
 @export var melee_arc_deg: float = 120.0

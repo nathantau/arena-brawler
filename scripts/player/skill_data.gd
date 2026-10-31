@@ -16,8 +16,9 @@ extends Resource
 ## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
 ## ERUPTION: marks a spot on the floor ahead along the aim (short of walls); when `duration` (the telegraph) runs out,
 ## `eruption_blast` goes off there.
+## SNARE: fires `volley_weapon` once (a single projectile); whoever it hits is slowed (WeaponData.snare_*).
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, SNARE = 13 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
