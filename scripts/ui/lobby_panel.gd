@@ -9,6 +9,7 @@ extends PanelContainer
 const SPACING: int = 10
 const BUTTON_MIN_SIZE: Vector2 = Vector2(170, 52)
 const READY_MIN_SIZE: Vector2 = Vector2(240, 64)
+const LEAVE_MIN_SIZE: Vector2 = Vector2(140, 64)
 const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 222)
 ## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
 ## the cell's body box, so they all stand in the same spot.
@@ -126,6 +127,10 @@ func _ready() -> void:
 	_blocker.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 	_blocker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var leave: Button = _button(footer, LEAVE_MIN_SIZE)
+	leave.text = "Leave"
+	leave.size_flags_vertical = Control.SIZE_SHRINK_END
+	leave.pressed.connect(func() -> void: arena.leave_requested.emit(false))
 	_ready_button = _button(footer, READY_MIN_SIZE)
 	_ready_button.theme_type_variation = &"PrimaryButton"
 	_ready_button.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
@@ -151,6 +156,8 @@ func _refresh() -> void:
 	_title.text = "LOADING ROOM · %s · %s" % [MatchRules.MODE_NAMES[st.mode], ArenaLayouts.NAMES[st.arena_index]]
 	_rules.text = "First to %d kills · %d:%02d" % [MatchRules.kill_target(st.mode),
 		int(st.time_limit) / 60, int(st.time_limit) % 60]
+	if arena.host_address != "":
+		_rules.text += " · Hosting on %s" % arena.host_address
 	_mode_button.text = "Mode: %s" % ("Duel" if st.mode == MatchRules.Mode.DUEL else "FFA")
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
 	if _weapons_for != me.character.id:

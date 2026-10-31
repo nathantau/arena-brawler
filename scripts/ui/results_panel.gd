@@ -5,6 +5,7 @@ extends CenterContainer
 
 const PANEL_MIN_SIZE: Vector2 = Vector2(560, 0)
 const SPACING: int = 10
+const LEAVE_MIN_SIZE: Vector2 = Vector2(180, 56)
 const ROW_SPACING: int = 14
 const ICON_SIZE: Vector2 = Vector2(26, 26)
 const PORTRAIT_SIZE: Vector2 = Vector2(48, 48)
@@ -45,6 +46,14 @@ func _ready() -> void:
 	_footer.theme_type_variation = &"DimLabel"
 	_footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_footer)
+	var leave := Button.new()
+	leave.text = "Leave"
+	leave.custom_minimum_size = LEAVE_MIN_SIZE
+	leave.focus_mode = Control.FOCUS_NONE
+	leave.pressed.connect(func() -> void: arena.leave_requested.emit(false))
+	var leave_row := CenterContainer.new()
+	leave_row.add_child(leave)
+	box.add_child(leave_row)
 	arena.match_updated.connect(_refresh)
 	_refresh()
 

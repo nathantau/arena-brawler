@@ -2,6 +2,7 @@ class_name CmdArgs
 extends RefCounted
 ## User args (after `--`):
 ##   --server [--port N] [--bots N]   headless authoritative server
+##   --host [--port N]                listen server: this device hosts AND plays (the menu's HOST button)
 ##   --connect host[:port]            join a server directly
 ##   --offline                        local sandbox vs bots, skip the menu
 ##   --autopilot                      (client) drive + fire automatically, for testing
@@ -17,6 +18,7 @@ extends RefCounted
 
 var server: bool = false
 var port: int = Constants.DEFAULT_PORT
+var host: bool = false
 var bots: int = 0
 var connect_host: String = ""
 var connect_port: int = Constants.DEFAULT_PORT
@@ -40,6 +42,8 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 		match arg:
 			"--server":
 				a.server = true
+			"--host":
+				a.host = true
 			"--port":
 				a.port = next.to_int()
 				i += 1

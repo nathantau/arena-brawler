@@ -24,6 +24,8 @@ func _ready() -> void:
 	Engine.max_fps = Constants.PHYSICS_FPS
 	if args.server:
 		_start_server()
+	elif args.host:
+		_start_host()
 	elif args.connect_host != "":
 		_join(args.connect_host, args.connect_port)
 	elif args.offline:
@@ -41,6 +43,45 @@ func _start_server() -> void:
 	if err != OK:
 		push_error("[server] failed to listen on port %d: %s" % [args.port, error_string(err)])
 		get_tree().quit(1)
+
+
+## Listen server: the same NetServer as `--server`, plus this device plays as peer 1 (the
+## server's own id, so it never clashes with a client) through a local view, like offline.
+func _start_host() -> void:
+	_hide_menu()
+	_server_arena = Arena.new(Arena.Mode.SERVER, randi(), args.match_mode, args.time_limit)
+	_server_arena.match_state.arena_index = args.arena_index
+	add_child(_server_arena)
+	var err: Error = session.start_server(_server_arena, args.port, args.bots, args.net_debug)
+	if err != OK:
+		_server_arena.queue_free()
+		_server_arena = null
+		_show_menu("Could not host on port %d: %s" % [args.port, error_string(err)])
+		return
+	var ip: String = LanAddress.local()
+	_server_arena.host_address = "%s:%d" % [ip if ip != "" else "(no Wi-Fi)", args.port]
+	print("[host] %s" % _server_arena.host_address)
+	_server_arena.leave_requested.connect(_on_host_leave, CONNECT_DEFERRED)
+	var input := LocalInput.new()
+	input.autopilot = args.autopilot
+	var me: Player = _server_arena.add_player(NetSession.HOST_ID, _server_arena.free_color_index(), input)
+	_server_arena.attach_local_view(me, input)
+	if args.character != &"":
+		_server_arena.select_character(me, args.character)
+	if args.weapon != &"":
+		_server_arena.select_weapon(me, args.weapon)
+	if args.special != &"":
+		_server_arena.select_special(me, 1, args.special)
+	if args.autopilot:
+		_server_arena.referee.set_ready(me.player_id, true)
+
+
+## Leave as host: shut the server down (clients see "Disconnected from server") and go back to the menu.
+func _on_host_leave(_restart: bool) -> void:
+	session.stop()
+	_server_arena.queue_free()
+	_server_arena = null
+	_show_menu("")
 
 
 func _start_offline() -> void:
@@ -100,6 +141,7 @@ func _show_menu(status: String) -> void:
 	if _menu == null:
 		_menu = MainMenu.new()
 		_menu.offline_pressed.connect(_start_offline)
+		_menu.host_pressed.connect(_start_host)
 		_menu.join_pressed.connect(func(address: String) -> void:
 			var addr: Array = CmdArgs.parse_address(address)
 			_join(addr[0], addr[1]))

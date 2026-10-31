@@ -70,6 +70,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - Run client (menu: offline vs bots / join by IP): `godot --path . `
 - Skip the menu: `godot --path . -- --offline` or `godot --path . -- --connect 192.168.1.20:7777`
 - Run client with touch controls on desktop (mouse emulates touch): `godot --path . -- --touch`
+- Host from a device (what the menu's HOST button does; listen server, you play too, LAN IP:port shown in the loading room): `godot --path . -- --host [--port 7777]`
+  (headless e2e: `--headless -- --host --autopilot` + a `--connect 127.0.0.1:7777 --autopilot` client)
 - Run headless server: `godot --path . --headless -- --server --port 7777` (add `--bots N` for server-side bots)
 - Match options (server / offline): `--mode duel|ffa` (starting mode; players can switch it in the lobby),
   `--arena N` (0 = Pit, 1 = Foundry), `--time-limit S` (shorter matches for testing)
@@ -417,6 +419,14 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
     generated from the Flicker sprite by `tools/sprites/generate.py`.
   - Still needed: Apple Team ID (+ signing) → archive + TestFlight upload; a cloud host with a public UDP port;
     a default server address in the client (currently join-by-IP in the menu); test on a real device over the internet.
+- **LAN host** (2026-10-31): main-menu HOST button / `--host` makes the device a listen server: the same `NetServer` as `--server`
+  (Arena.Mode.SERVER) plus the host plays as peer `NetSession.HOST_ID` (1, the server's own id) through a `LocalInput` + local view,
+  exactly like offline, so no second client/peer; clients see the host as a normal remote player. `Arena.host_address`
+  ("192.168.x.x:7777", `LanAddress.local()` = first private IPv4 from `IP.get_local_addresses()`) shows in the loading room header.
+  Pause-menu Leave as host -> `Main._on_host_leave`: `session.stop()` closes the ENet peer (clients get the normal "Disconnected from
+  server") and returns to the menu. iOS Info.plist `NSLocalNetworkUsageDescription` set via `application/additional_plist_content`
+  in export_presets.cfg. Limits: LAN only (no NAT traversal), no Bonjour discovery (type the IP), host's sim and render share one
+  device. Leave buttons in the loading room and results panel (same `leave_requested` path as the pause menu).
 - [ ] M6 not started
 - **Sakura FX polish** (2026-10-31): Blossom Ward / Snare / Petal Drift / Cherry Sapling strips doubled in frames at the
   same durations (ward loop 8 + open/close 12, snare vines 8 + burst 12, drift dissolve/reform/swirl 16, sapling grow/wilt
