@@ -168,7 +168,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   - `ProjectilePool` handles all three kinds. Each pellet keeps its (owner, seq, pellet) key; `attacker_id` changes
     when reflected so server hit events still match the client's cosmetic copy.
   - **3 characters** (`data/characters/*.tres`, `CharacterData` + `CharacterSkill` replacing `DashSkill`):
-    Flicker, Warden (Barrier: a wall on `LAYER_SHIELDS` that stops enemy projectiles, 3 s),
+    Flicker, Warden (Barrier: a wall on `LAYER_SHIELDS` that stops enemy projectiles, 4 s),
     Twinshot. Characters
     differ in HP/armor/energy/speed. Skill state + character id are in snapshots, so others' barriers
     show on every client and replay is exact (tested for all three). Picked in the lobby (`rpc_select_character`).
@@ -246,7 +246,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `SkillCatalog.shared()`; `CharacterData.signature_skill` + `can_use_skill()` (same tag list as weapons).
   Every player has `dash` (shared, own button / Space / InputFrame `skill`) and `special` (picked in the loading
   room, second button / E / InputFrame `special` flag 8). Specials: Barrier (heavy: Warden, Twinshot)
-  (Dual Wield was removed 2026-10-31: too close to another game's signature mechanic), **Great Ape** (Wukong signature, TRANSFORM: 6 s as a big dark-red ape drawn x1.35
+  (Dual Wield was removed 2026-10-31: too close to another game's signature mechanic), **Great Ape** (Wukong signature, TRANSFORM: 8 s as a big dark-red ape drawn x1.35
   from `assets/sprites/wukong_ape.png` (generate.py `FORMS`), half damage taken, 0.9 speed, FIRE uses
   `ape_fists` (melee slam) instead of the loadout, each slam playing the sheet's "attack" strip (generate.py `ATTACKS`/`APE_POSES`: he crouches, leaps (per-frame `hop`, knees tucked) with fists up beside his head, lands wide in a puff of dust as they smash down in front where the slam lands, back to the knuckle-walk; the hit waits for the smash frame: `WeaponData.windup` 0.3 s, `Player._windup_left`, remote peers start the strip at the impact via `play_recoil(skip)`); form weapon cooldown is in the snapshot). Snapshots carry both
   slots (`DASH_*`, `SPECIAL_ID/…`); server validates `rpc_select_special`; `--special ID` CLI. The loading room is
@@ -254,7 +254,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   longer Somersault dash is gone: everyone shares one Dash).
 - **Balance pass** (2026-10-31, numbers only, untested in real matches): reference sustained DPS vs ~140 HP+armor.
   Sakura fan 5 -> 4 dmg; Ember Palm interval 0.12 -> 0.14 s; SMG 7 -> 6; Arc Blade 34 -> 30; Boomtube rocket 40 -> 50;
-  Inferno beam 7 -> 5 dmg/tick; Petal Storm 3 -> 2 dmg per petal, cooldown 8 -> 9 s.
+  Inferno beam 7 -> 5 dmg/tick; Petal Storm 3 -> 2 dmg per petal, cooldown 8 -> 9 s (later 7 s, see Uptime balance pass).
 - **Flicker is the ninja** (2026-10-30): navy shroud, steel breastplate, mask peaking at the nose, steel forehead plate, choppy
   bob with a big spiky topknot (drawn above the art box: generate.py `CROWNS`, kept on KO via `KO_CROWNS`), its red
   tie behind her hair, ribbon tails that sway in idle; bare hands. Clothes shading (2026-10-31): light from the top left; breastplate specular + dithered shaded lower half, two-tone sash, shroud creases with lit ridges, sleeve/shin wraps (generate.py `sleeve_detail`). Four Flicker-only specials (tag `flicker`): **Shadow Clones** (signature, CLONES: 3 decoys run out from
@@ -296,8 +296,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   other slot already has it; `active_skill(kind)` finds the running TRANSFORM / CLONES / SMOKE / DASH. Loading room:
   pick 2 specials (badges 1/2, a new pick replaces the least recently set slot). Bots fight with their signature.
   `--special ID` sets slot 1. Energy numbers are a first guess, untested in real matches.
-- **Blossom Ward** (2026-10-31, Sakura special, `blossom_ward`, kind WARD = 10): 3 s ring of petals (radius
-  `ward_radius` 69 px, cooldown 10 s) that follows her and catches enemy projectiles; her own shots, beams and melee
+- **Blossom Ward** (2026-10-31, Sakura special, `blossom_ward`, kind WARD = 10): 3.3 s ring of petals (radius
+  `ward_radius` 69 px, cooldown 9 s) that follows her and catches enemy projectiles; her own shots, beams and melee
   pass. Reuses Barrier's path: a second `ShieldWall` (`is_ward`: a circle on LAYER_SHIELDS, a child of the Player so it
   moves with her, also for interpolated remote players) that `ProjectilePool` rays stop on, on server and client alike;
   shots that reach her inside the ring (fired from within it, or the ring moved onto them) are caught too
@@ -321,7 +321,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `Player.eruption_spot`, stored in the synced `anchor`); after a 0.6 s telegraph (`duration`) a pillar of fire goes off
   there: `eruption_blast` (`WeaponData.blast`: a splash "shot" that goes off where it's fired, 40 dmg, 80 px, falloff to
   0.4, needs sight, no self-damage, 300 knockback away from the spot, so up-ish) through `fire_shot` / `shot_fired` with
-  seq + `ERUPTION_SEQ_OFFSET`; replay fires nothing; cooldown 8 s. `exploded(..., art)` is false for blasts (the pillar is
+  seq + `ERUPTION_SEQ_OFFSET`; replay fires nothing; cooldown 6.3 s. `exploded(..., art)` is false for blasts (the pillar is
   the art; sound, sparks, shake stay). Art (volcano, reworked 2026-10-31; generate.py `eruption_crack` = 8-frame telegraph loop at 12 fps: cracked scorched floor, a rocky mound with lava pulsing in its cracks, hopping rocks, dust, ring of embers at the blast's reach; `eruption` = 26-frame 256 px strip at 15 fps (`ERUPTION_FPS`, 1.73 s) started `ERUPTION_LEAD` (4 frames) before the blast: the mound heaves and splits, then a volcanic cone bursts into a ~125 px fountain of lava and fire (`fire_column`, Flint's flowing bonfire tongues), dust ring, lava bombs arcing out and splatting, a dark ash plume, a magma pool; then it cools: cone crumbles, lava darkens to crust, embers fade, smoke drifts off. Heights/timings are the `FIRE_H`/`ERUPT_*` constants; `icon_eruption`; `flame_tongue()` is Flint's tongue helper), played by `SpecialFx` from synced state.
 - **Blossom Snare** (2026-10-31, Sakura special, `blossom_snare`, kind SNARE = 13): throws one big spinning blossom along the
   aim (`blossom_snare` weapon via `volley_weapon`, seq + `VOLLEY_SEQ_OFFSET`, 650 px/s, 640 px range, radius 9); the first
@@ -333,7 +333,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   and looping pink vines round the victim's feet while it lasts. Art (generate.py `blossom_shot` 4-frame projectile (the pool now
   reads any frame count from the strip), `snare_vines` period 4, `snare_burst` 8 frames, `icon_blossom_snare`).
 - **Staff Whirl** (2026-10-31, Apex special, `staff_whirl`, kind WHIRL = 11): spins the Cloud Staff round him for
-  `duration` 1.5 s (cooldown 9 s): every `whirl_interval` 0.25 s (first tick on the press; `CharacterSkill.whirl_tick_due`
+  `duration` 2 s (cooldown 7.5 s): every `whirl_interval` 0.25 s (first tick on the press; `CharacterSkill.whirl_tick_due`
   from the synced active time, no new synced field) enemies and crates within `whirl_radius` 70 px with line of sight take
   `whirl_damage` 8, pushed outward `whirl_knockback` 120; enemy projectiles touching the spin are sent back outward and
   become his (`ProjectilePool.whirl`, same attacker swap as the Arc Blade); he moves at `whirl_speed_scale` 0.75 and
@@ -347,7 +347,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   0.3 s (`trail_dash_time`) and leaves a trail of fire from the takeoff point to where he ended up. Both ends are
   fixed at activation (`Player._activate` measures the run with a test-only `move_and_collide`, so walls stop it) and
   live in the synced skill state like Vine Swing: `anchor` = takeoff, `direction` = the whole takeoff->end vector;
-  the dash is `anchor + direction * trail_progress()` (no move_and_slide meanwhile). The trail burns for `duration` 3 s
+  the dash is `anchor + direction * trail_progress()` (no move_and_slide meanwhile). The trail burns for `duration` 4 s
   (cooldown 8 s): every `trail_tick` 0.3 s (derived from the skill's elapsed time, `Player._burn_trail`)
   `ProjectilePool.burn_segment` hits every other player within `trail_radius` 22 px of the segment for `trail_damage` 6
   (authoritative only, replay does nothing, no self-damage, no i-frames, no knockback; keyed `seq + TRAIL_SEQ_OFFSET`).
@@ -358,8 +358,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   and joined by a thin jagged ember line plotted in art pixels (`_draw_blaze_line`: 1-2 px, hot spots running along it, loose
   sparks, charred pixel under it; cools ORANGE, RED, dark cracks, dithered away after the flames), plus an 8-frame ignition
   at takeoff and a flame streak behind him while he dashes. Preview: `tools/blaze_preview.gd` (runs in set directions).
-- **Petal Drift** (2026-10-31, Sakura special, `petal_drift`, kind DRIFT = 15): she dissolves into petals for `duration` 0.8 s
-  (cooldown 7 s) and glides at `drift_speed_scale` 1.6 x her speed along the stick (else the direction fixed at the press:
+- **Petal Drift** (2026-10-31, Sakura special, `petal_drift`, kind DRIFT = 15): she dissolves into petals for `duration` 1 s
+  (cooldown 6.5 s) and glides at `drift_speed_scale` 1.6 x her speed along the stick (else the direction fixed at the press:
   move, else aim), steerable, through the normal `move_and_slide` path (walls stop her). `try_activate` gives i-frames for
   the whole duration (`stats.invulnerable_time`), `Player.is_hidden()` is true meanwhile (enemy auto-aim and bots skip her,
   like smoke) and she can't fire; no new synced state (active time + direction in the skill snapshot). `SpecialFx` hides her
@@ -369,7 +369,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - **Sky Pillar** (2026-10-31, Apex special, `sky_pillar`, kind PILLAR = 14): he plants the Cloud Staff and it shoots out along
   the aim; after `pillar_windup` 0.25 s (he can't move or fire) it slams down on a line `pillar_length` 320 px x `pillar_width`
   36 px: every other player whose centre is within half the width of it takes `pillar_damage` 30 and is thrown
-  `pillar_knockback` 260 sideways (away from the line), and crates on it take the damage too. Cooldown 8 s, `duration` 0.75 s
+  `pillar_knockback` 260 sideways (away from the line), and crates on it take the damage too. Cooldown 6.3 s, `duration` 0.75 s
   (the whole animation). The line is fixed at activation (`Player._activate`: ray on `LAYER_WALLS` from his centre, so the first
   wall or crate shortens it) and stored in the synced skill state like Blaze Run (`anchor` = start, `direction` = the whole
   vector). The hit lands in the step the active time crosses the windup (`CharacterSkill.pillar_slammed`), authoritative only,
@@ -388,7 +388,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `flare_ring_frame` 12 frames of 192 px: flash, a ring of flame tongues racing out along the floor over a scorched band, then
   embers and smoke, `icon_flare_burst`): `SpecialFx` hides his sprite and draws the charge pose, then plays the ring as a poof at
   his feet scaled to the blast radius.
-  Sakura's **Cherry Sapling** (`SkillData.Kind.SAPLING = 18`, `cherry_sapling.tres`, 12 s cooldown, 6 s tree): plants a tree at her
+  Sakura's **Cherry Sapling** (`SkillData.Kind.SAPLING = 18`, `cherry_sapling.tres`, 10 s cooldown, 8 s tree): plants a tree at her
   feet (`anchor`, no new synced state); every `sapling_interval` (0.5 s, `CharacterSkill.sapling_shot_due`) `Player._sapling_shoot`
   fires `cherry_petal` (5 dmg) from the canopy at the nearest visible enemy within 360 px (shadow clones count, smoked/dead skipped,
   ties go to the earlier player; wall line-of-sight checked), keyed `seq + SAPLING_SEQ_OFFSET` (1 << 22) and relayed via
@@ -398,7 +398,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   plays when a shot falls due, even if nothing was in range).
 - **Storm Cloud** (2026-10-31, Apex special, `storm_cloud`, kind STORM = 16): summons a dark thundercloud at a spot
   `storm_distance` 240 px ahead along the aim (`Player.storm_spot` = `spot_ahead`, the same wall-shortened ray as
-  `eruption_spot`; stored in the synced `anchor`). For `duration` 3.1 s (cooldown 10 s) every `storm_interval` 0.6 s (the first
+  `eruption_spot`; stored in the synced `anchor`). For `duration` 4 s (cooldown 8.5 s) every `storm_interval` 0.6 s (the first
   one interval after the press; `CharacterSkill.storm_tick_due(before)` from the synced active time, no new synced field,
   the last step counts) `ProjectilePool.strike` hits every other player within `storm_radius` 90 px of the spot with line of
   sight from it for `storm_damage` 12, pushed `storm_knockback` 80 away from the spot, no stun. Authoritative only, replay
@@ -455,3 +455,29 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   cloud + falling rain), a strike's scorch (`storm_scorch`, `Poof.on_floor`), the Eruption telegraph crack and the Staff Whirl ring.
   Flare Burst split the same way: `flare_ring_floor` (30 frames, flash, scorch band, inner glow, cracks; `flare_ring_frame(k, floor_layer=True)`) plays as an `on_floor` poof in sync with `flare_ring`, which keeps tongues, licks, smoke and sparks.
   Left above players on purpose: tall art (Sky Pillar, Blaze flames, Flare ring tongues, ward dome, sapling, snare vines, smoke).
+- **Uptime balance pass** (2026-10-31, `balance/ability-uptime`): abilities felt too rare/short. Mobility got more i-frames and
+  shorter cooldowns, buffs/zones/forms last longer, bursts only cool down faster (no damage changes; art-timed durations untouched).
+  Storm Cloud 4 s now fits 6 strikes (was 5). No `SpecialFx` change needed: ward/smoke/sapling/storm loop, end strips time from the end.
+  | Skill | Field | Before -> After |
+  |---|---|---|
+  | Dash | cooldown / dash_iframes | 1.8 -> 1.4 / 0.22 -> 0.30 |
+  | Barrier | cooldown / duration | 7 -> 6 / 3 -> 4 |
+  | Shadow Clones | cooldown / duration | 12 -> 10 / 5 -> 6.5 |
+  | Smoke Bomb | cooldown / duration | 10 -> 8.5 / 4 -> 5 |
+  | Fan of Blades | cooldown | 6 -> 4.7 |
+  | Grapple Kunai | cooldown | 6 -> 4.7 |
+  | Great Ape | cooldown / duration | 18 -> 15 / 6 -> 8 |
+  | Vine Swing | cooldown / swing_iframes | 7 -> 5.5 / 0.15 -> 0.30 |
+  | Staff Whirl | cooldown / duration | 9 -> 7.5 / 1.5 -> 2.0 |
+  | Sky Pillar | cooldown | 8 -> 6.3 |
+  | Storm Cloud | cooldown / duration | 10 -> 8.5 / 3.1 -> 4.0 |
+  | Inferno | cooldown / duration | 16 -> 13 / 5 -> 6.5 |
+  | Eruption | cooldown | 8 -> 6.3 |
+  | Blaze Run | cooldown / duration | 8 -> 6.5 / 3 -> 4 |
+  | Flare Burst | cooldown | 9 -> 7 |
+  | Supernova | cooldown | 7 -> 5.5 |
+  | Blossom Ward | cooldown / duration | 11 -> 9 / 2.5 -> 3.3 |
+  | Blossom Snare | cooldown | 9 -> 7 |
+  | Petal Drift | cooldown / duration | 8 -> 6.5 / 0.8 -> 1.0 |
+  | Cherry Sapling | cooldown / duration | 12 -> 10 / 6 -> 8 |
+  | Petal Storm | cooldown | 9 -> 7 |
