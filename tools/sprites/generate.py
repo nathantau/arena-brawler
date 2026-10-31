@@ -73,14 +73,18 @@ class Canvas:
         def inside(x, y):
             return 0 <= x < n and 0 <= y < n and m[x, y]
 
+        bb = mask.getbbox()  # only the shape's box (plus its 1 px outline ring) can change
+        if bb is None:
+            return
+        xs, xe, ys, ye = max(0, bb[0] - 1), min(n, bb[2] + 1), max(0, bb[1] - 1), min(n, bb[3] + 1)
         if line:
-            for y in range(n):
-                for x in range(n):
+            for y in range(ys, ye):
+                for x in range(xs, xe):
                     if not inside(x, y) and self.px[x, y][3] and any(
                             inside(nx, ny) for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))):
                         self.px[x, y] = OUTLINE + (255,)
-        for y in range(n):
-            for x in range(n):
+        for y in range(ys, ye):
+            for x in range(xs, xe):
                 if not inside(x, y):
                     continue
                 c = color
@@ -2217,12 +2221,21 @@ def slam_frame(k: int) -> Image.Image:
     return outline(c.img)
 
 
-ERUPT_SIZE = 128  # art px, square frames
+ERUPT_SIZE = 128  # telegraph frames, art px (the floor spot is the centre)
 ERUPT_R = 53  # blast radius in art px (eruption_blast.tres splash 80 / SPRITE_SCALE 1.5): SpecialFx.ERUPTION_ART_RADIUS
-ERUPT_BASE = 102  # eruption strip: the floor spot's y (the pillar rises from here); SpecialFx.ERUPTION_BASE_Y
 ERUPT_SQUASH = 0.6  # the floor seen in 3/4 view
-ERUPT_FRAMES = 12
-CRACK_FRAMES = 4
+CRACK_FRAMES = 8  # the telegraph loop: a rocky mound over the cracked floor, lava pulsing in its cracks, rumbling
+VOLC_SIZE = 256  # eruption strip frames, art px
+ERUPT_BASE = 204  # eruption strip: the floor spot's y (the volcano grows from here); SpecialFx.ERUPTION_BASE_Y
+ERUPT_FRAMES = 26
+ERUPT_BLAST = 4  # the frame the burst lands on; the ones before lead in from the telegraph (SpecialFx.ERUPTION_LEAD)
+MOUND_W, MOUND_H = 26, 18  # the telegraph mound, which the strip's first frames grow on from
+CONE_W, CONE_WT, CONE_H = 44, 15, 40  # the volcanic cone: foot half-width, crater half-width, height
+POOL_R = 54  # the magma pool's reach
+FIRE_H = (0, 0, 0, 12, 60, 100, 118, 126, 122, 114, 100, 86, 70, 56, 43, 32, 24, 15, 8, 4) + (0,) * 6
+FIRE_HW = (0, 0, 0, 8, 22, 26, 26, 26, 25, 23, 21, 19, 17, 15, 13, 12, 10, 9, 7, 5) + (0,) * 6
+
+
 
 
 def erupt_cracks(c: Canvas, cx: float, cy: float, reach: float, glow, rng_seed: int = 9, width: int = 2):
@@ -2241,29 +2254,8 @@ def erupt_cracks(c: Canvas, cx: float, cy: float, reach: float, glow, rng_seed: 
             c.flat(L(pts[:-1], 1), glow)
 
 
-def erupt_wisp(c: Canvas, x: float, y: float, r: float, lean: float, phase: float):
-    """A lick of flame broken off and rising, its tip curling over towards `lean` (-1 / 1); small ones are teardrops."""
-    if r >= 3:
-        flame_tongue(c, (x, y), (x - lean * r * 0.6, y - r * 1.6), (x + lean * r * 0.9, y - r * 2.8), phase,
-                     wide=r, mid=x)
-    elif r >= 1:
-        c.part(P([(x - r, y), (x + lean, y - 2.2 * r - 1), (x + r, y), (x, y + r)]), ORANGE if r >= 2 else RED,
-               shade=False, line=False)
-
-
-def erupt_smoke(c: Canvas, puffs):
-    """Lingering smoke: lumps over a darker shadow layer, light catching their tops."""
-    pts = [(x, y, r) for x, y, r in puffs if r >= 1]
-    if not pts:
-        return
-    c.part(blobs([(x + 2, y + 2, r) for x, y, r in pts]), OUTLINE, shade=False)
-    c.part(blobs(pts), SHADOW)
-    for x, y, r in pts:
-        if r >= 4:
-            c.flat(E((x - r * 0.55, y - r * 0.7, x - r * 0.1, y - r * 0.4)), STEEL_D)
-
-
-def fire_column(c: Canvas, cx: float, base: float, height: float, hw: float, t: int, hot: bool = False):
+def fire_column(c: Canvas, cx: float, base: float, height: float, hw: float, t: int, hot: bool = False,
+                lean: float = 0.0):
     """A pillar of fire rising `height` from `base`: wavy sides swaying (a wave rolls up them each tick), narrowing a
     little, crowned with wide licking tongues like his bonfire; red rim, orange, yellow core (a white-hot heart when
     `hot`)."""
@@ -2274,7 +2266,7 @@ def fire_column(c: Canvas, cx: float, base: float, height: float, hw: float, t: 
             v = i / 8
             y = base - v * height * 0.72
             w = w0 * (1 - 0.5 * v ** 0.8)  # a bonfire: broad at the foot, drawing in up the flames
-            wave = math.sin(v * math.pi * 2.4 - t * math.pi / 2) * hw * 0.2 * v
+            wave = math.sin(v * math.pi * 2.4 - t * math.pi / 2) * hw * 0.2 * v + lean * height * v * v * 0.5
             left.append((cx - w + wave, y))
             right.append((cx + w + wave, y))
         (lx, ly), (rx, _) = left[-1], right[-1]
@@ -2284,7 +2276,7 @@ def fire_column(c: Canvas, cx: float, base: float, height: float, hw: float, t: 
             hx = lx + span * (j + 0.5)
             tall = max(1.0, height * 0.3 - inset * 1.5) * (0.75 + 0.35 * (((j * 7 + t) % 4) in (1, 2))) \
                 * (1.25 if j == 1 else 1)
-            crown += [(hx - span * 0.48, ly - tall * 0.35), (hx + SWAY[(t + j) % 4] * 2, ly - tall),
+            crown += [(hx - span * 0.48, ly - tall * 0.35), (hx + SWAY[(t + j) % 4] * 2 + lean * height * 0.1, ly - tall),
                       (hx + span * 0.48, ly - tall * 0.35)]
         return left + crown + right[::-1]
     layers = [(RED, 0.0), (ORANGE, hw * 0.3), (YELLOW, hw * 0.58)] + ([(WHITE, hw * 0.8)] if hot else [])
@@ -2293,87 +2285,249 @@ def fire_column(c: Canvas, cx: float, base: float, height: float, hw: float, t: 
             c.part(P(shape(inset)), col, shade=False, line=col == RED)
 
 
+def lava_cols(heat: float):
+    """(rim, middle, core or None) of lava at `heat` 1 (white-hot) .. 0 (crusted rock)."""
+    for lim, cols in ((0.9, (ORANGE, YELLOW, WHITE)), (0.7, (RED, ORANGE, YELLOW)), (0.5, (MAROON, RED, ORANGE)),
+                      (0.3, (BROWN, MAROON, RED)), (0.15, (BROWN, MAROON, None))):
+        if heat >= lim:
+            return cols
+    return OUTLINE, BROWN, None
+
+
+def lava_pool(c: Canvas, x: float, y: float, rx: float, ry: float, heat: float, seed: int = 0):
+    """A lumpy puddle of lava (or, cooled, of crusted rock) on the floor."""
+    if rx < 1.5:
+        return
+    rim, mid, core = lava_cols(heat)
+    rng = random.Random(seed)
+    lumps = [(rng.uniform(-0.5, 0.5), rng.uniform(-0.45, 0.45), rng.uniform(0.45, 0.6)) for _ in range(5)] \
+        + [(0, 0, 0.9)]
+
+    def blob(s):
+        return lambda d, f: [d.ellipse((x + dx * rx * s - sz * rx * s, y + dy * ry * s - sz * ry * s,
+                                        x + dx * rx * s + sz * rx * s, y + dy * ry * s + sz * ry * s), f)
+                             for dx, dy, sz in lumps]
+    c.part(blob(1.0), rim, shade=False)
+    c.part(blob(0.72), mid, shade=False, line=False)
+    if core and rx >= 6:
+        c.part(blob(0.4), core, shade=False, line=False)
+
+
+def rock_cone(c: Canvas, cx: float, b: float, wb: float, wt: float, h: float, dome: float, heat: float, seed: int = 3):
+    """A rocky mound (dome > 0) or volcanic cone (dome < 0: a crater dips in the top): dark brown, jagged flanks, a
+    maroon shadowed right side, strata, and veins of lava running down from the top at `heat`."""
+    if h < 3:
+        return
+    rng = random.Random(seed)
+    jit = [rng.uniform(-1, 1) * 1.6 for _ in range(8)]
+    side = lambda sign: [(cx + sign * (wb + (wt - wb) * i / 4 + jit[i + (4 if sign > 0 else 0)]), b - h * i / 4)
+                         for i in range(4)]
+    left, right = side(-1), side(1)
+    top = [(cx + wt * u, b - h + dome * u * u) for u in (-1, -0.5, 0, 0.5, 1)]
+    foot = [(cx + wb * u, b + wb * 0.16 * (1 - u * u)) for u in (0.75, 0.4, 0, -0.4, -0.75)]
+    c.part(P(left + top + right[::-1] + foot), BROWN)
+    c.flat(P([(cx + wt * 0.15, b - h + dome * 0.02), top[-1]] + right[::-1] + foot[:3]), MAROON)
+    for i in range(5):  # strata and chips of dark rock
+        y = b - h * (0.12 + 0.17 * i) + rng.uniform(-1, 1)
+        x = cx - wb * (0.55 - 0.15 * i) + rng.uniform(-3, 3)
+        c.flat(L([(x, y), (x + rng.uniform(3, 7), y + rng.uniform(-1, 1))], 1), OUTLINE)
+    rim, mid, core = lava_cols(heat)
+    for j in range(4):  # lava veins from the top, forking down the flanks
+        u = -0.75 + 0.5 * j + rng.uniform(-0.1, 0.1)
+        pts = [(cx + wt * u, b - h + dome * u * u + 1)]
+        for i in range(1, 5):
+            v = i / 4
+            pts.append((cx + (wt + (wb - wt) * v * 0.9) * u * (1 + 0.2 * v) + rng.uniform(-2, 2),
+                        b - h * (1 - v) + wb * 0.1 * v))
+        c.flat(L(pts, 3), rim)
+        c.flat(L(pts, 2 if core else 1), mid)
+        if core:
+            c.flat(L(pts[:3], 1), core)
+
+
+def erupt_smoke(c: Canvas, puffs, col=SHADOW, hi=STEEL_D):
+    """Smoke: lumps over a darker shadow layer, light catching their tops."""
+    pts = [(x, y, r) for x, y, r in puffs if r >= 1]
+    if not pts:
+        return
+    c.part(blobs([(x + 2, y + 2, r) for x, y, r in pts]), OUTLINE, shade=False)
+    c.part(blobs(pts), col)
+    for x, y, r in pts:
+        if r >= 4:
+            c.flat(E((x - r * 0.55, y - r * 0.7, x - r * 0.1, y - r * 0.4)), hi)
+
+
+def ash_plume(c: Canvas, k: int, cx: float, cy: float):
+    """The ash cloud: lumps of dark smoke born at the crater one after another, each rising to its own height and
+    swelling, so a billowing column grows into a wide cap; the low ones glow red from the fire under them; in the
+    follow-through the whole thing thins, leans away with the wind and is gone."""
+    rng = random.Random(7)
+    n = 16
+    cold, hot = [], []
+    for i in range(n):
+        a = k - (ERUPT_BLAST + 0.45 * i)
+        spread = rng.uniform(-1, 1)
+        if a < 0:
+            continue
+        v = i / n
+        rise = (8 + 7 * i) * (1 - math.exp(-a / 4)) + max(0, k - 16) * 1.5
+        r = min(24.0, 7 + 14 * v + 0.7 * a) * max(0.0, 1 - max(0, k - 16) / 12)
+        x = cx + spread * (8 + 30 * v) + SWAY[(k + i) % 4] + a * (0.35 + 0.3 * v) + max(0, k - 14) * 1.2
+        (hot if a < 3.5 and i < 5 else cold).append((x, cy - 6 - rise, round(r)))
+    erupt_smoke(c, cold)
+    erupt_smoke(c, hot, MAROON, RED)
+
+
+def lava_bomb(c: Canvas, x: float, y: float, r: float, heat: float, trail):
+    """A glob of lava in flight, trailing cooling sparks."""
+    for tx, ty, tr, th in trail:
+        if tr >= 1:
+            c.part(E((tx - tr, ty - tr, tx + tr, ty + tr)), lava_cols(th)[0], shade=False, line=False)
+    rim, mid, core = lava_cols(heat)
+    c.part(E((x - r, y - r, x + r, y + r)), rim, shade=False)
+    c.flat(E((x - r * 0.55, y - r * 0.55, x + r * 0.55, y + r * 0.55)), mid)
+    if core and r >= 3:
+        c.dot(round(x), round(y), core)
+
+
+def arc(x0: float, y0: float, x1: float, y1: float, apex: float, s: float):
+    """Where something thrown from (x0, y0) to land on (x1, y1) with its path peaking `apex` px higher is at s 0..1."""
+    return x0 + (x1 - x0) * s, y0 + (y1 - y0) * s - 4 * apex * s * (1 - s)
+
+
 def eruption_crack_frame(k: int) -> Image.Image:
-    """Eruption telegraph (period-4 loop at the marked spot): the floor split open in a star of glowing fissures over a
-    scorch, the heat inside pulsing, smoke curling up off the cracks, sparks popping, and a ring of glowing embers
-    marking where the blast will reach (squashed for the 3/4 view)."""
+    """Eruption telegraph (period-8 loop at the marked spot): the floor split open in a star of glowing fissures over
+    a scorch, a rocky mound heaving up out of it with lava pulsing in its cracks, small rocks hopping off it, dust
+    and smoke rumbling up, and a ring of glowing embers marking where the blast will reach (squashed for 3/4 view)."""
     c = Canvas(ERUPT_SIZE)
     m = ERUPT_SIZE // 2
+    ph = math.tau * k / CRACK_FRAMES
     rx, ry = ERUPT_R, ERUPT_R * ERUPT_SQUASH
-    for i in range(28):  # the reach: embers round the ring, marching every tick
-        a = math.tau * i / 28
+    for i in range(32):  # the reach: embers round the ring, marching every tick
+        a = math.tau * i / 32
         x, y = round(m + math.cos(a) * rx), round(m + math.sin(a) * ry)
         if (i + k) % 4 != 3:
-            c.flat(R((x - 1, y, x + 1, y)), (RED, ORANGE, YELLOW)[(i + k) % 4])
-    c.part(E((m - 22, m - 13, m + 22, m + 13)), MAROON, shade=False)  # scorched floor
-    c.part(E((m - 12, m - 7, m + 12, m + 7)), (RED, ORANGE, RED, MAROON)[k], shade=False)  # glowing up from below
-    erupt_cracks(c, m, m, ERUPT_R * 0.75, (ORANGE, YELLOW, YELLOW, ORANGE)[k])
-    c.flat(E((m - 5, m - 3, m + 5, m + 3)), (YELLOW, WHITE, YELLOW, ORANGE)[k])  # the hot heart of it
+            c.flat(R((x - 1, y, x + 1, y)), (RED, ORANGE, YELLOW, ORANGE)[(i + k) % 4])
+    c.part(E((m - 30, m - 17, m + 30, m + 17)), MAROON, shade=False)  # scorched floor
+    heat = 0.62 + 0.3 * (0.5 + 0.5 * math.sin(ph))
+    erupt_cracks(c, m, m, ERUPT_R * 0.8, lava_cols(heat)[1])
+    quake = (0, -1, 0, 0, -1, 0, 1, 0)[k]  # the whole mound shudders
+    rock_cone(c, m, m + 1 + quake, MOUND_W + (k % 2), MOUND_W * 0.55, MOUND_H + quake, MOUND_H * 0.6, heat)
     rng = random.Random(4)
-    for i in range(4):  # smoke curling up off the cracks, each its own phase
-        x0 = m + rng.uniform(-28, 28)
-        ph = (k + i) % 4
-        r = (4, 4, 3, 2)[ph]
-        x, y = x0 + SWAY[(k + i) % 4] * 2, m - 6 - ph * 7 - i * 3
-        c.part(E((x - r, y - r, x + r, y + r)), SHADOW if ph < 2 else STEEL_D)
-    for i in range(3):  # sparks popping up
-        ph = (k + i * 2) % 4
-        x, y = m - 14 + 14 * i + SWAY[(k + i) % 4], m - 4 - ph * 5
-        if ph < 3:
-            c.dot(round(x), round(y), (WHITE, YELLOW, ORANGE)[ph])
+    for i in range(6):  # rocks shaken loose, hopping
+        ang = math.tau * i / 6 + rng.uniform(-0.3, 0.3)
+        hop = (0, 0, 2, 4, 5, 3, 1, 0)[(k + i * 3) % 8]
+        x = m + math.cos(ang) * (MOUND_W + 6 + rng.uniform(0, 6))
+        y = m + 3 + math.sin(ang) * 11 - hop
+        c.part(R((round(x) - 1, round(y) - 1, round(x) + 1, round(y))), BROWN if i % 2 else MAROON, shade=False)
+    for i in range(5):  # dust and smoke puffing off the mound, each its own phase
+        t = ((k + i * 2) % 8) / 7
+        x = m + (i - 2) * 11 + SWAY[(k + i) % 4] * 2
+        r = round(1 + 2 * math.sin(math.pi * min(1.0, t * 1.1)))
+        if r >= 1:
+            c.part(E((x - r, m - 4 - 30 * t - r, x + r, m - 4 - 30 * t + r)), SHADOW if t < 0.5 else STEEL_D,
+                   shade=False)
+    for i in range(4):  # sparks popping off the cracks
+        t = ((k + i * 2) % 8) / 8
+        if t < 0.75:
+            c.dot(round(m - 18 + 12 * i + SWAY[(k + i) % 4]), round(m - 8 - 26 * t),
+                  (WHITE, YELLOW, ORANGE, RED)[int(t * 5.3)])
     return outline(c.img)
 
 
 def eruption_frame(k: int) -> Image.Image:
-    """Eruption, a one-shot rising from the floor spot (ERUPT_BASE): the ground bulges and glows, cracks splitting,
-    then a pillar of fire bursts up out of a bonfire of wide licking tongues, one flowing mass; it peaks,
-    its crown peels away as wisps that curl up and out, the column sinks back into the ground while embers rain down,
-    and smoke lingers over the glowing cracks."""
-    c = Canvas(ERUPT_SIZE)
-    m, b = ERUPT_SIZE // 2, ERUPT_BASE
-    rng = random.Random(11)
-    embers = [(rng.uniform(-1, 1), rng.uniform(0.4, 1.0)) for _ in range(10)]
-    puffs = [(rng.uniform(-0.7, 0.7), i / 7, rng.uniform(0.8, 1.2)) for i in range(8)]
-    height = (0, 0, 42, 76, 82, 78, 60, 40, 22, 10, 0, 0)[k]  # the column per frame: bulge, burst, peak, sink
-    hw = (0, 0, 28, 27, 26, 24, 21, 17, 13, 9, 0, 0)[k]
-    glow = (ORANGE, YELLOW, WHITE, YELLOW, YELLOW, YELLOW, ORANGE, ORANGE, ORANGE, RED, RED, None)[k]
-    erupt_cracks(c, m, b, ERUPT_R * (0.5 + 0.03 * min(k, 5)), glow)
-    if k >= 7:  # smoke billowing up off the last of it and lingering, behind the fire
-        f = (k - 7) / 4
-        grow = min(1.0, 0.6 + (k - 7) * 0.3)
-        erupt_smoke(c, [(m + dx * 30 * (0.7 + 0.6 * f) + SWAY[(k + i) % 4], b - 14 - 56 * dy * (0.6 + 0.4 * f) - 10 * f,
-                         round(12 * rr * (1 - 0.45 * f) * grow)) for i, (dx, dy, rr) in enumerate(puffs)])
-    if k <= 1:  # the floor bulges up, glowing, as the fire pushes through
-        r = 14 + 6 * k
-        c.part(E((m - r, b - r * 0.7 - 2 * k, m + r, b + r * 0.45)), BROWN)
-        c.part(E((m - r * 0.6, b - r * 0.5 - 2 * k, m + r * 0.6, b + r * 0.2)), (RED, ORANGE)[k], shade=False)
-        erupt_cracks(c, m, b - 2 * k, r * 0.9, YELLOW, rng_seed=5, width=1)
-        if k == 1:  # first spurts licking out of the split
-            flame(c, m - 14, m + 14, b, 14, k, tongues=5)
-    if 2 <= k <= 9:  # the bonfire at its foot: a rounded mass of fire with tongues licking up
-        g = min(1.0, (11 - k) / 4)
-        c.part(E((m - 30 * g, b - 8 * g, m + 30 * g, b + 8 * g)), RED, shade=False, line=False)
-        flame(c, round(m - 34 * g), round(m + 34 * g), b + 2, max(4, round(26 * g)), k, tongues=7, line=False)
-    if height:
-        fire_column(c, m, b, height, hw, k, k in (2, 3, 4))
-    if k == 2:  # the burst: a flash at the foot
-        c.part(blobs([(m - 9, b - 1, 6), (m + 8, b, 6), (m, b - 3, 8)]), WHITE, shade=False)
-    if 6 <= k <= 10:  # the crown peeling off: licks of flame curling up and away, shrinking, smaller ones behind
-        f = (k - 6) / 4
-        for i, (dx, dy) in enumerate(((-1, 0), (1, 0.15), (-0.45, 0.45), (0.55, 0.55), (0.05, 0.25))):
-            top = b - 78 + dy * 20
-            x = m + dx * (6 + 30 * f) + math.sin(f * 4 + i) * 3
-            y = top - 10 * f + dy * 10
-            r = (7 - 2 * (i > 2)) * (1 - 0.8 * f)
-            erupt_wisp(c, x, y, r, 1 if dx >= 0 else -1, (k + i) * math.pi / 2)
-    if 4 <= k <= 10:  # embers thrown up and raining back down
-        f = (k - 3) / 7
-        for i, (vx, vy) in enumerate(embers):
-            x = m + vx * 50 * f
-            y = b - 80 * vy * f * (2 - f) * 1.4 + 40 * f * f
-            if y < b + 14:
-                col = (WHITE, YELLOW, ORANGE, RED)[min(3, int(f * 4 + (i % 2) * 0.5))]
-                c.flat(R((round(x), round(y), round(x) + (1 if f < 0.6 else 0), round(y) + 1)), col)
+    """Eruption, a one-shot growing from the floor spot (ERUPT_BASE): the telegraph's mound heaves up, cracks, glows and
+    splits (frames 0-3), then bursts into a volcanic cone blasting a fountain of lava and fire, a ring of dust rolling
+    out, lava bombs arcing out to splat and pool, a dark ash plume billowing up and magma flooding the base; it cools:
+    the fire sinks, the cone crumbles, the lava darkens to crusted rock, embers fade and the smoke drifts away."""
+    c = Canvas(VOLC_SIZE)
+    m, b = VOLC_SIZE // 2, ERUPT_BASE
+    t = k - ERUPT_BLAST
+    fade = 1.0 if k < 21 else max(0.0, (25 - k) / 5)  # the debris sinks into the floor at the end
+    heat = 1.0 if k < 9 else max(0.0, 1 - (k - 8) / 15)
+    # --- the cone / mound: its size and the lava in it
+    if t < 0:
+        p = (k + 1) / 4  # carries on from the telegraph's mound
+        wb, wt, h, dome = MOUND_W + 8 * p, MOUND_W * 0.55 - 5 * p, MOUND_H + 18 * p, MOUND_H * 0.6 * (1 - p)
+        cone_heat = 0.7 + 0.28 * p
+    else:
+        cr = min(1.0, max(0.0, (k - 12) / 12))  # the crumble
+        wb, wt, dome = CONE_W + 8 * cr, CONE_WT + 10 * cr, -4 * (1 - cr) + 6 * cr
+        h = (CONE_H + 5 * (k == ERUPT_BLAST)) * (1 - cr ** 1.4)
+        cone_heat = heat
+    cy = b - h  # the crater: where fire and bombs come from
+    rng = random.Random(21)
+    bombs = [(rng.choice((-1, 1)) * rng.uniform(26, 98), rng.uniform(-6, 26), rng.uniform(60, 118),
+              ERUPT_BLAST + rng.choice((0, 0, 1, 1, 2)), rng.randint(8, 12), (5, 4, 3, 4, 3, 5)[i % 6],
+              rng.uniform(-5, 5)) for i in range(12)]
+    rocks = [(rng.choice((-1, 1)) * rng.uniform(22, 86), rng.uniform(-2, 24), rng.uniform(40, 90), rng.randint(8, 12))
+             for _ in range(8)]
+    embers = [(rng.uniform(-70, 70), rng.uniform(-4, 28), rng.uniform(70, 140), rng.randint(0, 4), rng.randint(10, 18))
+              for _ in range(22)]
+    # --- the floor: scorch or magma pool, cracks, lava splats, rocks lying where they fell
+    if t < 0:
+        c.part(E((m - 30, b - 17, m + 30, b + 17)), MAROON, shade=False)
+    else:
+        pr = (26 + (POOL_R - 26) * min(1.0, t / 5)) * fade
+        lava_pool(c, m, b + 2, pr, pr * 0.5, 1.0 if k < 9 else max(0.0, 1 - (k - 9) / 14), seed=2)
+    erupt_cracks(c, m, b, ERUPT_R * (0.6 + 0.05 * min(k, 6)), lava_cols(cone_heat)[1] if heat > 0.15 else None)
+    for i, (dx, ly, apex, k0, dur, r, x0) in enumerate(bombs):
+        age = k - (k0 + dur)
+        if age >= 0 and fade > 0:
+            lava_pool(c, m + dx, b + ly, (r * 2.4 + 1) * fade, (r * 1.2 + 0.5) * fade, max(0.0, 0.9 - 0.065 * age),
+                      seed=i)
+    for dx, ly, apex, dur in rocks:
+        if t >= dur and fade > 0.2:
+            c.part(R((round(m + dx), round(b + ly), round(m + dx) + 2, round(b + ly) + 1)), BROWN, shade=False)
+    if 0 <= t <= 5:  # the dust ring rolling out of the blast, puffs on a squashed ring
+        erupt_smoke(c, [(m + math.cos(math.tau * i / 12 + 0.3) * (24 + 14 * t),
+                         b + 8 + math.sin(math.tau * i / 12 + 0.3) * (24 + 14 * t) * ERUPT_SQUASH * 0.6,
+                         round(max(0.0, 5 - 0.8 * t + (i % 2)))) for i in range(12)], STEEL_D, STEEL)
+    elif 1 <= k < ERUPT_BLAST:  # the rumble before it: dust puffing up off the base
+        erupt_smoke(c, [(m + math.cos(math.tau * i / 5 + 0.7) * (30 + k * 3), b + 6 + math.sin(math.tau * i / 5 + 0.7) * 9
+                         - 3 * k, 3 + (i + k) % 2) for i in range(5)])
+    # --- the ash plume behind everything, then the cone and the fire it throws
+    ash_plume(c, k, m, cy)
+    rock_cone(c, m, b, wb, wt, h, dome, cone_heat)
+    g = min(1.0, (19 - k) / 7)
+    if FIRE_H[k]:
+        hw, ht = FIRE_HW[k], FIRE_H[k]
+        if t >= 0 and g > 0.1:  # the bonfire at the crater's foot
+            c.part(E((m - 22 * g, cy - 6 * g, m + 22 * g, cy + 6 * g)), RED, shade=False, line=False)
+        if ht > 40:
+            for side in (-1, 1):  # smaller jets either side of the main fountain
+                fire_column(c, m + side * hw * 0.8, cy + 2, ht * 0.6, hw * 0.6, k + side, lean=side * 0.25)
+        fire_column(c, m, cy + 2, ht, hw, k, 4 <= k <= 8)
+        if t >= 0:
+            flame(c, round(m - 24 * g), round(m + 24 * g), round(cy + 5), max(4, round(30 * g)), k, tongues=7, line=False)
+    if k == ERUPT_BLAST:  # the burst: a flash at the crater
+        c.part(blobs([(m - 11, cy, 9), (m + 11, cy, 9), (m, cy - 6, 13)]), WHITE, shade=False)
+    elif k == ERUPT_BLAST + 1:
+        c.part(blobs([(m - 8, cy - 2, 6), (m + 8, cy - 2, 6), (m, cy - 8, 8)]), YELLOW, shade=False, line=False)
+    if 0 < k < ERUPT_BLAST:  # first sparks leaking out of the splitting top
+        for i in range(k * 2):
+            c.dot(round(m - 8 + 4 * i + SWAY[(k + i) % 4]), round(cy - 3 - (i * 5 + k * 3) % 14),
+                  (WHITE, YELLOW, ORANGE)[i % 3])
+    # --- in the air: lava bombs, rocks, embers
+    for dx, ly, apex, k0, dur, r, x0 in bombs:
+        s = (k - k0) / dur
+        if 0 <= s < 1:
+            pos = lambda ss: arc(m + x0, cy, m + dx, b + ly, apex, ss)
+            trail = [(*pos(max(0.0, s - 0.07 * j)), r * (0.55 - 0.15 * j), max(0.0, 0.8 - 0.2 * s - 0.15 * j))
+                     for j in (1, 2)]
+            lava_bomb(c, *pos(s), r, 1.0 - 0.3 * s, trail)
+    for dx, ly, apex, dur in rocks:
+        s = t / dur
+        if 0 <= s < 1:
+            x, y = arc(m, cy, m + dx, b + ly, apex, s)
+            c.part(R((round(x) - 1, round(y) - 1, round(x) + 1, round(y) + 1)), BROWN if int(s * 6) % 2 else MAROON,
+                   shade=False)
+    for dx, ly, apex, k0, dur in embers:
+        s = (t - k0) / dur
+        if 0 <= s < 1:
+            x, y = arc(m, cy, m + dx, b + ly, apex, s)
+            c.flat(R((round(x), round(y), round(x) + (1 if s < 0.6 else 0), round(y) + 1)),
+                   (WHITE, YELLOW, ORANGE, RED, MAROON)[min(4, int(s * 5))])
     return outline(c.img)
 
 

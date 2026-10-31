@@ -42,14 +42,18 @@ const SNARE_BURST_TIME: float = 0.5
 const SNARE_BASE_Y: float = 26.0
 const CRACK_ART: Texture2D = preload(FX_DIR + "eruption_crack.png")
 const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
-const CRACK_FPS: float = 8.0
+const CRACK_FPS: float = 12.0
 ## The crack's ring of embers is drawn for this blast radius (generate.py ERUPT_R); other radii scale it.
 const ERUPTION_ART_RADIUS: float = 80.0
 ## Row of eruption.png the pillar rises from (generate.py ERUPT_BASE): it sits on the marked spot.
-const ERUPTION_BASE_Y: float = 102.0
-const ERUPTION_TIME: float = 0.9
+const ERUPTION_BASE_Y: float = 204.0
+## The eruption strip: ERUPTION_FRAMES (generate.py ERUPT_FRAMES) at ERUPTION_FPS, the burst landing on frame ERUPTION_BLAST_FRAME.
+const ERUPTION_FRAMES: float = 26.0
+const ERUPTION_FPS: float = 15.0
+const ERUPTION_BLAST_FRAME: float = 4.0
+const ERUPTION_TIME: float = ERUPTION_FRAMES / ERUPTION_FPS
 ## The strip starts this long before the blast lands, so its first frames (the floor bulging) lead into the burst.
-const ERUPTION_LEAD: float = ERUPTION_TIME * 2.0 / 12.0
+const ERUPTION_LEAD: float = ERUPTION_BLAST_FRAME / ERUPTION_FPS
 const POOF_TIME: float = 0.5
 const SMOKE_FPS: float = 10.0
 ## The cloud swells in when thrown and fades out at the end instead of popping.
@@ -282,7 +286,7 @@ func sync(p: Player) -> void:
 		var lift: float = (ERUPTION_ART.get_height() * 0.5 - ERUPTION_BASE_Y) * Constants.SPRITE_SCALE
 		_poof(eruption.anchor + Vector2(0.0, lift), ERUPTION_ART, ERUPTION_TIME)
 	_erupt_started = erupting and (_erupt_started or eruption.active_remaining <= ERUPTION_LEAD)
-	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD * 0.5 else null
+	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD else null
 	queue_redraw()
 
 
