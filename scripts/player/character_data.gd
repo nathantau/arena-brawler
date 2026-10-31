@@ -25,9 +25,6 @@ extends Resource
 var _portraits: Array[AtlasTexture] = []
 var _sprite_frames: SpriteFrames
 
-@export_group("Dual wield")
-## Sideways offset of each gun's muzzle while dual-wielding.
-@export var dual_offset: float = 9.0
 
 
 func can_use(weapon: WeaponData) -> bool:

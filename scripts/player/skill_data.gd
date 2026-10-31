@@ -6,12 +6,12 @@ extends Resource
 ## only tag makes it that character's signature.
 
 ## DASH: burst of speed with i-frames. SHIELD: a barrier in front that blocks enemy shots.
-## DUAL_WIELD: every shot fires a second, offset volley. TRANSFORM: a stronger form for a while
+## TRANSFORM: a stronger form for a while
 ## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
 ## BLINK: instant hop (stopped by walls) with i-frames. SMOKE: a cloud where you stand; inside it
 ## enemy auto-aim and bots can't lock on. VOLLEY: fires `volley_weapon` once (e.g. a ring of
 ## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
-enum Kind { DASH, SHIELD, DUAL_WIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
+enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -20,7 +20,7 @@ enum Kind { DASH, SHIELD, DUAL_WIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
 @export var special: bool = true
 @export var tags: Array[StringName] = []
 @export var cooldown: float = 2.0
-## How long it stays active (dash burst, barrier up, dual-wield window, transformation).
+## How long it stays active (dash burst, barrier up, transformation).
 @export var duration: float = 0.2
 ## UI icon (assets/ui/icon_*.png).
 @export var icon: Texture2D

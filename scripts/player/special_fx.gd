@@ -13,8 +13,10 @@ const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
 const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
 const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
 const POOF_TIME: float = 0.5
-const SMOKE_FRAMES: int = 4
-const SMOKE_FPS: float = 6.0
+const SMOKE_FPS: float = 10.0
+## The cloud swells in when thrown and fades out at the end instead of popping.
+const SMOKE_SWELL_TIME: float = 0.25
+const SMOKE_SWELL_FROM: float = 0.4
 ## smoke.png is drawn for this radius; other radii scale it.
 const SMOKE_ART_RADIUS: float = 90.0
 const SMOKE_ALPHA: float = 0.9
@@ -153,10 +155,12 @@ func _draw() -> void:
 	for i: int in _points.size():
 		_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
 	if _smoke_t >= 0.0:
-		var frame: int = int(_smoke_t * SMOKE_FPS) % SMOKE_FRAMES
-		var k: float = _owner.special.data.smoke_radius / SMOKE_ART_RADIUS
+		var frame: int = int(_smoke_t * SMOKE_FPS) % (SMOKE_ART.get_width() / SMOKE_ART.get_height())
+		var swell: float = lerpf(SMOKE_SWELL_FROM, 1.0, clampf(_smoke_t / SMOKE_SWELL_TIME, 0.0, 1.0))
+		var k: float = _owner.special.data.smoke_radius / SMOKE_ART_RADIUS * swell
+		var fade: float = clampf(_owner.special.active_remaining / FADE_TIME, 0.0, 1.0)
 		_draw_frame(SMOKE_ART, frame, SMOKE_ART.get_height(), _owner.special.anchor, Constants.SPRITE_SCALE * k,
-			SMOKE_ALPHA)
+			SMOKE_ALPHA * fade)
 
 ## The clone holds the owner's current weapon (and hand), pointing the way it runs.
 func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:

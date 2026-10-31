@@ -105,21 +105,14 @@ func _ready() -> void:
 
 
 ## Fires one shot. Fully determined by its arguments, so any peer that receives
-## (owner_id, seq, origin, facing, weapon, dual) reproduces the identical volley.
-## `dual`: a second, identical volley from a muzzle offset sideways (pellet keys offset).
-func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int,
-		dual: bool = false, dual_offset: float = 0.0) -> void:
+## (owner_id, seq, origin, facing, weapon) reproduces the identical volley.
+func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int) -> void:
 	shot_spawned.emit(owner_id, origin, facing, weapon)
 	if weapon.kind == WeaponData.Kind.MELEE:
 		_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
 		_swing(owner_id, seq, origin, facing.normalized(), weapon)
 		return
-	if not dual:
-		_volley(owner_id, seq, 0, origin, facing, weapon, match_seed)
-		return
-	var side: Vector2 = facing.normalized().orthogonal() * dual_offset
-	_volley(owner_id, seq, 0, origin + side, facing, weapon, match_seed)
-	_volley(owner_id, seq, Constants.DUAL_PELLET_OFFSET, origin - side, facing, weapon, match_seed)
+	_volley(owner_id, seq, origin, facing, weapon, match_seed)
 
 
 ## Remove a pellet the server says hit someone (client side). Splash pellets still pop.
@@ -149,7 +142,7 @@ func active_count() -> int:
 	return n
 
 
-func _volley(owner_id: int, seq: int, pellet_base: int, origin: Vector2, facing: Vector2, weapon: WeaponData,
+func _volley(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData,
 		match_seed: int) -> void:
 	_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
 	var crit: bool = CombatRules.roll_crit(weapon, _shot_rng)
@@ -157,9 +150,9 @@ func _volley(owner_id: int, seq: int, pellet_base: int, origin: Vector2, facing:
 	var dirs: PackedVector2Array = CombatRules.shot_directions(facing, weapon, _shot_rng)
 	for i: int in dirs.size():
 		if weapon.kind == WeaponData.Kind.BEAM:
-			_beam(owner_id, seq, pellet_base + i, origin, dirs[i], weapon, damage, crit)
+			_beam(owner_id, seq, i, origin, dirs[i], weapon, damage, crit)
 		else:
-			_spawn_pellet(owner_id, seq, pellet_base + i, origin, weapon.muzzle_distance(), dirs[i], weapon, damage, crit)
+			_spawn_pellet(owner_id, seq, i, origin, weapon.muzzle_distance(), dirs[i], weapon, damage, crit)
 
 
 ## Spawns from `origin` (the shooter's hand) at distance `muzzle_dist`. If a wall sits between

@@ -168,15 +168,14 @@ func on_snapshot(tick: int, states: Array) -> void:
 	_has_pending = true
 
 
-func on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool) -> void:
+func on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
 	if arena == null:
 		return
 	var weapon: WeaponData = arena.catalog.get_weapon(weapon_id)
 	var shooter: Player = arena.get_player(owner_id)
 	if weapon == null or shooter == null:
 		return
-	arena.projectiles.fire_shot(owner_id, seq, origin, facing, weapon, arena.match_seed, dual,
-		shooter.character.dual_offset)
+	arena.projectiles.fire_shot(owner_id, seq, origin, facing, weapon, arena.match_seed)
 	shooter.play_recoil(weapon.windup)
 
 

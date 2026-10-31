@@ -132,11 +132,11 @@ func _roster() -> Array:
 	return roster
 
 
-func _on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool) -> void:
+func _on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
 	# The shooter already predicted this shot locally.
 	for peer: int in session.multiplayer.get_peers():
 		if peer != owner_id:
-			session.rpc_shot.rpc_id(peer, owner_id, seq, origin, facing, weapon_id, dual)
+			session.rpc_shot.rpc_id(peer, owner_id, seq, origin, facing, weapon_id)
 
 
 func _on_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2) -> void:

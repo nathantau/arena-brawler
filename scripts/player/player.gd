@@ -5,7 +5,7 @@ extends CharacterBody2D
 ## Players collide with walls only (not each other), which keeps prediction exact.
 
 signal died(victim: Player, killer_id: int)
-signal shot_fired(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool)
+signal shot_fired(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName)
 ## Predicted/authoritative skill activation (not emitted during replay). For effects/SFX.
 signal skill_used(user: Player, skill: SkillData)
 
@@ -271,7 +271,7 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
 				projectiles.fire_shot(player_id, seq, global_position, slot.direction, slot.data.volley_weapon, match_seed)
-				shot_fired.emit(self, seq, global_position, slot.direction, slot.data.volley_weapon.id, false)
+				shot_fired.emit(self, seq, global_position, slot.direction, slot.data.volley_weapon.id)
 	if not replay:
 		skill_used.emit(self, slot.data)
 
@@ -308,10 +308,6 @@ func is_dashing() -> bool:
 	return dash.is_dashing() or special.is_dashing()
 
 
-func is_dual_wielding() -> bool:
-	return special.is_dual_wielding()
-
-
 ## The weapon FIRE uses: the transformed form's own weapon, else the loadout's active one.
 func held_weapon() -> WeaponState:
 	return special.form_weapon if special.is_transformed() else loadout.active()
@@ -343,9 +339,8 @@ func _try_fire(seq: int, replay: bool) -> void:
 ## Fire from where the player is (and faces) now.
 func _release_shot(seq: int, w: WeaponData) -> void:
 	var origin: Vector2 = shot_origin(w)
-	var dual: bool = is_dual_wielding()
-	projectiles.fire_shot(player_id, seq, origin, facing, w, match_seed, dual, character.dual_offset)
-	shot_fired.emit(self, seq, origin, facing, w.id, dual)
+	projectiles.fire_shot(player_id, seq, origin, facing, w, match_seed)
+	shot_fired.emit(self, seq, origin, facing, w.id)
 
 
 ## Guns fire from the hand holding them (shots then spawn at the barrel tip, WeaponData.muzzle_distance);
@@ -581,12 +576,7 @@ func _draw_head_over_weapon() -> void:
 
 
 func _draw_guns(ci: CanvasItem) -> void:
-	if is_dual_wielding():
-		var side: Vector2 = facing.orthogonal() * character.dual_offset
-		_draw_gun(ci, side)
-		_draw_gun(ci, -side)
-	else:
-		_draw_gun(ci, Vector2.ZERO)
+	_draw_gun(ci, Vector2.ZERO)
 
 
 func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:

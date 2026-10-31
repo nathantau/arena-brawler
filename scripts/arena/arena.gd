@@ -18,7 +18,7 @@ signal weapon_requested(id: StringName)
 signal special_requested(id: StringName)
 ## The local player chose Leave (or Restart, offline) in the pause menu.
 signal leave_requested(restart: bool)
-signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool)
+signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName)
 ## Authoritative damage (offline / server).
 signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2)
 ## Cosmetic: damage landed, on every peer (authoritative from player_hit, clients from the server).
@@ -431,8 +431,6 @@ func _on_skill_used(user: Player, skill: SkillData) -> void:
 			sfx.play(&"dash", user.global_position)
 		SkillData.Kind.SHIELD:
 			sfx.play(&"shield", user.global_position)
-		SkillData.Kind.DUAL_WIELD:
-			sfx.play(&"dual", user.global_position)
 		SkillData.Kind.TRANSFORM:
 			sfx.play(&"transform", user.global_position)
 			effects.burst(user.global_position, Color.WHITE, BURST_EXPLOSION_COUNT, BURST_DEATH_SPEED,
@@ -535,9 +533,8 @@ func _on_player_died(victim: Player, killer_id: int) -> void:
 	kill_registered.emit(killer_id, victim.player_id)
 
 
-func _on_player_shot(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName,
-		dual: bool) -> void:
-	shot_fired.emit(shooter.player_id, seq, origin, facing, weapon_id, dual)
+func _on_player_shot(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
+	shot_fired.emit(shooter.player_id, seq, origin, facing, weapon_id)
 
 
 ## Players-only copy of each rect shifted up by WALL_FEET_STRIP (Constants.LAYER_WALL_FEET), in the parent's space.

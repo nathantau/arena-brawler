@@ -1,5 +1,5 @@
 extends GutTest
-## Skills (shared dash, specials: barrier / dual wield / Great Ape) and movement integration.
+## Skills (shared dash, specials: barrier / Great Ape / ...) and movement integration.
 
 const DT: float = 1.0 / 60.0
 
@@ -34,7 +34,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.default_character(), flicker)
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
-	for id: StringName in [&"dash", &"barrier", &"dual_wield", &"great_ape", &"blink", &"smoke_bomb",
+	for id: StringName in [&"dash", &"barrier", &"great_ape", &"blink", &"smoke_bomb",
 			&"fan_of_blades", &"shadow_clones"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
@@ -101,15 +101,6 @@ func test_barrier_is_placed_in_front_and_expires() -> void:
 	assert_eq(skill.anchor, Vector2(100, 100) + Vector2.UP * barrier.shield_distance)
 	skill.tick(barrier.duration + 0.01)
 	assert_false(skill.is_shielding())
-
-
-func test_dual_wield_window() -> void:
-	var dual: SkillData = skills.get_skill(&"dual_wield")
-	var skill := CharacterSkill.new(dual)
-	assert_true(skill.try_activate(Vector2.RIGHT, Vector2.ZERO, PlayerStats.new()))
-	assert_true(skill.is_dual_wielding())
-	skill.tick(dual.duration + 0.01)
-	assert_false(skill.is_dual_wielding())
 
 
 func test_dash_velocity_overrides_input() -> void:
@@ -247,7 +238,7 @@ func test_flicker_can_pick_all_ninja_specials() -> void:
 	for sk: SkillData in skills.specials_for(flicker):
 		ids.append(sk.id)
 	assert_eq(ids[0], &"shadow_clones", "signature first")
-	for id: StringName in [&"blink", &"smoke_bomb", &"fan_of_blades", &"dual_wield"]:
+	for id: StringName in [&"blink", &"smoke_bomb", &"fan_of_blades"]:
 		assert_has(ids, id)
 	for c: CharacterData in [warden, twinshot]:
 		assert_false(c.can_use_skill(skills.get_skill(&"blink")), String(c.id))

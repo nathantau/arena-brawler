@@ -80,7 +80,12 @@ func _ready() -> void:
 	fighters.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # pushes the specials column to the right edge
 	top.add_child(fighters)
 	_label(fighters, &"HeaderLabel").text = "1 · Choose your fighter"
-	var character_row := _row(fighters)
+	# Scrolls sideways once there are more fighters than fit (drag the row).
+	var fighter_scroll := ScrollContainer.new()
+	fighter_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	fighter_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	fighters.add_child(fighter_scroll)
+	var character_row := _row(fighter_scroll)
 	for c: CharacterData in arena.characters.ordered:
 		var card: Button = _card(character_row, CHARACTER_CARD_SIZE, _fighter_art(c),
 			[c.display_name, "HP %d · Armor %d" % [c.max_hp, c.max_armor]])

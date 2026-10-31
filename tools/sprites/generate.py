@@ -1267,19 +1267,21 @@ def ui_kit() -> dict[str, Image.Image]:
 # --- effects: pixel-art animation strips for skills (assets/fx/), drawn at the sprite scale -----
 
 FX_OUT = ROOT / "assets" / "fx"
-POOF_FRAMES = 10
-SMOKE_FRAMES = 4
+POOF_FRAMES = 20
+POOF_GROW_FRAMES = 6  # the cloud swells up over these, then bursts
+SMOKE_FRAMES = 12
 
 
 def poof_frame(size: int, k: int, color) -> Image.Image:
-    """A cloud puff: lumps swell up into a full cloud (3 frames), then burst outward, drift up and
-    break into wisps. Lumps are uneven (seeded by size, so every frame of a strip agrees)."""
+    """A cloud puff: lumps swell up into a full cloud (POOF_GROW_FRAMES) with a swirl curling inside it, then burst
+    outward, drift up and break into wisps, sparkles flying off. A grey shadow layer under the lumps gives them depth.
+    Lumps are uneven (seeded by size, so every frame of a strip agrees)."""
     rng = random.Random(size)
     lumps = [(rng.uniform(-0.3, 0.3), rng.uniform(0.8, 1.15), rng.uniform(0.8, 1.2)) for _ in range(9)]
     c = Canvas(size)
     m = size // 2
-    grow = min(1.0, (k + 1) / 3)
-    t = max(0.0, (k - 2) / (POOF_FRAMES - 3))
+    grow = min(1.0, (k + 1) / POOF_GROW_FRAMES) ** 0.7  # eases in: quick at first, settling into the full cloud
+    t = max(0.0, (k - POOF_GROW_FRAMES + 1) / (POOF_FRAMES - POOF_GROW_FRAMES))
     rise = size * 0.03 * t
     ring, wisps = [], []
     for i, (da, reach, rr) in enumerate(lumps):
@@ -1293,10 +1295,26 @@ def poof_frame(size: int, k: int, color) -> Image.Image:
             d = size * (0.12 + 0.2 * t)
             wisps.append((m + math.cos(ang) * d, m + math.sin(ang) * d - rise, max(1, round(size * 0.04 * (1 - t)))))
     blob = lambda pts: lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in pts]
+    sh = max(1, round(size * 0.03))  # the shadow layer sits down and right of the lumps
+    c.part(blob([(x + sh, y + sh, r) for x, y, r in ring]), STEEL, shade=False)
     c.part(blob(wisps + ring), color)
     core = round(size * 0.22 * grow * (1 - 1.3 * t))
     if core >= 2:  # drawn over the ring, outlined where it overlaps: reads as separate lumps
         c.part(blob([(m, m - rise, core)]), color)
+        if core >= 5:  # a swirl curling round inside it, turning as it forms
+            spin = 70 * k
+            c.flat(lambda dr, f: dr.arc((m - core * 0.6, m - rise - core * 0.6, m + core * 0.6, m - rise + core * 0.6),
+                                        spin, spin + 200, f, width=1), STEEL)
+            c.flat(lambda dr, f: dr.arc((m - core * 0.3, m - rise - core * 0.3, m + core * 0.3, m - rise + core * 0.3),
+                                        spin + 180, spin + 330, f, width=1), STEEL)
+    if 0.0 < t < 0.85:  # sparkles flying off as it bursts, a little cross each
+        for i in range(6):
+            ang = math.tau * i / 6 + 0.2
+            d = size * (0.2 + 0.28 * t)
+            x, y = m + math.cos(ang) * d, m + math.sin(ang) * d - rise
+            arm = 2 if t < 0.5 and size >= 64 else 1
+            c.flat(R((x - arm, y, x + arm, y)), WHITE if i % 2 else STEEL)
+            c.flat(R((x, y - arm, x, y + arm)), WHITE if i % 2 else STEEL)
     return outline(c.img)
 
 
@@ -1517,19 +1535,41 @@ BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
 
 
 def smoke_frame(k: int, size: int = 136) -> Image.Image:
-    """Smoke Bomb cloud: a dark mass with puffs churning around it (loops)."""
+    """Smoke Bomb cloud: a dark mass with puffs churning around it, light catching their top-left edges, darker
+    billows churning in its lower right, swirl lines turning through it and wisps rising off the top, thinning away.
+    Loops over SMOKE_FRAMES: the outer ring turns two puffs' worth (big and small alternate, so one puff would pop)."""
     c = Canvas(size)
     m = size // 2
+    phase = k / SMOKE_FRAMES  # 0..1 round the loop
+    turn = math.tau / 10 * 2 * phase
     puffs = [(m, m, 40)]
     for i in range(10):
-        ang = math.tau * i / 10 + k * 0.16
-        reach = 34 + 6 * math.sin(k * math.pi / 2 + i)
+        ang = math.tau * i / 10 + turn
+        reach = 34 + 6 * math.sin(math.tau * phase + i)
         puffs.append((m + math.cos(ang) * reach, m + math.sin(ang) * reach, 20 + 4 * (i % 2)))
-    c.part(lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in puffs], SHADOW)
-    for i in range(0, 10, 3):  # a few lighter wisps on top
-        ang = math.tau * i / 10 + k * 0.16 + 0.3
-        x, y = m + math.cos(ang) * 30, m + math.sin(ang) * 30
-        c.flat(E((x - 5, y - 2, x + 5, y + 2)), STEEL_D)
+    blob = lambda pts: lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in pts]
+    c.part(blob(puffs), SHADOW)
+    inner = []  # darker billows churning in its lower right, away from the light
+    for i in range(4):
+        ang = math.tau * i / 4 - math.tau / 4 * phase
+        inner.append((m + 10 + math.cos(ang) * 12, m + 14 + math.sin(ang) * 8, 9 + 2 * math.sin(math.tau * phase + i * 2)))
+    c.flat(blob(inner), NAVY)
+    for x, y, r in puffs[1:]:  # light catching the top-left edge of each puff on that side
+        if x + y < 2 * m - 10:
+            c.flat(lambda dr, f, x=x, y=y, r=r: dr.arc((x - r + 3, y - r + 3, x + r - 3, y + r - 3), 190, 260, f, width=2),
+                   STEEL_D)
+    for j in range(2):  # swirl lines turning through it
+        spin = 360 * phase + 180 * j
+        rr = 18 + 9 * j
+        c.flat(lambda dr, f, spin=spin, rr=rr: dr.arc((m - rr, m - rr, m + rr, m + rr), spin, spin + 100, f, width=1),
+               STEEL_D)
+    for i in range(3):  # wisps rising off the top, shrinking as they go, one after another
+        w = (phase + i / 3) % 1.0
+        x = m - 24 + 24 * i + 4 * math.sin(math.tau * w)
+        y = m - 44 - 20 * w
+        r = round(6 * (1 - w))
+        if r >= 1:
+            c.part(E((x - r, y - r * 0.7, x + r, y + r * 0.7)), SHADOW, shade=False)
     return outline(c.img)
 
 

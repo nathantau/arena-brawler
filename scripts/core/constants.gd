@@ -42,9 +42,6 @@ const LOADOUT_SLOTS: int = 2
 
 # --- Skills (per-character tunables are in data/characters/*.tres) ---
 const SHIELD_THICKNESS: float = 10.0
-## Pellet index offset for the second gun's volley while dual-wielding, so every pellet of
-## both volleys has a distinct (owner, seq, pellet) key.
-const DUAL_PELLET_OFFSET: int = 64
 
 # --- Aiming ---
 const AUTO_AIM_RANGE: float = 560.0

@@ -1,6 +1,6 @@
 extends GutTest
 ## Weapon behaviours in a real physics world: splash, bounce, beam, melee + reflect,
-## shields, dual-wield volleys and crates.
+## shields and crates.
 
 const SHOOTER: int = 1
 const TARGET: int = 2
@@ -190,7 +190,7 @@ func test_sword_ignores_own_projectiles() -> void:
 	assert_eq(bullet.vel, vel)
 
 
-# --- shields / dual / crates ------------------------------------------------
+# --- shields / crates -------------------------------------------------------
 
 func test_shield_blocks_enemy_shots_not_own() -> void:
 	var warden: Player = _player(SHOOTER, Vector2(100, 300), &"warden")
@@ -206,18 +206,6 @@ func test_shield_blocks_enemy_shots_not_own() -> void:
 	pool.fire_shot(SHOOTER, 1, warden.global_position, Vector2.RIGHT, _w(&"pistol"), SEED)
 	await wait_physics_frames(25)
 	assert_lt(target.stats.armor, target.stats.max_armor)
-
-
-func test_dual_wield_fires_two_keyed_volleys() -> void:
-	await wait_physics_frames(1)
-	var shotgun: WeaponData = _w(&"shotgun")
-	pool.fire_shot(SHOOTER, 7, Vector2(100, 300), Vector2.RIGHT, shotgun, SEED, true, 9.0)
-	var live: Array[ProjectilePool.Slot] = _active()
-	assert_eq(live.size(), shotgun.pellets * 2)
-	var keys: Dictionary = {}
-	for s: ProjectilePool.Slot in live:
-		keys[s.pellet] = true
-	assert_eq(keys.size(), shotgun.pellets * 2, "every pellet has a distinct key")
 
 
 func test_projectiles_damage_and_destroy_crates() -> void:

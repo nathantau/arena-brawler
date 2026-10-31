@@ -156,9 +156,9 @@ func rpc_snapshot(tick: int, states: Array) -> void:
 
 
 @rpc("authority", "call_remote", "unreliable_ordered", CH_SHOTS)
-func rpc_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool) -> void:
+func rpc_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
 	if client != null:
-		client.on_shot(owner_id, seq, origin, facing, weapon_id, dual)
+		client.on_shot(owner_id, seq, origin, facing, weapon_id)
 
 
 @rpc("authority", "call_remote", "unreliable_ordered", CH_SHOTS)

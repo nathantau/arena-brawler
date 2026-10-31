@@ -24,7 +24,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - HP + Armor (armor regenerates after 3 s of not taking damage, HP does not).
 - Energy pool consumed by weapons; restored by pickups.
 - Carry 2 weapons, tap to swap.
-- 1 character skill on cooldown (MVP characters: Dash-dodge with i-frames; Deployable shield; Dual-wield burst).
+- 1 character skill on cooldown (MVP characters: Dash-dodge with i-frames; Deployable shield).
 **Weapons (MVP set of ~8, plus one signature weapon per character):** pistol (free, 0 energy), SMG, shotgun, sniper, rocket (splash), laser beam, melee sword (reflects bullets on swing), bouncing grenade launcher. All data-driven via `Resource` files (`WeaponData.tres`): damage, fire rate, spread, projectile speed, energy cost, crit chance, knockback.
 **Controls (mobile):** left virtual joystick = move; right side = attack button with **auto-aim to nearest visible enemy**, optional drag-to-aim on the attack button; skill button; weapon swap button. Haptics on hit.
 
@@ -162,8 +162,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
     when reflected so server hit events still match the client's cosmetic copy.
   - **3 characters** (`data/characters/*.tres`, `CharacterData` + `CharacterSkill` replacing `DashSkill`):
     Flicker, Warden (Barrier: a wall on `LAYER_SHIELDS` that stops enemy projectiles, 3 s),
-    Twinshot (Dual wield: every shot fires a second offset volley for 4 s; pellet keys offset by 64). Characters
-    differ in HP/armor/energy/speed. Skill state + character id are in snapshots, so others' barriers and dual guns
+    Twinshot. Characters
+    differ in HP/armor/energy/speed. Skill state + character id are in snapshots, so others' barriers
     show on every client and replay is exact (tested for all three). Picked in the lobby (`rpc_select_character`).
   - **2 arenas**: Pit and Foundry (`ArenaLayouts`, 180°-symmetric, tested). Chosen in the lobby (`MatchState.arena_index`,
     `rpc_request_arena`); switching rebuilds walls/crates/pickups and respawns everyone.
@@ -171,7 +171,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
     damaged by bullets/beams/blades/blasts, reset each match; hp mirrored to clients via `rpc_crates`.
   - **Juice** (local view only, never on the server): `fx/effects.gd` (pooled particles, damage numbers with crits,
     beam lines, sword arcs, blast rings), camera zoomed 1.4x (`CAMERA_ZOOM`, bigger characters on phones), camera shake (trauma model: own heavy shots, getting hit, nearby blasts),
-    haptics (hit, kill, nearby blast), character emblems, dual-gun / barrier visuals. `fx/sfx.gd` synthesizes all
+    haptics (hit, kill, nearby blast), character emblems, barrier visuals. `fx/sfx.gd` synthesizes all
     sounds at startup from a small recipe table (no audio assets), distance-attenuated.
   - Bots get varied characters and use their skill occasionally; autopilot uses its skill every 2.5 s.
   - Known M4 limitations: crates are still part of the ASCII layouts (no TileMap yet); bots don't pick weapons
@@ -233,16 +233,19 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   character) / Leave match; offline it pauses the tree, online the match keeps running (`Arena.leave_requested`).
   iOS Simulator: Godot's simulator lib is x86_64 only, so build with `ARCHS=x86_64` (runs under Rosetta).
 - **Skills as data: Dash + 1 special** (2026-10-30): `SkillData` resources in `data/skills/` (kind DASH / SHIELD /
-  DUAL_WIELD / TRANSFORM, cooldown, duration, icon, blurb, tags like weapons; `special = false` for Dash).
+  TRANSFORM / ..., cooldown, duration, icon, blurb, tags like weapons; `special = false` for Dash).
   `SkillCatalog.shared()`; `CharacterData.signature_skill` + `can_use_skill()` (same tag list as weapons).
   Every player has `dash` (shared, own button / Space / InputFrame `skill`) and `special` (picked in the loading
-  room, second button / E / InputFrame `special` flag 8). Specials: Barrier (heavy: Warden, Twinshot), Dual Wield
-  (light: Flicker, Twinshot), **Great Ape** (Wukong signature, TRANSFORM: 6 s as a big dark-red ape drawn x1.35
+  room, second button / E / InputFrame `special` flag 8). Specials: Barrier (heavy: Warden, Twinshot)
+  (Dual Wield was removed 2026-10-31: too close to another game's signature mechanic), **Great Ape** (Wukong signature, TRANSFORM: 6 s as a big dark-red ape drawn x1.35
   from `assets/sprites/wukong_ape.png` (generate.py `FORMS`), half damage taken, 0.9 speed, FIRE uses
   `ape_fists` (melee slam) instead of the loadout, each slam playing the sheet's "attack" strip (generate.py `ATTACKS`/`APE_POSES`: he crouches, leaps (per-frame `hop`, knees tucked) with fists up beside his head, lands wide in a puff of dust as they smash down in front where the slam lands, back to the knuckle-walk; the hit waits for the smash frame: `WeaponData.windup` 0.3 s, `Player._windup_left`, remote peers start the strip at the impact via `play_recoil(skip)`); form weapon cooldown is in the snapshot). Snapshots carry both
   slots (`DASH_*`, `SPECIAL_ID/…`); server validates `rpc_select_special`; `--special ID` CLI. The loading room is
   fighter cards with a special column beside them, then weapons. Removed per-character skill fields (Wukong's
   longer Somersault dash is gone: everyone shares one Dash).
+- **Balance pass** (2026-10-31, numbers only, untested in real matches): reference sustained DPS vs ~140 HP+armor.
+  Sakura fan 5 -> 4 dmg; Ember Palm interval 0.12 -> 0.14 s; SMG 7 -> 6; Arc Blade 34 -> 30; Boomtube rocket 40 -> 50;
+  Inferno beam 7 -> 5 dmg/tick; Petal Storm 3 -> 2 dmg per petal, cooldown 8 -> 9 s.
 - **Flicker is the ninja** (2026-10-30): navy shroud, steel breastplate, mask peaking at the nose, steel forehead plate, choppy
   bob with a big spiky topknot (drawn above the art box: generate.py `CROWNS`, kept on KO via `KO_CROWNS`), its red
   tie behind her hair, ribbon tails that sway in idle; bare hands. Four Flicker-only specials (tag `flicker`): **Shadow Clones** (signature, CLONES: 3 decoys run out from
@@ -251,7 +254,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   auto-aim and bots target them), **Blink** (BLINK: `move_and_collide` hop, walls stop it, i-frames),
   **Smoke Bomb** (SMOKE: cloud at your feet; while inside it `is_hidden()` and enemy auto-aim / bots skip you),
   **Fan of Blades** (VOLLEY: fires `blade_fan`, 12 piercing kunai in a ring, through the normal shot pipeline
-  with seq + `VOLLEY_SEQ_OFFSET`). Dual Wield is still pickable too.
+  with seq + `VOLLEY_SEQ_OFFSET`).
   Flourishes (`SpecialFx`, detected from synced state changes so remote players show them too): clones appear in
   their own cloud poof in a ring around the player (`CLONE_START_DISTANCE`), fade in, and vanish in poofs; the Great Ape transformation morphs
   (`SkillData.form_morph`: 12-frame 96 px strip, full colour: Wukong, ten in-between creatures
@@ -261,7 +264,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   (`APE_ARMOUR_BREAKS`) and red rises up his face from the chin, dithered), the ape; drawn at the normal sprite scale while the real
   sprite is hidden; his storm clouds live in the sheets, no cloud is drawn over him),
   and morphs back when it ends. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
-  (generate.py `FX`: poof / poof_small 10 frames (swell, then burst into wisps), wukong_ape_morph, smoke 4-frame loop; `Canvas(size)`
+  (generate.py `FX`: poof / poof_small 20 frames (swell with a swirl, shadow layer, then burst into wisps and sparkles), wukong_ape_morph, smoke 12-frame loop (edge highlights, inner billows, swirls, rising wisps; swells in and fades out in `SpecialFx`); `Canvas(size)`
   now takes any size). `Effects` is pixel art too: explosions play `blast` (fireball → smoke + embers), melee slams `slam` (dust ring + floor cracks; `exploded(..., slam)`), sword swings `slash` (crescent smear tinted to the weapon), all sized to the radius / reach; beams and particles are hard-edged, snapped to art pixels and shrink instead of fading. Preview all effects: `tools/fx_preview.gd`. Bullets are per-weapon pixel art (`WeaponData.projectile_sprite`, generate.py `PROJECTILES` → `assets/sprites/projectiles/`: energy bolts, lead pellets, sniper tracer, rocket with flickering exhaust, rolling grenade, kunai, brass round, plasma), rotated to the flight direction with a 2-frame flicker and a pixel trail; crits are drawn x1.35, flash and leave gold sparkles; wall hits pop as four pixel sparks. Not done: bots don't prefer usable pickups; the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests

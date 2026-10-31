@@ -3,7 +3,6 @@ extends RefCounted
 ## One skill slot (the shared Dash or the picked special), on cooldown. Behaviour by SkillData.kind:
 ## - DASH: burst of speed in `direction` with i-frames (movement reads is_dashing()).
 ## - SHIELD: a barrier centred on `anchor`, facing `direction`, that blocks enemy projectiles.
-## - DUAL_WIELD: every shot fires a second, offset volley for no extra energy.
 ## - TRANSFORM: a stronger form; fires `form_weapon` (its cooldown is snapshotted).
 ## - BLINK: like a dash's i-frames; the Player does the hop. VOLLEY: the Player fires it.
 ## - SMOKE / CLONES: centred on `anchor` (where you stood), aimed along `direction`.
@@ -38,10 +37,6 @@ func is_dashing() -> bool:
 
 func is_shielding() -> bool:
 	return data.kind == SkillData.Kind.SHIELD and is_active()
-
-
-func is_dual_wielding() -> bool:
-	return data.kind == SkillData.Kind.DUAL_WIELD and is_active()
 
 
 func is_transformed() -> bool:
