@@ -15,7 +15,7 @@ const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 222)
 const FIGHTER_ART_SCALE: float = 2.0
 const FIGHTER_ART_SIZE: Vector2 = Vector2(136, 150)
 ## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
-const SKILL_ROW_SIZE: Vector2 = Vector2(320, 66)
+const SKILL_ROW_SIZE: Vector2 = Vector2(320, 62)  # 7 rows (5 own + Dash + Barrier) fit above READY on a phone
 const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
 const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 128)
 const WEAPON_ART_SCALE: float = 2.0
@@ -109,7 +109,7 @@ func _ready() -> void:
 	top.add_child(specials)
 	_label(specials, &"HeaderLabel").text = "3 · Choose 2 specials"
 	_special_row = VBoxContainer.new()
-	_special_row.add_theme_constant_override("separation", SPACING)
+	_special_row.add_theme_constant_override("separation", SPACING / 2)
 	specials.add_child(_special_row)
 
 	var footer := HBoxContainer.new()
@@ -243,6 +243,7 @@ func _skill_row(sk: SkillData, blurb: String) -> Button:
 	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(pic)
 	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text.alignment = BoxContainer.ALIGNMENT_CENTER
 	text.add_theme_constant_override("separation", 0)
 	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -255,6 +256,8 @@ func _skill_row(sk: SkillData, blurb: String) -> Button:
 	blurb_label.text = blurb
 	for l: Label in [name_label, blurb_label]:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		l.clip_text = true  # never spill past the row; a too-long blurb ends in "…"
+		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	return b
 
 
