@@ -8,6 +8,7 @@ id = &"inferno_beam"
 display_name = "Inferno Beam"
 pickup = false
 kind = 1
+held_beam = true
 muzzle_x = 9.0
 damage = 7
 fire_interval = 0.1

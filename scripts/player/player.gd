@@ -352,6 +352,19 @@ func shot_origin(w: WeaponData) -> Vector2:
 	return global_position + (Vector2.ZERO if w.kind == WeaponData.Kind.MELEE else hand_offset(facing))
 
 
+## Aim direction that sends shots through `target`: guns fire from the front hand (shot_origin), not the body's
+## centre, so aiming centre-to-centre would pass up to ~30 px beside it, wider than a player.
+## shortcut: a target almost straight above / below, between the two hands, can still be off by a hand's width.
+func aim_at(target: Vector2) -> Vector2:
+	var to: Vector2 = target - global_position
+	if held_weapon().data.kind == WeaponData.Kind.MELEE:
+		return to.normalized()
+	var aim: Vector2 = target - (global_position + hand_offset(to))
+	if aim.x != 0.0 and signf(aim.x) != signf(to.x):  # aiming from that hand turns him round: use the other hand
+		aim = target - (global_position + hand_offset(aim))
+	return aim.normalized()
+
+
 ## Where the front hand is for a character facing `dir` (the sprite flips when facing left, so it's on the aim side).
 static func hand_offset(dir: Vector2) -> Vector2:
 	return Vector2(-WEAPON_HAND.x if dir.x < 0.0 else WEAPON_HAND.x, WEAPON_HAND.y)

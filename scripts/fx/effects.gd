@@ -23,6 +23,12 @@ const COLOR_NUMBER_CRIT: Color = UiStyle.C_YELLOW
 const BEAM_TIME: float = 0.07
 const BEAM_CORE_COLOR: Color = Color(1, 1, 1, 0.9)
 const BEAM_CORE_SCALE: float = 0.4
+## Held beams (WeaponData.held_beam): fire rolling down in segments this long, layered red / orange / yellow /
+## white-hot core (width fractions), surging and flaring every frame.
+const HELD_BEAM_SEGMENT: float = 10.0
+const HELD_BEAM_LAYERS: Array = [[UiStyle.C_RED, 1.0], [UiStyle.C_ORANGE, 0.72], [UiStyle.C_YELLOW, 0.45],
+	[UiStyle.C_WHITE, 0.2]]
+const HELD_BEAM_FIRE: Array[Color] = [UiStyle.C_RED, UiStyle.C_ORANGE, UiStyle.C_YELLOW]
 const SWING_TIME: float = 0.18
 const RING_TIME: float = 0.5
 const SLAM_TIME: float = 0.4
@@ -53,6 +59,13 @@ class DamageNumber:
 	var crit: bool = false
 
 
+class HeldBeam:
+	var shooter: Player
+	var weapon: WeaponData
+	var length: float = 0.0
+	var life: float = 0.0
+
+
 class Beam:
 	var life: float = 0.0
 	var from: Vector2 = Vector2.ZERO
@@ -81,6 +94,7 @@ class Ring:
 var _particles: Array[Particle] = []
 var _numbers: Array[DamageNumber] = []
 var _beams: Array[Beam] = []
+var _held: Dictionary = {}  # player_id -> HeldBeam
 var _swings: Array[Swing] = []
 var _rings: Array[Ring] = []
 var _pc: int = 0
@@ -147,6 +161,26 @@ func beam(from: Vector2, to: Vector2, color: Color, width: float) -> void:
 	b.color = color
 
 
+## Keeps `shooter`'s beam lit, drawn every frame from their fist along their current aim, `length` long (the last
+## tick's raycast). Each damage tick renews it for two ticks, so it stays lit between them instead of flashing.
+func hold_beam(shooter: Player, w: WeaponData, length: float) -> void:
+	var b: HeldBeam = _held.get(shooter.player_id)
+	if b == null:
+		b = HeldBeam.new()
+		_held[shooter.player_id] = b
+	b.shooter = shooter
+	b.weapon = w
+	b.length = length
+	b.life = w.fire_interval * 2.0
+
+
+func _held_ends(b: HeldBeam) -> PackedVector2Array:
+	var p: Player = b.shooter
+	var from: Vector2 = p.global_position + p.visual_offset + Player.hand_offset(p.facing) \
+		+ p.facing * b.weapon.muzzle_distance()
+	return PackedVector2Array([from, from + p.facing * b.length])
+
+
 func swing(origin: Vector2, facing: Vector2, radius: float, arc_deg: float, color: Color) -> void:
 	var s: Swing = _swings[_sc]
 	_sc = (_sc + 1) % _swings.size()
@@ -182,6 +216,17 @@ func _process(delta: float) -> void:
 			n.pos.y -= NUMBER_RISE * delta
 	for b: Beam in _beams:
 		b.life -= delta
+	for id: int in _held.keys():
+		var h: HeldBeam = _held[id]
+		h.life -= delta
+		if h.life <= 0.0 or not is_instance_valid(h.shooter) or h.shooter.dead:
+			_held.erase(id)
+			continue
+		var ends: PackedVector2Array = _held_ends(h)
+		var dir: Vector2 = h.shooter.facing
+		burst(ends[1], HELD_BEAM_FIRE.pick_random(), 2, 260.0, 5.0, 0.35, -dir, 2.6)  # blaze spraying off the hit
+		var along: Vector2 = ends[0].lerp(ends[1], _rng.randf())
+		burst(along, HELD_BEAM_FIRE.pick_random(), 1, 140.0, 4.0, 0.3, dir.orthogonal() * signf(_rng.randf() - 0.5), 0.8)
 	for s: Swing in _swings:
 		s.life -= delta
 	for r: Ring in _rings:
@@ -208,6 +253,7 @@ func _draw() -> void:
 		draw_line(b.from, b.to, b.color, w)
 		if w > px:
 			draw_line(b.from, b.to, BEAM_CORE_COLOR, maxf(px, snappedf(w * BEAM_CORE_SCALE, px)))
+	_draw_held_beams(px)
 	for p: Particle in _particles:
 		if p.life <= 0.0:
 			continue
@@ -238,3 +284,22 @@ func _draw_strip(ci: CanvasItem, art: Texture2D, t: float, at: Vector2, angle: f
 	ci.draw_set_transform(at, angle, Vector2(scale_px, scale_px))
 	ci.draw_texture_rect_region(art, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2(k * h, 0, h, h), tint)
 	ci.draw_set_transform(Vector2.ZERO)
+
+
+func _draw_held_beams(px: float) -> void:
+	var time: float = Time.get_ticks_msec() / 1000.0
+	for h: HeldBeam in _held.values():
+		var ends: PackedVector2Array = _held_ends(h)
+		var dir: Vector2 = h.shooter.facing
+		var base: float = h.weapon.projectile_radius * 2.0
+		var n: int = maxi(1, ceili(h.length / HELD_BEAM_SEGMENT))
+		var pulse: float = 1.0 + 0.15 * sin(time * 30.0)
+		for layer: Array in HELD_BEAM_LAYERS:
+			var color: Color = layer[0]
+			for i: int in n:
+				# surges of fire rolling down the beam, in whole art pixels
+				var surge: float = 1.0 + 0.22 * sin(time * 40.0 - i * 1.3) + 0.12 * sin(time * 67.0 + i * 2.9)
+				var w: float = maxf(px, snappedf(base * layer[1] * surge, px))
+				draw_line(ends[0] + dir * (h.length * i / n), ends[0] + dir * (h.length * (i + 1) / n), color, w)
+			draw_circle(ends[0], maxf(px, snappedf(base * 0.6 * layer[1] * pulse, px)), color)  # flare at the fist
+			draw_circle(ends[1], maxf(px, snappedf(base * 0.8 * layer[1] * (2.0 - pulse), px)), color)  # blaze at the hit

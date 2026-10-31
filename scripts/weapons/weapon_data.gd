@@ -50,6 +50,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Drawn floating in front of the wielder; false = the character's own art is the weapon (Flint's fiery fists),
 ## the sprite only shows in the HUD and loading room.
 @export var held_art: bool = true
+## BEAM: drawn as one constant fiery beam from the hand while firing (Effects.hold_beam), not a flash per tick.
+@export var held_beam: bool = false
 ## Who may carry it: any character sharing a tag (CharacterData.weapon_tags). Empty = everyone.
 ## A character's own id as the only tag makes a signature weapon.
 @export var tags: Array[StringName] = []

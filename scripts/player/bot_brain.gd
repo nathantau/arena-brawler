@@ -42,7 +42,7 @@ func get_input(player: Player, delta: float) -> InputFrame:
 		var move: Vector2 = radial * Constants.BOT_RADIAL_WEIGHT + strafe * Constants.BOT_STRAFE_WEIGHT
 		_frame.move_vec = move.normalized() * Constants.BOT_MOVE_SCALE
 		var err: float = deg_to_rad(Constants.BOT_AIM_ERROR_DEG)
-		_frame.aim_vec = dir.rotated(rng.randf_range(-err, err))
+		_frame.aim_vec = player.aim_at(target as Vector2).rotated(rng.randf_range(-err, err))
 		_frame.fire = true
 		# Skills are edge-triggered: a one-frame press now and then.
 		_frame.skill = rng.randf() < Constants.BOT_SKILL_CHANCE_PER_SEC * delta

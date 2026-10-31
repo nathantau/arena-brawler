@@ -356,8 +356,12 @@ func _attach_effects() -> void:
 	sfx.listener = local_player
 	add_child(sfx)
 	projectiles.shot_spawned.connect(_fx_shot)
-	projectiles.beam_drawn.connect(func(from: Vector2, to: Vector2, w: WeaponData) -> void:
-		effects.beam(from, to, w.color, w.projectile_radius * BEAM_WIDTH_SCALE))
+	projectiles.beam_drawn.connect(func(owner_id: int, from: Vector2, to: Vector2, w: WeaponData) -> void:
+		var shooter: Player = get_player(owner_id)
+		if w.held_beam and shooter != null:
+			effects.hold_beam(shooter, w, from.distance_to(to))
+		else:
+			effects.beam(from, to, w.color, w.projectile_radius * BEAM_WIDTH_SCALE))
 	projectiles.swung.connect(func(origin: Vector2, facing: Vector2, w: WeaponData) -> void:
 		if w.thrust:
 			var tip: Vector2 = origin + facing * (w.melee_range + Constants.PLAYER_RADIUS)

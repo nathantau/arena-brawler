@@ -40,11 +40,11 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 		_drive_autopilot(player)
 	var aim := Vector2.ZERO
 	if fire_mouse:
-		aim = player.get_global_mouse_position() - player.global_position
+		aim = player.aim_at(player.get_global_mouse_position())
 	elif touch_on and touch.attack_aim != Vector2.ZERO:
 		aim = touch.attack_aim
 	elif auto_target != null:
-		aim = auto_aim_point - player.global_position
+		aim = player.aim_at(auto_aim_point)
 	_frame.aim_vec = aim.normalized() if aim != Vector2.ZERO else Vector2.ZERO
 
 	return _frame

@@ -358,3 +358,14 @@ func test_petal_storm_homes_in_on_enemies() -> void:
 	# Flying straight, only the 1-2 petals aimed at it would land; homing brings most of the ring around.
 	assert_gt(taken, storm.damage * storm.pellets / 2, "most petals curve onto the target")
 	assert_eq(me.stats.hp, me.stats.max_hp, "never the shooter")
+
+
+func test_aim_at_sends_shots_through_the_target() -> void:
+	var p: Player = _player(SHOOTER, Vector2.ZERO)
+	var w: WeaponData = p.held_weapon().data
+	for target: Vector2 in [Vector2(200, 0), Vector2(-200, 40), Vector2(150, -150), Vector2(-120, 160), Vector2(60, 220)]:
+		p.facing = p.aim_at(target)
+		var from_hand: Vector2 = target - p.shot_origin(w)
+		var miss: float = absf(from_hand.cross(p.facing))  # distance from the target to the shot's line
+		assert_lt(miss, 1.0, "aiming at %s" % target)
+		assert_gt(from_hand.dot(p.facing), 0.0, "and towards it")

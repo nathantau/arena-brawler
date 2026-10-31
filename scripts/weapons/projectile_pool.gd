@@ -16,7 +16,7 @@ extends Node2D
 signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2)
 ## Cosmetic events, emitted on every peer.
 signal shot_spawned(owner_id: int, origin: Vector2, facing: Vector2, weapon: WeaponData)
-signal beam_drawn(from: Vector2, to: Vector2, weapon: WeaponData)
+signal beam_drawn(owner_id: int, from: Vector2, to: Vector2, weapon: WeaponData)
 signal swung(origin: Vector2, facing: Vector2, weapon: WeaponData)
 signal exploded(at: Vector2, radius: float, color: Color, slam: bool)
 
@@ -200,7 +200,7 @@ func _beam(owner_id: int, seq: int, pellet: int, origin: Vector2, dir: Vector2, 
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	var from: Vector2 = origin + dir * weapon.muzzle_distance()
 	if not AutoAim.has_line_of_sight(space, _los_query, origin, from):
-		beam_drawn.emit(origin, from, weapon)
+		beam_drawn.emit(owner_id, origin, from, weapon)
 		return
 	var to: Vector2 = from + dir * weapon.projectile_range
 	_query.from = from
@@ -224,7 +224,7 @@ func _beam(owner_id: int, seq: int, pellet: int, origin: Vector2, dir: Vector2, 
 				(collider as Crate).take_damage(damage)
 		break
 	_add_impact(end, weapon.projectile_radius, weapon.color)
-	beam_drawn.emit(from, end, weapon)
+	beam_drawn.emit(owner_id, from, end, weapon)
 
 
 func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData) -> void:
