@@ -64,8 +64,10 @@ func _nearest_visible_enemy(player: Player) -> Variant:
 			spots.append(p.global_position)
 		for at: Vector2 in spots:
 			var d: float = player.global_position.distance_squared_to(at)
-			if d > 0.0 and d < best_dist_sq \
-					and AutoAim.has_line_of_sight(space, _query, player.global_position, at):
-				best = at
+			if d <= 0.0 or d >= best_dist_sq:
+				continue
+			var spot: Variant = AutoAim.visible_point(space, _query, player.global_position, at)
+			if spot != null:
+				best = spot
 				best_dist_sq = d
 	return best

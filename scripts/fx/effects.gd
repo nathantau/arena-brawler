@@ -29,6 +29,11 @@ const HELD_BEAM_SEGMENT: float = 10.0
 const HELD_BEAM_LAYERS: Array = [[UiStyle.C_RED, 1.0], [UiStyle.C_ORANGE, 0.72], [UiStyle.C_YELLOW, 0.45],
 	[UiStyle.C_WHITE, 0.2]]
 const HELD_BEAM_FIRE: Array[Color] = [UiStyle.C_RED, UiStyle.C_ORANGE, UiStyle.C_YELLOW]
+## Flame wisps peeling off a held beam's edges per frame, rising and cooling (yellow, orange, red) as they shrink.
+const WISP_POOL: int = 128
+const WISPS_PER_FRAME: int = 3
+const WISP_LIFE: float = 0.5
+const WISP_RISE: Vector2 = Vector2(0.0, -110.0)
 const SWING_TIME: float = 0.18
 const RING_TIME: float = 0.5
 const SLAM_TIME: float = 0.4
@@ -57,6 +62,13 @@ class DamageNumber:
 	var pos: Vector2 = Vector2.ZERO
 	var text: String = ""
 	var crit: bool = false
+
+
+class Wisp:
+	var life: float = 0.0
+	var pos: Vector2 = Vector2.ZERO
+	var vel: Vector2 = Vector2.ZERO
+	var size: float = 4.0
 
 
 class HeldBeam:
@@ -95,6 +107,8 @@ var _particles: Array[Particle] = []
 var _numbers: Array[DamageNumber] = []
 var _beams: Array[Beam] = []
 var _held: Dictionary = {}  # player_id -> HeldBeam
+var _wisps: Array[Wisp] = []
+var _wc: int = 0
 var _swings: Array[Swing] = []
 var _rings: Array[Ring] = []
 var _pc: int = 0
@@ -120,6 +134,8 @@ func _ready() -> void:
 		_numbers.append(DamageNumber.new())
 	for i: int in BEAM_POOL:
 		_beams.append(Beam.new())
+	for i: int in WISP_POOL:
+		_wisps.append(Wisp.new())
 	for i: int in SWING_POOL:
 		_swings.append(Swing.new())
 	for i: int in RING_POOL:
@@ -227,6 +243,18 @@ func _process(delta: float) -> void:
 		burst(ends[1], HELD_BEAM_FIRE.pick_random(), 2, 260.0, 5.0, 0.35, -dir, 2.6)  # blaze spraying off the hit
 		var along: Vector2 = ends[0].lerp(ends[1], _rng.randf())
 		burst(along, HELD_BEAM_FIRE.pick_random(), 1, 140.0, 4.0, 0.3, dir.orthogonal() * signf(_rng.randf() - 0.5), 0.8)
+		for k: int in WISPS_PER_FRAME:  # wisps peeling off its edges
+			var side: Vector2 = dir.orthogonal() * signf(_rng.randf() - 0.5) * h.weapon.projectile_radius * 0.8
+			var w: Wisp = _wisps[_wc]
+			_wc = (_wc + 1) % _wisps.size()
+			w.life = WISP_LIFE * _rng.randf_range(0.6, 1.0)
+			w.pos = ends[0].lerp(ends[1], _rng.randf()) + side
+			w.vel = WISP_RISE * _rng.randf_range(0.6, 1.2) + side * 2.0 + dir * _rng.randf_range(-30.0, 30.0)
+			w.size = _rng.randf_range(4.0, 8.0)
+	for w: Wisp in _wisps:
+		if w.life > 0.0:
+			w.life -= delta
+			w.pos += w.vel * delta
 	for s: Swing in _swings:
 		s.life -= delta
 	for r: Ring in _rings:
@@ -303,3 +331,11 @@ func _draw_held_beams(px: float) -> void:
 				draw_line(ends[0] + dir * (h.length * i / n), ends[0] + dir * (h.length * (i + 1) / n), color, w)
 			draw_circle(ends[0], maxf(px, snappedf(base * 0.6 * layer[1] * pulse, px)), color)  # flare at the fist
 			draw_circle(ends[1], maxf(px, snappedf(base * 0.8 * layer[1] * (2.0 - pulse), px)), color)  # blaze at the hit
+	for w: Wisp in _wisps:  # little flames rising off it: a teardrop pointing up, shrinking and cooling
+		if w.life <= 0.0:
+			continue
+		var f: float = w.life / WISP_LIFE
+		var r: float = maxf(px, snappedf(w.size * f, px))
+		var at: Vector2 = (w.pos / px).floor() * px
+		draw_colored_polygon(PackedVector2Array([at + Vector2(-r, 0), at + Vector2(0, -r * 2.5), at + Vector2(r, 0),
+			at + Vector2(0, r)]), UiStyle.C_YELLOW if f > 0.66 else UiStyle.C_ORANGE if f > 0.33 else UiStyle.C_RED)

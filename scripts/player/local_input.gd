@@ -15,6 +15,7 @@ var _frame := InputFrame.new()
 var _query := PhysicsRayQueryParameters2D.new()
 var _candidates: Array[Player] = []
 var _positions := PackedVector2Array()
+var _aim_spots := PackedVector2Array()  # per candidate: the visible part to aim at (AutoAim.visible_point)
 var _space: PhysicsDirectSpaceState2D
 var _origin: Vector2 = Vector2.ZERO
 var _is_visible_cb: Callable = _is_visible
@@ -63,17 +64,21 @@ func _update_auto_target(player: Player) -> void:
 		for c: Vector2 in p.clone_points():
 			_candidates.append(p)
 			_positions.append(c)
+	_aim_spots = _positions.duplicate()
 	_space = player.get_world_2d().direct_space_state
 	_origin = player.global_position
 	var idx: int = AutoAim.pick_nearest(_origin, _positions, Constants.AUTO_AIM_RANGE, _is_visible_cb)
 	var new_target: Player = _candidates[idx] if idx >= 0 else null
 	auto_target = new_target
 	if auto_target != null:
-		auto_aim_point = _positions[idx]
+		auto_aim_point = _aim_spots[idx]
 
 
 func _is_visible(i: int) -> bool:
-	return AutoAim.has_line_of_sight(_space, _query, _origin, _positions[i])
+	var spot: Variant = AutoAim.visible_point(_space, _query, _origin, _positions[i])
+	if spot != null:
+		_aim_spots[i] = spot
+	return spot != null
 
 
 ## Circle-strafe and fire when a target is visible, otherwise walk toward the nearest enemy.
