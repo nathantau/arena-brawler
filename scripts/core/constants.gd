@@ -24,6 +24,8 @@ const CRATE_HP: int = 60
 const PLAYER_RADIUS: float = 18.0
 ## Feet (Player.FOOT_RING_Y = 40) minus PLAYER_RADIUS.
 const WALL_FEET_STRIP: float = 22.0
+## Grapple Kunai stops this far past touching distance from the wall it bit.
+const GRAPPLE_STANDOFF: float = 2.0
 const PLAYER_ACCEL: float = 2600.0
 const PLAYER_DECEL: float = 2200.0
 ## Used when above normal max speed (after dash / knockback) so overspeed bleeds off fast.

@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"blink", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -248,7 +248,7 @@ func test_flicker_can_pick_all_ninja_specials() -> void:
 	for sk: SkillData in skills.specials_for(flicker):
 		ids.append(sk.id)
 	assert_eq(ids[0], &"shadow_clones", "signature first")
-	for id: StringName in [&"blink", &"smoke_bomb", &"fan_of_blades"]:
+	for id: StringName in [&"blink", &"smoke_bomb", &"fan_of_blades", &"grapple_kunai"]:
 		assert_has(ids, id)
 	for c: CharacterData in [warden, twinshot]:
 		assert_false(c.can_use_skill(skills.get_skill(&"blink")), String(c.id))
@@ -314,6 +314,96 @@ func test_shadow_clones_stay_in_when_cast_from_under_a_wall() -> void:
 	p.skills[1].active_remaining -= 2.0
 	for c: Vector2 in p.clone_points():
 		assert_gt(c.y, p.global_position.y - 1.0, "clones don't run up through the wall: %s" % c)
+
+
+## Runs idle frames until the grapple pull is over (or `limit` frames pass).
+func _until_pulled(p: Player, limit: int = 120) -> void:
+	var idle := InputFrame.new()
+	for i: int in limit:
+		if not p.skills[1].is_active():
+			return
+		idle.seq = 11 + i
+		p.simulate(idle, DT)
+
+
+func test_grapple_zips_to_a_wall_and_stops_short() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	_wall(world, Vector2(500, 300), Vector2(20, 400))  # left face at x 490, inside the 420 range from x 200
+	var p: Player = _flicker_in(world, &"grapple_kunai")
+	p.global_position = Vector2(200, 300)
+	await wait_physics_frames(2)
+	var sk: SkillData = skills.get_skill(&"grapple_kunai")
+	_press_special(p, Vector2.RIGHT)
+	assert_true(p.skills[1].is_active(), "bit the wall")
+	assert_almost_eq(p.skills[1].cooldown_remaining, sk.cooldown, 0.001, "a bite charges the full cooldown")
+	assert_eq(p.global_position, Vector2(200, 300), "held still while the kunai bites")
+	_until_pulled(p)
+	assert_false(p.skills[1].is_active(), "the pull ends on arrival")
+	var stop: float = 490.0 - Constants.PLAYER_RADIUS - Constants.GRAPPLE_STANDOFF
+	assert_almost_eq(p.global_position.x, stop, 1.0, "stops just short of the wall")
+	assert_almost_eq(p.global_position.y, 300.0, 0.01, "straight along the aim")
+	assert_eq(p.velocity, Vector2.ZERO, "no slide after the pull")
+
+
+func test_grapple_miss_does_not_move_and_charges_short_cooldown() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	_wall(world, Vector2(700, 300), Vector2(20, 400))  # 490 px away: out of range
+	var p: Player = _flicker_in(world, &"grapple_kunai")
+	p.global_position = Vector2(200, 300)
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	assert_false(p.skills[1].is_active())
+	assert_almost_eq(p.skills[1].cooldown_remaining, skills.get_skill(&"grapple_kunai").grapple_miss_cooldown, 0.001)
+	_until_pulled(p, 30)
+	assert_eq(p.global_position, Vector2(200, 300), "didn't move")
+
+
+func test_grapple_wall_on_the_way_stops_the_pull() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	_wall(world, Vector2(500, 300), Vector2(20, 400))
+	# A crate the aim line passes beside, but her body clips: its feet strip spans y 310..330.
+	_wall(world, Vector2(350, 342), Vector2(40, 20))
+	var p: Player = _flicker_in(world, &"grapple_kunai")
+	p.global_position = Vector2(200, 300)
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	assert_true(p.skills[1].is_active(), "the kunai flew past the crate and bit the wall")
+	_until_pulled(p)
+	assert_false(p.skills[1].is_active())
+	assert_between(p.global_position.x, 250.0, 335.0, "stopped at the crate")
+
+
+func test_grapple_never_ends_inside_walls_or_outside_the_arena() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	# A 400 px box like the arena border (inside: 100..500), with a crate in the middle of one side.
+	_wall(world, Vector2(300, 80), Vector2(480, 40))
+	_wall(world, Vector2(300, 520), Vector2(480, 40))
+	_wall(world, Vector2(80, 300), Vector2(40, 480))
+	_wall(world, Vector2(520, 300), Vector2(40, 480))
+	_wall(world, Vector2(420, 300), Vector2(48, 48))
+	var p: Player = _flicker_in(world, &"grapple_kunai")
+	await wait_physics_frames(2)
+	var circle := CircleShape2D.new()
+	circle.radius = Constants.PLAYER_RADIUS - 0.5
+	var q := PhysicsShapeQueryParameters2D.new()
+	q.shape = circle
+	q.collision_mask = Constants.LAYER_WALL_FEET
+	for start: Vector2 in [Vector2(300, 300), Vector2(150, 150), Vector2(330, 460)]:
+		for k: int in 16:
+			p.global_position = start
+			p.skills[1].reset()
+			var aim: Vector2 = Vector2.RIGHT.rotated(TAU * k / 16.0)
+			_press_special(p, aim)
+			_until_pulled(p)
+			q.transform = Transform2D(0.0, p.global_position)
+			var where: String = "from %s aiming %s: ended at %s" % [start, aim, p.global_position]
+			assert_eq(world.get_world_2d().direct_space_state.intersect_shape(q).size(), 0, "not in a wall " + where)
+			assert_true(Rect2(100, 100 - Constants.WALL_FEET_STRIP, 400, 400).has_point(p.global_position),
+				"inside the arena " + where)
 
 
 func test_fan_of_blades_fires_a_ring() -> void:

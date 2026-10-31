@@ -104,7 +104,7 @@ var _sprite := AnimatedSprite2D.new()
 var _overlay := Node2D.new()
 ## Smoke clouds and shadow clones (cosmetic, from the synced special state).
 var _special_fx := SpecialFx.new()
-var _clone_query := PhysicsRayQueryParameters2D.new()
+var _feet_ray := PhysicsRayQueryParameters2D.new()
 
 
 func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData], ctrl: PlayerController,
@@ -138,7 +138,8 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	_ward.caught.connect(_special_fx.petal_pop)
 	# The walls players move against (shifted to the feet): standing under a wall puts the centre inside the wall
 	# itself, and a ray starting inside a wall misses it, so clones ran out through it (even past the border).
-	_clone_query.collision_mask = Constants.LAYER_WALL_FEET
+	# Grapple Kunai casts against them too, so it only bites walls she can stand against.
+	_feet_ray.collision_mask = Constants.LAYER_WALL_FEET
 	set_character(p_character)
 
 
@@ -229,7 +230,7 @@ func _process(delta: float) -> void:
 	_sprite.position = visual_offset
 	_sprite.flip_h = facing.x < 0.0
 	_special_fx.sync(self)
-	_sprite.modulate.a = 0.0 if _special_fx.is_morphing() else \
+	_sprite.modulate.a = 0.0 if _special_fx.hides_owner() else \
 		INVULN_ALPHA if stats.is_invulnerable() or is_hidden() else 1.0
 	queue_redraw()
 	_overlay.queue_redraw()
@@ -258,11 +259,15 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			_activate(skills[i], input, replay)
 	_prev_skills = pressed
 
-	var mover: CharacterSkill = active_skill(SkillData.Kind.DASH)
-	var tf: CharacterSkill = form()
-	var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0)
-	velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed, delta)
-	move_and_slide()
+	var grapple: CharacterSkill = active_skill(SkillData.Kind.GRAPPLE)
+	if grapple != null:
+		_pull(grapple, delta)
+	else:
+		var mover: CharacterSkill = active_skill(SkillData.Kind.DASH)
+		var tf: CharacterSkill = form()
+		var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0)
+		velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed, delta)
+		move_and_slide()
 	_sync_shields()
 
 	if input.aim_vec.length_squared() > 0.0:
@@ -275,7 +280,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		if _windup_left <= 0.0:
 			_windup_left = -1.0
 			_release_shot(_windup_seq, _windup_weapon)
-	if input.fire and not is_dashing():
+	if input.fire and not is_dashing() and grapple == null:  # both hands on the chain
 		_try_fire(input.seq, replay)
 
 
@@ -285,6 +290,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 	match slot.data.kind:
 		SkillData.Kind.BLINK:
 			move_and_collide(slot.direction * slot.data.blink_distance)  # walls stop the hop
+		SkillData.Kind.GRAPPLE:
+			_throw_grapple(slot)
 		SkillData.Kind.VOLLEY:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
@@ -351,13 +358,39 @@ func clone_points() -> PackedVector2Array:
 		var run: Vector2 = Vector2.RIGHT.rotated(angle)
 		var target: Vector2 = clones.anchor + run * minf(CLONE_START_DISTANCE + t * d.clone_speed, d.clone_reach) \
 			+ run.orthogonal() * sin(t * CLONE_WOBBLE_SPEED) * CLONE_WOBBLE_PX
-		_clone_query.from = clones.anchor
-		_clone_query.to = target
-		var hit: Dictionary = space.intersect_ray(_clone_query)
+		_feet_ray.from = clones.anchor
+		_feet_ray.to = target
+		var hit: Dictionary = space.intersect_ray(_feet_ray)
 		if not hit.is_empty():
 			target = hit.position + hit.normal * Constants.PLAYER_RADIUS  # as close as a player can stand
 		out.append(target)
 	return out
+
+
+## Casts the kunai once, at activation: a bite stores where she'll stop (`anchor`, a player radius short of the wall,
+## so it's snapshotted and replays don't depend on walls changing later); a miss ends it at once on the short cooldown.
+func _throw_grapple(slot: CharacterSkill) -> void:
+	_feet_ray.from = global_position
+	_feet_ray.to = global_position + slot.direction * slot.data.grapple_range
+	var hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(_feet_ray)
+	if hit.is_empty():
+		slot.active_remaining = 0.0
+		slot.cooldown_remaining = slot.data.grapple_miss_cooldown
+		return
+	slot.anchor = hit.position + hit.normal * (Constants.PLAYER_RADIUS + Constants.GRAPPLE_STANDOFF)
+	velocity = Vector2.ZERO
+
+
+## Held still while the kunai bites, then pulled straight at `anchor`; arriving or hitting a wall on the way ends it.
+func _pull(slot: CharacterSkill, delta: float) -> void:
+	velocity = Vector2.ZERO
+	if slot.elapsed() < slot.data.grapple_bite_time:
+		return
+	var to: Vector2 = slot.anchor - global_position
+	var step: float = slot.data.grapple_speed * delta
+	var arrived: bool = to.length() <= step
+	if move_and_collide(to if arrived else to.normalized() * step) != null or arrived:
+		slot.active_remaining = 0.0
 
 
 func is_dashing() -> bool:

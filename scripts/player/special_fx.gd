@@ -6,7 +6,10 @@ extends Node2D
 ## Start / end flourishes are detected from state changes (so remote players get them too):
 ## each clone appears from its own cloud poof around the player and vanishes in one; a transformation morphs into
 ## the form (SkillData.form_morph) and morphs back when it ends (no cloud drawn over the ape); the Blossom Ward's
-## petals burst out into a ring that follows the player, scatter when it ends and pop where it catches a shot. All pixel-art strips from
+## petals burst out into a ring that follows the player, scatter when it ends and pop where it catches a shot.
+## Grapple Kunai: the kunai flies out trailing its chain, sparks where it bites and she zips along it in her own
+## pose with speed lines; a miss (seen as the short cooldown appearing) flies out to full range and snaps back.
+## All pixel-art strips from
 ## tools/sprites/generate.py (assets/fx), drawn at the characters' pixel scale.
 
 const FX_DIR: String = "res://assets/fx/"
@@ -37,6 +40,28 @@ const APPEAR_DELAY: float = 0.08
 const APPEAR_TIME: float = 0.2
 const CLONE_POOF_TIME: float = 0.7
 const MORPH_TIME: float = 1.0
+const ZIP_ART: Texture2D = preload(FX_DIR + "flicker_zip.png")
+const SPARK_ART: Texture2D = preload(FX_DIR + "grapple_spark.png")
+const CHAIN_ART: Texture2D = preload(FX_DIR + "grapple_chain.png")
+const KUNAI_ART: Texture2D = preload("res://assets/sprites/projectiles/flicker_kunai.png")
+const ZIP_FPS: float = 12.0
+## Her outstretched hand in the zip pose (generate.py flicker_zip), from the sprite's centre, facing right.
+const ZIP_HAND: Vector2 = Vector2(35, 14)
+## Art px from the kunai sprite's centre to its tip and to its ring (generate.py kunai).
+const KUNAI_TIP: float = 7.0
+const KUNAI_RING: float = 6.0
+## Art px between chain links (each link is 6 long, so they overlap like a chain).
+const CHAIN_LINK_STEP: float = 4.0
+const SPARK_TIME: float = 0.3
+## A miss: out to full range, then snapped back faster.
+const MISS_OUT_TIME: float = 0.14
+const MISS_BACK_TIME: float = 0.1
+const SPEED_LINES: int = 5
+const SPEED_LINE_GAP: float = 12.0
+const SPEED_LINE_LEN: float = 26.0
+const SPEED_LINE_SCROLL: float = 900.0
+const SPEED_LINE_SPAN: float = 70.0
+const SPEED_LINE_COLORS: Array[Color] = [Color("f2f0e6"), Color("9aa7c2")]  # palette WHITE, STEEL
 
 
 class Poof:
@@ -67,6 +92,14 @@ var _morph_flip: bool = false
 var _ward_t: float = -1.0
 var _ward_radius: float = 0.0
 var _ward_at: Vector2 = Vector2.ZERO
+var _grapple: CharacterSkill
+var _grapple_at: Vector2 = Vector2.ZERO
+var _grapple_bit: bool = false
+var _grapple_cd: float = 0.0
+## Seconds into a missed throw (-1 = none), and its direction.
+var _miss_t: float = -1.0
+var _miss_dir: Vector2 = Vector2.RIGHT
+var _time: float = 0.0
 
 
 func _init() -> void:
@@ -135,13 +168,38 @@ func sync(p: Player) -> void:
 		c.flip_h = _points[i].x < clones.anchor.x
 		c.modulate.a = alpha
 	_smoke_t = smoke.elapsed() if smoke != null and smoke.is_smoking() else -1.0
+	_sync_grapple(p)
 	queue_redraw()
+
+
+func _sync_grapple(p: Player) -> void:
+	var g: CharacterSkill = _slot(p, SkillData.Kind.GRAPPLE)
+	var was: CharacterSkill = _grapple
+	_grapple = g if g != null and g.is_active() and not p.dead else null
+	_grapple_at = p.global_position + p.visual_offset
+	if g == null:
+		return
+	if _grapple != null and was == null:
+		_grapple_bit = false
+	elif _grapple == null and not p.dead and g.cooldown_remaining > _grapple_cd + 0.01 \
+			and g.cooldown_remaining <= g.data.grapple_miss_cooldown:  # a fresh miss (a bite charges the full cooldown)
+		_miss_t = 0.0
+		_miss_dir = g.direction
+	_grapple_cd = g.cooldown_remaining
+	if _grapple != null and not _grapple_bit and _grapple.elapsed() >= _grapple.data.grapple_bite_time:
+		_grapple_bit = true
+		_poof(_bite_point(), SPARK_ART, SPARK_TIME)
 
 
 func _process(delta: float) -> void:
 	for pf: Poof in _poofs:
 		pf.t += delta
 	_poofs = _poofs.filter(func(pf: Poof) -> bool: return pf.t < pf.duration)
+	_time += delta
+	if _miss_t >= 0.0:
+		_miss_t += delta
+		if _miss_t > MISS_OUT_TIME + MISS_BACK_TIME:
+			_miss_t = -1.0
 	if _morph_t >= 0.0:
 		_morph_t += delta
 		if _morph_t > MORPH_TIME:
@@ -156,9 +214,9 @@ static func _slot(p: Player, kind: SkillData.Kind) -> CharacterSkill:
 	return null
 
 
-## The owner's sprite is hidden while this plays (Player).
-func is_morphing() -> bool:
-	return _morph_t >= 0.0
+## The owner's sprite is hidden while a morph or the grapple zip pose plays (Player).
+func hides_owner() -> bool:
+	return _morph_t >= 0.0 or _grapple != null
 
 
 func _start_morph(p: Player, back: bool) -> void:
@@ -197,6 +255,7 @@ func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_
 
 
 func _draw() -> void:
+	_draw_grapple()
 	_draw_morph()
 	_draw_ward()
 	_draw_flourishes()
@@ -262,3 +321,56 @@ func _draw_flourishes() -> void:
 		var n: int = pf.art.get_width() / pf.art.get_height()
 		var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
 		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale)
+
+
+## Where the kunai bit: the stop point is a player radius short of the feet-level wall; the wall itself is drawn
+## WALL_FEET_STRIP lower.
+func _bite_point() -> Vector2:
+	return _grapple.anchor + _grapple.direction * (Constants.PLAYER_RADIUS + Constants.GRAPPLE_STANDOFF) \
+		+ Vector2(0.0, Constants.WALL_FEET_STRIP)
+
+
+func _draw_grapple() -> void:
+	if _owner == null:
+		return
+	var s: float = Constants.SPRITE_SCALE
+	if _miss_t >= 0.0:
+		var hand: Vector2 = _grapple_at + Player.hand_offset(_miss_dir)
+		var out: float = _miss_t / MISS_OUT_TIME if _miss_t < MISS_OUT_TIME \
+			else 1.0 - (_miss_t - MISS_OUT_TIME) / MISS_BACK_TIME
+		var range_px: float = _slot(_owner, SkillData.Kind.GRAPPLE).data.grapple_range
+		_draw_chain(hand, hand + _miss_dir * range_px * clampf(out, 0.0, 1.0))
+	if _grapple == null:
+		return
+	var flip: bool = _grapple.direction.x < 0.0
+	var hand: Vector2 = _grapple_at + Vector2(-ZIP_HAND.x if flip else ZIP_HAND.x, ZIP_HAND.y)
+	var bite: Vector2 = _bite_point()
+	var throw: float = clampf(_grapple.elapsed() / _grapple.data.grapple_bite_time, 0.0, 1.0)
+	if throw >= 1.0:  # speed lines streaming off behind her while she's pulled
+		var dir: Vector2 = _grapple.direction
+		for k: int in SPEED_LINES:
+			var side: float = (k - (SPEED_LINES - 1) * 0.5) * SPEED_LINE_GAP
+			var back: float = fposmod(_time * SPEED_LINE_SCROLL + k * 37.0, SPEED_LINE_SPAN) + Constants.PLAYER_RADIUS
+			var a: Vector2 = (_grapple_at + dir.orthogonal() * side - dir * back).snapped(Vector2.ONE * s)
+			draw_line(a, a - dir * SPEED_LINE_LEN, SPEED_LINE_COLORS[k % 2], s)
+	_draw_chain(hand, hand.lerp(bite, throw))
+	draw_set_transform(_grapple_at, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+	var n: int = ZIP_ART.get_width() / ZIP_ART.get_height()
+	_draw_frame(ZIP_ART, int(_time * ZIP_FPS) % n, ZIP_ART.get_height(), Vector2.ZERO, s)
+	draw_set_transform(Vector2.ZERO)
+
+
+## The kunai with its tip at `tip`, its chain of links trailing back to `hand`.
+func _draw_chain(hand: Vector2, tip: Vector2) -> void:
+	var s: float = Constants.SPRITE_SCALE
+	var dir: Vector2 = (tip - hand).normalized() if tip != hand else Vector2.RIGHT
+	var ring: Vector2 = tip - dir * (KUNAI_TIP + KUNAI_RING) * s
+	var links: int = int(maxf(0.0, (ring - hand).dot(dir)) / (CHAIN_LINK_STEP * s))
+	var link: float = CHAIN_ART.get_height()
+	for i: int in links:
+		draw_set_transform(hand + dir * (i + 0.5) * CHAIN_LINK_STEP * s, dir.angle(), Vector2(s, s))
+		draw_texture_rect_region(CHAIN_ART, Rect2(-link * 0.5, -link * 0.5, link, link), Rect2(i % 2 * link, 0, link, link))
+	var kh: float = KUNAI_ART.get_height()
+	draw_set_transform(tip - dir * KUNAI_TIP * s, dir.angle(), Vector2(s, s))
+	draw_texture_rect_region(KUNAI_ART, Rect2(-kh * 0.5, -kh * 0.5, kh, kh), Rect2(0, 0, kh, kh))
+	draw_set_transform(Vector2.ZERO)
