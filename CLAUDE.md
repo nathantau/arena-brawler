@@ -80,6 +80,11 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `--autopilot` makes a client drive + fire on its own, e.g. two headless autopilot clients for soak tests:
   `godot --path . --headless --quit-after 4000 -- --connect 127.0.0.1:7777 --autopilot --net-debug`
 - Tests: `godot --path . --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit`
+- Smoke test (every fighter x special x weapon in a live arena, drawing included; run before every push/release), without stealing focus:
+  write `override.cfg` with `[display]` `window/size/no_focus=true`, `window/size/initial_position_type=0`,
+  `window/size/initial_position=Vector2i(-4000, -4000)`, then
+  `open -g -W -n -a /Applications/Godot.app --args --path "$PWD" --log-file <log> -s tools/smoke_specials.gd`,
+  delete `override.cfg`; `grep -c "SCRIPT ERROR" <log>` must be 0 and the log ends with `smoke done <n> combos`.
 - iOS export (needs `app_store_team_id` in `export_presets.cfg`): `godot --path . --headless --export-release "iOS" build/ios/ArenaBrawler.xcodeproj`
   - Compile check without signing: `xcodebuild -project build/ios/ArenaBrawler.xcodeproj -scheme ArenaBrawler -sdk iphoneos -configuration Release -derivedDataPath build/ios-dd CODE_SIGNING_ALLOWED=NO build`
 - Install on a USB/Wi-Fi-paired iPhone (dev-signed; after an iOS export): `xcodebuild -project build/ios/ArenaBrawler.xcodeproj -scheme ArenaBrawler -configuration Release -destination id=<UDID> -derivedDataPath build/ios-dev -allowProvisioningUpdates <ASC key flags as in tools/release/release_ios.sh> CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development" build`
