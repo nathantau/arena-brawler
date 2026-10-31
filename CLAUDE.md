@@ -427,6 +427,12 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   server") and returns to the menu. iOS Info.plist `NSLocalNetworkUsageDescription` set via `application/additional_plist_content`
   in export_presets.cfg. Limits: LAN only (no NAT traversal), no Bonjour discovery (type the IP), host's sim and render share one
   device. Leave buttons in the loading room and results panel (same `leave_requested` path as the pause menu).
+- **Easier join** (2026-10-31): menu address field is prefilled with the last address that connected (`user://last_join.cfg`, saved in
+  `Main` on `connected_to_server`; `LanAddress.load_last/save_last/prefill`) else this device's subnet ("192.168.1."); port is optional
+  (`CmdArgs.parse_address` defaults 7777); number-pad keyboard (`KEYBOARD_TYPE_NUMBER_DECIMAL`). While the field has focus and the
+  keyboard is up (`DisplayServer.virtual_keyboard_get_height()` scaled to canvas), `MainMenu` hides Play/Host and lifts the address
+  row above it; Join hides the keyboard. `--fake-keyboard N` simulates it on desktop. Loading room header shows a big yellow
+  "Friends join: IP" (`LanAddress.friendly` drops :7777). No discovery (iOS multicast entitlement).
 - [ ] M6 not started
 - **Sakura FX polish** (2026-10-31): Blossom Ward / Snare / Petal Drift / Cherry Sapling strips doubled in frames at the
   same durations (ward loop 8 + open/close 12, snare vines 8 + burst 12, drift dissolve/reform/swirl 16, sapling grow/wilt
