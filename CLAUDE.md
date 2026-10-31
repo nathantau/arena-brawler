@@ -453,4 +453,5 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   node at `Effects.GROUND_Z` (above the arena floor, under players) drawn by `_draw_floor`: the Storm Cloud's shadow + rain splashes
   (generate.py `storm_cloud_art(floor_layer=True)` -> `storm_floor` / `_form` / `_end` strips, same frames as the cloud strips, which now hold only
   cloud + falling rain), a strike's scorch (`storm_scorch`, `Poof.on_floor`), the Eruption telegraph crack and the Staff Whirl ring.
+  Flare Burst split the same way: `flare_ring_floor` (30 frames, flash, scorch band, inner glow, cracks; `flare_ring_frame(k, floor_layer=True)`) plays as an `on_floor` poof in sync with `flare_ring`, which keeps tongues, licks, smoke and sparks.
   Left above players on purpose: tall art (Sky Pillar, Blaze flames, Flare ring tongues, ward dome, sapling, snare vines, smoke).
