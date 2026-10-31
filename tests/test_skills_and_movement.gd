@@ -34,7 +34,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.default_character(), flicker)
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
-	for id: StringName in [&"dash", &"barrier", &"great_ape", &"blink", &"smoke_bomb",
+	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
 			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
@@ -248,25 +248,11 @@ func test_flicker_can_pick_all_ninja_specials() -> void:
 	for sk: SkillData in skills.specials_for(flicker):
 		ids.append(sk.id)
 	assert_eq(ids[0], &"shadow_clones", "signature first")
-	for id: StringName in [&"blink", &"smoke_bomb", &"fan_of_blades", &"grapple_kunai"]:
+	for id: StringName in [&"smoke_bomb", &"fan_of_blades", &"grapple_kunai"]:
 		assert_has(ids, id)
+	assert_false(ids.has(&"blink"), "Blink was cut from her kit")
 	for c: CharacterData in [warden, twinshot]:
-		assert_false(c.can_use_skill(skills.get_skill(&"blink")), String(c.id))
-
-
-func test_blink_hops_and_walls_stop_it() -> void:
-	var world := Node2D.new()
-	add_child_autofree(world)
-	_wall(world, Vector2(400, 300), Vector2(20, 400))
-	var p: Player = _flicker_in(world, &"blink")
-	p.global_position = Vector2(100, 300)
-	await wait_physics_frames(2)
-	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
-	assert_gt(p.global_position.x, 100.0 + skills.get_skill(&"blink").blink_distance * 0.9, "hopped forward")
-	assert_true(p.stats.is_invulnerable())
-	p.skills[1].reset()
-	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
-	assert_lt(p.global_position.x, 400.0 - 10.0, "stopped at the wall")
+		assert_false(c.can_use_skill(skills.get_skill(&"smoke_bomb")), String(c.id))
 
 
 func test_smoke_hides_only_inside_the_cloud() -> void:

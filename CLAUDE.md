@@ -254,7 +254,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   where you stood; positions are a pure function of the synced special state + walls (`Player.clone_points()`, raycast against the
   feet-level walls players move in, so casting from under a wall can't send them through it),
   drawn by `player/special_fx.gd` with the owner's sprite/weapon; harmless and bullets pass through, but enemy
-  auto-aim and bots target them), **Blink** (BLINK: `move_and_collide` hop, walls stop it, i-frames),
+  auto-aim and bots target them), (Blink was cut 2026-10-31: Dash and Grapple Kunai cover it),
   **Smoke Bomb** (SMOKE: cloud at your feet; while inside it `is_hidden()` and enemy auto-aim / bots skip you),
   **Fan of Blades** (VOLLEY: fires `blade_fan`, 12 piercing kunai in a ring, through the normal shot pipeline
   with seq + `VOLLEY_SEQ_OFFSET`), **Grapple Kunai** (GRAPPLE = 8, 2026-10-31: a chained kunai along the aim, cast
