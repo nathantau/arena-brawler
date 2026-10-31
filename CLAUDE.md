@@ -222,6 +222,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   iPhone insets on desktop). Redone: HUD (icon bars, weapon slots with sprites + cost, kills/deaths pill, clock),
   touch controls (pixel buttons, skill icon + cooldown, swap shows the other weapon), title screen (tiled court,
   logo, idling roster), loading room, results (trophy, portraits). Damage numbers / pickup labels outlined.
+  Pause menu (`PauseMenu`, II button top-right in a match, Esc on desktop): Resume / Restart (offline, keeps the
+  character) / Leave match; offline it pauses the tree, online the match keeps running (`Arena.leave_requested`).
   iOS Simulator: Godot's simulator lib is x86_64 only, so build with `ARCHS=x86_64` (runs under Rosetta).
 - **Skills as data: Dash + 1 special** (2026-10-30): `SkillData` resources in `data/skills/` (kind DASH / SHIELD /
   DUAL_WIELD / TRANSFORM, cooldown, duration, icon, blurb, tags like weapons; `special = false` for Dash).
@@ -230,7 +232,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   room, second button / E / InputFrame `special` flag 8). Specials: Barrier (heavy: Warden, Twinshot), Dual Wield
   (light: Flicker, Twinshot), **Great Ape** (Wukong signature, TRANSFORM: 6 s as a big dark-red ape drawn x1.35
   from `assets/sprites/wukong_ape.png` (generate.py `FORMS`), half damage taken, 0.9 speed, FIRE uses
-  `ape_fists` (melee slam) instead of the loadout, each slam playing the sheet's "attack" strip (generate.py `ATTACKS`: from the knuckle-walk stance, fists up, then a ground pound wide at both sides; `APE_POSES`, `Player.play_recoil`); form weapon cooldown is in the snapshot). Snapshots carry both
+  `ape_fists` (melee slam) instead of the loadout, each slam playing the sheet's "attack" strip (generate.py `ATTACKS`: the hit is instant, so it opens with the fists coming down into a ground pound wide at both sides, then settles back into the knuckle-walk stance; `APE_POSES`, `Player.play_recoil`); form weapon cooldown is in the snapshot). Snapshots carry both
   slots (`DASH_*`, `SPECIAL_ID/…`); server validates `rpc_select_special`; `--special ID` CLI. The loading room is
   fighter cards with a special column beside them, then weapons. Removed per-character skill fields (Wukong's
   longer Somersault dash is gone: everyone shares one Dash).

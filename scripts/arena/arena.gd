@@ -16,6 +16,8 @@ signal arena_requested(index: int)
 signal character_requested(id: StringName)
 signal weapon_requested(id: StringName)
 signal special_requested(id: StringName)
+## The local player chose Leave (or Restart, offline) in the pause menu.
+signal leave_requested(restart: bool)
 signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName, dual: bool)
 ## Authoritative damage (offline / server).
 signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2)
@@ -322,12 +324,15 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	lobby.arena = self
 	var results := ResultsPanel.new()
 	results.arena = self
-	touch.blockers = [lobby]
+	var pause := PauseMenu.new()
+	pause.arena = self
 	add_child(ui)
 	ui.add_child(hud)
 	ui.add_child(touch)
 	ui.add_child(lobby)
 	ui.add_child(results)
+	ui.add_child(pause)
+	touch.blockers = [lobby, pause.button, pause.menu]
 
 	input.arena = self
 	input.touch = touch

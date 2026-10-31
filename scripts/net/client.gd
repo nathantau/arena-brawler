@@ -82,6 +82,8 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 	_latest_tick = tick
 	arena = Arena.new(Arena.Mode.CLIENT, match_seed)
 	world_parent.add_child(arena)
+	arena.leave_requested.connect(func(_restart: bool) -> void:
+		(func() -> void: session.client_disconnected.emit("Left the match")).call_deferred())
 	arena.ready_requested.connect(func(is_ready: bool) -> void:
 		session.rpc_set_ready.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, is_ready))
 	arena.mode_requested.connect(func(mode: MatchRules.Mode) -> void:

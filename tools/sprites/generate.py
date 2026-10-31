@@ -1437,10 +1437,10 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
 CROWNS = {"flint": flint_crown}  # optional per-frame effects drawn behind
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
-## build(None, i, pose). Wind up high, then smash down with the body squashed.
-ATTACKS = {"wukong_ape": [(("walk", "raise", 0.5), -1), (("raise", "raise", 0), -2), (("raise", "raise", 0), -3),
-                          (("raise", "pound", 0.35), -2), (("raise", "pound", 0.7), 0), (("pound", "pound", 0), 2),
-                          (("pound", "pound", 0), 2), (("pound", "walk", 0.5), 1)]}
+## build(None, i, pose). The hit lands the moment the attack starts, so it opens with the fists already coming
+## down, then pounds the ground with the body squashed and settles back into the knuckle-walk.
+ATTACKS = {"wukong_ape": [(("raise", "pound", 0.7), 0), (("pound", "pound", 0), 2), (("pound", "pound", 0), 2),
+                          (("pound", "pound", 0), 1), (("pound", "walk", 0.4), 1), (("pound", "walk", 0.75), 0)]}
 
 
 # --- frame processing -------------------------------------------------------

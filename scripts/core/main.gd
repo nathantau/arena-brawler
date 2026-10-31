@@ -48,6 +48,7 @@ func _start_offline() -> void:
 	_offline_arena = Arena.new(Arena.Mode.OFFLINE, Constants.DEFAULT_MATCH_SEED, args.match_mode, args.time_limit)
 	_offline_arena.match_state.arena_index = args.arena_index
 	add_child(_offline_arena)
+	_offline_arena.leave_requested.connect(_on_offline_leave, CONNECT_DEFERRED)
 	var input := LocalInput.new()
 	input.autopilot = args.autopilot
 	var me: Player = _offline_arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, input)
@@ -62,6 +63,17 @@ func _start_offline() -> void:
 		_offline_arena.select_special(me, args.special)
 	if args.autopilot:
 		_offline_arena.referee.set_ready(me.player_id, true)
+
+
+## Pause menu: Restart keeps the character (back to the lobby), Leave returns to the main menu.
+func _on_offline_leave(restart: bool) -> void:
+	if restart:
+		args.character = _offline_arena.local_player.character.id
+		_start_offline()
+		return
+	_offline_arena.queue_free()
+	_offline_arena = null
+	_show_menu("")
 
 
 func _join(host: String, port: int) -> void:
