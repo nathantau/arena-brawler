@@ -1376,6 +1376,10 @@ ICONS = {
                            c.flat(P([(5, 10), (6, 6), (7, 10)]), YELLOW),
                            c.flat(L([(1, 11), (3, 12)], 1), ORANGE), c.flat(L([(9, 12), (11, 11)], 1), ORANGE),
                            c.dot(2, 6, YELLOW), c.dot(10, 4, ORANGE), c.dot(11, 8, YELLOW)),
+    "flare_burst": lambda c: (c.flat(lambda d, f: d.ellipse((0, 3, 12, 11), outline=f, width=1), RED),
+                              c.flat(P([(1, 7), (2, 3), (3, 6), (4, 2), (5, 6), (7, 1), (8, 6), (9, 3), (10, 6), (11, 2), (12, 7)]), ORANGE),
+                              c.flat(E((4, 5, 8, 9)), YELLOW), c.flat(E((5, 6, 7, 8)), WHITE),
+                              c.dot(1, 11, YELLOW), c.dot(11, 12, ORANGE)),
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -2891,6 +2895,97 @@ def projectile_strip(draw, n: int = 2) -> Image.Image:
     return strip(frames_)
 
 
+## Flare Burst (Flint): his flames swell and brighten (FLARE_CHARGE_FRAMES CELL frames, one per ~0.04 s of the 0.25 s charge),
+## then a ring of fire races out along the floor (FLARE_FRAMES frames of FLARE_W x FLARE_W art px, centred on his feet;
+## its reach FLARE_R = flare_burst_blast.tres splash 120 / SPRITE_SCALE 1.5 = SpecialFx.FLARE_ART_RADIUS) and leaves embers and smoke.
+FLARE_CHARGE_FRAMES = 6
+FLARE_FRAMES = 12
+FLARE_W = 192
+FLARE_R = 80
+FLARE_SQUASH = 0.75  # the floor seen in 3/4 view
+
+
+def flint_flare_frame(k: int) -> Image.Image:
+    """Charging: his idle look stoked up (heat rises 0 -> 1) with a white-hot core swelling in his chest."""
+    h = k / (FLARE_CHARGE_FRAMES - 1)
+    low, up = flint(None, k % 4, heat=h)
+    f = flint_embers(k % 4, h).img
+    f.alpha_composite(low.img)
+    f.alpha_composite(up.img, (0, UPPER_DY))
+    core = Canvas()
+    if k >= 2:  # the heart blazes through his suit
+        r = 3 + 2 * (k - 2)
+        core.flat(E((32 - r, 40 - r, 32 + r, 40 + r)), YELLOW)
+        core.flat(E((32 - r + 2, 40 - r + 2, 32 + r - 2, 40 + r - 2)), WHITE)
+        f.alpha_composite(core.img, (0, UPPER_DY))
+    c = flint_crown(k % 4, 0, h).img
+    c.alpha_composite(f, (PAD, PAD))
+    return outline(c)
+
+
+def flare_ring_frame(k: int) -> Image.Image:
+    """Frame k of 12: a white flash (0), the ring of flame tongues racing out along the floor (1-7) while the flash
+    cools, then the flames die back (8-11) leaving scorch, drifting embers and smoke."""
+    import random
+    n = FLARE_W
+    c = Canvas(n)
+    m = n // 2
+    rng = random.Random(41)
+    sq = FLARE_SQUASH
+    run = min(1.0, k / 7)
+    r = 10 + (FLARE_R - 10) * (1 - (1 - run) ** 2)  # races out, slowing at the edge
+    life = 1.0 if k <= 7 else max(0.0, 1 - (k - 7) / 4)
+    if 2 <= k <= 10:  # a scorched band on the floor behind the front, thinning to dots as it cools
+        band = 16 if k <= 8 else 6
+        for rr, col in ((r, MAROON if k < 9 else SHADOW), (r - band, None)):
+            if rr > 2:
+                d = ImageDraw.Draw(c.img)
+                d.ellipse((m - rr, m - rr * sq, m + rr, m + rr * sq), fill=(col + (255,)) if col else (0, 0, 0, 0))
+        if k >= 9:  # dither it away
+            for y in range(n):
+                for x in range(n):
+                    if c.px[x, y][3] and (x + y * 2) % (2 + k - 9) != 0:
+                        c.px[x, y] = (0, 0, 0, 0)
+        if k <= 5:  # the flash cooling at the middle
+            fr = (24, 18, 11, 6)[k - 2]
+            c.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), (WHITE, YELLOW, ORANGE, RED)[k - 2])
+        if k >= 3 and k <= 7:  # the inner edge glows
+            c.flat(lambda d, f: d.ellipse((m - r + band - 3, m - (r - band + 3) * sq, m + r - band + 3, m + (r - band + 3) * sq), outline=f, width=2), ORANGE if k < 6 else RED)
+    if k <= 1:  # the flash: a white-hot disc with rays
+        fr = (16, 30)[k]
+        c.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), YELLOW)
+        c.flat(E((m - fr + 5, m - (fr - 5) * sq, m + fr - 5, m + (fr - 5) * sq)), WHITE)
+        if k == 1:
+            for a in range(0, 360, 45):
+                ca, sa = math.cos(math.radians(a)), math.sin(math.radians(a))
+                c.flat(L([(m + ca * (fr + 2), m + sa * (fr + 2) * sq), (m + ca * (fr + 16), m + sa * (fr + 16) * sq)], 2), WHITE)
+    if life > 0 and k >= 1:  # the tongues of flame along the front, tallest early, drawn back to front
+        count = 14
+        ring = []
+        for i in range(count):
+            a = math.tau * (i + 0.5 * (k % 2)) / count
+            ring.append((m + math.cos(a) * r, m + math.sin(a) * r * sq))
+        for x, y in sorted(ring, key=lambda q: q[1]):
+            hgt = max(2, round((16 + 8 * (1 - run)) * life + (x * 7 + k) % 4))
+            flame(c, round(x) - 7, round(x) + 7, round(y), hgt, k, tongues=3, line=False)
+    if k >= 5:  # smoke and embers left in the ring
+        for j in range(7):
+            ang = rng.uniform(0, math.tau)
+            rad = rng.uniform(0.2, 0.85) * FLARE_R
+            age = k - 5
+            px, py = m + math.cos(ang) * rad, m + math.sin(ang) * rad * sq - 4 * age - 3
+            sr = 3 + age * 0.5 + (j % 3)
+            if k <= 10 or j % 3 == 0:
+                c.flat(E((px - sr, py - sr, px + sr, py + sr)), STEEL_D if age % 3 else SHADOW)
+        for j in range(9):
+            ang = rng.uniform(0, math.tau)
+            rad = rng.uniform(0.1, 0.95) * FLARE_R
+            ex, ey = m + math.cos(ang) * rad, m + math.sin(ang) * rad * sq - 5 * (k - 5)
+            if k - 5 < 5 + j % 2:
+                c.dot(round(ex), round(ey), (YELLOW, ORANGE, ORANGE, RED, MAROON)[min(4, (k - 5 + j) // 2)])
+    return outline(c.img)
+
+
 def strip(frames_: list[Image.Image]) -> Image.Image:
     w, h = frames_[0].size
     out = Image.new("RGBA", (w * len(frames_), h), (0, 0, 0, 0))
@@ -2933,11 +3028,13 @@ FX = {
     "whirl_ring": lambda: strip([whirl_ring_frame(k) for k in range(WHIRL_FRAMES)]),
     "whirl_spark": lambda: strip([whirl_spark_frame(k) for k in range(WHIRL_SPARK_FRAMES)]),
     "wukong_pillar": lambda: strip([wukong_pillar_frame(k) for k in range(PILLAR_POSE_FRAMES)]),
+    "flint_flare": lambda: strip([flint_flare_frame(k) for k in range(FLARE_CHARGE_FRAMES)]),
 }
 ## Not square strips: single images (checked whole).
 ## (sky_pillar: frames are wider than tall, so it is checked whole; frames keep clear of their edges by construction.)
 FX_IMAGES = {"vine": vine, "vine_top": vine_top,
-             "sky_pillar": lambda: strip([sky_pillar_frame(k) for k in range(PILLAR_FRAMES)])}
+             "sky_pillar": lambda: strip([sky_pillar_frame(k) for k in range(PILLAR_FRAMES)]),
+             "flare_ring": lambda: strip([flare_ring_frame(k) for k in range(FLARE_FRAMES)])}
 
 
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint,

@@ -45,6 +45,8 @@ const WHIRL_SEQ_OFFSET: int = 1 << 26
 const TRAIL_SEQ_OFFSET: int = 1 << 27
 ## Sky Pillar slams are keyed too.
 const PILLAR_SEQ_OFFSET: int = 1 << 28
+## Flare Burst blasts are keyed too.
+const NOVA_SEQ_OFFSET: int = 1 << 30
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
@@ -265,6 +267,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var burn_before: float = burning.elapsed() if burning != null else 0.0
 	var pillar: CharacterSkill = active_skill(SkillData.Kind.PILLAR)
 	var pillar_before: float = pillar.elapsed() if pillar != null else 0.0
+	var nova: CharacterSkill = active_skill(SkillData.Kind.NOVA)
+	var nova_before: float = nova.elapsed() if nova != null else 0.0
 	for slot: CharacterSkill in skills:
 		slot.tick(delta)
 	if burning != null and not replay:
@@ -273,6 +277,10 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		var d: SkillData = pillar.data
 		projectiles.line_hit(player_id, input.seq + PILLAR_SEQ_OFFSET, pillar.anchor, pillar.anchor + pillar.direction,
 			d.pillar_width * 0.5, d.pillar_damage, d.pillar_knockback)
+	if nova != null and not replay and nova.nova_burst(nova_before):
+		var key: int = input.seq + NOVA_SEQ_OFFSET
+		projectiles.fire_shot(player_id, key, global_position, nova.direction, nova.data.nova_blast, match_seed)
+		shot_fired.emit(self, key, global_position, nova.direction, nova.data.nova_blast.id)
 	weapon.tick(delta)
 	var pressed: Array[bool] = [input.skill, input.special]
 	if frozen:
@@ -293,7 +301,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var whirl: CharacterSkill = active_skill(SkillData.Kind.WHIRL)
 	var drift: CharacterSkill = active_skill(SkillData.Kind.DRIFT)
 	var planting: CharacterSkill = active_skill(SkillData.Kind.PILLAR)  # just pressed counts
-	var rooted: bool = planting != null and planting.pillar_winding()
+	var flaring: CharacterSkill = active_skill(SkillData.Kind.NOVA)
+	var rooted: bool = (planting != null and planting.pillar_winding()) or (flaring != null and flaring.nova_charging())
 	if swing == null:
 		swing = active_skill(SkillData.Kind.SWING)  # just pressed
 	if swing != null:  # in the air: placed along the arc, over whatever is in between
@@ -806,7 +815,7 @@ func _draw() -> void:
 
 func _draw_overlay() -> void:
 	if held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null \
-			and active_skill(SkillData.Kind.PILLAR) == null and not _special_fx.is_petals():  # the staff is in the spin / plant pose; petals hide it
+			and active_skill(SkillData.Kind.PILLAR) == null and not _special_fx.is_petals() and not _special_fx.is_flaring():  # the staff is in the spin / plant pose; petals hide it
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)

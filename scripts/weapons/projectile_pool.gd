@@ -120,6 +120,8 @@ func _ready() -> void:
 func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int) -> void:
 	if weapon.blast:
 		_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
+		if weapon.destroys_shots:
+			_destroy_shots(owner_id, origin, weapon.splash_radius)
 		_blast(owner_id, seq, origin, weapon)
 		return
 	shot_spawned.emit(owner_id, origin, facing, weapon)
@@ -294,6 +296,14 @@ func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int,
 			_damage_player(target, owner_id, seq, 0, damage, false, push, target.global_position)
 		elif result.collider is Crate:
 			(result.collider as Crate).take_damage(damage)
+
+
+## Enemy projectiles within `radius` of `origin` vanish (every peer: the cosmetic copies go too).
+func _destroy_shots(owner_id: int, origin: Vector2, radius: float) -> void:
+	for s: Slot in _slots:
+		if s.active and s.attacker_id != owner_id and s.pos.distance_to(origin) <= radius + s.radius:
+			s.active = false
+			_add_impact(s.pos, s.radius, s.color)
 
 
 func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData) -> void:

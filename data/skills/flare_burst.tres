@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_flare_burst.png" id="2_icon"]
+[ext_resource type="Resource" path="res://data/weapons/flare_burst_blast.tres" id="3_blast"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"flare_burst"
+display_name = "Flare Burst"
+kind = 17
+special = true
+blurb = "Fire ring blast"
+tags = Array[StringName]([&"flint"])
+cooldown = 9.0
+duration = 0.4
+nova_charge = 0.25
+nova_blast = ExtResource("3_blast")

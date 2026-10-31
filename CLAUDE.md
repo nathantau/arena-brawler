@@ -373,6 +373,16 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `sky_pillar_frame` 12 frames of 228x64 art px (a gold-banded red staff growing from his hand, lifted, slamming flat with a flash,
   dust and floor cracks along the line, then shrinking away), `icon_sky_pillar`): `SpecialFx` draws the pillar rotated along the
   line and cropped (never stretched) to its length, with his pose over it (his sprite and held staff hidden meanwhile).
+- **Flare Burst** (2026-10-31, Flint special, `flare_burst`, kind NOVA = 17): he flares up for `nova_charge` 0.25 s (can't move or
+  fire: `Player` roots him like the Sky Pillar windup), then `nova_blast` (`flare_burst_blast.tres`, a `blast` weapon with the new
+  `WeaponData.destroys_shots`) goes off on him: every other player within 120 px with line of sight takes 25 (no falloff) and is
+  thrown 420 away from him, and enemy projectiles in range are destroyed (`ProjectilePool._destroy_shots`, run by `fire_shot` on
+  every peer so cosmetic copies vanish too). Goes through `fire_shot` / `shot_fired` with seq + `NOVA_SEQ_OFFSET` (1 << 30) in the
+  step the active time crosses the charge (`CharacterSkill.nova_burst`); authoritative only, replay does nothing. Cooldown 9 s,
+  `duration` 0.4 s. Art (generate.py `flint_flare_frame` 6-frame charge pose = his idle with heat rising and a white-hot heart,
+  `flare_ring_frame` 12 frames of 192 px: flash, a ring of flame tongues racing out along the floor over a scorched band, then
+  embers and smoke, `icon_flare_burst`): `SpecialFx` hides his sprite and draws the charge pose, then plays the ring as a poof at
+  his feet scaled to the blast radius.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

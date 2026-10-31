@@ -92,6 +92,12 @@ const PILLAR_POSE_ART: Texture2D = preload(FX_DIR + "wukong_pillar.png")
 const PILLAR_ART: Texture2D = preload(FX_DIR + "sky_pillar.png")
 const PILLAR_FRAME_W: float = 228.0
 const PILLAR_BASE_X: float = 8.0
+## Flare Burst: his charge pose strip (generate.py FLARE_CHARGE_FRAMES CELL frames over `nova_charge`), then the ring of fire
+## (FLARE_FRAMES square frames, centred on his feet, its reach FLARE_ART_RADIUS art px = the blast's radius / SPRITE_SCALE).
+const FLARE_CHARGE_ART: Texture2D = preload(FX_DIR + "flint_flare.png")
+const FLARE_RING_ART: Texture2D = preload(FX_DIR + "flare_ring.png")
+const FLARE_RING_TIME: float = 0.7
+const FLARE_ART_RADIUS: float = 80.0
 ## Her outstretched hand in the zip pose (generate.py flicker_zip), from the sprite's centre, facing right.
 const ZIP_HAND: Vector2 = Vector2(35, 14)
 ## Art px from the kunai sprite's centre to its tip and to its ring (generate.py kunai).
@@ -214,6 +220,10 @@ var _grapple: CharacterSkill
 ## Sky Pillar while it plays (null = not): the slot, and where he is drawn.
 var _pillar: CharacterSkill
 var _pillar_at: Vector2 = Vector2.ZERO
+## Flare Burst while he charges (null = not), where he is drawn, and whether he was charging last sync.
+var _flare: CharacterSkill
+var _flare_at: Vector2 = Vector2.ZERO
+var _flare_flip: bool = false
 var _grapple_at: Vector2 = Vector2.ZERO
 var _grapple_bit: bool = false
 var _grapple_cd: float = 0.0
@@ -291,6 +301,14 @@ func sync(p: Player) -> void:
 	var pillar: CharacterSkill = _slot(p, SkillData.Kind.PILLAR)
 	_pillar = pillar if pillar != null and pillar.is_active() and not p.dead else null
 	_pillar_at = p.global_position + p.visual_offset
+	var nova: CharacterSkill = _slot(p, SkillData.Kind.NOVA)
+	var charging: bool = nova != null and nova.nova_charging() and not p.dead
+	if _flare != null and not charging and nova != null and nova.is_active() and not p.dead:  # the ring goes off
+		var k: float = nova.data.nova_blast.splash_radius / (FLARE_ART_RADIUS * Constants.SPRITE_SCALE)
+		_poof(p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y), FLARE_RING_ART, FLARE_RING_TIME, k)
+	_flare = nova if charging else null
+	_flare_at = p.global_position + p.visual_offset
+	_flare_flip = p.facing.x < 0.0
 	_sync_swing(p)
 	_sync_drift(p)
 	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
@@ -352,6 +370,10 @@ func _sync_drift(p: Player) -> void:
 
 
 ## The owner's sprite and held weapon stay hidden while she is petals or gathering back (Player).
+func is_flaring() -> bool:
+	return _flare != null
+
+
 func is_petals() -> bool:
 	return _drift_t >= 0.0 or _reform_t >= 0.0
 
@@ -427,7 +449,7 @@ static func _slot(p: Player, kind: SkillData.Kind) -> CharacterSkill:
 
 ## The owner's sprite is hidden while a morph or the grapple zip pose plays (Player).
 func hides_owner() -> bool:
-	return _morph_t >= 0.0 or _grapple != null or _whirl_t >= 0.0 or is_petals() or _pillar != null
+	return _morph_t >= 0.0 or _grapple != null or _whirl_t >= 0.0 or is_petals() or _pillar != null or _flare != null
 
 
 ## The owner's sprite is hidden while the swing pose is drawn instead (Player).
@@ -524,6 +546,7 @@ func _draw() -> void:
 	_draw_ward()
 	_draw_whirl()
 	_draw_pillar()
+	_draw_flare()
 	_draw_swing()
 	_draw_drift()
 	_draw_snare()
@@ -712,6 +735,18 @@ func _draw_pillar() -> void:
 	draw_set_transform(_pillar_at, 0.0, Vector2(-1.0 if _pillar.direction.x < 0.0 else 1.0, 1.0))
 	var cell: float = PILLAR_POSE_ART.get_height()
 	_draw_frame(PILLAR_POSE_ART, int(u * (PILLAR_POSE_ART.get_width() / cell)), cell, Vector2.ZERO, px)
+	draw_set_transform(Vector2.ZERO)
+
+
+## His flames swell and brighten over the charge (the strip, spread over `nova_charge`), in place of his sprite.
+func _draw_flare() -> void:
+	if _flare == null:
+		return
+	var cell: float = FLARE_CHARGE_ART.get_height()
+	var n: int = int(FLARE_CHARGE_ART.get_width() / cell)
+	var frame: int = mini(int(_flare.elapsed() / _flare.data.nova_charge * n), n - 1)
+	draw_set_transform(_flare_at, 0.0, Vector2(-1.0 if _flare_flip else 1.0, 1.0))
+	_draw_frame(FLARE_CHARGE_ART, frame, cell, Vector2.ZERO, Constants.SPRITE_SCALE)
 	draw_set_transform(Vector2.ZERO)
 
 
