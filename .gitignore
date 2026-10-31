@@ -5,3 +5,5 @@
 .DS_Store
 /tools/sprites/.venv/
 __pycache__/
+override.cfg
+.claude/worktrees/
