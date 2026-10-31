@@ -144,7 +144,10 @@ func _show_menu(status: String) -> void:
 		_menu.host_pressed.connect(_start_host)
 		_menu.join_pressed.connect(func(address: String) -> void:
 			var addr: Array = CmdArgs.parse_address(address)
-			_join(addr[0], addr[1]))
+			_join(addr[0], addr[1])
+			if session.client != null:
+				session.multiplayer.connected_to_server.connect(
+					func() -> void: LanAddress.save_last(address), CONNECT_ONE_SHOT))
 		add_child(_menu)
 	_menu.visible = true
 	_menu.set_status(status)

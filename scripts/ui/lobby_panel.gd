@@ -26,6 +26,7 @@ var arena: Arena
 
 var _title: Label
 var _rules: Label
+var _join_hint: Label
 var _mode_button: Button
 var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
@@ -62,6 +63,8 @@ func _ready() -> void:
 	header.add_child(titles)
 	_title = _label(titles, &"HeaderLabel")
 	_rules = _label(titles, &"DimLabel")
+	_join_hint = _label(titles, &"HeaderLabel")
+	_join_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 	_mode_button = _button(header, BUTTON_MIN_SIZE)
 	_mode_button.pressed.connect(_on_mode_pressed)
 	_arena_button = _button(header, BUTTON_MIN_SIZE)
@@ -156,8 +159,8 @@ func _refresh() -> void:
 	_title.text = "LOADING ROOM · %s · %s" % [MatchRules.MODE_NAMES[st.mode], ArenaLayouts.NAMES[st.arena_index]]
 	_rules.text = "First to %d kills · %d:%02d" % [MatchRules.kill_target(st.mode),
 		int(st.time_limit) / 60, int(st.time_limit) % 60]
-	if arena.host_address != "":
-		_rules.text += " · Hosting on %s" % arena.host_address
+	_join_hint.visible = arena.host_address != ""
+	_join_hint.text = "Friends join: %s" % LanAddress.friendly(arena.host_address)
 	_mode_button.text = "Mode: %s" % ("Duel" if st.mode == MatchRules.Mode.DUEL else "FFA")
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
 	if _weapons_for != me.character.id:
