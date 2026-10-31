@@ -351,6 +351,14 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `SpecialFx` stamps every `BLAZE_STEP` along the path as he runs it, an 8-frame ignition at takeoff, an 8-frame die-out
   (flames shrink, cracks cool, smoke, scorch) played stamp by stamp over the last second, and a flame streak behind him
   while he dashes.
+- **Petal Drift** (2026-10-31, Sakura special, `petal_drift`, kind DRIFT = 15): she dissolves into petals for `duration` 0.8 s
+  (cooldown 7 s) and glides at `drift_speed_scale` 1.6 x her speed along the stick (else the direction fixed at the press:
+  move, else aim), steerable, through the normal `move_and_slide` path (walls stop her). `try_activate` gives i-frames for
+  the whole duration (`stats.invulnerable_time`), `Player.is_hidden()` is true meanwhile (enemy auto-aim and bots skip her,
+  like smoke) and she can't fire; no new synced state (active time + direction in the skill snapshot). `SpecialFx` hides her
+  sprite + weapon (`is_petals()`): 8-frame dissolve (her idle frame breaking into petals, generate.py `drift_dissolve_frame`),
+  swirl loop (`drift_swirl_frame`, period 8, mirrored and tilted with her velocity, petals streaming behind), reform strip
+  (the dissolve backwards + sparkles) and a petal burst (`petal_pop`) as she gathers; `icon_petal_drift`.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

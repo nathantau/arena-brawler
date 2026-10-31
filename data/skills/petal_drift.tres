@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_petal_drift.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"petal_drift"
+display_name = "Petal Drift"
+kind = 15
+special = true
+blurb = "Turn to petals: glide, untouchable"
+tags = Array[StringName]([&"sakura"])
+cooldown = 7.0
+duration = 0.8
+drift_speed_scale = 1.6

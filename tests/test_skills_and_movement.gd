@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -1110,3 +1110,143 @@ func test_blaze_run_replay_matches_and_damages_nothing() -> void:
 	assert_eq(hits.size(), served, "replay damages nothing")
 	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
 	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
+
+
+# --- Sakura's Petal Drift ---------------------------------------------------
+
+func _drifter(world: Node2D, pool: ProjectilePool, id: int = 1, at: Vector2 = Vector2(100, 300)) -> Player:
+	var p := Player.new()
+	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
+		characters.get_character(&"sakura"))
+	world.add_child(p)
+	p.set_skill(1, skills.get_skill(&"petal_drift"))
+	p.global_position = at
+	return p
+
+
+func _drift_world(walls: bool = false) -> Array:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	if walls:
+		_wall(world, Vector2(250, 300), Vector2(20, 400))
+	return [world, pool, _drifter(world, pool)]
+
+
+func test_petal_drift_is_sakuras_own() -> void:
+	var d: SkillData = skills.get_skill(&"petal_drift")
+	assert_eq(d.kind, SkillData.Kind.DRIFT)
+	assert_eq(int(d.kind), 15)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"sakura", String(c.id))
+
+
+func test_petal_drift_is_untouchable_for_exactly_its_duration() -> void:
+	var s: Array = _drift_world()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"petal_drift")
+	await wait_physics_frames(2)
+	assert_true(p.can_be_hit())
+	_press_special(p, Vector2.RIGHT)
+	assert_true(p.is_hidden(), "auto-aim and bots skip her")
+	for i: int in floori(d.duration / DT) - 2:
+		_idle(p, 1)
+		assert_false(p.can_be_hit(), "no hits while petals")
+		assert_true(p.is_hidden())
+	_idle(p, 6)
+	assert_false(p.skills[1].is_active())
+	assert_true(p.can_be_hit(), "back in the world")
+	assert_false(p.is_hidden())
+	assert_gt(p.skills[1].cooldown_remaining, 0.0)
+
+
+func test_petal_drift_is_faster_and_steerable() -> void:
+	var s: Array = _drift_world()
+	var p: Player = s[2]
+	var walker: Player = _drifter(s[0], s[1], 2, Vector2(100, 700))
+	var d: SkillData = skills.get_skill(&"petal_drift")
+	await wait_physics_frames(2)
+	var go := InputFrame.new()
+	go.move_vec = Vector2.RIGHT
+	for i: int in 30:
+		walker.simulate(go, DT)
+	var normal: float = walker.velocity.x
+	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
+	for i: int in 30:
+		p.simulate(go, DT)
+	assert_almost_eq(p.velocity.x, normal * d.drift_speed_scale, 1.0, "faster")
+	var up := InputFrame.new()
+	up.move_vec = Vector2.UP
+	for i: int in 12:  # 42 frames in, still drifting (0.8 s = 48)
+		p.simulate(up, DT)
+	assert_true(p.skills[1].is_active())
+	assert_lt(p.velocity.y, -normal, "the stick steers her")
+	assert_lt(p.velocity.x, normal * 0.5)
+
+
+func test_petal_drift_glides_on_without_input() -> void:
+	var s: Array = _drift_world()
+	var p: Player = s[2]
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)  # no stick: along the aim
+	_idle(p, 20)
+	assert_gt(p.global_position.x, 150.0)
+	assert_almost_eq(p.global_position.y, 300.0, 0.01)
+
+
+func test_petal_drift_stops_at_walls() -> void:
+	var s: Array = _drift_world(true)
+	var p: Player = s[2]
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
+	var go := InputFrame.new()
+	go.move_vec = Vector2.RIGHT
+	for i: int in 45:
+		p.simulate(go, DT)
+	assert_lt(p.global_position.x, 250.0, "the wall holds her")
+
+
+func test_petal_drift_cannot_fire() -> void:
+	var s: Array = _drift_world()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"petal_drift")
+	await wait_physics_frames(2)
+	watch_signals(p)
+	var f := InputFrame.new()
+	f.seq = 10
+	f.special = true
+	f.fire = true
+	f.aim_vec = Vector2.RIGHT
+	p.simulate(f, DT)
+	f.special = false
+	for i: int in floori(d.duration / DT) - 2:
+		p.simulate(f, DT)
+	assert_signal_not_emitted(p, "shot_fired", "no shots while petals")
+	for i: int in 10:
+		p.simulate(f, DT)
+	assert_signal_emitted(p, "shot_fired", "fires again once she reforms")
+
+
+func test_petal_drift_replay_matches() -> void:
+	var s: Array = _drift_world(true)
+	var a: Player = s[2]
+	var b: Player = _drifter(s[0], s[1], 2, Vector2(300, 100))
+	await wait_physics_frames(2)
+	var snapshot: Array = a.capture_state()
+	var f := InputFrame.new()
+	f.seq = 10
+	f.special = true
+	f.move_vec = Vector2(1, -0.3)
+	f.aim_vec = Vector2.RIGHT
+	a.simulate(f, DT)
+	assert_true(b.apply_state(snapshot, WeaponCatalog.load_all(), characters))
+	b.simulate(f, DT, true)
+	f.special = false
+	for i: int in 70:
+		a.simulate(f, DT)
+		b.simulate(f, DT, true)
+	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
+	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
+	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+	assert_almost_eq(b.stats.invulnerable_time, a.stats.invulnerable_time, 0.0001)

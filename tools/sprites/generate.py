@@ -1350,6 +1350,9 @@ ICONS = {
                                + [c.flat(E((x - 2, y - 2, x + 2, y + 2)), PINK_L if i % 2 else WHITE)
                                   for i, (x, y) in enumerate(((6, 2), (9, 4), (8, 7), (4, 7), (3, 4)))]
                                + [c.flat(E((5, 3, 7, 5)), PINK), c.dot(6, 4, YELLOW)],
+    "petal_drift": lambda c: [ward_petal(c, 6 + 4.5 * math.cos(a), 6 + 4.5 * math.sin(a), a + 1.8, 6, 1.0, col)
+                              for a, col in ((0.3, PINK_L), (2.4, WHITE), (4.5, PINK_L))]
+                             + [c.flat(E((4, 4, 8, 8)), PINK), c.dot(6, 6, YELLOW)],
     "blossom_ward": lambda c: [c.flat(lambda d, f: d.ellipse((1, 1, 11, 11), outline=f, width=1), PINK)]
                               + [c.flat(P([(6 + round(5 * dx), 6 + round(5 * dy)), (6 + round(5 * dx - 2 * dy), 6 + round(5 * dy + 2 * dx)),
                                            (6 + round(5 * dx + 2 * dy), 6 + round(5 * dy - 2 * dx))]),
@@ -2071,6 +2074,92 @@ def petal_pop_frame(k: int) -> Image.Image:
     return outline(c.img)
 
 
+# --- Petal Drift (Sakura): she dissolves into a swirl of petals, glides, and gathers back ---
+DRIFT_FRAMES = 8  # dissolve, reform and the swirl loop
+DRIFT_SEEDS = 16  # chunks of her that break off as petals
+DRIFT_PETALS = 12  # petals in the swirl
+DRIFT_TRAIL = 5  # petals streaming behind
+
+
+def drift_body() -> Image.Image:
+    return cell(frames(sakura)[0])
+
+
+def drift_dissolve_frame(k: int) -> Image.Image:
+    """Dissolve (8 frames; the reform strip plays it backwards): her idle frame breaks into chunks that each turn into
+    a petal and blow away to the left, the last of her gone by the final frame. Chunks go from the back (left) first."""
+    rng = random.Random(5)
+    body = drift_body()
+    px = body.load()
+    t = k / (DRIFT_FRAMES - 1)
+    pts = [(x, y) for y in range(CELL) for x in range(CELL) if px[x, y][3]]
+    seeds = [(*rng.choice(pts), 0.0, rng.uniform(-1, 1), rng.uniform(0.7, 1.3)) for _ in range(DRIFT_SEEDS)]
+    # a seed breaks off earlier the further back (left) it sits, so she peels away from the trailing side
+    seeds = [(x, y, 0.05 + 0.6 * ((x - 28) / 40) * 0.7 + rng.uniform(0, 0.3), s, r) for x, y, _, s, r in seeds]
+    seeds = [(x, y, min(max(a, 0.05), 0.85), s, r) for x, y, a, s, r in seeds]
+    out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    o = out.load()
+    for x, y in pts:
+        near = min(seeds, key=lambda sd: (sd[0] - x) ** 2 + (sd[1] - y) ** 2)
+        if t <= near[2] + rng.uniform(-0.04, 0.04):
+            o[x, y] = px[x, y]
+    out = outline(Image.composite(out, Image.new("RGBA", out.size), out.split()[3]))
+    pc = Canvas(CELL)
+    for x, y, a, spin, reach in seeds:
+        if t <= a:
+            continue
+        u = (t - a) / (1 - a + 1e-6) if a < 1 else 0
+        u = min(1.0, (t - a) * 2.2)
+        px_ = max(10.0, x - 22 * reach * u ** 0.8)
+        py_ = y - 10 * u + 9 * math.sin(u * 3 + spin) * u
+        length = 8 - 3 * u
+        ward_petal(pc, px_, py_, math.pi + 0.5 * spin * u * 3 + 0.4, length, math.cos(2.5 * u * 3 + spin * 2),
+                   PINK_L if spin > 0 else WHITE)
+    out.alpha_composite(outline(pc.img))
+    return out
+
+
+def drift_reform_frame(k: int) -> Image.Image:
+    """Reform (8 frames): the dissolve backwards, then a wink of white sparkles as she's whole again."""
+    img = drift_dissolve_frame(DRIFT_FRAMES - 1 - k)
+    if k >= DRIFT_FRAMES - 3:
+        c = Canvas(CELL)
+        for i, (x, y) in enumerate(((34, 30), (62, 38), (44, 66), (66, 62))):
+            arm = (1, 2)[k - (DRIFT_FRAMES - 3) > 0 and i % 2 == 0]
+            c.flat(R((x - arm, y, x + arm, y)), WHITE)
+            c.flat(R((x, y - arm, x, y + arm)), WHITE)
+        img.alpha_composite(outline(c.img))
+    return img
+
+
+def drift_swirl_frame(k: int) -> Image.Image:
+    """The drift form (period 8, moving right): a tornado of petals wider at the top and leaning back, spinning two
+    turns per loop (back petals pink, front ones pale and white), a few stragglers streaming behind. SpecialFx
+    mirrors it and tilts it with her motion."""
+    c = Canvas(CELL)
+    m = CELL / 2
+    items = []
+    for i in range(DRIFT_PETALS):
+        h = -26 + 50 * ((i * 5) % DRIFT_PETALS) / DRIFT_PETALS
+        r = 6 + 15 * (h + 26) / 50
+        a = math.tau * (i / DRIFT_PETALS + 2 * k / DRIFT_FRAMES)
+        x = m + r * math.cos(a) - 0.22 * (24 - h)
+        y = m + h + 0.35 * r * math.sin(a)
+        flutter = math.cos(math.tau * (3 * k / DRIFT_FRAMES + i / 4))
+        items.append((math.sin(a), x, y, a + math.pi / 2, 9 - 2 * (h < -10), flutter))
+    for depth, x, y, ang, length, flutter in sorted(items):
+        front = depth > 0
+        ward_petal(c, x, y, ang + 0.5, length, flutter, (PINK_L if flutter >= 0 else WHITE) if front else PINK)
+    c.flat(E((m - 5, m + 14, m + 3, m + 19)), PINK)  # a tight knot of petals at the foot
+    for j in range(DRIFT_TRAIL):
+        u = (k / DRIFT_FRAMES + j / DRIFT_TRAIL) % 1.0
+        x = m - 18 - u * 24
+        y = m + 4 + 12 * math.sin(math.tau * (u + j / DRIFT_TRAIL)) - 8 * u
+        ward_petal(c, x, y, math.pi + 0.7 * math.sin(math.tau * u * 2 + j), 7 - 4 * u,
+                   math.cos(math.tau * (u * 2 + j / 3)), PINK_L if j % 2 else WHITE)
+    return outline(c.img)
+
+
 SNARE_FRAMES = 4  # vines loop (period 4)
 SNARE_W = 40
 SNARE_BASE_Y = 26  # row of the ground ring's centre (SpecialFx.SNARE_BASE_Y)
@@ -2724,6 +2813,9 @@ FX = {
     "snare_vines": lambda: strip([snare_vines_frame(k) for k in range(SNARE_FRAMES)]),
     "snare_burst": lambda: strip([snare_burst_frame(k) for k in range(SNARE_BURST_FRAMES)]),
     "petal_pop": lambda: strip([petal_pop_frame(k) for k in range(POP_FRAMES)]),
+    "sakura_drift": lambda: strip([drift_swirl_frame(k) for k in range(DRIFT_FRAMES)]),
+    "sakura_dissolve": lambda: strip([drift_dissolve_frame(k) for k in range(DRIFT_FRAMES)]),
+    "sakura_reform": lambda: strip([drift_reform_frame(k) for k in range(DRIFT_FRAMES)]),
     # Grapple Kunai (SpecialFx): the zip pose loop, the bite spark, chain links.
     "flicker_zip": lambda: strip([flicker_zip(i) for i in range(4)]),
     "grapple_spark": lambda: strip([grapple_spark(k) for k in range(GRAPPLE_SPARK_FRAMES)]),

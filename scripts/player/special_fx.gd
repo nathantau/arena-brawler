@@ -140,6 +140,18 @@ const BLAZE_DIE_TIME: float = 1.0
 const BLAZE_DIE_FRAME_TIME: float = 0.6
 const BLAZE_IGNITE_TIME: float = 0.5
 const BLAZE_STREAK_FADE: float = 0.1
+## Petal Drift: her sprite breaks into petals (dissolve strip), the swirl loop is drawn instead while she glides, and
+## the reform strip gathers her back (the dissolve backwards). All 96 px cells like her sheet, 8 frames at DRIFT_FPS.
+const DRIFT_ART: Texture2D = preload(FX_DIR + "sakura_drift.png")
+const DISSOLVE_ART: Texture2D = preload(FX_DIR + "sakura_dissolve.png")
+const REFORM_ART: Texture2D = preload(FX_DIR + "sakura_reform.png")
+const DRIFT_FPS: float = 24.0
+const DRIFT_STRIP_FRAMES: int = 8
+const DISSOLVE_TIME: float = DRIFT_STRIP_FRAMES / DRIFT_FPS
+## How much of her motion's slope (radians) the swirl leans with.
+const DRIFT_LEAN: float = 0.4
+## Speed under which the swirl keeps its last heading.
+const DRIFT_MIN_SPEED: float = 20.0
 
 
 class Poof:
@@ -203,6 +215,13 @@ var _vine_t: float = -1.0
 ## The Blaze Run slot while its trail burns (else null), and where the owner is drawn.
 var _blaze: CharacterSkill
 var _blaze_at: Vector2 = Vector2.ZERO
+## Petal Drift: seconds drifting (-1 = not), seconds into the reform (-1 = none), where she's drawn, her heading.
+var _drift_t: float = -1.0
+var _reform_t: float = -1.0
+var _drift_at: Vector2 = Vector2.ZERO
+var _drift_flip: bool = false
+var _drift_lean: float = 0.0
+var _face_flip: bool = false
 
 
 func _init() -> void:
@@ -248,6 +267,7 @@ func sync(p: Player) -> void:
 	_morph_at = p.global_position + p.visual_offset
 	_sync_whirl(p)
 	_sync_swing(p)
+	_sync_drift(p)
 	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
 	if slow > _snare_left + SNARE_NEW_MARGIN:  # a snare landed (or was refreshed): petals burst
 		_poof(p.global_position + p.visual_offset, SNARE_BURST_ART, SNARE_BURST_TIME)
@@ -288,6 +308,27 @@ func sync(p: Player) -> void:
 	_erupt_started = erupting and (_erupt_started or eruption.active_remaining <= ERUPTION_LEAD)
 	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD else null
 	queue_redraw()
+
+
+func _sync_drift(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.DRIFT)
+	var on: bool = slot != null and slot.is_drifting() and not p.dead
+	_drift_at = p.global_position + p.visual_offset
+	_face_flip = p.facing.x < 0.0
+	if on and p.velocity.length() > DRIFT_MIN_SPEED:
+		_drift_flip = p.velocity.x < 0.0
+		_drift_lean = atan2(p.velocity.y, absf(p.velocity.x)) * DRIFT_LEAN * (-1.0 if _drift_flip else 1.0)
+	if _drift_t >= 0.0 and not on and not p.dead:  # gathers back with a little burst of petals
+		_reform_t = 0.0
+		petal_pop(_drift_at)
+	if p.dead:
+		_reform_t = -1.0
+	_drift_t = slot.elapsed() if on else -1.0
+
+
+## The owner's sprite and held weapon stay hidden while she is petals or gathering back (Player).
+func is_petals() -> bool:
+	return _drift_t >= 0.0 or _reform_t >= 0.0
 
 
 func _sync_blaze(p: Player) -> void:
@@ -336,6 +377,10 @@ func _process(delta: float) -> void:
 		_morph_t += delta
 		if _morph_t > MORPH_TIME:
 			_morph_t = -1.0
+	if _reform_t >= 0.0:
+		_reform_t += delta
+		if _reform_t > DRIFT_STRIP_FRAMES / DRIFT_FPS:
+			_reform_t = -1.0
 	if _vine_t >= 0.0:
 		_vine_t += delta
 		if _vine_t > VINE_RETRACT_TIME:
@@ -352,7 +397,7 @@ static func _slot(p: Player, kind: SkillData.Kind) -> CharacterSkill:
 
 ## The owner's sprite is hidden while a morph or the grapple zip pose plays (Player).
 func hides_owner() -> bool:
-	return _morph_t >= 0.0 or _grapple != null or _whirl_t >= 0.0
+	return _morph_t >= 0.0 or _grapple != null or _whirl_t >= 0.0 or is_petals()
 
 
 ## The owner's sprite is hidden while the swing pose is drawn instead (Player).
@@ -449,6 +494,7 @@ func _draw() -> void:
 	_draw_ward()
 	_draw_whirl()
 	_draw_swing()
+	_draw_drift()
 	_draw_snare()
 	_draw_blaze()
 	_draw_flourishes()
@@ -594,6 +640,29 @@ func _draw_whirl() -> void:
 	draw_set_transform(_whirl_at, 0.0, Vector2(-1.0 if _whirl_flip else 1.0, 1.0))
 	_draw_frame(WHIRL_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_ART.get_width() / WHIRL_ART.get_height()),
 		WHIRL_ART.get_height(), Vector2.ZERO, px)
+	draw_set_transform(Vector2.ZERO)
+
+
+func _draw_drift() -> void:
+	var px: float = Constants.SPRITE_SCALE
+	var cell: float = DRIFT_ART.get_height()
+	var frame: int = 0
+	var art: Texture2D = REFORM_ART
+	var flip: bool = _face_flip
+	if _drift_t >= DISSOLVE_TIME:  # the swirl, leaning with her motion
+		draw_set_transform(_drift_at, _drift_lean, Vector2(-1.0 if _drift_flip else 1.0, 1.0))
+		_draw_frame(DRIFT_ART, int(_drift_t * DRIFT_FPS) % DRIFT_STRIP_FRAMES, cell, Vector2.ZERO, px)
+		draw_set_transform(Vector2.ZERO)
+		return
+	if _drift_t >= 0.0:
+		art = DISSOLVE_ART
+		frame = int(_drift_t * DRIFT_FPS)
+	elif _reform_t >= 0.0:
+		frame = int(_reform_t * DRIFT_FPS)
+	else:
+		return
+	draw_set_transform(_drift_at, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
+	_draw_frame(art, mini(frame, DRIFT_STRIP_FRAMES - 1), cell, Vector2.ZERO, px)
 	draw_set_transform(Vector2.ZERO)
 
 
