@@ -556,7 +556,13 @@ def wukong_ape(step=None, t=0, pose=None):
     A transformation form, drawn bigger in game (SkillData.form_scale). `pose` (attack frames): (from, to, mix)
     between two APE_POSES; None = knuckle-walking."""
     low = Canvas()
-    for x, (dx, dy) in zip((21, 35), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
+    air = pose is not None and pose[0] == "raise"  # mid-leap: knees tucked up under him
+    land = pose is not None and pose[:2] == ("smash", "smash")  # landed: feet planted wide
+    stance = ((1, -5), (-1, -5)) if air else ((-3, 0), (3, 0)) if land else None
+    if land and pose is not None and step is None:
+        for x, y, r in ((5, 53, 4), (11, 57, 4), (18, 59, 3), (31, 59, 3), (59, 56, 3)):  # dust kicked up by the landing
+            low.part(E((x - r, y - r, x + r, y + r)), STEEL, line=False)
+    for x, (dx, dy) in zip((21, 35), stance or (WALK_LEGS[step] if step is not None else ((0, 0), (0, 0)))):
         x += dx  # thick, slightly bowed ape legs with broad flat feet, on the same stride as everyone
         low.part(P([(x, 44 + dy), (x + 8, 44 + dy), (x + 9, 54 + dy), (x - 1, 54 + dy)]), MAROON)
         low.part(E((x - 5, 54 + dy, x, 58 + dy)), BROWN)  # big toe splayed out to the side
@@ -1721,9 +1727,11 @@ KO_CROWNS = {"flicker"}  # crowns that stay on a knocked-out body (Flint's flame
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Fists go up over his head, then smash down in front on frame 3 (the hit lands then:
 ## ape_fists windup), the body squashed, and settle back into the knuckle-walk.
-ATTACKS = {"wukong_ape": [(("walk", "raise", 0.6), -1), (("raise", "raise", 0), -3), (("raise", "smash", 0.5), -1),
-                          (("smash", "smash", 0), 2), (("smash", "smash", 0), 2), (("smash", "walk", 0.4), 1),
-                          (("smash", "walk", 0.8), 0)]}
+## Per frame: (pose, dy = upper body over the legs, + crouches, hop = whole body off the ground, - is up).
+## The Great Ape crouches, leaps up raising his fists, and lands squashed as they slam down.
+ATTACKS = {"wukong_ape": [(("walk", "raise", 0.6), 3, 0), (("raise", "raise", 0), -2, -9), (("raise", "smash", 0.5), -1, -12),
+                          (("smash", "smash", 0), 3, 0), (("smash", "smash", 0), 2, 0), (("smash", "walk", 0.4), 1, 0),
+                          (("smash", "walk", 0.8), 0, 0)]}
 
 
 # --- frame processing -------------------------------------------------------
@@ -1777,13 +1785,15 @@ def frames(build, aura=None, crown=None) -> list[Image.Image]:
 
 
 def attack_frames(build, aura, poses) -> list[Image.Image]:
-    """SIZE px attack frames (ATTACKS), composed like idle frames."""
+    """CELL px attack frames (ATTACKS), composed like idle frames; a hop lifts the whole body (aura stays put)."""
     out = []
-    for i, (pose, dy) in enumerate(poses):
+    for i, (pose, dy, hop) in enumerate(poses):
         low, up = build(None, i, pose)
-        f = aura(i).img if aura else Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-        f.alpha_composite(low.img)
-        f.alpha_composite(up.img, (0, UPPER_DY + dy))
+        f = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        if aura:
+            f.alpha_composite(aura(i).img, (PAD, PAD))
+        f.alpha_composite(low.img, (PAD, PAD + hop))
+        f.alpha_composite(up.img, (PAD, PAD + UPPER_DY + dy + hop))
         out.append(outline(f))
     return out
 
@@ -1863,7 +1873,7 @@ def main() -> None:
         else:
             fs = [cell(f) for f in frames(build, AURAS.get(name))]
         fs += death_frames(build, CROWNS.get(name) if name in KO_CROWNS else None)
-        fs += [cell(f) for f in attack_frames(build, AURAS.get(name), ATTACKS.get(name, []))]
+        fs += attack_frames(build, AURAS.get(name), ATTACKS.get(name, []))
         sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
         for i, f in enumerate(fs):
             sheet.paste(f, (i * CELL, 0))
