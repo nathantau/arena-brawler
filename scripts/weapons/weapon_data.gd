@@ -63,6 +63,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var splash_radius: float = 0.0
 ## Damage multiplier at the edge of the blast (1.0 at the centre).
 @export_range(0.0, 1.0) var splash_edge_scale: float = 0.4
+## Goes off right where it's fired, no flight or muzzle (a skill's blast, e.g. Flint's Eruption).
+@export var blast: bool = false
 
 @export_group("Bounce")
 ## Wall bounces before the projectile stops. Bouncing projectiles explode on players or

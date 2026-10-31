@@ -307,6 +307,15 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   (`vine`, cropped to length, never stretched) whose leafy clump (`vine_top`) sits above the arc's midpoint; leaf burst
   at takeoff, dust puff on landing, then the vine swings on and pulls up. Progress is read from the drawn position on
   the takeoff→landing line, so interpolated remote players stay in step.
+- **Eruption** (2026-10-31, Flint special, `eruption`, kind ERUPTION = 9): marks a floor spot 260 px ahead along the
+  aim (from the feet, so standing under a wall can't put it beyond; pulled back 8 px off the first `LAYER_WALLS` hit:
+  `Player.eruption_spot`, stored in the synced `anchor`); after a 0.6 s telegraph (`duration`) a pillar of fire goes off
+  there: `eruption_blast` (`WeaponData.blast`: a splash "shot" that goes off where it's fired, 40 dmg, 80 px, falloff to
+  0.4, needs sight, no self-damage, 300 knockback away from the spot, so up-ish) through `fire_shot` / `shot_fired` with
+  seq + `ERUPTION_SEQ_OFFSET`; replay fires nothing; cooldown 8 s. `exploded(..., art)` is false for blasts (the pillar is
+  the art; sound, sparks, shake stay). Art (generate.py `eruption_crack` period-4 telegraph with a ring of embers at the
+  blast's reach, 12-frame `eruption` strip started `ERUPTION_LEAD` before the blast so the floor bulges into the burst,
+  `icon_eruption`; `flame_tongue()` is Flint's tongue helper, now module level), played by `SpecialFx` from synced state.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"blink", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -629,3 +629,147 @@ func test_vine_swing_replay_from_captured_state_matches() -> void:
 		assert_eq(b.skills[1].anchor, a.skills[1].anchor)
 		assert_eq(b.skills[1].direction, a.skills[1].direction)
 		assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+
+
+# --- Flint's Eruption --------------------------------------------------------------
+
+func _flint_erupter(world: Node2D, pool: ProjectilePool, id: int = 1) -> Player:
+	var p := Player.new()
+	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
+		characters.get_character(&"flint"))
+	world.add_child(p)
+	p.set_skill(1, skills.get_skill(&"eruption"))
+	return p
+
+
+func _idle(p: Player, frames: int, replay: bool = false) -> void:
+	for i: int in frames:
+		var f := InputFrame.new()
+		f.seq = 100 + i
+		p.simulate(f, DT, replay)
+
+
+func _hits(pool: ProjectilePool) -> Array:
+	var hits: Array = []
+	pool.player_hit.connect(func(_o: int, _s: int, _p: int, victim: int, dmg: int, _c: bool, _a: Vector2) -> void:
+		hits.append([victim, dmg]))
+	return hits
+
+
+func test_eruption_is_flints_own() -> void:
+	var eruption: SkillData = skills.get_skill(&"eruption")
+	assert_eq(eruption.kind, SkillData.Kind.ERUPTION)
+	assert_true(eruption.eruption_blast.blast)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(eruption), c.id == &"flint", String(c.id))
+
+
+func test_eruption_spot_is_ahead_and_stops_at_walls() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var p: Player = _flint_erupter(world, null)
+	var d: SkillData = skills.get_skill(&"eruption")
+	p.global_position = Vector2(100, 300)
+	await wait_physics_frames(2)
+	var feet := Vector2(100, 300 + Constants.WALL_FEET_STRIP)
+	assert_almost_eq(p.eruption_spot(Vector2.RIGHT, d), feet + Vector2(d.eruption_distance, 0), Vector2(0.01, 0.01))
+	_wall(world, Vector2(250, 300), Vector2(20, 400))
+	await wait_physics_frames(2)
+	var spot: Vector2 = p.eruption_spot(Vector2.RIGHT, d)
+	assert_almost_eq(spot.x, 240.0 - d.eruption_wall_margin, 0.5, "pulled back off the wall")
+	assert_eq(p.eruption_spot(Vector2.RIGHT, d), spot, "deterministic")
+
+
+func test_eruption_spot_stays_in_when_cast_from_under_a_wall() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	_wall(world, Vector2(300, 0), Vector2(800, 48))  # spans y -24..24
+	var p: Player = _flint_erupter(world, null)
+	p.global_position = Vector2(300, 400)
+	await wait_physics_frames(2)
+	for i: int in 120:
+		p.velocity = Vector2(0, -400)
+		p.move_and_slide()
+	assert_lt(p.global_position.y, 24.0, "centre inside the wall")
+	var spot: Vector2 = p.eruption_spot(Vector2.UP, skills.get_skill(&"eruption"))
+	assert_gt(spot.y, 24.0, "not beyond the wall: %s" % spot)
+
+
+func test_eruption_lands_only_after_the_telegraph() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var p: Player = _flint_erupter(world, pool)
+	p.global_position = Vector2(100, 300)
+	var d: SkillData = skills.get_skill(&"eruption")
+	var target: Player = _flint_erupter(world, pool, 2)
+	target.global_position = Vector2(100 + d.eruption_distance, 300)
+	await wait_physics_frames(2)
+	var hits: Array = _hits(pool)
+	_press_special(p, Vector2.RIGHT)
+	assert_true(p.skills[1].is_active(), "telegraph showing")
+	_idle(p, floori(d.duration / DT) - 2)
+	assert_eq(hits.size(), 0, "nothing before the delay")
+	_idle(p, 4)
+	assert_eq(hits.size(), 1, "erupts once")
+	assert_eq(hits[0][0], 2)
+	assert_gt(hits[0][1], d.eruption_blast.damage * 0.9, "dead centre: near full damage")
+	assert_lt(target.velocity.y, 0.0, "knocked up")
+	assert_eq(p.stats.hp, p.stats.max_hp)
+
+
+func test_eruption_falls_off_walls_block_it_and_spares_the_caster() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var blast: WeaponData = skills.get_skill(&"eruption").eruption_blast
+	var caster: Player = _flint_erupter(world, pool, 1)
+	caster.global_position = Vector2(500, 300)
+	var near: Player = _flint_erupter(world, pool, 2)
+	near.global_position = Vector2(510, 300)
+	var far: Player = _flint_erupter(world, pool, 3)
+	far.global_position = Vector2(500 - blast.splash_radius * 0.8, 300)
+	var hidden: Player = _flint_erupter(world, pool, 4)
+	hidden.global_position = Vector2(500, 300 + blast.splash_radius * 0.7)
+	_wall(world, Vector2(500, 300 + blast.splash_radius * 0.4), Vector2(200, 12))
+	await wait_physics_frames(2)
+	var dmg: Dictionary = {}
+	pool.player_hit.connect(func(_o: int, _s: int, _p: int, victim: int, d: int, _c: bool, _a: Vector2) -> void:
+		dmg[victim] = d)
+	pool.fire_shot(1, 7, caster.global_position, Vector2.RIGHT, blast, 3)
+	assert_false(dmg.has(1), "no self-damage")
+	assert_true(dmg.has(2) and dmg.has(3))
+	assert_gt(dmg[2], dmg[3], "falloff")
+	assert_false(dmg.has(4), "the wall blocks it")
+	assert_eq(pool.active_count(), 0, "a blast leaves nothing flying")
+
+
+func test_eruption_replay_matches_and_spawns_nothing() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	_wall(world, Vector2(250, 300), Vector2(20, 400))
+	var a: Player = _flint_erupter(world, pool, 1)
+	var b: Player = _flint_erupter(world, pool, 2)
+	a.global_position = Vector2(100, 300)
+	await wait_physics_frames(2)
+	var snapshot: Array = a.capture_state()
+	var booms: Array = []
+	pool.exploded.connect(func(at: Vector2, _r: float, _c: Color, _s: bool, _art: bool) -> void: booms.append(at))
+	_press_special(a, Vector2.RIGHT)
+	_idle(a, 60)
+	assert_eq(booms.size(), 1, "the server's eruption")
+	assert_true(b.apply_state(snapshot, WeaponCatalog.load_all(), characters))
+	var f := InputFrame.new()
+	f.seq = 10
+	f.aim_vec = Vector2.RIGHT
+	f.special = true
+	b.simulate(f, DT, true)
+	assert_eq(b.skills[1].anchor, a.skills[1].anchor, "same spot")
+	_idle(b, 60, true)
+	assert_eq(booms.size(), 1, "replay spawns nothing")
+	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+	assert_lt(booms[0].x, 250.0, "erupted short of the wall")

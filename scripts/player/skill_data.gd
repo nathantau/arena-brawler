@@ -14,7 +14,9 @@ extends Resource
 ## WARD: a ring round you that moves with you and catches enemy projectiles (not beams or melee).
 ## GRAPPLE: a kunai on a chain thrown along the aim; if it bites a wall you're pulled straight to it.
 ## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
-enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GRAPPLE = 8, WARD = 10 }
+## ERUPTION: marks a spot on the floor ahead along the aim (short of walls); when `duration` (the telegraph) runs out,
+## `eruption_blast` goes off there.
+enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -75,6 +77,14 @@ enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GR
 @export var clone_reach: float = 260.0
 ## Angle between neighbouring clones' paths.
 @export var clone_spread_deg: float = 55.0
+
+@export_group("Eruption")
+## How far ahead along the aim the spot is marked.
+@export var eruption_distance: float = 260.0
+## A wall in the way pulls the spot back this far off it, so the blast's sight lines start in the open.
+@export var eruption_wall_margin: float = 8.0
+## The pillar of fire: a `blast` weapon (damage, splash radius + falloff, knockback).
+@export var eruption_blast: WeaponData
 
 @export_group("Transform")
 ## Sheet laid out like a character's (idle, hit, walk); drawn `form_scale` x the usual size.

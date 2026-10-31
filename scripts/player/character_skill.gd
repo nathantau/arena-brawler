@@ -11,6 +11,7 @@ extends RefCounted
 ##   with the short cooldown. `duration` only caps the pull.
 ## - SWING: from `anchor` (takeoff) to `anchor + direction` (landing; the Player sets `direction` to that whole
 ##   vector, not a unit one, so both ends are in the snapshot).
+## - ERUPTION: `anchor` = the marked spot (the Player places it against the walls); it goes off as it ends.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 var data: SkillData

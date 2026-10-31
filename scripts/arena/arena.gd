@@ -385,8 +385,9 @@ func _fx_shot(owner_id: int, origin: Vector2, facing: Vector2, w: WeaponData) ->
 		add_shake(w.screen_shake)
 
 
-func _fx_explosion(at: Vector2, radius: float, color: Color, slam: bool) -> void:
-	effects.blast(at, radius, slam)
+func _fx_explosion(at: Vector2, radius: float, color: Color, slam: bool, art: bool) -> void:
+	if art:
+		effects.blast(at, radius, slam)
 	effects.burst(at, color, BURST_EXPLOSION_COUNT, BURST_DEATH_SPEED, PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 1.5)
 	sfx.play(&"explosion", at)
 	if local_player != null:
