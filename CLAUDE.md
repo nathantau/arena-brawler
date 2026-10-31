@@ -94,7 +94,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 ## Status
 - [~] **M1 – implemented, needs a hands-on feel pass** (2026-10-28)
   - Done: floating joystick + FIRE (auto-aim, drag-to-aim) / DASH / SWAP touch buttons; WASD + mouse/J/Space/Q on desktop;
-    auto-aim to nearest visible enemy (`AutoAim.visible_point`: sight from the shooter's hand to the target's centre or lower hitbox, since feet-based collision puts a player under a wall with its centre inside it; `Player.aim_at`: aims from the hand shots leave; bots too); Pocket Blaster (free), Buzzsaw SMG, Scattercannon;
+    auto-aim to nearest visible enemy (`AutoAim.visible_point`: sight from the shooter's hand to the target's centre or lower hitbox, since feet-based collision puts a player under a wall with its centre inside it; `Player.aim_at`: searches angles for the shot line from the hand that passes through the target; bots too); Pocket Blaster (free), Buzzsaw SMG, Scattercannon;
     energy; HP + armor regen; dash with i-frames; 3 dummy bots; kill/death tally; respawn at safest spawn; one arena ("Pit").
   - Sim lives in pure classes (`PlayerStats`, `WeaponState`, `Loadout`, `DashSkill`, `MovementSim`, `CombatRules`, `AutoAim`)
     driven by `Player.simulate(InputFrame, delta)`.
@@ -195,7 +195,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   1 player), Warden's Oath Hammer (melee slam: one blast at the tip of the reach, not behind walls), Twinshot's
   Ricochet Six (bullets bounce off walls twice and still hit), Wukong's Cloud Staff (`thrust`: long narrow stab).
   Arms and hands are small and part of each sprite's art (generate.py `arm()`, `ARM_X`; Sakura's small kimono sleeves,
-  Flint's fire fists); a weapon's grip sits on the front hand, on the aim side (`Player.WEAPON_HAND`, `hand_offset()`), drawn over the body
+  Flint's fire fists); a weapon's grip sits on the front hand, on the aim side, sliding in to the middle near straight up / down so the firing point never jumps hands (`Player.WEAPON_HAND`, `hand_offset()`, `HAND_SLIDE_BELOW`), drawn over the body
   but behind the head (the frame's head rows, `Player.SPRITE_HEAD_ROWS`, are redrawn over it) and follows the aim; shots start from there (`shot_origin`, `muzzle_distance`).
   Weapons are drawn from their sprite at the character's pixel scale, pivoting on the grip: guns
   kick back and up, melee sweeps the arc from a raised guard, thrusts stab out and back (`Player._draw_gun`).

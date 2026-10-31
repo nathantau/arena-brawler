@@ -369,3 +369,14 @@ func test_aim_at_sends_shots_through_the_target() -> void:
 		var miss: float = absf(from_hand.cross(p.facing))  # distance from the target to the shot's line
 		assert_lt(miss, 1.0, "aiming at %s" % target)
 		assert_gt(from_hand.dot(p.facing), 0.0, "and towards it")
+
+
+func test_aim_at_close_targets_shoots_towards_them() -> void:
+	var p: Player = _player(SHOOTER, Vector2.ZERO)
+	var w: WeaponData = p.held_weapon().data
+	for target: Vector2 in [Vector2(10, 30), Vector2(-8, 40), Vector2(0, 25), Vector2(15, -30), Vector2(-5, -45),
+			Vector2(30, 5), Vector2(-25, -10)]:
+		p.facing = p.aim_at(target)
+		var from_hand: Vector2 = target - p.shot_origin(w)
+		assert_gt(from_hand.normalized().dot(p.facing), 0.5, "shoots towards %s" % target)
+		assert_lt(absf(from_hand.cross(p.facing)), Constants.PLAYER_RADIUS, "and through it")
