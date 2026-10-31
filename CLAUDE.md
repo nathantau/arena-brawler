@@ -250,7 +250,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   Inferno beam 7 -> 5 dmg/tick; Petal Storm 3 -> 2 dmg per petal, cooldown 8 -> 9 s.
 - **Flicker is the ninja** (2026-10-30): navy shroud, steel breastplate, mask peaking at the nose, steel forehead plate, choppy
   bob with a big spiky topknot (drawn above the art box: generate.py `CROWNS`, kept on KO via `KO_CROWNS`), its red
-  tie behind her hair, ribbon tails that sway in idle; bare hands. Four Flicker-only specials (tag `flicker`): **Shadow Clones** (signature, CLONES: 3 decoys run out from
+  tie behind her hair, ribbon tails that sway in idle; bare hands. Clothes shading (2026-10-31): light from the top left; breastplate specular + dithered shaded lower half, two-tone sash, shroud creases with lit ridges, sleeve/shin wraps (generate.py `sleeve_detail`). Four Flicker-only specials (tag `flicker`): **Shadow Clones** (signature, CLONES: 3 decoys run out from
   where you stood; positions are a pure function of the synced special state + walls (`Player.clone_points()`, raycast against the
   feet-level walls players move in, so casting from under a wall can't send them through it),
   drawn by `player/special_fx.gd` with the owner's sprite/weapon; harmless and bullets pass through, but enemy
