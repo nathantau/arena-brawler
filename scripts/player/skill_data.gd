@@ -11,7 +11,8 @@ extends Resource
 ## BLINK: instant hop (stopped by walls) with i-frames. SMOKE: a cloud where you stand; inside it
 ## enemy auto-aim and bots can't lock on. VOLLEY: fires `volley_weapon` once (e.g. a ring of
 ## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
-enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
+## WARD: a ring round you that moves with you and catches enemy projectiles (not beams or melee).
+enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, WARD = 10 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -41,6 +42,10 @@ enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
 
 @export_group("Smoke")
 @export var smoke_radius: float = 90.0
+
+@export_group("Ward")
+## Enemy projectiles crossing into this radius round the player are caught.
+@export var ward_radius: float = 70.0
 
 @export_group("Volley")
 @export var volley_weapon: WeaponData

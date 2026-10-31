@@ -86,6 +86,31 @@ func _check_replay(character: StringName) -> void:
 	await wait_physics_frames(1)
 
 
+func test_blossom_ward_replay_and_roundtrip() -> void:
+	await wait_physics_frames(2)
+	var a: Player = _player(1, &"sakura")
+	var b: Player = _player(2, &"sakura")
+	var ward: SkillData = SkillCatalog.shared().get_skill(&"blossom_ward")
+	a.set_skill(1, ward)
+	var inputs: Array[InputFrame] = _inputs(90)
+	var snapshot: Array = []
+	for i: int in inputs.size():
+		a.simulate(inputs[i], Constants.PHYSICS_DT)
+		if i == 49:
+			snapshot = a.capture_state()
+			assert_true(a.skills[1].is_warding(), "pressed at input 46")
+	assert_true(b.apply_state(snapshot, catalog, characters))
+	assert_eq(b.skills[1].data, ward, "the slot came over the wire")
+	assert_not_null(b.ward(), "the ring is up on the other peer too")
+	assert_eq(b.capture_state().slice(1), snapshot.slice(1), "roundtrip")
+	for i: int in range(50, inputs.size()):
+		b.simulate(inputs[i], Constants.PHYSICS_DT, true)
+	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
+	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
+	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+	assert_eq(b.ward() != null, a.ward() != null)
+
+
 func test_state_roundtrip() -> void:
 	var a: Player = _player(1)
 	a.global_position = Vector2(12, 34)

@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"blink", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -360,3 +360,19 @@ func test_flint_inferno_fires_beams() -> void:
 	assert_lt(inferno.form_weapon.muzzle_distance(), 8.0, "the beam starts at his fist, not out in the air")
 	assert_not_null(inferno.form_frames(), "Inferno sheet loads")
 	assert_true(flint.can_use_skill(skills.get_skill(&"supernova")), "Supernova stays pickable")
+
+
+func test_blossom_ward_is_sakuras_and_expires() -> void:
+	var ward: SkillData = skills.get_skill(&"blossom_ward")
+	var sakura: CharacterData = characters.get_character(&"sakura")
+	assert_eq(ward.kind, SkillData.Kind.WARD)
+	assert_true(skills.specials_for(sakura).has(ward))
+	assert_false(flicker.can_use_skill(ward))
+	var stats := PlayerStats.new()
+	var skill := CharacterSkill.new(ward)
+	assert_true(skill.try_activate(Vector2.RIGHT, Vector2.ZERO, stats))
+	assert_true(skill.is_warding())
+	assert_false(stats.is_invulnerable(), "no i-frames")
+	skill.tick(ward.duration + 0.01)
+	assert_false(skill.is_warding(), "expired")
+	assert_false(skill.try_activate(Vector2.RIGHT, Vector2.ZERO, stats), "on cooldown")

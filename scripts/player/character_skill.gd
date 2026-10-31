@@ -6,6 +6,7 @@ extends RefCounted
 ## - TRANSFORM: a stronger form; fires `form_weapon` (its cooldown is snapshotted).
 ## - BLINK: like a dash's i-frames; the Player does the hop. VOLLEY: the Player fires it.
 ## - SMOKE / CLONES: centred on `anchor` (where you stood), aimed along `direction`.
+## - WARD: a ring round the player (wherever they are now) that catches enemy projectiles.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 var data: SkillData
@@ -49,6 +50,10 @@ func is_smoking() -> bool:
 
 func is_cloning() -> bool:
 	return data.kind == SkillData.Kind.CLONES and is_active()
+
+
+func is_warding() -> bool:
+	return data.kind == SkillData.Kind.WARD and is_active()
 
 
 ## Seconds since activation (drives clone paths).

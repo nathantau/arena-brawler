@@ -418,7 +418,7 @@ func _on_skill_used(user: Player, skill: SkillData) -> void:
 	match skill.kind:
 		SkillData.Kind.DASH:
 			sfx.play(&"dash", user.global_position)
-		SkillData.Kind.SHIELD:
+		SkillData.Kind.SHIELD, SkillData.Kind.WARD:
 			sfx.play(&"shield", user.global_position)
 		SkillData.Kind.TRANSFORM:
 			sfx.play(&"transform", user.global_position)
