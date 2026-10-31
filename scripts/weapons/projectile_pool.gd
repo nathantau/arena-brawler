@@ -156,11 +156,10 @@ func _volley(owner_id: int, seq: int, pellet_base: int, origin: Vector2, facing:
 		if weapon.kind == WeaponData.Kind.BEAM:
 			_beam(owner_id, seq, pellet_base + i, origin, dirs[i], weapon, damage, crit)
 		else:
-			var muzzle_dist: float = Constants.PLAYER_RADIUS + weapon.projectile_radius + Constants.MUZZLE_OFFSET
-			_spawn_pellet(owner_id, seq, pellet_base + i, origin, muzzle_dist, dirs[i], weapon, damage, crit)
+			_spawn_pellet(owner_id, seq, pellet_base + i, origin, weapon.muzzle_distance(), dirs[i], weapon, damage, crit)
 
 
-## Spawns from `origin` (shooter centre) at distance `muzzle_dist`. If a wall sits between
+## Spawns from `origin` (the shooter's hand) at distance `muzzle_dist`. If a wall sits between
 ## the shooter and the muzzle the shot pops on the wall instead of tunnelling through.
 func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle_dist: float, dir: Vector2,
 		weapon: WeaponData, damage: int, crit: bool) -> void:
@@ -195,7 +194,7 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 func _beam(owner_id: int, seq: int, pellet: int, origin: Vector2, dir: Vector2, weapon: WeaponData,
 		damage: int, crit: bool) -> void:
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
-	var from: Vector2 = origin + dir * (Constants.PLAYER_RADIUS + Constants.MUZZLE_OFFSET)
+	var from: Vector2 = origin + dir * weapon.muzzle_distance()
 	if not AutoAim.has_line_of_sight(space, _los_query, origin, from):
 		beam_drawn.emit(origin, from, weapon)
 		return

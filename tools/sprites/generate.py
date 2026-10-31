@@ -343,7 +343,7 @@ def wukong(step=None, t=0):
 ## Great Ape arm poses: "walk" = knuckle-walking, fists planted in front (idle / walk, like a gorilla); "raise" =
 ## fists up high at the sides; "pound" = fists slammed into the ground wide at both sides (the attack).
 ## Per pose: (shoulder, elbow, wrist) per arm, then (x, top, thumb dx) per fist. Back arm / fist first.
-APE_POSES = {"walk": ((((15, 26), (28, 36), (36, 44)), ((49, 26), (53, 36), (52, 44))), ((30, 45, -2), (46, 45, 9))),
+APE_POSES = {"walk": ((((15, 26), (13, 36), (17, 44)), ((49, 26), (51, 36), (47, 44))), ((11, 45, -2), (41, 45, 9))),
              "raise": ((((15, 26), (9, 18), (8, 13)), ((49, 26), (55, 18), (56, 13))), ((2, 2, -2), (50, 2, 9))),
              "pound": ((((15, 26), (8, 36), (7, 43)), ((49, 26), (56, 36), (57, 43))), ((2, 47, -2), (50, 47, 9)))}
 
@@ -978,8 +978,6 @@ def ui_kit() -> dict[str, Image.Image]:
 FX_OUT = ROOT / "assets" / "fx"
 POOF_FRAMES = 10
 SMOKE_FRAMES = 4
-BOLT_VARIANTS = 3
-BOLT_W, BOLT_H = 24, 88
 
 
 def poof_frame(size: int, k: int, color) -> Image.Image:
@@ -1120,7 +1118,7 @@ def ape_morph(t: float, scale: float) -> Image.Image:
 
 def morph_frames(a: Image.Image, b: Image.Image, b_scale: float, between) -> list[Image.Image]:
     """Transformation from a character's frame `a` into its form `b` (drawn `b_scale` x in game), in full colour:
-    six in-between creatures (`between(t, scale)`, e.g. ape_morph) that stretch, swell and grow, with gold sparks crackling. CELL-sized
+    ten in-between creatures (`between(t, scale)`, e.g. ape_morph) that stretch, swell and grow, with gold sparks crackling. CELL-sized
     frames with the growth baked in, drawn at the normal sprite scale (SpecialFx) so pixels stay crisp."""
     rng = random.Random(7)
 
@@ -1140,29 +1138,11 @@ def morph_frames(a: Image.Image, b: Image.Image, b_scale: float, between) -> lis
                     px[x + dx * j, y + dy * j] = YELLOW + (255,)
         return img
 
-    steps = (0.15, 0.3, 0.45, 0.6, 0.75, 0.9)
+    steps = tuple((i + 1) / 11 for i in range(10))
     return [at(a, 1.0)] + [sparks(between(t, 1 + (b_scale - 1) * t)) for t in steps] + [at(b, b_scale)]
 
 
 BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
-
-
-def bolt(variant: int) -> Image.Image:
-    """A jagged lightning bolt, top to bottom: gold glow with a white core."""
-    rng = random.Random(variant)
-    c = Canvas(BOLT_H)
-    m = BOLT_H // 2
-    pts, x, y = [(m, 2)], m, 2
-    while y < BOLT_H - 14:  # uneven drops, sideways jolts that can double back
-        y += rng.randint(6, 15)
-        x = max(m - 9, min(m + 9, x + rng.choice((-1, 1)) * rng.randint(3, 8)))
-        pts.append((x, y))
-    pts.append((m + rng.randint(-2, 2), BOLT_H - 3))
-    kink = pts[len(pts) // 2]
-    fork = [kink, (kink[0] + (8 if kink[0] < m else -8), kink[1] + 8), (kink[0] + (5 if kink[0] < m else -5), kink[1] + 14)]
-    c.part(lambda dr, f: (dr.line(pts, f, 5), dr.line(fork, f, 3)), YELLOW, shade=False)
-    c.flat(L(pts, 1), WHITE)
-    return outline(c.img).crop((m - BOLT_W // 2, 0, m + BOLT_W // 2, BOLT_H))
 
 
 def smoke_frame(k: int, size: int = 136) -> Image.Image:
@@ -1417,7 +1397,6 @@ FX = {
     "poof": lambda: strip([poof_frame(80, k, WHITE) for k in range(POOF_FRAMES)]),
     "poof_small": lambda: strip([poof_frame(48, k, WHITE) for k in range(POOF_FRAMES)]),
     "poof_dark": lambda: strip([poof_frame(64, k, SHADOW) for k in range(POOF_FRAMES)]),
-    "bolt": lambda: strip([bolt(v) for v in range(BOLT_VARIANTS)]),
     "smoke": lambda: strip([smoke_frame(k) for k in range(SMOKE_FRAMES)]),
     "blast": lambda: strip([blast_frame(k) for k in range(BLAST_FRAMES)]),
     "slam": lambda: strip([slam_frame(k) for k in range(SLAM_FRAMES)]),
@@ -1625,7 +1604,7 @@ def main() -> None:
     FX_OUT.mkdir(exist_ok=True)
     for name, make in FX.items():
         img = make()
-        check(img, img.height if name != "bolt" else BOLT_W, edges=name != "bolt")
+        check(img, img.height)
         img.save(FX_OUT / f"{name}.png")
     print(f"wrote {len(FX)} effect strips to {FX_OUT}")
     # App Store icons must be opaque.

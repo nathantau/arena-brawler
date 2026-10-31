@@ -248,13 +248,13 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   **Fan of Blades** (VOLLEY: fires `blade_fan`, 12 piercing kunai in a ring, through the normal shot pipeline
   with seq + `VOLLEY_SEQ_OFFSET`). Dual Wield is still pickable too.
   Flourishes (`SpecialFx`, detected from synced state changes so remote players show them too): clones appear in
-  their own cloud poof in a ring around the player (`CLONE_START_DISTANCE`), fade in, and vanish in poofs; the Great Ape transformation is struck by lightning, morphs
+  their own cloud poof in a ring around the player (`CLONE_START_DISTANCE`), fade in, and vanish in poofs; the Great Ape transformation morphs
   (`SkillData.form_morph`: 8-frame 96 px strip, full colour: Wukong, six in-between creatures
   drawn by generate.py `ape_morph(t, scale)` (every body part's shape interpolated, arms/fists sprout, feathers and
   collar retract, colours switch in stages, growing), the ape; drawn at the normal sprite scale while the real
   sprite is hidden) and bursts out of a cloud; it ends in a dark puff,
   morphing back. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
-  (generate.py `FX`: poof / poof_small / poof_dark 10 frames (swell, then burst into wisps), wukong_ape_morph, bolt 3 variants, smoke 4-frame loop; `Canvas(size)`
+  (generate.py `FX`: poof / poof_small / poof_dark 10 frames (swell, then burst into wisps), wukong_ape_morph, smoke 4-frame loop; `Canvas(size)`
   now takes any size). `Effects` is pixel art too: explosions play `blast` (fireball → smoke + embers), melee slams `slam` (dust ring + floor cracks; `exploded(..., slam)`), sword swings `slash` (crescent smear tinted to the weapon), all sized to the radius / reach; beams and particles are hard-edged, snapped to art pixels and shrink instead of fading. Preview all effects: `tools/fx_preview.gd`. Bullets are per-weapon pixel art (`WeaponData.projectile_sprite`, generate.py `PROJECTILES` → `assets/sprites/projectiles/`: energy bolts, lead pellets, sniper tracer, rocket with flickering exhaust, rolling grenade, kunai, brass round, plasma), rotated to the flight direction with a 2-frame flicker and a pixel trail; crits are drawn x1.35, flash and leave gold sparkles; wall hits pop as four pixel sparks. Not done: bots don't prefer usable pickups; the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests

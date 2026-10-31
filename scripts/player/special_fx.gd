@@ -4,22 +4,16 @@ extends Node2D
 ## frame from the synced skill state (Player calls sync()). Clones copy the owner's sprite,
 ## walk animation, weapon and hand so they're hard to tell apart.
 ## Start / end flourishes are detected from state changes (so remote players get them too):
-## each clone appears from its own cloud poof around the player and vanishes in one; a transformation is struck by
-## lightning, morphs into the form (SkillData.form_morph) and bursts out of a cloud; it ends in a dark puff,
-## morphing back. All pixel-art strips from
+## each clone appears from its own cloud poof around the player and vanishes in one; a transformation morphs into
+## the form (SkillData.form_morph) and bursts out of a cloud; it ends in a dark puff, morphing back. All pixel-art strips from
 ## tools/sprites/generate.py (assets/fx), drawn at the characters' pixel scale.
 
 const FX_DIR: String = "res://assets/fx/"
 const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
 const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
 const POOF_DARK: Texture2D = preload(FX_DIR + "poof_dark.png")
-const BOLT_ART: Texture2D = preload(FX_DIR + "bolt.png")
 const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
 const POOF_TIME: float = 0.5
-const BOLT_VARIANTS: int = 3
-const BOLT_COUNT: int = 4
-const BOLT_TIME: float = 0.35
-const BOLT_SPREAD: Vector2 = Vector2(36, 14)
 const SMOKE_FRAMES: int = 4
 const SMOKE_FPS: float = 6.0
 ## smoke.png is drawn for this radius; other radii scale it.
@@ -30,9 +24,9 @@ const FADE_TIME: float = 0.4
 const APPEAR_DELAY: float = 0.08
 const APPEAR_TIME: float = 0.2
 const CLONE_POOF_TIME: float = 0.7
-const MORPH_TIME: float = 0.55
-## The transformation's cloud bursts this far into the morph, as it finishes.
-const MORPH_POOF_AT: float = 0.4
+const MORPH_TIME: float = 1.0
+## The transformation's (dark, stormy) cloud bursts this far into the morph, as it finishes.
+const MORPH_POOF_AT: float = 0.8
 
 
 class Poof:
@@ -42,18 +36,11 @@ class Poof:
 	var duration: float = POOF_TIME
 
 
-class Bolt:
-	var land: Vector2 = Vector2.ZERO
-	var variant: int = 0
-
-
 var _clones: Array[AnimatedSprite2D] = []
 var _points := PackedVector2Array()
 var _owner: Player
 var _smoke_t: float = -1.0
 var _poofs: Array[Poof] = []
-var _bolt_t: float = -1.0
-var _bolts: Array[Bolt] = []
 var _was_cloning: bool = false
 var _was_transformed: bool = false
 var _last_points := PackedVector2Array()
@@ -87,7 +74,6 @@ func sync(p: Player) -> void:
 		_last_points = _points
 	var transformed: bool = p.special.is_transformed()
 	if transformed and not _was_transformed:
-		_strike(p.global_position)
 		_start_morph(p, false)
 		if _morph_t < 0.0:
 			_poof(p.global_position, POOF_BIG)
@@ -128,13 +114,9 @@ func _process(delta: float) -> void:
 	for pf: Poof in _poofs:
 		pf.t += delta
 	_poofs = _poofs.filter(func(pf: Poof) -> bool: return pf.t < pf.duration)
-	if _bolt_t >= 0.0:
-		_bolt_t += delta
-		if _bolt_t > BOLT_TIME:
-			_bolt_t = -1.0
 	if _morph_t >= 0.0:
 		if not _morph_back and _morph_t < MORPH_POOF_AT and _morph_t + delta >= MORPH_POOF_AT:
-			_poof(_morph_at, POOF_BIG)
+			_poof(_morph_at, POOF_DARK)
 		_morph_t += delta
 		if _morph_t > MORPH_TIME:
 			_morph_t = -1.0
@@ -159,17 +141,6 @@ func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME) -> void:
 	pf.art = art
 	pf.duration = duration
 	_poofs.append(pf)
-
-
-## Bolts from above, landing around the player (cosmetic RNG, not the sim's).
-func _strike(at: Vector2) -> void:
-	_bolts.clear()
-	for i: int in BOLT_COUNT:
-		var b := Bolt.new()
-		b.land = at + Vector2(_rng.randf_range(-BOLT_SPREAD.x, BOLT_SPREAD.x), _rng.randf_range(-BOLT_SPREAD.y, BOLT_SPREAD.y))
-		b.variant = _rng.randi_range(0, BOLT_VARIANTS - 1)
-		_bolts.append(b)
-	_bolt_t = 0.0
 
 
 ## Frame `frame` of a horizontal strip of square frames, centred on `at`, at the sprite scale.
@@ -223,15 +194,10 @@ func _draw_morph() -> void:
 	draw_set_transform(Vector2.ZERO)
 
 
-## Poofs play their strip once; bolts flicker (every third frame off) and stand on their landing spot.
+## Poofs play their strip once.
 func _draw_flourishes() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for pf: Poof in _poofs:
 		var n: int = pf.art.get_width() / pf.art.get_height()
 		var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
 		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px)
-	if _bolt_t >= 0.0 and int(_bolt_t * 30.0) % 3 != 2:
-		var bw: float = BOLT_ART.get_width() / float(BOLT_VARIANTS)
-		var bh: float = BOLT_ART.get_height()
-		for b: Bolt in _bolts:
-			_draw_frame(BOLT_ART, b.variant, bw, b.land - Vector2(0.0, bh * px * 0.5), px)

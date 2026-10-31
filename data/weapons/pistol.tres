@@ -6,6 +6,7 @@
 
 [resource]
 script = ExtResource("1_wd")
+muzzle_x = 22.0
 projectile_sprite = ExtResource("9_proj")
 id = &"pistol"
 display_name = "Pocket Blaster"

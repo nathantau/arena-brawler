@@ -31,8 +31,9 @@ func is_participant(id: int) -> bool:
 
 
 ## Movement, firing and skills are frozen during the countdown and on the results screen.
+## Everyone stands still outside a running match: the lobby hides the arena (no warm-up fights, no haptics).
 func inputs_locked() -> bool:
-	return phase == Phase.COUNTDOWN or phase == Phase.RESULTS
+	return phase != Phase.PLAYING
 
 
 ## Warm-up in the lobby lets everyone respawn; in a match only participants do.

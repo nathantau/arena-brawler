@@ -325,11 +325,17 @@ func _try_fire(seq: int, replay: bool) -> void:
 	var weapon: WeaponState = held_weapon()
 	if not weapon.try_fire(stats) or replay:
 		return
-	var origin: Vector2 = global_position
+	var origin: Vector2 = shot_origin(weapon.data)
 	var dual: bool = is_dual_wielding()
 	projectiles.fire_shot(player_id, seq, origin, facing, weapon.data, match_seed, dual, character.dual_offset)
 	play_recoil()
 	shot_fired.emit(self, seq, origin, facing, weapon.data.id, dual)
+
+
+## Guns fire from the hand holding them (shots then spawn at the barrel tip, WeaponData.muzzle_distance);
+## melee swings stay centred on the body.
+func shot_origin(w: WeaponData) -> Vector2:
+	return global_position + (Vector2.ZERO if w.kind == WeaponData.Kind.MELEE else Vector2(0.0, WEAPON_HAND_Y))
 
 
 func play_recoil() -> void:

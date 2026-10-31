@@ -37,6 +37,9 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Bullet art (tools/sprites/generate.py PROJECTILES): a 2-frame strip of square frames pointing
 ## right, rotated to the flight direction. Null = a plain circle of `color`.
 @export var projectile_sprite: Texture2D
+## Barrel tip, sprite px along the barrel (x): shots spawn there. 0 = no gun art (skill volleys): just outside
+## the body.
+@export var muzzle_x: float = 0.0
 ## Where the second hand holds it (sprite px, like Player.WEAPON_GRIP); zero = one-handed.
 @export var off_hand: Vector2 = Vector2.ZERO
 ## Who may carry it: any character sharing a tag (CharacterData.weapon_tags). Empty = everyone.
@@ -68,3 +71,10 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Animate (and draw the hit) as a straight stab instead of a sweep.
 @export var thrust: bool = false
 ## With splash_radius > 0 a melee hit is a slam: one blast at the tip of the reach instead of the arc.
+
+
+## How far along the aim shots spawn from their origin (the hand holding the gun, Player.shot_origin()).
+func muzzle_distance() -> float:
+	if muzzle_x <= 0.0:
+		return Constants.PLAYER_RADIUS + projectile_radius + Constants.MUZZLE_OFFSET
+	return Player.WEAPON_HOLD_DISTANCE + (muzzle_x - Player.WEAPON_GRIP.x) * Constants.SPRITE_SCALE

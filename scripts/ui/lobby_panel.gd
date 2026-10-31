@@ -11,8 +11,8 @@ const BUTTON_MIN_SIZE: Vector2 = Vector2(170, 52)
 const READY_MIN_SIZE: Vector2 = Vector2(240, 64)
 const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 196)
 ## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
-const SKILL_ROW_SIZE: Vector2 = Vector2(330, 66)
-const SKILL_ICON_SIZE: Vector2 = Vector2(45, 45)
+const SKILL_ROW_SIZE: Vector2 = Vector2(330, 56)
+const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
 const WEAPON_CARD_SIZE: Vector2 = Vector2(182, 128)
 const CHARACTER_ART_SCALE: float = 2.0
 const WEAPON_ART_SCALE: float = 2.0
@@ -84,6 +84,10 @@ func _ready() -> void:
 		card.pressed.connect(func() -> void: arena.character_requested.emit(id))
 		_character_cards[id] = card
 
+	# Weapons under the fighters, so a character with many specials can't push them below the fold.
+	_label(fighters, &"HeaderLabel").text = "3 · Choose your weapon"
+	_weapon_row = _row(fighters)
+
 	var specials := VBoxContainer.new()
 	specials.add_theme_constant_override("separation", SPACING)
 	top.add_child(specials)
@@ -91,9 +95,6 @@ func _ready() -> void:
 	_special_row = VBoxContainer.new()
 	_special_row.add_theme_constant_override("separation", SPACING)
 	specials.add_child(_special_row)
-
-	_label(steps, &"HeaderLabel").text = "3 · Choose your weapon"
-	_weapon_row = _row(steps)
 
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", SPACING)

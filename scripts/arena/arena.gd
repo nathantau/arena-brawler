@@ -157,8 +157,6 @@ func _load_layout(index: int) -> void:
 	crates.setup(map, _floor.tiles)
 	pickups.setup(map, catalog, catalog.pickup_ids(), match_seed)
 	projectiles.clear()
-	if camera != null:
-		_set_camera_limits()
 
 
 func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl: PlayerController,
@@ -308,7 +306,6 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	camera.zoom = Vector2.ONE * Constants.CAMERA_ZOOM
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = Constants.CAMERA_SMOOTHING
-	_set_camera_limits()
 	add_child(camera)
 	camera.global_position = p.global_position
 	camera.reset_smoothing()
@@ -340,13 +337,6 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	input.arena = self
 	input.touch = touch
 	_attach_effects()
-
-
-func _set_camera_limits() -> void:
-	camera.limit_left = 0
-	camera.limit_top = 0
-	camera.limit_right = int(map.size.x)
-	camera.limit_bottom = int(map.size.y)
 
 
 func add_shake(amount: float) -> void:
@@ -383,7 +373,7 @@ func _attach_effects() -> void:
 
 
 func _fx_shot(owner_id: int, origin: Vector2, facing: Vector2, w: WeaponData) -> void:
-	var muzzle: Vector2 = origin + facing * (Constants.PLAYER_RADIUS + Constants.MUZZLE_OFFSET)
+	var muzzle: Vector2 = origin + facing * w.muzzle_distance()
 	effects.burst(muzzle, w.color, BURST_MUZZLE_COUNT, BURST_MUZZLE_SPEED, PARTICLE_SIZE * 0.6, PARTICLE_LIFE * 0.4,
 		facing, BURST_MUZZLE_SPREAD)
 	sfx.play(w.sfx, origin)

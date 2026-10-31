@@ -108,8 +108,8 @@ func test_state_rejects_malformed() -> void:
 func test_respawn_and_lock_rules_per_phase() -> void:
 	var s := MatchState.new()
 	s.participants = [1]
-	assert_true(s.may_respawn(2), "anyone respawns in warm-up")
-	assert_false(s.inputs_locked())
+	assert_true(s.may_respawn(2), "anyone respawns in the lobby")
+	assert_true(s.inputs_locked(), "frozen behind the loading room")
 	s.phase = MatchState.Phase.COUNTDOWN
 	assert_true(s.inputs_locked())
 	assert_true(s.may_respawn(1))

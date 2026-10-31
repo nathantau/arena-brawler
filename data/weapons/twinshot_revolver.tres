@@ -6,6 +6,7 @@
 
 [resource]
 script = ExtResource("1_wd")
+muzzle_x = 30.0
 projectile_sprite = ExtResource("9_proj")
 id = &"twinshot_revolver"
 display_name = "Ricochet Six"

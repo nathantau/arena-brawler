@@ -6,6 +6,7 @@
 
 [resource]
 script = ExtResource("1_wd")
+muzzle_x = 46.0
 projectile_sprite = ExtResource("9_proj")
 id = &"sniper"
 display_name = "Needle Rifle"
