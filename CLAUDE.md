@@ -280,6 +280,15 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   other slot already has it; `active_skill(kind)` finds the running TRANSFORM / CLONES / SMOKE / DASH. Loading room:
   pick 2 specials (badges 1/2, a new pick replaces the least recently set slot). Bots fight with their signature.
   `--special ID` sets slot 1. Energy numbers are a first guess, untested in real matches.
+- **Blossom Ward** (2026-10-31, Sakura special, `blossom_ward`, kind WARD = 10): 3 s ring of petals (radius
+  `ward_radius` 69 px, cooldown 10 s) that follows her and catches enemy projectiles; her own shots, beams and melee
+  pass. Reuses Barrier's path: a second `ShieldWall` (`is_ward`: a circle on LAYER_SHIELDS, a child of the Player so it
+  moves with her, also for interpolated remote players) that `ProjectilePool` rays stop on, on server and client alike;
+  shots that reach her inside the ring (fired from within it, or the ring moved onto them) are caught too
+  (`Player.ward()`). Caught shots pop without their blast (rockets fizzle) and emit `ShieldWall.caught` → a petal pop
+  (`SpecialFx.petal_pop`, every peer). Art (generate.py `blossom_ward*`, `petal_pop`, `icon_blossom_ward`): period-4
+  ring loop (16 orbiting petals that wobble and turn over pink/white, an inner band turning the other way, drifters
+  peeling off; seamless because petal i's look is a function of 4i + k), 8-frame opening bloom, 8-frame scatter on end.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

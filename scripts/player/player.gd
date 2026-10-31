@@ -87,6 +87,7 @@ var visual_offset: Vector2 = Vector2.ZERO
 
 var _shape: CollisionShape2D
 var _shield := ShieldWall.new()
+var _ward := ShieldWall.new(true)
 var _prev_skills: Array[bool] = [false, false]
 var _hit_flash: float = 0.0
 ## Attack animation time left, and its full length (depends on the weapon used).
@@ -126,12 +127,15 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	_shield.owner_id = id
 	_shield.color = color
 	add_child(_shield)
+	_ward.owner_id = id
+	add_child(_ward)
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_sprite.scale = Vector2.ONE * Constants.SPRITE_SCALE
 	add_child(_sprite)
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
 	add_child(_special_fx)
+	_ward.caught.connect(_special_fx.petal_pop)
 	# The walls players move against (shifted to the feet): standing under a wall puts the centre inside the wall
 	# itself, and a ray starting inside a wall misses it, so clones ran out through it (even past the border).
 	_clone_query.collision_mask = Constants.LAYER_WALL_FEET
@@ -153,7 +157,7 @@ func set_character(data: CharacterData) -> void:
 	skills.clear()
 	for sd: SkillData in kept:
 		skills.append(CharacterSkill.new(sd))
-	_shield.sync(_shield_slot(), dead)
+	_sync_shields()
 	_sprite.sprite_frames = data.sprite_frames()
 	_sprite.play(&"idle")
 	if chosen_weapon != null and not data.can_use(chosen_weapon) and chosen_weapon != data.signature_weapon:
@@ -175,7 +179,7 @@ func set_skill(slot: int, data: SkillData) -> void:
 	if skills[other].data == data:
 		skills[other] = CharacterSkill.new(old)
 	skills[slot] = CharacterSkill.new(data)
-	_shield.sync(_shield_slot(), dead)
+	_sync_shields()
 
 
 func set_weapon(w: WeaponData) -> void:
@@ -246,7 +250,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		# Keep edge state current so a button held through the countdown doesn't fire on release.
 		_prev_skills = pressed
 		velocity = Vector2.ZERO
-		_shield.sync(_shield_slot(), dead)
+		_sync_shields()
 		return
 
 	for i: int in Constants.SKILL_SLOTS:
@@ -259,7 +263,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0)
 	velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed, delta)
 	move_and_slide()
-	_shield.sync(_shield_slot(), dead)
+	_sync_shields()
 
 	if input.aim_vec.length_squared() > 0.0:
 		facing = input.aim_vec.normalized()
@@ -307,12 +311,23 @@ func is_transformed() -> bool:
 	return form() != null
 
 
-## The barrier slot (it owns the ShieldWall); slot 0 when neither special is a barrier.
-func _shield_slot() -> CharacterSkill:
+## The barrier and the ward follow their slots (slot 0 when neither special is one: then they stay down).
+func _sync_shields() -> void:
+	_shield.sync(_slot_of(SkillData.Kind.SHIELD), dead)
+	_ward.sync(_slot_of(SkillData.Kind.WARD), dead)
+
+
+func _slot_of(kind: SkillData.Kind) -> CharacterSkill:
 	for slot: CharacterSkill in skills:
-		if slot.data.kind == SkillData.Kind.SHIELD:
+		if slot.data.kind == kind:
 			return slot
 	return skills[0]
+
+
+## The Blossom Ward ring while it's up, else null. Shots that reach the player inside it (fired from within the
+## ring, or the ring moved onto them) are caught too.
+func ward() -> ShieldWall:
+	return _ward if _ward.is_up() else null
 
 
 ## Inside your own smoke: enemy auto-aim and bots can't lock on.
@@ -500,7 +515,7 @@ func _set_dead(value: bool) -> void:
 		_spawn_corpse()
 	visible = not value
 	_shape.set_deferred("disabled", value)
-	_shield.sync(_shield_slot(), dead)
+	_sync_shields()
 
 
 ## Plays the current sheet's (form's, if transformed) "die" animation where we fell, then frees itself.
@@ -603,7 +618,7 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	respawn_timer = s[StateField.RESPAWN_TIMER]
 	last_input_seq = s[StateField.LAST_INPUT_SEQ]
 	_set_dead(s[StateField.DEAD])
-	_shield.sync(_shield_slot(), dead)
+	_sync_shields()
 	return true
 
 

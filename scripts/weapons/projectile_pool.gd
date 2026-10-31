@@ -7,6 +7,8 @@ extends Node2D
 ## - MELEE: arc hit around the wielder; can reflect enemy projectiles inside the arc. With
 ##   splash it's a slam: one blast at the tip of the reach instead.
 ## Piercing projectiles damage each player they pass through, up to WeaponData.pierce.
+## A Blossom Ward (ShieldWall.is_ward) catches enemy projectiles without their blast: at its edge, or on its
+## owner if a shot got inside it. Beams pass it.
 ##
 ## Authoritative pools (offline / server) apply damage. Client pools are cosmetic: they stop
 ## on walls, shields and players locally but damage only ever comes from the server.
@@ -205,8 +207,8 @@ func _beam(owner_id: int, seq: int, pellet: int, origin: Vector2, dir: Vector2, 
 		if hit.is_empty():
 			break
 		var collider: Object = hit.collider
-		if _passes_through(collider, owner_id):
-			_exclude(hit.rid)
+		if _passes_through(collider, owner_id) or (collider is ShieldWall and (collider as ShieldWall).is_ward):
+			_exclude(hit.rid)  # wards only stop projectiles
 			continue
 		end = hit.position
 		if authoritative:
@@ -314,6 +316,9 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 		var collider: Object = hit.collider
 		var target := collider as Player
 		if target != null and target.player_id != s.attacker_id and target.can_be_hit():
+			if target.ward() != null:
+				_catch(s, hit.position, target.ward())
+				return
 			if s.splash_radius > 0.0:
 				_stop(s, hit.position)
 			else:
@@ -330,6 +335,9 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 		if target != null or _passes_through(collider, s.attacker_id):
 			_exclude(hit.rid)
 			continue
+		if collider is ShieldWall and (collider as ShieldWall).is_ward:
+			_catch(s, hit.position, collider)
+			return
 		if s.bounces_left > 0 and not collider is ShieldWall:
 			if collider is Crate and authoritative and s.splash_radius <= 0.0:
 				(collider as Crate).take_damage(s.damage)  # ricochets still chip crates
@@ -397,6 +405,12 @@ func _stop(s: Slot, at: Vector2) -> void:
 		_explode(s, at - s.vel.normalized() * s.radius)
 	else:
 		_finish(s, at)
+
+
+## Caught by a Blossom Ward: gone in a petal pop, without its blast.
+func _catch(s: Slot, at: Vector2, ward: ShieldWall) -> void:
+	s.active = false
+	ward.caught.emit(at)
 
 
 func _finish(s: Slot, at: Vector2) -> void:

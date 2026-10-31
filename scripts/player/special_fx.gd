@@ -5,13 +5,24 @@ extends Node2D
 ## walk animation, weapon and hand so they're hard to tell apart.
 ## Start / end flourishes are detected from state changes (so remote players get them too):
 ## each clone appears from its own cloud poof around the player and vanishes in one; a transformation morphs into
-## the form (SkillData.form_morph) and morphs back when it ends (no cloud drawn over the ape). All pixel-art strips from
+## the form (SkillData.form_morph) and morphs back when it ends (no cloud drawn over the ape); the Blossom Ward's
+## petals burst out into a ring that follows the player, scatter when it ends and pop where it catches a shot. All pixel-art strips from
 ## tools/sprites/generate.py (assets/fx), drawn at the characters' pixel scale.
 
 const FX_DIR: String = "res://assets/fx/"
 const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
 const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
 const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
+const WARD_ART: Texture2D = preload(FX_DIR + "blossom_ward.png")
+const WARD_OPEN_ART: Texture2D = preload(FX_DIR + "blossom_ward_open.png")
+const WARD_CLOSE_ART: Texture2D = preload(FX_DIR + "blossom_ward_close.png")
+const PETAL_POP_ART: Texture2D = preload(FX_DIR + "petal_pop.png")
+## The ward strips are drawn for this radius (generate.py WARD_R art px x SPRITE_SCALE); other radii scale them.
+const WARD_ART_RADIUS: float = 69.0
+const WARD_FPS: float = 10.0
+const WARD_OPEN_TIME: float = 0.3
+const WARD_CLOSE_TIME: float = 0.5
+const PETAL_POP_TIME: float = 0.3
 const POOF_TIME: float = 0.5
 const SMOKE_FPS: float = 10.0
 ## The cloud swells in when thrown and fades out at the end instead of popping.
@@ -33,6 +44,7 @@ class Poof:
 	var art: Texture2D
 	var t: float = 0.0
 	var duration: float = POOF_TIME
+	var scale: float = 1.0
 
 
 var _clones: Array[AnimatedSprite2D] = []
@@ -51,6 +63,10 @@ var _morph_back: bool = false
 var _morph_art: Texture2D
 var _morph_at: Vector2 = Vector2.ZERO
 var _morph_flip: bool = false
+## Seconds the ward has been up (-1 = down), its radius and where it's drawn (the owner, as drawn).
+var _ward_t: float = -1.0
+var _ward_radius: float = 0.0
+var _ward_at: Vector2 = Vector2.ZERO
 
 
 func _init() -> void:
@@ -83,6 +99,14 @@ func sync(p: Player) -> void:
 	elif _was_transformed and not transformed and not p.dead:
 		_start_morph(p, true)
 	_was_transformed = transformed
+	var ward: CharacterSkill = _slot(p, SkillData.Kind.WARD)
+	var warding: bool = ward != null and ward.is_warding() and not p.dead
+	_ward_at = p.global_position + p.visual_offset
+	if warding:
+		_ward_radius = ward.data.ward_radius
+	elif _ward_t >= 0.0 and not p.dead:
+		_poof(_ward_at, WARD_CLOSE_ART, WARD_CLOSE_TIME, _ward_scale())
+	_ward_t = ward.elapsed() if warding else -1.0
 	if p.dead:
 		_morph_t = -1.0
 	_morph_at = p.global_position + p.visual_offset
@@ -146,12 +170,22 @@ func _start_morph(p: Player, back: bool) -> void:
 	_morph_t = 0.0
 
 
-func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME) -> void:
+func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME, scale: float = 1.0) -> void:
 	var pf := Poof.new()
 	pf.pos = at
 	pf.art = art
 	pf.duration = duration
+	pf.scale = scale
 	_poofs.append(pf)
+
+
+## A shot caught on the ward (ShieldWall.caught, on every peer).
+func petal_pop(at: Vector2) -> void:
+	_poof(at, PETAL_POP_ART, PETAL_POP_TIME)
+
+
+func _ward_scale() -> float:
+	return _ward_radius / WARD_ART_RADIUS
 
 
 ## Frame `frame` of a horizontal strip of square frames, centred on `at`, at the sprite scale.
@@ -164,6 +198,7 @@ func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_
 
 func _draw() -> void:
 	_draw_morph()
+	_draw_ward()
 	_draw_flourishes()
 	if _owner == null:
 		return
@@ -206,10 +241,24 @@ func _draw_morph() -> void:
 	draw_set_transform(Vector2.ZERO)
 
 
+## The ring opens in a bloom (its last frame is the loop's first), then loops while it's up.
+func _draw_ward() -> void:
+	if _ward_t < 0.0:
+		return
+	var px: float = Constants.SPRITE_SCALE * _ward_scale()
+	if _ward_t < WARD_OPEN_TIME:
+		var n: int = WARD_OPEN_ART.get_width() / WARD_OPEN_ART.get_height()
+		_draw_frame(WARD_OPEN_ART, mini(int(_ward_t / WARD_OPEN_TIME * n), n - 1), WARD_OPEN_ART.get_height(),
+			_ward_at, px)
+		return
+	var frame: int = int((_ward_t - WARD_OPEN_TIME) * WARD_FPS) % (WARD_ART.get_width() / WARD_ART.get_height())
+	_draw_frame(WARD_ART, frame, WARD_ART.get_height(), _ward_at, px)
+
+
 ## Poofs play their strip once.
 func _draw_flourishes() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for pf: Poof in _poofs:
 		var n: int = pf.art.get_width() / pf.art.get_height()
 		var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
-		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px)
+		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale)

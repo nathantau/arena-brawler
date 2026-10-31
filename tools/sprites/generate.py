@@ -1229,6 +1229,12 @@ ICONS = {
                           c.flat(P([(6, 3), (9, 7), (8, 10), (4, 10), (3, 7)]), ORANGE), c.flat(E((5, 7, 7, 10)), YELLOW)),
     "inferno": lambda c: (c.flat(P([(6, 0), (9, 4), (11, 2), (11, 8), (9, 11), (3, 11), (1, 8), (1, 3), (3, 5)]), RED),
                           c.flat(P([(6, 3), (9, 7), (8, 10), (4, 10), (3, 7)]), ORANGE), c.flat(E((5, 7, 7, 10)), YELLOW)),
+    "blossom_ward": lambda c: [c.flat(lambda d, f: d.ellipse((1, 1, 11, 11), outline=f, width=1), PINK)]
+                              + [c.flat(P([(6 + round(5 * dx), 6 + round(5 * dy)), (6 + round(5 * dx - 2 * dy), 6 + round(5 * dy + 2 * dx)),
+                                           (6 + round(5 * dx + 2 * dy), 6 + round(5 * dy - 2 * dx))]),
+                                        PINK_L if i % 2 else WHITE)
+                                 for i, (dx, dy) in enumerate(((0, -1), (0.87, -0.5), (0.87, 0.5), (0, 1), (-0.87, 0.5), (-0.87, -0.5)))]
+                              + [c.flat(E((4, 4, 8, 8)), PINK_L), c.dot(6, 6, YELLOW)],
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -1567,6 +1573,147 @@ def smoke_frame(k: int, size: int = 136) -> Image.Image:
     return outline(c.img)
 
 
+WARD_R = 46  # art px ring radius (x SPRITE_SCALE = SpecialFx.WARD_ART_RADIUS)
+WARD_SIZE = 128
+WARD_CLOSE_SIZE = 156
+WARD_FRAMES = 4  # loop
+WARD_OPEN_FRAMES = 8
+WARD_CLOSE_FRAMES = 8
+WARD_OUTER = 16  # petals orbiting on the ring
+WARD_INNER = 7  # smaller petals turning the other way just inside it
+POP_SIZE = 28
+POP_FRAMES = 8
+
+
+def ward_petal(c: Canvas, x: float, y: float, ang: float, length: float, flutter: float, color, base=PINK):
+    """One cherry petal centred at (x, y), its tip along `ang`: a teardrop notched at the tip, a darker base. `flutter`
+    (-1..1) is how much of its face shows as it turns over: near 0 it's edge-on, below 0 its paler back shows."""
+    ux, uy = math.cos(ang), math.sin(ang)
+    w = max(0.5, length * 0.42 * abs(flutter))
+    q = lambda a, b: (x + ux * a - uy * b, y + uy * a + ux * b)
+    h = length / 2
+    c.flat(P([q(-h, 0), q(-h * 0.4, w), q(h * 0.5, w), q(h, w * 0.45), q(h * 0.6, 0), q(h, -w * 0.45),
+              q(h * 0.5, -w), q(-h * 0.4, -w)]), color)
+    if length >= 5 and abs(flutter) > 0.3:
+        c.flat(L([q(-h, 0), q(-h * 0.2, 0)], 1), base)
+
+
+def ward_ring(n_outer: int, k: int):
+    """Ring petals for loop frame `k` as (x, y, ang, length,
+    flutter, colour) relative to the centre. Petal i's look is a function of n = 4 i + k, so after a loop petal i
+    stands exactly where petal i + 1 started: the loop is seamless while each petal wobbles, tilts and turns over."""
+    out = []
+    span = WARD_FRAMES * n_outer
+    for i in range(n_outer):
+        n = WARD_FRAMES * i + k
+        ang = math.tau * n / span
+        r = WARD_R + 2.5 * math.sin(math.tau * 3 * n / span)
+        flutter = math.cos(math.tau * (n_outer + 3) * n / span)
+        tilt = 0.5 * math.sin(math.tau * 5 * n / span)
+        length = 8 + round(math.sin(math.tau * 2 * n / span + 1))
+        out.append((math.cos(ang) * r, math.sin(ang) * r, ang + math.pi / 2 + tilt, length, flutter,
+                    PINK_L if flutter >= 0 else WHITE))
+    span = WARD_FRAMES * WARD_INNER
+    for i in range(WARD_INNER):  # turning the other way: petal i ends where petal i - 1 started
+        n = WARD_FRAMES * i - k
+        ang = math.tau * n / span + 0.2
+        r = WARD_R - 8 + 1.5 * math.sin(math.tau * 2 * n / span)
+        flutter = math.cos(math.tau * (WARD_INNER + 2) * n / span)
+        out.append((math.cos(ang) * r, math.sin(ang) * r, ang - math.pi / 2, 5, flutter,
+                    WHITE if flutter >= 0 else PINK_L))
+    return out
+
+
+def blossom_ward_frame(k: int) -> Image.Image:
+    """Blossom Ward loop (period 4): petals orbit the ring, wobbling in and out, tilting and turning over (pink face,
+    white back); a smaller band inside turns the other way; a few petals drift off outward and sink, shrinking."""
+    c = Canvas(WARD_SIZE)
+    m = WARD_SIZE / 2
+    for j, a0 in enumerate((0.6, 2.7, 4.6)):  # drifters peel off the ring, one after another
+        w = (k / WARD_FRAMES + j / 3) % 1.0
+        ang = a0 + 0.35 * w
+        r = WARD_R + 2 + 9 * w
+        ward_petal(c, m + math.cos(ang) * r, m + math.sin(ang) * r + 4 * w, ang + 2.0 * w, 6 - 3 * w,
+                   math.cos(math.pi * 2 * w + j), PINK_L)
+    for x, y, ang, length, flutter, col in ward_ring(WARD_OUTER, k):
+        ward_petal(c, m + x, m + y, ang, length, flutter, col)
+    return outline(c.img)
+
+
+def blossom_bloom(c: Canvas, m: float, r: float, spin: float):
+    """A five-petal cherry blossom at the centre, `r` art px across its petals."""
+    for i in range(5):
+        a = spin + math.tau * i / 5
+        ward_petal(c, m + math.cos(a) * r * 0.55, m + math.sin(a) * r * 0.55, a, r, 1.0, WHITE if i % 2 else PINK_L)
+    c.flat(E((m - r * 0.25, m - r * 0.25, m + r * 0.25, m + r * 0.25)), PINK)
+    c.dot(round(m), round(m), YELLOW)
+
+
+def blossom_ward_open_frame(k: int) -> Image.Image:
+    """Opening bloom (8 frames): a blossom opens over her and bursts; its petals spiral out into the ring,
+    overshooting a little, sparkles winking on the ring. The last frame is the loop's first."""
+    c = Canvas(WARD_SIZE)
+    m = WARD_SIZE / 2
+    t = k / (WARD_OPEN_FRAMES - 1)
+    if k <= 3:  # the bloom: opens, holds, bursts
+        r = (4, 9, 12, 8)[k]
+        blossom_bloom(c, m, r, 0.3 * k)
+    e = min(1.0, max(0.0, (k - 1) / (WARD_OPEN_FRAMES - 2)))
+    e = 1 + 2.2 * (e - 1) ** 3 + 1.2 * (e - 1) ** 2 if e < 1 else 1.0  # ease out with a small overshoot
+    if k >= 1:
+        for x, y, ang, length, flutter, col in ward_ring(WARD_OUTER, 0):
+            d = math.hypot(x, y)
+            a = math.atan2(y, x) - 1.3 * (1 - e)
+            rr = d * e
+            ward_petal(c, m + math.cos(a) * rr, m + math.sin(a) * rr, ang - 1.3 * (1 - e), length * min(1.0, 0.5 + e),
+                       flutter if e >= 1 else 1.0, col)
+    if 2 <= k <= 5:  # sparkles winking on as the ring forms
+        for j in range(3):
+            a = 0.9 + math.tau * j / 3 + 0.5 * k
+            x, y = m + math.cos(a) * WARD_R * 0.8 * e, m + math.sin(a) * WARD_R * 0.8 * e
+            arm = 2 if k in (3, 4) else 1
+            c.flat(R((x - arm, y, x + arm, y)), WHITE)
+            c.flat(R((x, y - arm, x, y + arm)), WHITE)
+    return outline(c.img)
+
+
+def blossom_ward_close_frame(k: int) -> Image.Image:
+    """Closing scatter (8 frames): the ring loosens, petals fly outward with a twist and sink as they flutter,
+    shrinking and dropping out one by one."""
+    rng = random.Random(11)
+    c = Canvas(WARD_CLOSE_SIZE)
+    m = WARD_CLOSE_SIZE / 2
+    t = k / (WARD_CLOSE_FRAMES - 1)
+    for idx, (x, y, ang, length, flutter, col) in enumerate(ward_ring(WARD_OUTER, 0)):
+        reach, spin, gone = rng.uniform(0.7, 1.3), rng.uniform(-1.0, 1.0), rng.uniform(0.55, 1.0)
+        if t > gone:
+            continue
+        a = math.atan2(y, x) + 0.35 * t
+        rr = math.hypot(x, y) + 14 * reach * t ** 0.7
+        f = math.cos(math.atan2(flutter, 1) + 3.0 * t + spin * 2)
+        ward_petal(c, m + math.cos(a) * rr, m + math.sin(a) * rr + 9 * t * t, ang + spin * 3 * t,
+                   max(2.0, length * (1 - 0.6 * t)), f, col if f >= 0 else WHITE)
+    return outline(c.img)
+
+
+def petal_pop_frame(k: int) -> Image.Image:
+    """A shot caught on the ward: a white wink, and four tiny petals burst out and flutter down."""
+    c = Canvas(POP_SIZE)
+    m = POP_SIZE / 2
+    t = k / (POP_FRAMES - 1)
+    if k <= 2:
+        arm = (2, 3, 1)[k]
+        c.flat(R((m - arm, m, m + arm, m)), WHITE)
+        c.flat(R((m, m - arm, m, m + arm)), WHITE)
+    for i, a in enumerate((0.5, 2.0, 3.6, 5.1)):
+        if t > 0.75 + 0.06 * i:
+            continue
+        d = 2 + 8 * t ** 0.6
+        ward_petal(c, m + math.cos(a) * d, m + math.sin(a) * d + 4 * t * t, a + 2.5 * t, max(2.0, 5 - 3 * t),
+                   math.cos(4 * t + i), PINK_L if i % 2 else WHITE)
+    return outline(c.img)
+
+
 BLAST_FRAMES = 10
 BLAST_SIZE = 128  # art px; the fireball reaches ~BLAST_R, drawn scaled to the weapon's splash radius
 BLAST_R = 56
@@ -1820,6 +1967,10 @@ FX = {
     "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],
                                                    frames(wukong_ape, AURAS["wukong_ape"])[0], 1.35, ape_morph)),
     "flint_inferno_morph": flint_inferno_morph,
+    "blossom_ward": lambda: strip([blossom_ward_frame(k) for k in range(WARD_FRAMES)]),
+    "blossom_ward_open": lambda: strip([blossom_ward_open_frame(k) for k in range(WARD_OPEN_FRAMES)]),
+    "blossom_ward_close": lambda: strip([blossom_ward_close_frame(k) for k in range(WARD_CLOSE_FRAMES)]),
+    "petal_pop": lambda: strip([petal_pop_frame(k) for k in range(POP_FRAMES)]),
 }
 
 

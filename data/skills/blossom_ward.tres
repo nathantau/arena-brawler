@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_blossom_ward.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"blossom_ward"
+display_name = "Blossom Ward"
+kind = 10
+special = true
+blurb = "Petals catch enemy shots"
+tags = Array[StringName]([&"sakura"])
+cooldown = 10.0
+duration = 3.0
+ward_radius = 69.0

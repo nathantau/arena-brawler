@@ -207,6 +207,70 @@ func test_shield_blocks_enemy_shots_not_own() -> void:
 	assert_lt(target.stats.armor, target.stats.max_armor)
 
 
+func _sakura_warding(at: Vector2) -> Player:
+	var sakura: Player = _player(SHOOTER, at, &"sakura")
+	sakura.set_skill(1, SkillCatalog.shared().get_skill(&"blossom_ward"))
+	assert_true(sakura.skills[1].try_activate(Vector2.RIGHT, at, sakura.stats))
+	sakura._sync_shields()
+	return sakura
+
+
+func test_blossom_ward_catches_enemy_shots_not_own() -> void:
+	var sakura: Player = _sakura_warding(Vector2(300, 300))
+	var target: Player = _player(TARGET, Vector2(600, 300))
+	await wait_physics_frames(2)
+	var pops: Array = []
+	sakura._ward.caught.connect(func(at: Vector2) -> void: pops.append(at))
+	pool.fire_shot(TARGET, 1, target.global_position, Vector2.LEFT, _w(&"pistol"), SEED)
+	await wait_physics_frames(30)
+	assert_eq(sakura.stats.armor, sakura.stats.max_armor, "enemy shot caught")
+	assert_eq(pool.active_count(), 0, "and removed")
+	assert_eq(pops.size(), 1, "with a petal pop")
+	var radius: float = sakura.skills[1].data.ward_radius
+	assert_almost_eq((pops[0] as Vector2).distance_to(sakura.global_position), radius, 2.0, "at the ring's edge")
+	pool.fire_shot(SHOOTER, 1, sakura.global_position, Vector2.RIGHT, _w(&"pistol"), SEED)
+	await wait_physics_frames(30)
+	assert_lt(target.stats.armor, target.stats.max_armor, "her own shots pass")
+
+
+func test_blossom_ward_catches_rockets_without_a_blast_and_lets_beams_through() -> void:
+	var sakura: Player = _sakura_warding(Vector2(300, 300))
+	var enemy: Player = _player(TARGET, Vector2(600, 300))
+	await wait_physics_frames(2)
+	watch_signals(pool)
+	pool.fire_shot(TARGET, 1, enemy.global_position, Vector2.LEFT, _w(&"rocket"), SEED)
+	await wait_physics_frames(40)
+	assert_signal_not_emitted(pool, "exploded")
+	assert_eq(sakura.stats.armor, sakura.stats.max_armor)
+	pool.fire_shot(TARGET, 2, enemy.global_position, Vector2.LEFT, _w(&"laser"), SEED)
+	assert_lt(sakura.stats.armor, sakura.stats.max_armor, "beams aren't blocked")
+
+
+func test_blossom_ward_follows_her_and_catches_shots_inside_it() -> void:
+	var sakura: Player = _sakura_warding(Vector2(300, 300))
+	var enemy: Player = _player(TARGET, Vector2(300, 600))
+	await wait_physics_frames(2)
+	sakura.global_position = Vector2(300, 500)
+	await wait_physics_frames(2)
+	assert_eq(sakura._ward.global_position, sakura.global_position, "the ring moved with her")
+	pool.fire_shot(TARGET, 1, enemy.global_position, Vector2.UP, _w(&"pistol"), SEED)
+	await wait_physics_frames(20)
+	assert_eq(sakura.stats.armor, sakura.stats.max_armor, "caught: fired from inside the ring")
+	assert_eq(pool.active_count(), 0)
+
+
+func test_blossom_ward_expires() -> void:
+	var sakura: Player = _sakura_warding(Vector2(300, 300))
+	var enemy: Player = _player(TARGET, Vector2(600, 300))
+	sakura.skills[1].tick(sakura.skills[1].data.duration + 0.01)
+	sakura._sync_shields()
+	await wait_physics_frames(2)
+	assert_null(sakura.ward())
+	pool.fire_shot(TARGET, 1, enemy.global_position, Vector2.LEFT, _w(&"pistol"), SEED)
+	await wait_physics_frames(30)
+	assert_lt(sakura.stats.armor, sakura.stats.max_armor, "hit once the ward is down")
+
+
 func test_projectiles_damage_and_destroy_crates() -> void:
 	var crate: Crate = _crate(Vector2(300, 300))
 	await wait_physics_frames(2)
