@@ -17,6 +17,6 @@ duration = 3.1
 storm_distance = 240.0
 storm_wall_margin = 8.0
 storm_radius = 90.0
-storm_damage = 12
+storm_damage = 10
 storm_interval = 0.6
 storm_knockback = 80.0

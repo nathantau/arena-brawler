@@ -12,6 +12,6 @@ kind = 15
 special = true
 blurb = "Untouchable glide"
 tags = Array[StringName]([&"sakura"])
-cooldown = 7.0
+cooldown = 8.0
 duration = 0.8
 drift_speed_scale = 1.6
