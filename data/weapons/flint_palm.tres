@@ -8,7 +8,8 @@
 [resource]
 script = ExtResource("1_wd")
 held_frames = ExtResource("3_anim")
-muzzle_x = 21.0
+muzzle_x = 14.0
+upright = true
 projectile_sprite = ExtResource("9_proj")
 id = &"flint_palm"
 display_name = "Ember Palm"

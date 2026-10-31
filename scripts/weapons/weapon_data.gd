@@ -37,6 +37,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Optional in-world loop (generate.py WEAPON_ANIMS): a strip of `sprite`-sized frames played instead of `sprite`
 ## while held; the HUD and loading room keep the still `sprite`.
 @export var held_frames: Texture2D
+## Drawn upright instead of turned with the aim (mirrored when facing left): an orb whose flames rise.
+@export var upright: bool = false
 ## Bullet art (tools/sprites/generate.py PROJECTILES): a 2-frame strip of square frames pointing
 ## right, rotated to the flight direction. Null = a plain circle of `color`.
 @export var projectile_sprite: Texture2D

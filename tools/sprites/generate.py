@@ -393,8 +393,8 @@ def sakura(step=None, t=0):
 
 
 def flint(step=None, t=0, heat=0.0):
-    """Fire: a little fire elemental with a molten face, a glowing molten body
-    and legs with pulsing veins and an ember heart, flames curling up him and wisps breaking off, and fists of fire. His flaming hair is drawn above the
+    """Fire: a little fire elemental with a molten face, a scorched dark suit
+    burning up from its hem (heat burns it off) over a glowing molten body and legs with veins and an ember heart, flames curling up him and wisps breaking off, and fists of fire. His flaming hair is drawn above the
     art box (CROWNS: flint_crown). `heat` 0..1 stokes him into his Inferno form:
     bigger hand flames, white-hot cracks, flames off his shoulders and blazing eyes trailing fire."""
     hot = heat >= 0.5
@@ -446,7 +446,7 @@ def flint(step=None, t=0, heat=0.0):
             for side in (1, -1):  # out of step on each side
                 tongue(root, grow(root, ctrl), grow(root, tip), (t + k + (side < 0) * 2) * math.pi / 2, side)
     fist(17, 1)  # back hand, behind the body
-    # glowing molten body (his shirt long burnt off): a hotter core inside, veins of fire pulsing every tick
+    # glowing molten body under his suit: a hotter core inside, veins of fire pulsing every tick
     up.part(RR(BODY, 3), ORANGE if hot else RED)
     up.flat(RR((25, 37, 39, 45), 3) if hot else RR((23, 36, 41, 46), 3), YELLOW if hot else ORANGE)
     for k, pts in enumerate((((25, 35), (27, 39), (25, 43), (27, 47)), ((39, 34), (37, 38), (40, 42), (38, 46)),
@@ -455,8 +455,32 @@ def flint(step=None, t=0, heat=0.0):
     up.flat(P([(32, 37), (35, 40), (32, 43), (29, 40)]), YELLOW)  # ember heart
     if t % 2 == 0 or hot:
         up.flat(R((31, 39, 33, 41)) if hot else R((32, 40, 32, 40)), WHITE)  # heartbeat
-    reach = 0.55 + 0.45 * heat  # flames curling up over the front of him either side of the heart, taller when hot
-    for k, (root, ctrl, tip) in enumerate((((25, 48), (20, 42), (26, 33)), ((39, 48), (44, 43), (38, 35)))):
+    # his dark suit, already scorched up from a ragged hem; heat burns it away until Inferno leaves nothing. Burnt
+    # from the bottom up through blotchy char (FLINT_BURN), the edge glowing like embers, charred just inside it.
+    suit = Canvas()
+    suit.part(RR(BODY, 3), SHADOW)
+    for side in (1, -1):  # lapels, open at the neck over his glowing chest
+        suit.part(P([(32 + side * x, y) for x, y in ((4, 33), (1, 40), (7, 37), (8, 33))]), NAVY, shade=False)
+    suit.flat(P([(29, 33), (32, 39), (35, 33)]), OUTLINE)  # the open collar (cut out below)
+    for y in (42, 45):
+        suit.dot(32, y, STEEL)  # buttons
+    burn = 0.1 + heat * 1.05
+    sp = suit.img.load()
+    for y in range(BODY[1], BODY[3] + 1):
+        for x in range(BODY[0], BODY[2] + 1):
+            if sp[x, y][:3] == OUTLINE:  # the collar: the chest shows through
+                sp[x, y] = (0, 0, 0, 0)
+                continue
+            left = flint_burn(x, y) - burn  # how far from burning through
+            if sp[x, y][3] and left < 0:
+                sp[x, y] = (0, 0, 0, 0)
+            elif sp[x, y][3] and left < 0.07:
+                sp[x, y] = (YELLOW if (x + y + t) % 3 == 0 else ORANGE) + (255,)  # embers along the burnt edge
+            elif sp[x, y][3] and left < 0.13:
+                sp[x, y] = MAROON + (255,)  # charred
+    up.img.alpha_composite(suit.img)
+    reach = 0.3 + 0.7 * heat  # flames curling up over the front of him as the suit burns, taller when hot
+    for k, (root, ctrl, tip) in enumerate((((25, 48), (20, 42), (26, 33)), ((39, 48), (44, 43), (38, 35))) if heat else ()):
         tongue(root, [r + (q - r) * reach for r, q in zip(root, ctrl)], [r + (q - r) * reach for r, q in zip(root, tip)],
                (t + k * 2) * math.pi / 2, wide=2.5 + heat)
     fist(47, 3)  # front hand
@@ -487,6 +511,14 @@ def flint(step=None, t=0, heat=0.0):
     mid = (HEAD[0] + HEAD[2]) // 2
     flame(up, mid - 13, mid + 13, FACE[1] + 5, 10, t + 2, tongues=5, line=False, rim=ORANGE)
     return low, up
+
+
+def flint_burn(x: int, y: int) -> float:
+    """How long Flint's suit holds out at art px (x, y), 0..1: the bottom goes first, through blotchy char (a fixed
+    hash over 2 px blocks, so it's the same every frame)."""
+    up_the_body = 1 - (y - BODY[1]) / (BODY[3] - BODY[1])
+    blotch = ((x // 2 * 7919) ^ (y // 2 * 104729)) % 101 / 100
+    return 0.65 * up_the_body + 0.35 * blotch
 
 
 def flint_crown(t: int, dy: int, heat: float = 0.0) -> Canvas:
@@ -827,16 +859,13 @@ def blossom_fan(c):  # Sakura: a folding fan, open, ribs fanning out from the ri
     c.dot(7, 12, YELLOW)
 
 
-def ember_palm(c, t=0):  # Flint: a fireball cupped in his hand, flames streaming back off it, its core pulsing
-    s, f = SWAY[t % 4], t % 2
-    tongues = lambda k: [(14, 4), (4 - s, 3 + k), (9, 8), (2 + f, 11 + k // 2), (8, 12), (2 + (1 - f), 14 - k // 2),
-                         (9, 16), (4 + s, 21 - k), (14, 20)]  # jagged tongues trailing back, flickering each tick
-    c.part(lambda d, fill: (d.ellipse((7, 5, 21, 19), fill), d.polygon(tongues(0), fill)), RED, shade=False)
-    c.part(lambda d, fill: (d.ellipse((9, 7, 20, 17), fill), d.polygon(
-        [((x + 14) / 2 + 1, (y + 12) / 2) for x, y in tongues(2)], fill)), ORANGE, shade=False, line=False)
-    c.flat(E((11, 9, 18, 15)), YELLOW)
-    c.flat(R((13, 11, 15, 13)) if f else R((14, 12, 14, 12)), WHITE)  # white-hot core pulses
-    c.dot(12 + (t // 2), 9, WHITE)  # glint
+def ember_palm(c, t=0):  # Flint: a fireball floating over his palm, drawn upright (WeaponData.upright), its flames rising
+    flame(c, 7, 19, 14, 10, t, tongues=3)  # tongues rising off it, flickering every tick
+    c.part(E((7, 9, 19, 21)), RED, shade=False, line=False)  # the ball
+    c.part(E((8, 10, 18, 20)), ORANGE, shade=False, line=False)
+    c.flat(E((10, 12, 16, 18)), YELLOW)
+    c.flat(R((12, 14, 14, 16)) if t % 2 else R((13, 15, 13, 15)), WHITE)  # white-hot core pulses
+    c.dot(16 - t % 2, 8 - 2 * (t % 4), YELLOW)  # a spark rising off the top
 
 
 WEAPONS = {"pistol": pistol, "bot_blaster": bot_blaster, "smg": smg, "shotgun": shotgun, "sniper": sniper,

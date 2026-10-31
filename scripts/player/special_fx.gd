@@ -165,8 +165,10 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 		return
 	var flip_v: float = -1.0 if dir.x < 0.0 else 1.0
 	var s: float = Constants.SPRITE_SCALE
-	draw_set_transform(at + Player.hand_offset(dir), dir.angle(),
-		Vector2(s, s * flip_v))
+	if w.upright:
+		draw_set_transform(at + Player.hand_offset(dir), 0.0, Vector2(s * flip_v, s))
+	else:
+		draw_set_transform(at + Player.hand_offset(dir), dir.angle(), Vector2(s, s * flip_v))
 	var tint := Color(1, 1, 1, alpha)
 	w.draw_held(self, Player.WEAPON_GRIP, tint)
 	draw_set_transform(Vector2.ZERO)

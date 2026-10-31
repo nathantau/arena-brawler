@@ -589,7 +589,10 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 	var scale_px: float = Constants.SPRITE_SCALE
 	var hand_at: Vector2 = visual_offset + offset + hand_offset(facing) + facing * hold
 	var tint := Color(1, 1, 1, _sprite.modulate.a)
-	ci.draw_set_transform(hand_at, angle, Vector2(scale_px, scale_px * flip_v))
+	if w.upright:  # an orb: not turned with the aim, so its flames rise; mirrored to face the aim
+		ci.draw_set_transform(hand_at, 0.0, Vector2(scale_px * flip_v, scale_px))
+	else:
+		ci.draw_set_transform(hand_at, angle, Vector2(scale_px, scale_px * flip_v))
 	w.draw_held(ci, WEAPON_GRIP, tint)
 
 
