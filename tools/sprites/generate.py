@@ -4682,18 +4682,22 @@ def title_far() -> Image.Image:
     w, h, horizon = 416, 200, 104
     img = Image.new("RGBA", (w, h), (0, 0, 0, 255))
     px = img.load()
-    bands = [OUTLINE, NAVY, BLUE, NAVY]  # night sky, a glow pooling above the stands
     rng = random.Random(7)
+    # night sky: flat bands, a 1-px dither row only where two bands meet
+    bands = [(0, OUTLINE), (26, SHADOW), (46, NAVY), (66, BLUE), (84, STEEL_D)]
     for y in range(h):
-        u = min(1.0, y / (horizon - 8)) * (len(bands) - 1)
-        i = min(int(u), len(bands) - 2)
+        i = max(k for k, (y0, _) in enumerate(bands) if y >= y0)
         for x in range(w):
-            px[x, y] = dither_mix(bands[i], bands[i + 1], u - i, x, y) + (255,)
-    for y in range(40, horizon):  # haze glow behind the centre of the stage
-        for x in range(w):
-            d = math.hypot((x - w / 2) / 150, (y - 92) / 46)
-            if d < 1:
-                px[x, y] = dither_mix(px[x, y][:3], STEEL_D, (1 - d) * 0.8, x, y) + (255,)
+            c = bands[i][1]
+            if i and y == bands[i][0] and x % 2:
+                c = bands[i - 1][1]
+            px[x, y] = c + (255,)
+    for _ in range(26):  # a few stars
+        sx, sy = rng.randrange(4, w - 4), rng.randrange(9, 60)
+        px[sx, sy] = WHITE + (255,)
+        if rng.random() < 0.2:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                px[sx + dx, sy + dy] = STEEL + (255,)
     for row, (base, col, amp) in enumerate(((horizon - 22, SHADOW, 5), (horizon - 10, OUTLINE, 6))):
         x = 0  # crowd: bumpy silhouettes in two rows, a few lit phones and flags
         while x < w:
@@ -4738,6 +4742,9 @@ def title_mid() -> Image.Image:
         d.rectangle([x0 + 19, 0, x0 + 24, h], fill=SHADOW + (255,))
         for y in range(10, h, 22):
             d.rectangle([x0, y, x0 + 24, y + 2], fill=OUTLINE + (255,))
+            d.rectangle([x0, y + 3, x0 + 18, y + 3], fill=WHITE + (255,))
+            for rx in (x0 + 4, x0 + 14):
+                d.rectangle([rx, y + 9, rx + 1, y + 10], fill=OUTLINE + (255,))
         bx = x0 + (-22 if x0 < 200 else 26)  # banner
         d.rectangle([bx, 18, bx + 20, 62], fill=RED + (255,))
         d.polygon([(bx, 62), (bx + 20, 62), (bx + 10, 72)], fill=RED + (255,))
@@ -4745,18 +4752,19 @@ def title_mid() -> Image.Image:
         d.rectangle([bx + 17, 18, bx + 20, 62], fill=MAROON + (255,))
         d.rectangle([bx + 6, 30, bx + 14, 42], fill=YELLOW + (255,))
         d.rectangle([bx + 8, 32, bx + 12, 40], fill=ORANGE + (255,))
+        d.rectangle([bx + 4, 52, bx + 15, 53], fill=MAROON + (255,))
     return outline(img)
 
 
 def title_vignette() -> Image.Image:
-    w, h = 160, 90
+    """Screen-edge darkening: a flat border band, then a thin 1-px pattern ramp (no big dither blocks)."""
+    w, h = 320, 180
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     px = img.load()
     for y in range(h):
         for x in range(w):
-            d = math.hypot((x - w / 2) / (w / 2), (y - h / 2) / (h / 2))
-            t = max(0.0, (d - 0.62) / 0.55)
-            if t * 16 > BAYER4[y % 4][x % 4] + 0.5:
+            e = min(x, y, w - 1 - x, h - 1 - y)  # distance to the nearest screen edge
+            if e < 5 or (e < 8 and (x + y) % 2 == 0) or (e < 11 and x % 2 == 0 and y % 2 == 0):
                 px[x, y] = OUTLINE + (255,)
     return img
 

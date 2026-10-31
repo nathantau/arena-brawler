@@ -19,9 +19,9 @@ const FLOOR_THEME: StringName = &"gym"
 const FLOOR_TILE: float = 64.0
 const FLOOR_VEIL: Color = Color(0.05, 0.05, 0.1, 0.62)
 const FLOOR_FADE_H: float = 90.0
-const VIGNETTE_ALPHA: float = 0.8
-const VIGNETTE_ART_W: float = 160.0
-const VIGNETTE_ART_H: float = 90.0
+const VIGNETTE_ALPHA: float = 0.7
+const VIGNETTE_ART_W: float = 320.0
+const VIGNETTE_ART_H: float = 180.0
 ## Camera drift (px) per layer factor, and its speeds.
 const DRIFT: Vector2 = Vector2(14.0, 5.0)
 const DRIFT_SPEED: Vector2 = Vector2(0.35, 0.27)
