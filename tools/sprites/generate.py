@@ -110,6 +110,10 @@ def x_eye(c: Canvas, x: int, y: int, color=OUTLINE):
 
 
 # All characters use a 6 px gap between eyes (left eye x, then left x + 10).
+## Faces are rounded squares (not ovals): corner radius in art px.
+FACE_R = 8
+
+
 def big_eyes(c: Canvas, y: int, xs: tuple[int, int], iris, h: int = 6):
     for x in xs:
         if KO:
@@ -165,7 +169,7 @@ def flicker(step=None, t=0):
     up.part(R((22, 43, 42, 45)), RED, line=False)  # sash
     up.part(E((16, 5, 50, 38)), NAVY)  # hair around the head
     up.part(P([(16, 18), (21, 18), (23, 40), (17, 37)]), NAVY)  # long lock down the back of her neck
-    up.part(E((21, 12, 47, 38)), SKIN)  # face
+    up.part(RR((21, 12, 47, 38), FACE_R), SKIN)  # face
     up.part(P([(19, 11), (49, 11), (49, 16), (45, 14), (41, 18), (37, 13), (31, 18), (27, 14), (22, 18), (19, 17)]),
             NAVY, shade=False)  # side-swept bangs
     up.part(P([(45, 14), (50, 16), (50, 33), (46, 29)]), NAVY, shade=False)  # lock framing her face
@@ -249,7 +253,7 @@ def twinshot(step=None, t=0):
         up.part(RR((x, 42, x + 7, 54), 2), BROWN)  # holster
         up.part(RR((x + 1, 36, x + 5, 43), 1), STEEL_D)  # grip
         up.dot(x + 2, 37, STEEL)
-    up.part(E((20, 14, 44, 37)), SKIN)  # face
+    up.part(RR((20, 14, 44, 37), FACE_R), SKIN)  # face
     big_eyes(up, 23, (29, 39), BLUE)
     up.flat(R((29, 21, 32, 21)), BROWN)  # brows
     up.flat(R((39, 21, 42, 21)), BROWN)
@@ -311,9 +315,9 @@ def sakura(step=None, t=0):
     up.part(P([(19, 9), (12, 12), (8, 20), (6 + s, 30), (7 + s, 40), (11 + s, 46), (13, 37), (15, 27), (19, 17)]), PINK)
     up.flat(L([(13, 15), (10, 24), (9 + s, 36)], 1), PINK_L)  # its sheen
     up.part(E((16, 5, 48, 37)), PINK)  # hair
-    up.part(E((21, 12, 47, 38)), SKIN)  # face
+    up.part(RR((21, 12, 47, 38), FACE_R), SKIN)  # face
     # middle part: two curtains and two long side locks, mirrored about the face's centre line (x = 34)
-    curtain = [(34, 8), (43, 7), (48, 12), (49, 22), (47, 26), (43, 20), (39, 15), (35, 12)]
+    curtain = [(34, 8), (43, 7), (48, 12), (49, 22), (47, 22), (46, 17), (41, 13), (35, 12)]  # sweeps off the forehead
     lock = [(44, 14), (49, 14), (50, 39), (46, 37)]
     for shape in (curtain, lock):
         up.part(P(shape), PINK, shade=False)
@@ -346,7 +350,7 @@ def flint(step=None, t=0):
         up.flat(L(pts, 1), ORANGE)  # glowing cracks
     up.flat(P([(32, 37), (35, 40), (32, 43), (29, 40)]), YELLOW)  # ember heart
     up.dot(32, 40, WHITE)
-    up.part(E((20, 14, 44, 37)), ORANGE)  # molten face
+    up.part(RR((20, 14, 44, 37), FACE_R), ORANGE)  # molten face
     up.part(E((27, 27, 39, 35)), YELLOW, line=False)  # hot glow around the mouth
     big_eyes(up, 23, (29, 39), YELLOW)
     up.flat(R((25, 30, 26, 30)), RED)  # blush
@@ -385,7 +389,7 @@ def wukong(step=None, t=0):
     for x in (24, 31, 38):
         up.part(P([(x, 9), (x + 3, 4), (x + 6, 9)]), BROWN)  # fur tufts
     up.part(E((15, 6, 49, 38)), BROWN)  # head fur
-    up.part(E((23, 15, 47, 36)), SKIN)  # round, human face
+    up.part(RR((23, 15, 47, 36), FACE_R), SKIN)  # human face
     up.part(P([(23, 16), (47, 16), (47, 18), (43, 19), (39, 17), (35, 19), (30, 17), (26, 19), (23, 18)]), BROWN,
             shade=False)  # spiky fringe
     up.part(R((17, 13, 47, 16)), YELLOW)  # golden circlet
@@ -647,16 +651,16 @@ def blossom_fan(c):  # Sakura: a folding fan, open, ribs fanning out from the ri
     c.dot(7, 12, YELLOW)
 
 
-def ember_palm(c):  # Flint: a burning orb held in the palm, a tongue of fire licking forward
-    c.part(P([(10, 8), (24, 11), (10, 15)]), RED, shade=False)
-    c.part(P([(11, 10), (20, 11), (11, 13)]), YELLOW, shade=False, line=False)
-    c.part(E((3, 6, 14, 17)), ORANGE)
-    c.flat(E((6, 9, 11, 14)), YELLOW)
-    c.dot(7, 10, WHITE)
+def ember_palm(c):  # Flint: a burning orb resting just past his palm, a tongue of fire licking forward
+    c.part(P([(16, 8), (30, 11), (16, 15)]), RED, shade=False)
+    c.part(P([(17, 10), (26, 11), (17, 13)]), YELLOW, shade=False, line=False)
+    c.part(E((9, 6, 20, 17)), ORANGE)
+    c.flat(E((12, 9, 17, 14)), YELLOW)
+    c.dot(13, 10, WHITE)
 
 
 # Hands are drawn by the game on the weapon's grip (they follow the aim), not baked into the sheets.
-HANDS = {"flicker": NAVY, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN, "flint": ORANGE, "sakura": SKIN}
+HANDS = {"flicker": NAVY, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN, "flint": SHADOW, "sakura": SKIN}
 HAND_SIZE = 10
 
 
@@ -1167,7 +1171,7 @@ def ape_morph(t: float, scale: float) -> Image.Image:
     if t < 0.75:
         c.part(E(box((11, 17, 21, 28), (20, 10, 28, 20), u)), fur)  # ear tucks in
     c.part(E(box((15, 6, 49, 38), (24, 3, 50, 29), u)), fur)
-    c.part(E(box((23, 15, 47, 36), (28, 11, 50, 29), u)), face_c)
+    c.part(RR(box((23, 15, 47, 36), (28, 11, 50, 29), u), w(FACE_R, FACE_R)), face_c)
     collar = ((11, 31, 3), (15, 35, 5), (21, 38, 4), (26, 39, 3), (43, 38, 3), (47, 36, 4))
     for x, y, r in collar:  # the cloud collar puffs away
         rr = r * scale * (1 - t / 0.5)

@@ -6,7 +6,7 @@
 
 [resource]
 script = ExtResource("1_wd")
-muzzle_x = 25.0
+muzzle_x = 31.0
 projectile_sprite = ExtResource("9_proj")
 id = &"flint_palm"
 display_name = "Ember Palm"
