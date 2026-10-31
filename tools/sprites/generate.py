@@ -168,26 +168,60 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
+def sleeve_detail(c: Canvas, x: int):
+    """Shade's sleeve: a wrist wrap (lit top, shaded lower edge), a crease and a few weave pixels on the shaded side."""
+    c.flat(R((x, 40, x + 5, 40)), STEEL_D)
+    c.flat(R((x, 41, x + 5, 41)), SHADOW)
+    c.flat(L([(x + 2, 37), (x + 2, 38)], 1), SHADOW)  # crease
+    c.dot(x + 1, 38, BLUE)  # lit ridge beside it
+    c.dot(x + 4, 39, SHADOW)
+
+
 def flicker(step=None, t=0, zip_=False):
     """Shade, a kunoichi: a choppy jagged bob with a big spiky topknot that swings in the wind, red ribbon tails fluttering from its tie, a steel forehead
     plate, big lashed teal eyes over a mask that peaks at the bridge of her nose; fitted navy shroud, a metal
     breastplate and a red sash. The topknot is too big for the art box: it's drawn above it (CROWNS: flicker_topknot)."""
     low = Canvas()
     for x, dy in legs(low, NAVY, SHADOW, step):
-        low.flat(R((x, 49 + dy, x + 5, 49 + dy)), SHADOW)  # leg wraps
-        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), SHADOW)
+        for y, top, under in ((49, STEEL_D, SHADOW), (51, STEEL_D, SHADOW)):  # shin wraps: lit top edge, shaded lower
+            low.flat(R((x, y + dy, x + 5, y + dy)), top)
+            low.flat(R((x, y + 1 + dy, x + 5, y + 1 + dy)), under)
+        low.flat(L([(x + 1, 46 + dy), (x + 1, 48 + dy)], 1), BLUE)  # lit fold down the thigh's left
+        low.flat(L([(x + 3, 47 + dy), (x + 3, 48 + dy)], 1), SHADOW)  # crease
+        low.dot(x + 4, 50 + dy, SHADOW)  # weave on the shaded side
     up = Canvas()
     wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
     arm(up, ARM_X[0], NAVY, SKIN)
+    sleeve_detail(up, ARM_X[0])
     up.part(RR(BODY, 3), NAVY)  # fitted shroud
     up.part(P([(24, 36), (41, 36), (42, 40), (38, 44), (27, 44), (23, 40)]), STEEL)  # metal breastplate
     up.flat(L([(33, 37), (33, 43)], 1), STEEL_D)  # its centre ridge
+    up.flat(L([(32, 38), (32, 40)], 1), WHITE)  # lit side of the ridge
+    up.flat(R((26, 38, 28, 38)), WHITE)  # specular, top left
+    up.dot(26, 39, WHITE)
+    for x in range(27, 40, 2):  # lower half in shade: dithered up into the lit half, solid below
+        up.dot(x, 42, STEEL_D)
+    up.flat(R((26, 43, 39, 43)), STEEL_D)
+    for x, y in ((26, 41), (39, 41)):  # rivets
+        up.dot(x, y, SHADOW)
     up.part(R((20, 45, 44, 46)), RED, shade=False, line=False)  # thin sash
+    up.flat(R((20, 46, 44, 46)), MAROON)  # shaded lower half
+    up.flat(R((21, 45, 24, 45)), ORANGE)  # lit left end
+    for x in range(21, 44, 2):  # shroud under the sash, in shade: weave
+        up.dot(x, 47, NAVY)
+    # shroud folds: a dark crease with a lit ridge beside it, light from the top left
+    for x, y0, y1 in ((22, 41, 44), (42, 42, 44)):
+        up.flat(L([(x, y0), (x, y1)], 1), SHADOW)
+    up.flat(L([(21, 40), (21, 43)], 1), BLUE)
+    up.dot(41, 41, BLUE)
     if zip_:  # Grapple Kunai: the front arm reaches forward along the chain (ribbons stream back: flicker_zip)
         up.part(RR((40, 37, 50, 41), 2), NAVY)
+        up.flat(L([(45, 38), (45, 40)], 1), STEEL_D)  # forearm wrap
+        up.flat(L([(46, 38), (46, 40)], 1), SHADOW)
         up.part(E((48, 37, 53, 42)), SKIN)
     else:
         arm(up, ARM_X[1], NAVY, SKIN)
+        sleeve_detail(up, ARM_X[1])
     # ribbon tails: two thin red streamers hanging from the topknot's tie, fluttering behind her head
     for x0, lag in ((18, 1), (21, 2)) if not zip_ else ():
         up.part(L([(x0, 10), (x0 - 7 - wave(lag, 1), 20), (x0 - 12 - wave(lag + 1, 2), 30),
