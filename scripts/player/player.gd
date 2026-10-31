@@ -24,8 +24,6 @@ enum StateField {
 const WEAPON_GRIP: Vector2 = Vector2(6, 12)
 ## The front hand (generate.py arm() at ARM_X[1]) in local px, mirrored when facing left: weapon grips sit on it.
 const WEAPON_HAND: Vector2 = Vector2(20, 22)
-## Below this sideways share of the aim (|dir.x|, about 30 deg off vertical) the weapon slides in from the hand.
-const HAND_SLIDE_BELOW: float = 0.5
 const AIM_SEARCH_STEPS: int = 72
 const AIM_REFINE_STEPS: int = 7
 ## Sheet cell rows from the top down to the chin (generate.py PAD + FACE bottom + UPPER_DY, + outline and bob): redrawn over a
@@ -357,8 +355,9 @@ func shot_origin(w: WeaponData) -> Vector2:
 
 
 ## Aim direction that sends shots through `target`: guns fire from the front hand (shot_origin), not the body's
-## centre, so aiming centre-to-centre would pass up to ~30 px beside it, wider than a player. The hand moves with
-## the aim, so search the angles around the target for the one whose shot line passes closest, then refine it.
+## centre, so aiming centre-to-centre would pass up to ~30 px beside it, wider than a player. The hand changes with
+## the aim (it jumps sides past vertical), so search the angles around the target for the shot line passing
+## closest, then refine it.
 func aim_at(target: Vector2) -> Vector2:
 	var to: Vector2 = target - global_position
 	if held_weapon().data.kind == WeaponData.Kind.MELEE or to == Vector2.ZERO:
@@ -388,12 +387,9 @@ func _aim_miss(target: Vector2, angle: float) -> float:
 	return absf(rel.cross(dir)) if rel.dot(dir) > 0.0 else INF
 
 
-## Where the weapon is held for a character aiming `dir`: on the front hand (the sprite flips when facing left, so
-## it's on the aim side), sliding in to the middle of the body when aiming near straight up / down, so the firing
-## point moves smoothly instead of jumping hands as the aim swings past vertical.
+## Where the front hand is for a character facing `dir` (the sprite flips when facing left, so it's on the aim side).
 static func hand_offset(dir: Vector2) -> Vector2:
-	var side: float = clampf(dir.normalized().x / HAND_SLIDE_BELOW, -1.0, 1.0)
-	return Vector2(WEAPON_HAND.x * side, WEAPON_HAND.y)
+	return Vector2(-WEAPON_HAND.x if dir.x < 0.0 else WEAPON_HAND.x, WEAPON_HAND.y)
 
 
 ## `skip` seconds into the attack animation: remote peers only hear of a wound-up hit when it lands.

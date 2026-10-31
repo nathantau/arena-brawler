@@ -49,6 +49,8 @@ var _joy_finger: int = NO_FINGER
 var _joy_origin: Vector2 = Vector2.ZERO
 var _joy_pos: Vector2 = Vector2.ZERO
 var _attack_finger: int = NO_FINGER
+## Where the attack finger landed: drag-aim is measured from here, so pressing off-centre doesn't aim.
+var _attack_origin: Vector2 = Vector2.ZERO
 var _skill_finger: int = NO_FINGER
 var _special_finger: int = NO_FINGER
 var _swap_finger: int = NO_FINGER
@@ -116,6 +118,7 @@ func _on_press(finger: int, p: Vector2) -> void:
 		return
 	if _attack_finger == NO_FINGER and _hits(p, _attack_center(), ATTACK_RADIUS):
 		_attack_finger = finger
+		_attack_origin = p
 		attack_held = true
 		attack_aim = Vector2.ZERO
 	elif _skill_finger == NO_FINGER and _hits(p, _skill_center(), SKILL_RADIUS):
@@ -142,7 +145,7 @@ func _on_drag(finger: int, p: Vector2) -> void:
 		_joy_pos = _joy_origin + offset
 		move_vec = offset / JOY_RADIUS
 	elif finger == _attack_finger:
-		var drag: Vector2 = p - _attack_center()
+		var drag: Vector2 = p - _attack_origin
 		attack_aim = drag if drag.length() > Constants.DRAG_AIM_DEADZONE_PX else Vector2.ZERO
 	queue_redraw()
 

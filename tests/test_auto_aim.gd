@@ -55,3 +55,15 @@ func test_sees_a_player_standing_just_below_a_wall() -> void:
 	assert_not_null(spot, "but its lower half is in plain sight")
 	var far := Vector2(0, -120)  # really behind the wall
 	assert_null(AutoAim.visible_point(space, query, shooter, far))
+
+
+func test_pressing_fire_off_centre_does_not_aim() -> void:
+	var tc: TouchControls = autofree(TouchControls.new())  # out of the tree: its _ready anchors it full-screen
+	tc.size = Vector2(1280, 720)
+	var c: Vector2 = tc._attack_center()
+	tc._on_press(0, c + Vector2(-40, 10))  # thumb lands on the button's left side
+	tc._on_drag(0, c + Vector2(-42, 12))  # and rolls a little
+	assert_true(tc.attack_held)
+	assert_eq(tc.attack_aim, Vector2.ZERO, "still auto-aim, not aiming left")
+	tc._on_drag(0, c + Vector2(30, 10))  # a real drag to the right
+	assert_gt(tc.attack_aim.x, 0.0, "drag-aim follows the drag from where the thumb landed")

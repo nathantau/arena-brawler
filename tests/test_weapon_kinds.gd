@@ -378,5 +378,6 @@ func test_aim_at_close_targets_shoots_towards_them() -> void:
 			Vector2(30, 5), Vector2(-25, -10)]:
 		p.facing = p.aim_at(target)
 		var from_hand: Vector2 = target - p.shot_origin(w)
-		assert_gt(from_hand.normalized().dot(p.facing), 0.5, "shoots towards %s" % target)
-		assert_lt(absf(from_hand.cross(p.facing)), Constants.PLAYER_RADIUS, "and through it")
+		assert_gt(target.normalized().dot(p.facing), 0.0, "shoots towards %s, never away" % target)
+		# right between the hands the best is straight up / down from one, a hand's width off: still a hit
+		assert_lt(absf(from_hand.cross(p.facing)), Constants.PLAYER_RADIUS + w.projectile_radius, "and hits it")
