@@ -330,6 +330,8 @@ def sakura(step=None, t=0):
         up.flat(R((x, y, x + 1, y + 1)), PINK_L)
     up.part(R((20, 40, 44, 44)), RED, line=False)  # obi
     up.flat(R((20, 42, 44, 42)), PINK)  # obi cord
+    up.part(sleeve(41, 51), WHITE)  # front sleeve
+    up.flat(L([(42 - wave(3, 1.5), 47), (50 - wave(2, 1), 47)], 1), PINK_L)
     # long ponytail from a high tie at the back of her head, flowing in the wind
     up.part(P([(19, 9), (12, 12), (8 - wave(0, 0.5), 20), (6 - wave(1, 1), 30), (6 - wave(2, 1.5), 40),
                (9 - wave(3, 2), 46), (12 - wave(2, 1.5), 38), (15 - wave(1, 1), 28), (19, 17)]), PINK)
@@ -685,40 +687,10 @@ def ember_palm(c):  # Flint: a burning orb resting just past his palm, a tongue 
     c.dot(13, 10, WHITE)
 
 
-# Hands are drawn by the game on the weapon's grip (they follow the aim), not baked into the sheets.
-HANDS = {"flicker": NAVY, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN, "flint": SHADOW, "sakura": SKIN}
-HAND_SIZE = 10
-
-
-def hand_image(color) -> Image.Image:
-    c = Canvas()
-    c.part(E((2, 2, 7, 7)), color)
-    return outline(c.img).crop((0, 0, HAND_SIZE, HAND_SIZE))
-
-
 WEAPONS = {"pistol": pistol, "bot_blaster": bot_blaster, "smg": smg, "shotgun": shotgun, "sniper": sniper,
            "rocket": rocket, "grenade": grenade, "laser": laser, "sword": sword,
            "flicker_kunai": kunai, "warden_hammer": hammer, "twinshot_revolver": revolver, "wukong_staff": staff, "flint_palm": ember_palm,
            "sakura_fan": blossom_fan}
-
-
-# Arms (sleeves) are drawn by the game too, stretched from the shoulder (Player.ARM_SHOULDER) to the hand, so the
-# sleeve always meets the hand wherever it aims. Pointing right, shoulder at x=0, centred on ARM_H // 2.
-# (colour, half-width at the shoulder, half-width at the cuff, cuff trim colour or None)
-ARMS = {"flicker": (SHADOW, 2, 2, None), "warden": (STEEL, 3, 2, None), "twinshot": (ORANGE, 2, 3, None),
-        "wukong": (YELLOW, 2, 2, None), "flint": (SHADOW, 2, 2, None), "sakura": (WHITE, 2, 4, PINK_L)}
-ARM_W, ARM_H = 12, 12
-
-
-def arm_image(color, shoulder, cuff, trim) -> Image.Image:
-    m = ARM_H // 2
-    c = Canvas()
-    c.part(lambda d, f: (d.ellipse((1, m - shoulder, 1 + 2 * shoulder, m + shoulder), f),
-                         d.polygon([(1 + shoulder, m - shoulder), (ARM_W - 2, m - cuff), (ARM_W - 2, m + cuff),
-                                    (1 + shoulder, m + shoulder)], f)), color)  # one shape: no seam at the shoulder
-    if trim:
-        c.flat(R((ARM_W - 3, m - cuff, ARM_W - 3, m + cuff)), trim)
-    return outline(c.img).crop((0, 0, ARM_W, ARM_H))
 
 
 def weapon_image(draw) -> Image.Image:
@@ -1728,16 +1700,6 @@ def main() -> None:
         check(img, PROJ)
         img.save(PROJ_OUT / f"{name}.png")
     print(f"wrote {len(PROJECTILES)} projectiles to {PROJ_OUT}")
-    assert HANDS.keys() == CHARACTERS.keys(), "every character needs a hand colour"
-    for name, color in HANDS.items():
-        img = hand_image(color)
-        check(img, HAND_SIZE)
-        img.save(OUT / f"{name}_hand.png")
-    assert ARMS.keys() == CHARACTERS.keys(), "every character needs an arm"
-    for name, arm in ARMS.items():
-        img = arm_image(*arm)
-        check(img, ARM_W, edges=False)  # the shoulder and cuff ends are covered by the body and hand
-        img.save(OUT / f"{name}_arm.png")
     ARENA_OUT.mkdir(exist_ok=True)
     for name, parts in THEMES.items():
         sheet = theme_sheet(*parts)

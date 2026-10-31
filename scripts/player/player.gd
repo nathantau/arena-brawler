@@ -22,11 +22,9 @@ enum StateField {
 
 ## Weapon art (WeaponData.sprite) is drawn at the character's pixel scale, pivoting on its grip.
 const WEAPON_GRIP: Vector2 = Vector2(6, 12)
-const WEAPON_HOLD_DISTANCE: float = 14.0
+const WEAPON_HOLD_DISTANCE: float = 8.0
 ## Hands sit below the sprite's centre.
-const WEAPON_HAND_Y: float = 12.0
-## Front shoulder (facing right) the arm sprite is stretched from to the hand; mirrored when facing left.
-const ARM_SHOULDER: Vector2 = Vector2(9.0, 6.0)
+const WEAPON_HAND_Y: float = 6.0
 const GUN_RECOIL_PX: float = 4.0
 const GUN_KICK_DEG: float = 14.0
 const RECOIL_TIME: float = 0.06
@@ -575,21 +573,8 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 	var scale_px: float = Constants.SPRITE_SCALE
 	var hand_at: Vector2 = visual_offset + offset + Vector2(0.0, WEAPON_HAND_Y) + facing * hold
 	var tint := Color(1, 1, 1, _sprite.modulate.a)
-	var arm: Texture2D = character.arm_sprite
-	if arm != null:
-		var shoulder: Vector2 = visual_offset + offset + ARM_SHOULDER * Vector2(-1.0 if facing.x < 0.0 else 1.0, 1.0)
-		var reach: Vector2 = hand_at - shoulder
-		# Squashed (never stretched) to the reach so the cuff ends under the hand.
-		var sx: float = minf(scale_px, reach.length() / arm.get_width())
-		ci.draw_set_transform(shoulder, reach.angle(), Vector2(sx, scale_px))
-		ci.draw_texture(arm, Vector2(0.0, -arm.get_height() * 0.5), tint)
 	ci.draw_set_transform(hand_at, angle, Vector2(scale_px, scale_px * flip_v))
 	ci.draw_texture(w.sprite, -WEAPON_GRIP, tint)
-	var hand: Texture2D = character.hand_sprite
-	if hand != null:
-		ci.draw_texture(hand, -hand.get_size() * 0.5, tint)
-		if w.off_hand != Vector2.ZERO:
-			ci.draw_texture(hand, w.off_hand - WEAPON_GRIP - hand.get_size() * 0.5, tint)
 
 
 func _draw_bars(r: float) -> void:

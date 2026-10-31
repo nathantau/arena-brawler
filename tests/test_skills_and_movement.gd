@@ -22,7 +22,6 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.ordered.size(), 6)
 	for c: CharacterData in characters.ordered:
 		assert_not_null(c.sprite_sheet, c.id)
-		assert_not_null(c.hand_sprite, c.id)
 		var cells: int = Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES + Constants.SPRITE_WALK_FRAMES \
 			+ Constants.SPRITE_DIE_FRAMES
 		assert_eq(c.sprite_sheet.get_width(), cells * Constants.SPRITE_CELL_SIZE, "%s sheet has a death strip" % c.id)

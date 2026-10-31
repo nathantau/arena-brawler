@@ -42,8 +42,6 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Barrel tip, sprite px along the barrel (x): shots spawn there. 0 = no gun art (skill volleys): just outside
 ## the body.
 @export var muzzle_x: float = 0.0
-## Where the second hand holds it (sprite px, like Player.WEAPON_GRIP); zero = one-handed.
-@export var off_hand: Vector2 = Vector2.ZERO
 ## Who may carry it: any character sharing a tag (CharacterData.weapon_tags). Empty = everyone.
 ## A character's own id as the only tag makes a signature weapon.
 @export var tags: Array[StringName] = []

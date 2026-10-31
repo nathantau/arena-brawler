@@ -28,4 +28,3 @@ bounce_damping = 0.7
 drag = 1.2
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"explosive", &"light"])
-off_hand = Vector2(29, 14)

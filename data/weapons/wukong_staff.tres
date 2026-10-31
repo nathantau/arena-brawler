@@ -22,4 +22,3 @@ melee_arc_deg = 36.0
 thrust = true
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"wukong"])
-off_hand = Vector2(24, 11)

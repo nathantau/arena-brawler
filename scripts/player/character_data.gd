@@ -19,10 +19,6 @@ extends Resource
 ## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames, then walk frames.
 @export var sprite_sheet: Texture2D
 
-## Drawn on the held weapon's grip(s) (tools/sprites/generate.py HANDS); the sheets have no hands.
-@export var hand_sprite: Texture2D
-## Sleeve stretched from the shoulder to the hand (generate.py ARMS), so the arm follows the aim too.
-@export var arm_sprite: Texture2D
 
 var _portraits: Array[AtlasTexture] = []
 var _sprite_frames: SpriteFrames

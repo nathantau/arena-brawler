@@ -23,4 +23,3 @@ melee_range = 56.0
 melee_arc_deg = 160.0
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"warden"])
-off_hand = Vector2(18, 11)

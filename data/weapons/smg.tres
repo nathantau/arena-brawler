@@ -24,4 +24,3 @@ sfx = &"shot_light"
 screen_shake = 0.04
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"light"])
-off_hand = Vector2(15, 17)

@@ -20,4 +20,3 @@ screen_shake = 0.02
 sfx = &"laser"
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"arcane"])
-off_hand = Vector2(16, 12)
