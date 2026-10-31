@@ -1,6 +1,6 @@
 class_name PauseMenu
 extends Control
-## Pause button (top right, under the status line; hidden in the lobby and results, whose buttons sit there) and
+## Pause button (top right, under the status line; hidden in the lobby and results, which have their own Leave button) and
 ## its menu: Resume, Restart (offline), Leave.
 ## Offline the whole tree pauses while it's open; online the match keeps running underneath.
 ## Esc toggles it on desktop.
