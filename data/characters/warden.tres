@@ -11,6 +11,7 @@ sprite_sheet = ExtResource("2_sheet")
 signature_weapon = ExtResource("3_sig")
 signature_skill = ExtResource("5_skill")
 weapon_tags = Array[StringName]([&"warden", &"blade", &"heavy", &"arcane"])
+in_rotation = false
 id = &"warden"
 display_name = "Warden"
 max_hp = 120

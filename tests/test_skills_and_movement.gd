@@ -19,7 +19,8 @@ func before_all() -> void:
 
 
 func test_catalog_and_skills() -> void:
-	assert_eq(characters.ordered.size(), 6)
+	assert_eq(characters.ordered.size(), 4, "Gunnar and Warden are benched")
+	assert_not_null(characters.get_character(&"warden"), "benched characters still load by id")
 	for c: CharacterData in characters.ordered:
 		assert_not_null(c.sprite_sheet, c.id)
 		var cells: int = Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES + Constants.SPRITE_WALK_FRAMES \

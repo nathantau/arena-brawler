@@ -11,6 +11,7 @@ sprite_sheet = ExtResource("2_sheet")
 signature_weapon = ExtResource("3_sig")
 signature_skill = ExtResource("5_skill")
 weapon_tags = Array[StringName]([&"twinshot", &"light", &"precision", &"heavy"])
+in_rotation = false
 id = &"twinshot"
 display_name = "Gunnar"
 max_hp = 90

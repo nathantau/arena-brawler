@@ -16,6 +16,8 @@ extends Resource
 @export var signature_weapon: WeaponData
 ## Default special. Null = the first special the character can use.
 @export var signature_skill: SkillData
+## false = benched: not offered in menus, the loading room or to bots (still loadable by id, e.g. --character).
+@export var in_rotation: bool = true
 ## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames, then walk frames.
 @export var sprite_sheet: Texture2D
 

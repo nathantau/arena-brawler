@@ -269,7 +269,7 @@ func test_signature_weapons_belong_to_their_character_only() -> void:
 
 func test_pickup_weapons_are_many_to_many() -> void:
 	var users_per_weapon: Dictionary[StringName, int] = {}
-	for c: CharacterData in characters.ordered:
+	for c: CharacterData in characters.all():  # the roster's data, benched characters too
 		var usable: int = 0
 		for id: StringName in catalog.pickup_ids():
 			if c.can_use(_w(id)):

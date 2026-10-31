@@ -6,7 +6,7 @@ const CHARACTER_DIR: String = "res://data/characters/"
 const DEFAULT_ID: StringName = &"flicker"
 
 var _by_id: Dictionary[StringName, CharacterData] = {}
-## Sorted by id so every peer agrees on the order (lobby cycling).
+## Characters in rotation, sorted by id so every peer agrees on the order (lobby cycling).
 var ordered: Array[CharacterData] = []
 
 
@@ -17,9 +17,15 @@ static func load_all() -> CharacterCatalog:
 		var c := load(CHARACTER_DIR + file) as CharacterData
 		if c != null:
 			catalog._by_id[c.id] = c
-			catalog.ordered.append(c)
+			if c.in_rotation:
+				catalog.ordered.append(c)
 	catalog.ordered.sort_custom(func(a: CharacterData, b: CharacterData) -> bool: return a.id < b.id)
 	return catalog
+
+
+## Every character, benched ones included.
+func all() -> Array[CharacterData]:
+	return _by_id.values()
 
 
 func get_character(id: StringName) -> CharacterData:
