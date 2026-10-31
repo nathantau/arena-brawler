@@ -13,6 +13,6 @@ kind = 13
 special = true
 blurb = "Blossom that slows"
 tags = Array[StringName]([&"sakura"])
-cooldown = 9.0
+cooldown = 7.0
 duration = 0.1
 volley_weapon = ExtResource("3_blossom")

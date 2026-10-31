@@ -13,6 +13,6 @@ kind = 5
 special = true
 blurb = "Homing petal wave"
 tags = Array[StringName]([&"sakura"])
-cooldown = 9.0
+cooldown = 7.0
 duration = 0.1
 volley_weapon = ExtResource("3_ring")

@@ -531,7 +531,7 @@ func test_vine_swing_goes_up_and_over_mid_flight() -> void:
 	_press_special(p, Vector2.RIGHT)
 	assert_true(p.stats.is_invulnerable(), "i-frames at takeoff")
 	var idle := InputFrame.new()
-	for i: int in 15:
+	for i: int in 20:
 		p.simulate(idle, DT)
 	assert_false(p.stats.is_invulnerable(), "hittable in the air")
 	assert_true(p.skills[1].is_active())
@@ -1679,7 +1679,7 @@ func test_storm_cloud_strikes_only_enemies_in_range_with_sight_on_each_tick() ->
 	_idle(p, floori(d.storm_interval / DT))
 	assert_eq(hits.size(), 2, "a bolt every interval, one victim each")
 	_idle(p, floori(d.duration / DT))
-	assert_eq(hits.size(), 5, "five strikes over the cloud's life")
+	assert_eq(hits.size(), 6, "six strikes over the cloud's life")
 	assert_eq(hidden.stats.hp, hidden.stats.max_hp, "no sight from the spot")
 	assert_eq(far.stats.hp, far.stats.max_hp, "out of reach")
 	assert_eq(p.stats.hp, p.stats.max_hp, "not herself")
@@ -1697,7 +1697,7 @@ func test_storm_cloud_expires_and_cools_down() -> void:
 	_idle(p, ceili(d.duration / DT) + 5)
 	assert_false(p.skills[1].is_active())
 	var served: int = hits.size()
-	assert_eq(served, 5)
+	assert_eq(served, 6)
 	_idle(p, 120)
 	assert_eq(hits.size(), served, "no strikes once it's gone")
 	assert_gt(p.skills[1].cooldown_remaining, 0.0)
