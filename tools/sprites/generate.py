@@ -346,7 +346,8 @@ def sakura(step=None, t=0):
     lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16 - drift, 38), (mid + 12 - drift, 36)]
     for side in (1, -1):  # each curtain and its lock as one shape, so no line where the lock meets the curtain
         c_pts, l_pts = ([(mid + side * (x - mid), y) for x, y in pts] for pts in (curtain, lock))
-        up.part(lambda d, f, c_pts=c_pts, l_pts=l_pts: (d.polygon(c_pts, f), d.polygon(l_pts, f)), PINK, shade=False)
+        up.part(lambda d, f, c_pts=c_pts, l_pts=l_pts: (d.polygon(c_pts, f), d.polygon(l_pts, f)), PINK)  # shaded like the ponytail
+        up.flat(L([(mid + side * 6, 11), (mid + side * 11, 15), (mid + side * 13, 24 - drift * side)], 1), PINK_L)  # sheen
     up.flat(L([(mid, 8), (mid, 13)], 1), MAROON)  # the parting
     up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
                           ((19, 4), (22, 6), (21, 9), (17, 9), (16, 6))], PINK_L)  # cherry blossom tying the ponytail
