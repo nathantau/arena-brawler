@@ -283,6 +283,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 
 	var grapple: CharacterSkill = active_skill(SkillData.Kind.GRAPPLE)
 	var whirl: CharacterSkill = active_skill(SkillData.Kind.WHIRL)
+	var drift: CharacterSkill = active_skill(SkillData.Kind.DRIFT)
 	if swing == null:
 		swing = active_skill(SkillData.Kind.SWING)  # just pressed
 	if swing != null:  # in the air: placed along the arc, over whatever is in between
@@ -301,7 +302,12 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			* stats.speed_scale()
 		if whirl != null:
 			speed *= whirl.data.whirl_speed_scale
-		velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed, delta)
+		var steer: Vector2 = input.move_vec
+		if drift != null:  # glides on its own way until the stick says otherwise
+			speed *= drift.data.drift_speed_scale
+			if steer.length() < Constants.INPUT_DEADZONE:
+				steer = drift.direction
+		velocity = MovementSim.step_velocity(velocity, steer, mover if mover != null else skills[0], speed, delta)
 		move_and_slide()
 	_sync_shields()
 	if whirl != null:
@@ -317,7 +323,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		if _windup_left <= 0.0:
 			_windup_left = -1.0
 			_release_shot(_windup_seq, _windup_weapon)
-	if input.fire and not is_dashing() and grapple == null and whirl == null:  # both hands on the chain
+	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null:  # both hands on the chain
 		_try_fire(input.seq, replay)
 
 
@@ -432,8 +438,10 @@ func ward() -> ShieldWall:
 	return _ward if _ward.is_up() else null
 
 
-## Inside your own smoke: enemy auto-aim and bots can't lock on.
+## Inside your own smoke or drifting as petals: enemy auto-aim and bots can't lock on.
 func is_hidden() -> bool:
+	if active_skill(SkillData.Kind.DRIFT) != null:
+		return true
 	var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
 	return smoke != null and global_position.distance_to(smoke.anchor) <= smoke.data.smoke_radius
 
@@ -518,7 +526,7 @@ func held_weapon() -> WeaponState:
 
 ## Dash goes where you're moving (else where you face); the barrier goes where you aim.
 func _skill_direction(data: SkillData, input: InputFrame) -> Vector2:
-	var moves: bool = data.kind == SkillData.Kind.DASH
+	var moves: bool = data.kind == SkillData.Kind.DASH or data.kind == SkillData.Kind.DRIFT
 	if moves and input.move_vec.length() > Constants.INPUT_DEADZONE:
 		return input.move_vec
 	if input.aim_vec.length_squared() > 0.0:
@@ -779,7 +787,7 @@ func _draw() -> void:
 
 
 func _draw_overlay() -> void:
-	if held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null:  # the staff is in the spin pose
+	if held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null and not _special_fx.is_petals():  # the staff is in the spin pose
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)

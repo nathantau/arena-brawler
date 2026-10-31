@@ -15,6 +15,7 @@ extends RefCounted
 ## - WHIRL: a spinning staff round the player (wherever they are now); the Player damages and reflects.
 ## - TRAIL: the trail runs from `anchor` (takeoff) to `anchor + direction` (where he stopped; the Player sets `direction`
 ##   to that whole vector like SWING). Dash for the first `trail_dash_time`, then the fire burns on.
+## - DRIFT: petals for `duration`; the Player moves faster along the stick (else `direction`), untouchable.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 const WHIRL_EPSILON: float = 0.0001
@@ -64,6 +65,10 @@ func is_cloning() -> bool:
 
 func is_warding() -> bool:
 	return data.kind == SkillData.Kind.WARD and is_active()
+
+
+func is_drifting() -> bool:
+	return data.kind == SkillData.Kind.DRIFT and is_active()
 
 
 func is_whirling() -> bool:
@@ -121,6 +126,8 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 		SkillData.Kind.SWING, SkillData.Kind.TRAIL:
 			anchor = origin
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.swing_iframes)
+		SkillData.Kind.DRIFT:
+			stats.invulnerable_time = maxf(stats.invulnerable_time, data.duration)
 		SkillData.Kind.TRANSFORM:
 			form_weapon.cooldown = 0.0
 	return true
