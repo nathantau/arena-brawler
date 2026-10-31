@@ -59,9 +59,9 @@ const RUN_SWAY: float = 12.0
 const STRIKE_PERIOD: float = 3.6
 const STRIKE_STAGGER: float = 1.1
 const STRIKE_FPS: float = 10.0
-const RING_FPS: float = 36.0
-const RING_SCALE: float = 1.7
-const RING_ALPHA: float = 0.7
+const RING_FPS: float = 24.0
+const RING_SCALE: float = 1.0
+const RING_ALPHA: float = 0.5
 const SHADOW_ALPHA: float = 0.55
 const REVEAL_RISE: float = 36.0
 
@@ -86,7 +86,7 @@ var _beam: Texture2D = load(ART_DIR + "title_beam.png")
 var _shadow: Texture2D = load(ART_DIR + "title_shadow.png")
 var _logo: Texture2D = load(ART_DIR + "logo.png")
 var _shine: Texture2D = load(ART_DIR + "logo_shine.png")
-var _ring: Texture2D = load("res://assets/fx/flare_ring.png")
+var _ring: Texture2D = load("res://assets/fx/slam.png")
 var _tiles: Texture2D
 var _idle: Array = []  ## per slot: Array[Texture2D]
 var _run: Array = []
@@ -239,9 +239,9 @@ func _draw_fighter(i: int, slot: Vector4, base: Vector2, rise: float) -> void:
 	var w: float = CELL * sc * (-1.0 if right_team else 1.0)
 	var origin := Vector2(feet.x - absf(w) * 0.5, feet.y - CELL_FEET * sc)
 	draw_texture_rect(tex, Rect2(origin, Vector2(w, CELL * sc)), false, tint)
-	if pose == POSE_STRIKE and ph < 30.0 / RING_FPS:
+	var frames: int = _ring.get_width() / _ring.get_height()
+	if pose == POSE_STRIKE and ph < float(frames) / RING_FPS:
 		var rs: float = _ring.get_height() * RING_SCALE
-		var frames: int = _ring.get_width() / _ring.get_height()
 		var f: int = mini(int(ph * RING_FPS), frames - 1)
 		var c: Vector2 = feet + Vector2(0.0, -6.0 * sc)
 		draw_texture_rect_region(_ring, Rect2(c - Vector2(rs, rs) * 0.5, Vector2(rs, rs)),
