@@ -3082,22 +3082,32 @@ def death_frames(build, crown=None) -> list[Image.Image]:
 BLAZE_CELL = 48  # art px, square: one stamp of burning ground; its floor spot is (cell centre, BLAZE_FLOOR_Y)
 BLAZE_FLOOR_Y = 36  # SpecialFx.BLAZE_FLOOR_Y
 BLAZE_SQUASH = 0.32  # the floor seen in 3/4 view
-BLAZE_DIE_FRAMES = 8
 BLAZE_IGNITE_FRAMES = 8
 BLAZE_STREAK_CELL = 96
 
 
-def blaze_ground(c: Canvas, m: int, rx: int, glow, cracks: bool = True):
-    """Scorched floor with glowing cracks round (m, BLAZE_FLOOR_Y)."""
+def blaze_scorch(c: Canvas, m: int, rx: float, seed: int, glow=None):
+    """A small flat irregular scorch mark round (m, BLAZE_FLOOR_Y): wider than tall, ragged edge, never a disc.
+    `glow` colours a couple of short cracks in it (None: cold)."""
+    if rx < 3:
+        return
+    rng = random.Random(seed)
     y = BLAZE_FLOOR_Y
-    ry = max(1, round(rx * BLAZE_SQUASH))
-    c.part(E((m - rx, y - ry, m + rx, y + ry)), SHADOW, shade=False)
-    if rx > 6:
-        c.flat(E((m - rx + 4, y - ry + 2, m + rx - 4, y + ry - 2)), MAROON)
-    if cracks:
-        for dx, dy, ex, ey in ((-14, 1, -6, -2), (-8, 3, 0, 1), (4, -2, 12, 2), (9, 3, 15, 0), (-3, -3, 3, -1)):
-            if abs(dx) < rx - 2 and abs(ex) < rx - 2:
-                c.flat(L([(m + dx, y + dy), (m + ex, y + ey)], 1), glow)
+    ry = max(1.5, rx * 0.26)
+    pts = []
+    n = 14
+    for i in range(n):
+        a = 2 * math.pi * i / n
+        j = rng.uniform(0.6, 1.2) if i % 2 else rng.uniform(0.85, 1.1)
+        pts.append((m + math.cos(a) * rx * j, y + math.sin(a) * ry * j))
+    c.flat(P(pts), SHADOW)
+    c.flat(P([(m + (x - m) * 0.6, y + (yy - y) * 0.6) for x, yy in pts]), MAROON)
+    if glow is not None:
+        for _ in range(2):
+            x0 = m + rng.uniform(-rx * 0.6, rx * 0.3)
+            y0 = y + rng.uniform(-ry * 0.4, ry * 0.4)
+            c.flat(L([(x0, y0), (x0 + rng.uniform(2, 4), y0 + rng.choice((-1, 0, 1))),
+                      (x0 + rng.uniform(5, 7), y0 + rng.choice((-1, 0, 1)))], 1), glow)
 
 
 def blaze_flames(c: Canvas, m: int, k: int, scale: float, xs=(-11, 0, 11), heights=(19, 27, 17), wide=4.5):
@@ -3131,11 +3141,7 @@ BLAZE_FLAME_VARIANTS = (
     ((-8, 1, 9), (11, 18, 12), 3.8),
 )
 BLAZE_FLAME_DIE = (0.85, 0.62, 0.4, 0.2)  # flame scale per frame of the die-out, after which it's gone
-BLAZE_GROUND_CELL = 32  # art px: one blob of the continuous scorched band, centred on its floor spot
-BLAZE_GROUND_VARIANTS = 3
-BLAZE_GROUND_RX = (11, 12, 13)
-BLAZE_GROUND_RY = 7
-BLAZE_GROUND_COOL = (YELLOW, ORANGE, ORANGE, RED, RED, MAROON, MAROON, MAROON)  # crack colour per die frame
+BLAZE_COOL = (ORANGE, RED, MAROON, MAROON)  # crack colour per frame of the die-out
 
 
 def blaze_flame_frame(v: int, k: int, scale: float = 1.0, embers: bool = True) -> Image.Image:
@@ -3143,50 +3149,12 @@ def blaze_flame_frame(v: int, k: int, scale: float = 1.0, embers: bool = True) -
     c = Canvas(BLAZE_CELL)
     m = BLAZE_CELL // 2
     xs, heights, wide = BLAZE_FLAME_VARIANTS[v]
+    blaze_scorch(c, m, (max(abs(x) for x in xs) + 8) * min(1.0, scale + 0.15), 90 + v,
+                 (ORANGE, YELLOW, YELLOW, ORANGE)[k] if embers else BLAZE_COOL[k % 4])
     blaze_flames(c, m, k, scale, xs, heights, wide)
     if embers:
         blaze_embers(c, m, k, 2, 6, 3 + v)
     return outline(c.img)
-
-
-def blaze_ground_layer(layer: str, v: int = 0, glow=ORANGE) -> Image.Image:
-    """One blob of the scorched ground band. SpecialFx draws all rims, then all bases, then all cracks, so overlapping
-    blobs merge into one outlined strip with the cracks on top of it. layer: rim | base | cracks."""
-    n = BLAZE_GROUND_CELL
-    c = Canvas(n)
-    m, y = n // 2, n // 2
-    rx, ry = BLAZE_GROUND_RX[v], BLAZE_GROUND_RY
-    if layer == "rim":
-        c.flat(E((m - rx - 1, y - ry - 1, m + rx + 1, y + ry + 1)), OUTLINE)
-    elif layer == "base":
-        c.flat(E((m - rx, y - ry, m + rx, y + ry)), SHADOW)
-    else:
-        rng = random.Random(40 + v)
-        for _ in range(2):  # darker scorch smudges
-            sx, sy = rng.randint(-rx + 4, rx - 4), rng.randint(-2, 2)
-            c.flat(E((m + sx - 3, y + sy - 1, m + sx + 3, y + sy + 1)), MAROON)
-        for _ in range(4):  # cracks: short zigzags
-            x0, y0 = m + rng.randint(-rx + 3, rx - 6), y + rng.randint(-ry + 2, ry - 2)
-            pts = [(x0, y0)]
-            for _ in range(rng.randint(2, 3)):
-                x0 += rng.randint(2, 4)
-                y0 = max(y - ry + 1, min(y + ry - 1, y0 + rng.randint(-2, 2)))
-                pts.append((x0, y0))
-            c.flat(L(pts, 1), glow)
-        for _ in range(4):  # glowing specks, gone once it's cold
-            sx, sy = m + rng.randint(-rx + 3, rx - 3), y + rng.randint(-ry + 2, ry - 2)
-            if glow != MAROON:
-                c.dot(sx, sy, YELLOW)
-    return c.img
-
-
-def blaze_ground_strip() -> Image.Image:
-    """Frame 0 rim, 1 base, then per variant: 4 crack-glow loop frames and BLAZE_DIE_FRAMES cooling frames."""
-    fs = [blaze_ground_layer("rim"), blaze_ground_layer("base")]
-    for v in range(BLAZE_GROUND_VARIANTS):
-        fs += [blaze_ground_layer("cracks", v, (ORANGE, YELLOW, YELLOW, ORANGE)[k]) for k in range(4)]
-        fs += [blaze_ground_layer("cracks", v, BLAZE_GROUND_COOL[k]) for k in range(BLAZE_DIE_FRAMES)]
-    return strip(fs)
 
 
 def blaze_ignite_frame(k: int) -> Image.Image:
@@ -3199,7 +3167,7 @@ def blaze_ignite_frame(k: int) -> Image.Image:
         ry = max(1, round(rx * BLAZE_SQUASH))
         c.flat(lambda d, f: d.ellipse((m - rx, BLAZE_FLOOR_Y - ry, m + rx, BLAZE_FLOOR_Y + ry), outline=f, width=1),
                (WHITE, YELLOW, YELLOW, ORANGE, RED)[k])
-    blaze_ground(c, m, min(21, 8 + 5 * k), YELLOW if k < 5 else ORANGE)
+    blaze_scorch(c, m, min(19, 7 + 4 * k), 70 + k, YELLOW if k < 5 else ORANGE)
     blaze_flames(c, m, k, (0.3, 0.6, 1.0, 1.15, 1.1, 1.05, 1.0, 1.0)[k], wide=5.5)
     blaze_embers(c, m, k, 5, 7, 8)
     return outline(c.img)
@@ -3222,7 +3190,6 @@ def blaze_streak_frame(k: int) -> Image.Image:
 
 
 FX.update({
-    "blaze_run_ground": blaze_ground_strip,
     # per variant: 4 loop frames; then per variant the die-out (shrinking flames)
     "blaze_run_flames": lambda: strip([blaze_flame_frame(v, k) for v in range(len(BLAZE_FLAME_VARIANTS)) for k in range(4)]
                                       + [blaze_flame_frame(v, i, s, False) for v in range(len(BLAZE_FLAME_VARIANTS))
