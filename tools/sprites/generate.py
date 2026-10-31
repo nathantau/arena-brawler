@@ -110,8 +110,15 @@ def x_eye(c: Canvas, x: int, y: int, color=OUTLINE):
 
 
 # All characters use a 6 px gap between eyes (left eye x, then left x + 10).
-## Faces are rounded squares (not ovals): corner radius in art px.
+## Every character shares one base, modelled on Apex's (Wukong's) face: the same face (a rounded square) and body
+## box, eyes, blush and mouth at the same spots. Hair, hats, masks and outfits go on top. Corner radius in art px.
+FACE = (23, 15, 47, 36)
 FACE_R = 8
+BODY = (20, 33, 44, 48)
+EYES_X = (31, 41)
+EYES_Y = 22
+BLUSH = (27, 45, 29)
+MOUTH = (37, 30)
 
 
 def big_eyes(c: Canvas, y: int, xs: tuple[int, int], iris, h: int = 6):
@@ -164,28 +171,28 @@ def flicker(step=None, t=0):
     up.flat(L([(15, 12), (10, 22), (8 + s, 34)], 1), BLUE)  # hair sheen
     up.part(L([(13, 25), (25, 45)], 4), OUTLINE)  # ninjato on the back
     up.part(RR((9, 21, 15, 27), 1), STEEL)  # its guard and pommel
-    up.part(RR((22, 33, 42, 48), 3), SHADOW)  # fitted shroud
+    up.part(RR(BODY, 3), SHADOW)  # fitted shroud
     up.part(P([(23, 34), (32, 40), (41, 34), (41, 37), (32, 43), (23, 37)]), NAVY, shade=False, line=False)  # wrap
     up.part(R((22, 43, 42, 45)), RED, line=False)  # sash
     up.part(E((16, 5, 50, 38)), NAVY)  # hair around the head
     up.part(P([(16, 18), (21, 18), (23, 40), (17, 37)]), NAVY)  # long lock down the back of her neck
-    up.part(RR((21, 12, 47, 38), FACE_R), SKIN)  # face
+    up.part(RR(FACE, FACE_R), SKIN)  # face
     up.part(P([(19, 11), (49, 11), (49, 16), (45, 14), (41, 18), (37, 13), (31, 18), (27, 14), (22, 18), (19, 17)]),
             NAVY, shade=False)  # side-swept bangs
-    up.part(P([(45, 14), (50, 16), (50, 33), (46, 29)]), NAVY, shade=False)  # lock framing her face
+    up.part(P([(FACE[2], 15), (51, 17), (51, 33), (FACE[2] + 1, 30)]), NAVY, shade=False)  # lock framing her face
     up.flat(L([(23, 9), (33, 8)], 1), BLUE)  # crown sheen
     up.part(R((29, 9, 40, 11)), STEEL)  # small forehead plate
     up.flat(R((34, 10, 35, 10)), STEEL_D)  # its engraving
     up.part(RR((17, 7, 22, 12), 2), RED)  # ribbon tying the ponytail
-    big_eyes(up, 20, (28, 39), TEAL, h=7)
+    big_eyes(up, EYES_Y - 1, EYES_X, TEAL, h=6)
     if not KO:
-        for x in (28, 39):  # lashes flick up and out at the top outer corner
+        for x in EYES_X:  # lashes flick up and out at the top outer corner
             up.flat(R((x + 3, 19, x + 4, 19)), OUTLINE)
             up.dot(x + 5, 18, OUTLINE)
-    up.part(P([(22, 30), (47, 30), (46, 35), (40, 38), (29, 38), (23, 35)]), SHADOW)  # fitted mask over nose and mouth
-    up.flat(L([(31, 33), (38, 33)], 1), NAVY)  # its fold
-    up.flat(R((24, 28, 25, 28)), RED)  # blush peeking above it
-    up.flat(R((44, 28, 45, 28)), RED)
+    up.part(P([(23, 29), (47, 29), (47, 33), (42, 36), (29, 36), (23, 33)]), SHADOW)  # fitted mask over nose and mouth
+    up.flat(L([(32, 32), (41, 32)], 1), NAVY)  # its fold
+    up.flat(R((BLUSH[0], 28, BLUSH[0] + 1, 28)), RED)  # blush peeking above it
+    up.flat(R((BLUSH[1], 28, BLUSH[1] + 1, 28)), RED)
     up.part(RR((24, 38, 41, 41), 2), RED)  # scarf, under the chin
     up.part(RR((20, 38, 26, 44), 2), MAROON)  # scarf knot
     return low, up
@@ -253,12 +260,12 @@ def twinshot(step=None, t=0):
         up.part(RR((x, 42, x + 7, 54), 2), BROWN)  # holster
         up.part(RR((x + 1, 36, x + 5, 43), 1), STEEL_D)  # grip
         up.dot(x + 2, 37, STEEL)
-    up.part(RR((20, 14, 44, 37), FACE_R), SKIN)  # face
-    big_eyes(up, 23, (29, 39), BLUE)
-    up.flat(R((29, 21, 32, 21)), BROWN)  # brows
-    up.flat(R((39, 21, 42, 21)), BROWN)
-    face(up, (25, 43, 30))
-    up.part(RR((20, 32, 44, 37), 2), RED)  # bandana
+    up.part(RR(FACE, FACE_R), SKIN)  # face
+    big_eyes(up, EYES_Y, EYES_X, BLUE)
+    up.flat(R((EYES_X[0], 20, EYES_X[0] + 3, 20)), BROWN)  # brows
+    up.flat(R((EYES_X[1], 20, EYES_X[1] + 3, 20)), BROWN)
+    face(up, BLUSH)
+    up.part(RR((FACE[0], 31, FACE[2], FACE[3]), 2), RED)  # bandana
     s = SWAY[t % 4]
     up.part(P([(21, 33), (14, 37 + s), (16, 40 + s), (22, 36)]), RED)  # bandana tail flutters
     up.part(E((5, 13, 59, 23)), BROWN)  # hat brim
@@ -302,7 +309,7 @@ def sakura(step=None, t=0):
     up.part(P([(22, 39), (10, 34 + s), (9, 41 + s), (15, 44 + s), (22, 43)]), RED)  # obi bow ends flutter behind
     up.part(RR((13, 34, 23, 48), 3), WHITE)  # back sleeve, wide and hanging
     up.flat(R((14, 46, 22, 47)), PINK_L)  # its hem
-    up.part(RR((20, 33, 44, 49), 3), WHITE)  # kimono
+    up.part(RR(BODY, 3), WHITE)  # kimono
     up.flat(L([(26, 33), (32, 40)], 1), RED)  # crossed collar
     up.flat(L([(38, 33), (32, 40)], 1), RED)
     for x, y in ((24, 36), (40, 37), (27, 46), (37, 47)):  # blossom pattern
@@ -315,26 +322,28 @@ def sakura(step=None, t=0):
     up.part(P([(19, 9), (12, 12), (8, 20), (6 + s, 30), (7 + s, 40), (11 + s, 46), (13, 37), (15, 27), (19, 17)]), PINK)
     up.flat(L([(13, 15), (10, 24), (9 + s, 36)], 1), PINK_L)  # its sheen
     up.part(E((16, 5, 48, 37)), PINK)  # hair
-    up.part(RR((21, 12, 47, 38), FACE_R), SKIN)  # face
-    # middle part: two curtains and two long side locks, mirrored about the face's centre line (x = 34)
-    curtain = [(34, 8), (43, 7), (48, 12), (49, 22), (47, 22), (46, 17), (41, 13), (35, 12)]  # sweeps off the forehead
-    lock = [(44, 14), (49, 14), (50, 39), (46, 37)]
+    up.part(RR(FACE, FACE_R), SKIN)  # face
+    # middle part: two curtains and two long side locks, mirrored about the face's centre line
+    mid = (FACE[0] + FACE[2]) // 2
+    curtain = [(mid, 10), (mid + 9, 9), (mid + 13, 14), (mid + 14, 23), (mid + 12, 23), (mid + 11, 19), (mid + 6, 15),
+               (mid + 1, 14)]  # sweeps off the forehead
+    lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16, 38), (mid + 12, 36)]
     for shape in (curtain, lock):
         up.part(P(shape), PINK, shade=False)
-        up.part(P([(68 - x, y) for x, y in shape]), PINK, shade=False)
-    up.flat(L([(34, 6), (34, 11)], 1), MAROON)  # the parting
+        up.part(P([(2 * mid - x, y) for x, y in shape]), PINK, shade=False)
+    up.flat(L([(mid, 8), (mid, 13)], 1), MAROON)  # the parting
     up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
                           ((19, 4), (22, 6), (21, 9), (17, 9), (16, 6))], PINK_L)  # cherry blossom tying the ponytail
     up.dot(19, 7, YELLOW)
-    big_eyes(up, 22, (29, 39), PINK, h=6)
+    big_eyes(up, EYES_Y, EYES_X, PINK, h=6)
     if not KO:
         for x, out in ((29, -1), (39, 4)):  # calm lids, lashes flicking out at the outer corners
             up.flat(R((x, 21, x + 3, 21)), OUTLINE)
             up.dot(x + out, 21, OUTLINE)
             up.dot(x + out + (1 if out > 0 else -1), 20, OUTLINE)
-    up.flat(R((25, 30, 27, 30)), PINK)  # pink blush
-    up.flat(R((44, 30, 45, 30)), PINK)
-    up.flat(R((34, 33, 35, 33)), MAROON)  # small mouth
+    up.flat(R((BLUSH[0], BLUSH[2], BLUSH[0] + 2, BLUSH[2])), PINK)  # pink blush
+    up.flat(R((BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])), PINK)
+    up.flat(R((MOUTH[0], MOUTH[1], MOUTH[0] + 1, MOUTH[1])), MAROON)  # small mouth
     return low, up
 
 
@@ -345,19 +354,19 @@ def flint(step=None, t=0):
     for x, dy in legs(low, SHADOW, MAROON, step):
         low.flat(R((x + 2, 47 + dy, x + 2, 50 + dy)), ORANGE)  # ember crack down each leg
     up = Canvas()
-    up.part(RR((20, 33, 44, 48), 3), SHADOW)  # sooty body
+    up.part(RR(BODY, 3), SHADOW)  # sooty body
     for pts in (((25, 35), (28, 39), (26, 43), (28, 47)), ((38, 34), (36, 38), (39, 42)), ((32, 44), (34, 47))):
         up.flat(L(pts, 1), ORANGE)  # glowing cracks
     up.flat(P([(32, 37), (35, 40), (32, 43), (29, 40)]), YELLOW)  # ember heart
     up.dot(32, 40, WHITE)
-    up.part(RR((20, 14, 44, 37), FACE_R), ORANGE)  # molten face
-    up.part(E((27, 27, 39, 35)), YELLOW, line=False)  # hot glow around the mouth
-    big_eyes(up, 23, (29, 39), YELLOW)
-    up.flat(R((25, 30, 26, 30)), RED)  # blush
-    up.flat(R((42, 30, 43, 30)), RED)
-    up.flat(R((33, 31, 35, 31)), MAROON)  # little grin
+    up.part(RR(FACE, FACE_R), ORANGE)  # molten face
+    up.part(E((MOUTH[0] - 6, 26, MOUTH[0] + 6, 34)), YELLOW, line=False)  # hot glow around the mouth
+    big_eyes(up, EYES_Y, EYES_X, YELLOW)
+    up.flat(R((BLUSH[0], BLUSH[2], BLUSH[0] + 1, BLUSH[2])), RED)  # blush
+    up.flat(R((BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])), RED)
+    up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
     # Tongues licking up from the forehead; orange rim so no red stripe runs across the face.
-    flame(up, 20, 44, 18, 7, t + 2, tongues=4, line=False, rim=ORANGE)
+    flame(up, FACE[0], FACE[2], FACE[1] + 4, 7, t + 2, tongues=4, line=False, rim=ORANGE)
     return low, up
 
 
@@ -366,7 +375,7 @@ def flint_crown(t: int, dy: int) -> Canvas:
     A CELL canvas drawn behind the body before outlining (the face covers its base); `dy` = the head's bob."""
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
-    flame(c, PAD + 21, PAD + 43, top + 24, 26, t, tongues=4)  # no wider than the face (20..44), or the side tongues read as horns
+    flame(c, PAD + FACE[0] + 1, PAD + FACE[2] - 1, top + FACE[1] + 9, 26, t, tongues=4)  # no wider than the face, or the side tongues read as horns
     return c
 
 
@@ -378,7 +387,7 @@ def wukong(step=None, t=0):
     up = Canvas()
     s = SWAY[t % 4]
     up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11 + s, 31)], 3), BROWN)  # curly tail, tip wags
-    up.part(RR((20, 33, 44, 48), 3), YELLOW)  # golden armour
+    up.part(RR(BODY, 3), YELLOW)  # golden armour
     up.flat(R((31, 36, 33, 44)), ORANGE)
     up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
     up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
@@ -389,14 +398,14 @@ def wukong(step=None, t=0):
     for x in (24, 31, 38):
         up.part(P([(x, 9), (x + 3, 4), (x + 6, 9)]), BROWN)  # fur tufts
     up.part(E((15, 6, 49, 38)), BROWN)  # head fur
-    up.part(RR((23, 15, 47, 36), FACE_R), SKIN)  # human face
+    up.part(RR(FACE, FACE_R), SKIN)  # human face
     up.part(P([(23, 16), (47, 16), (47, 18), (43, 19), (39, 17), (35, 19), (30, 17), (26, 19), (23, 18)]), BROWN,
             shade=False)  # spiky fringe
     up.part(R((17, 13, 47, 16)), YELLOW)  # golden circlet
     up.dot(32, 14, RED)
     up.dot(33, 14, RED)
-    big_eyes(up, 22, (31, 41), YELLOW)
-    face(up, (27, 45, 29), (37, 30))
+    big_eyes(up, EYES_Y, EYES_X, YELLOW)
+    face(up, BLUSH, MOUTH)
     # Lopsided on purpose: billows up over the back shoulder, just a wisp at the front.
     collar = ((11, 31, 3), (15, 35, 5), (21, 38, 4), (26, 39, 3), (43, 38, 3), (47, 36, 4))
     up.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in collar], WHITE,
@@ -1171,7 +1180,7 @@ def ape_morph(t: float, scale: float) -> Image.Image:
     if t < 0.75:
         c.part(E(box((11, 17, 21, 28), (20, 10, 28, 20), u)), fur)  # ear tucks in
     c.part(E(box((15, 6, 49, 38), (24, 3, 50, 29), u)), fur)
-    c.part(RR(box((23, 15, 47, 36), (28, 11, 50, 29), u), w(FACE_R, FACE_R)), face_c)
+    c.part(RR(box(FACE, (28, 11, 50, 29), u), w(FACE_R, FACE_R)), face_c)
     collar = ((11, 31, 3), (15, 35, 5), (21, 38, 4), (26, 39, 3), (43, 38, 3), (47, 36, 4))
     for x, y, r in collar:  # the cloud collar puffs away
         rr = r * scale * (1 - t / 0.5)
@@ -1189,7 +1198,7 @@ def ape_morph(t: float, scale: float) -> Image.Image:
     for j, crack in enumerate(APE_CRACKS):
         if t > 0.25 + 0.15 * j:
             c.flat(L(pts([on_wukong_band(x, y) for x, y in crack], crack, u), max(1, round(scale))), OUTLINE)
-    for x0, x1 in ((31, 32), (41, 42)):  # eyes slide and narrow; turn red and angry halfway
+    for x0, x1 in ((EYES_X[0], 32), (EYES_X[1], 42)):  # eyes slide and narrow; turn red and angry halfway
         ex, ey = pt((x0, 22), (x1, 14), u)
         eh = w(6, 3)
         ew = w(3, 3)

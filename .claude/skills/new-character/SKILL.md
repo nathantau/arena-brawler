@@ -17,8 +17,9 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
   without asking), hard alpha, nothing touching the frame edge. `check()` enforces this.
 - House style (keep characters consistent):
   - Chibi: head ~ half the height, stubby `legs()`; upper body is composited `UPPER_DY` px down.
-  - Eyes via `big_eyes(c, y, (x, x + 10), iris)` — **6 px gap, always `x` and `x + 10`**.
-  - `face(c, (left_x, right_x, y), mouth)` for blush (+ optional mouth) under the eyes.
+  - **One shared base for everyone, modelled on Apex's face:** `up.part(RR(FACE, FACE_R), <skin>)` for the face,
+    `RR(BODY, 3)` for the torso, `big_eyes(c, EYES_Y, EYES_X, iris)` for the eyes, `face(c, BLUSH, MOUTH)` for blush
+    and mouth. Never a custom face size or eye spot: personality comes from hair, hats, masks, outfits, iris colour.
   - Build from `part()` (auto-shaded + inner line), `flat()` for details, `dot()` for single pixels.
     Overlapping blobs that should read as one shape go in **one** `part()` (a lambda drawing several
     shapes), otherwise each gets its own highlight streak.
