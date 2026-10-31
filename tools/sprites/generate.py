@@ -1410,7 +1410,7 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
 CROWNS = {"flint": flint_crown}  # optional per-frame effects drawn behind
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Wind up high, then smash down with the body squashed.
-ATTACKS = {"wukong_ape": [(0, -2), (1, 2), (1, 1)]}
+ATTACKS = {"wukong_ape": [(0, -2), (0, -3), (1, 2), (1, 2), (1, 1)]}
 
 
 # --- frame processing -------------------------------------------------------

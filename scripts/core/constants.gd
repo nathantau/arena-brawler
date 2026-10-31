@@ -76,9 +76,9 @@ const SPRITE_CELL_SIZE: int = 96
 const SPRITE_PORTRAIT_RECT: Rect2 = Rect2(12, 4, 72, 72)
 const SPRITE_DIE_FRAMES: int = 8
 const SPRITE_DIE_FPS: float = 9.0
-## Optional melee "attack" strip after the death frames (Great Ape: wind-up, smash, hold).
-const SPRITE_ATTACK_FRAMES: int = 3
-const SPRITE_ATTACK_FPS: float = 12.0
+## Optional melee "attack" strip after the death frames (Great Ape: wind-up, smash, hold; ~0.45 s, under the fists' 0.5 s interval).
+const SPRITE_ATTACK_FRAMES: int = 5
+const SPRITE_ATTACK_FPS: float = 11.0
 const SPRITE_IDLE_FRAMES: int = 4
 const SPRITE_HIT_FRAMES: int = 2
 const SPRITE_IDLE_FPS: float = 6.0
