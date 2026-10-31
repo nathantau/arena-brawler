@@ -23,6 +23,8 @@ signal swung(origin: Vector2, facing: Vector2, weapon: WeaponData)
 ## `art` false: a skill draws its own (Eruption's pillar of fire); keep just the sound, sparks and shake.
 signal exploded(at: Vector2, radius: float, color: Color, slam: bool, art: bool)
 
+## Slam lines reach this far past their end so a crate that stopped them is struck.
+const LINE_END_REACH: float = 6.0
 const TRAIL_TIME: float = 0.025
 const TRAIL_WIDTH_SCALE: float = 1.2
 const TRAIL_ALPHA: float = 0.45
@@ -93,6 +95,8 @@ var _query := PhysicsRayQueryParameters2D.new()
 var _los_query := PhysicsRayQueryParameters2D.new()
 var _area_query := PhysicsShapeQueryParameters2D.new()
 var _area_shape := CircleShape2D.new()
+var _line_query := PhysicsShapeQueryParameters2D.new()
+var _line_shape := RectangleShape2D.new()
 var _empty_exclude: Array[RID] = []
 var _shot_rng := RandomNumberGenerator.new()
 var _time: float = 0.0
@@ -107,6 +111,8 @@ func _ready() -> void:
 	_query.collision_mask = HIT_MASK
 	_query.hit_from_inside = false
 	_area_query.shape = _area_shape
+	_line_query.shape = _line_shape
+	_line_query.collision_mask = Constants.LAYER_CRATES
 
 
 ## Fires one shot. Fully determined by its arguments, so any peer that receives
@@ -482,8 +488,10 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 			crate.take_damage(CombatRules.splash_damage(s.damage, cdist, s.splash_radius, s.splash_edge))
 
 
-## Fire on the floor along from -> to: everyone within `radius` of the line (not the owner) takes `damage`.
-func burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: float, damage: int) -> void:
+## Fire on the floor along from -> to: everyone within `radius` of the line (not the owner) takes `damage`,
+## pushed `knockback` away from the line (along it if they stand right on it, sideways).
+func burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: float, damage: int,
+		knockback: float = 0.0) -> void:
 	if not authoritative:
 		return
 	for target: Player in targets:
@@ -491,7 +499,27 @@ func burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: f
 			continue
 		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(target.global_position, from, to)
 		if closest.distance_to(target.global_position) <= radius:
-			_damage_player(target, owner_id, seq, 0, damage, false, Vector2.ZERO, target.global_position)
+			var away: Vector2 = target.global_position - closest
+			if away.length_squared() < 1.0:
+				away = (to - from).orthogonal()
+			_damage_player(target, owner_id, seq, 0, damage, false, away.normalized() * knockback, target.global_position)
+
+
+## A slam along from -> to: players as burn_segment, plus crates on the line (the line ends at the wall that stopped it,
+## which may be a crate, so it reaches `LINE_END_REACH` past its end).
+func line_hit(owner_id: int, seq: int, from: Vector2, to: Vector2, half_width: float, damage: int,
+		knockback: float) -> void:
+	if not authoritative:
+		return
+	burn_segment(owner_id, seq, from, to, half_width, damage, knockback)
+	var line: Vector2 = to - from
+	if line == Vector2.ZERO:
+		return
+	_line_shape.size = Vector2(line.length() + LINE_END_REACH, half_width * 2.0)
+	_line_query.transform = Transform2D(line.angle(), from + line.normalized() * (_line_shape.size.x * 0.5))
+	for result: Dictionary in get_world_2d().direct_space_state.intersect_shape(_line_query, SPLASH_QUERY_MAX):
+		if result.collider is Crate:
+			(result.collider as Crate).take_damage(damage)
 
 
 ## `key_owner`: the pellet key's owner (differs from the attacker after a reflection).

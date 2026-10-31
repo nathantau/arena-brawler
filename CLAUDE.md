@@ -359,6 +359,18 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   sprite + weapon (`is_petals()`): 8-frame dissolve (her idle frame breaking into petals, generate.py `drift_dissolve_frame`),
   swirl loop (`drift_swirl_frame`, period 8, mirrored and tilted with her velocity, petals streaming behind), reform strip
   (the dissolve backwards + sparkles) and a petal burst (`petal_pop`) as she gathers; `icon_petal_drift`.
+- **Sky Pillar** (2026-10-31, Apex special, `sky_pillar`, kind PILLAR = 14): he plants the Cloud Staff and it shoots out along
+  the aim; after `pillar_windup` 0.25 s (he can't move or fire) it slams down on a line `pillar_length` 320 px x `pillar_width`
+  36 px: every other player whose centre is within half the width of it takes `pillar_damage` 30 and is thrown
+  `pillar_knockback` 260 sideways (away from the line), and crates on it take the damage too. Cooldown 8 s, `duration` 0.75 s
+  (the whole animation). The line is fixed at activation (`Player._activate`: ray on `LAYER_WALLS` from his centre, so the first
+  wall or crate shortens it) and stored in the synced skill state like Blaze Run (`anchor` = start, `direction` = the whole
+  vector). The hit lands in the step the active time crosses the windup (`CharacterSkill.pillar_slammed`), authoritative only,
+  replay does nothing: `ProjectilePool.line_hit` (= `burn_segment`, which gained a `knockback` arg, + a rectangle query for
+  crates), keyed `seq + PILLAR_SEQ_OFFSET` (1 << 28). Art (generate.py `wukong_pillar_frame` 6-frame plant/thrust pose,
+  `sky_pillar_frame` 12 frames of 228x64 art px (a gold-banded red staff growing from his hand, lifted, slamming flat with a flash,
+  dust and floor cracks along the line, then shrinking away), `icon_sky_pillar`): `SpecialFx` draws the pillar rotated along the
+  line and cropped (never stretched) to its length, with his pose over it (his sprite and held staff hidden meanwhile).
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

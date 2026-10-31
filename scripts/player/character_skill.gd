@@ -16,6 +16,8 @@ extends RefCounted
 ## - TRAIL: the trail runs from `anchor` (takeoff) to `anchor + direction` (where he stopped; the Player sets `direction`
 ##   to that whole vector like SWING). Dash for the first `trail_dash_time`, then the fire burns on.
 ## - DRIFT: petals for `duration`; the Player moves faster along the stick (else `direction`), untouchable.
+## - PILLAR: the line runs from `anchor` (his feet-level centre) to `anchor + direction` (the Player sets `direction` to that
+##   whole vector, cut short by a wall); the slam lands when `pillar_windup` has passed.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 const WHIRL_EPSILON: float = 0.0001
@@ -100,6 +102,16 @@ func trail_progress() -> float:
 ## TRAIL: still in the dash part (the frame it ends counts, so he lands exactly on the trail's end).
 func trail_dashing(delta: float) -> bool:
 	return data.kind == SkillData.Kind.TRAIL and is_active() and elapsed() - delta < data.trail_dash_time
+
+
+## PILLAR: planting the staff, before the slam (he can't move or fire).
+func pillar_winding() -> bool:
+	return data.kind == SkillData.Kind.PILLAR and is_active() and elapsed() < data.pillar_windup
+
+
+## PILLAR: the slam lands in the step that ticked from `before` to now.
+func pillar_slammed(before: float) -> bool:
+	return data.kind == SkillData.Kind.PILLAR and before < data.pillar_windup and elapsed() >= data.pillar_windup
 
 
 ## 1.0 = just used, 0.0 = ready.

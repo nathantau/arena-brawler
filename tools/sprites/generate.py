@@ -1364,6 +1364,9 @@ ICONS = {
                              c.flat(E((4, 5, 12, 12)), BROWN), c.flat(E((6, 7, 12, 12)), SKIN),
                              c.flat(R((4, 6, 12, 7)), YELLOW), c.dot(8, 9, OUTLINE), c.dot(10, 9, OUTLINE),
                              c.flat(L([(9, 0), (11, 1)], 1), RED)),
+    "sky_pillar": lambda c: (c.flat(P([(1, 12), (4, 10), (8, 10), (12, 12)]), STEEL), c.flat(L([(5, 9), (8, 1)], 3), RED),
+                             c.flat(R((5, 0, 9, 1)), YELLOW), c.flat(R((4, 6, 8, 7)), YELLOW), c.dot(7, 3, ORANGE),
+                             c.flat(L([(0, 11), (2, 8)], 1), SHADOW), c.flat(L([(12, 11), (10, 8)], 1), SHADOW)),
     "staff_whirl": lambda c: (c.flat(lambda d, f: d.ellipse((0, 2, 12, 10), outline=f, width=1), YELLOW),
                               c.flat(L([(1, 10), (11, 2)], 3), RED), c.flat(R((0, 9, 2, 11)), YELLOW),
                               c.flat(R((10, 1, 12, 3)), YELLOW), c.dot(2, 3, WHITE), c.dot(10, 9, WHITE)),
@@ -1544,6 +1547,109 @@ def wukong_whirl_frame(k: int) -> Image.Image:
     c.part(E((hx - 4, hy - 4, hx + 4, hy + 3)), SKIN)  # fists gripping the middle
     c.flat(R((hx - 2, hy - 1, hx + 2, hy - 1)), SKIN_D)
     return outline(c.img)
+
+
+## Sky Pillar (Apex): the plant / slam pose strip (CELL frames), the pillar strip itself (PILLAR_W x PILLAR_H frames: a
+## gold-banded red staff that grows from his hand along the line, crashes down with dust and floor cracks, then shrinks
+## away; drawn rotated along the line and cropped to its length by SpecialFx, so keep PILLAR_W in sync) and the icon.
+PILLAR_POSE_FRAMES = 6
+PILLAR_FRAMES = 12
+PILLAR_W, PILLAR_H = 228, 64
+PILLAR_X0 = 8  # the staff's base: the line's start sits here (SpecialFx PILLAR_BASE_X)
+PILLAR_LEN = 213  # 320 px / SPRITE_SCALE
+PILLAR_T = 24  # 36 px wide
+
+
+def wukong_pillar_frame(k: int) -> Image.Image:
+    """Apex planting the staff: crouched with it held high, then thrusting it out along the aim (to the right, mirrored by
+    SpecialFx) while his body leans into it."""
+    _, up = wukong(None, k % 4, swing=True)
+    lean = (0, 0, 1, 2, 2, 2)[k]
+    c = Canvas(CELL)
+    c.img.alpha_composite(wukong_clouds(k % 4).img, (PAD, PAD + 2))
+    low, _ = wukong(None, k % 4, swing=True)
+    c.img.alpha_composite(low.img, (PAD, PAD + (2 if k < 2 else 0)))
+    c.img.alpha_composite(up.img, (PAD + lean, PAD + UPPER_DY + (2 if k < 2 else 0)))
+    c.px = c.img.load()
+    ox, oy = PAD + lean, PAD + UPPER_DY
+    hand = ((50, 52), (54, 56), (56, 58), (57, 58), (57, 58), (57, 58))[k]
+    tips = ((50, 22, 50, 74), (52, 36, 66, 74), (30, 58, 90, 58), (28, 58, 91, 58), (28, 58, 91, 58), (28, 58, 91, 58))[k]
+    hx, hy = hand
+    c.part(L([(ox + 45, oy + 38), (hx, hy - 2)], 5), YELLOW)  # front sleeve reaching the staff
+    x0, y0, x1, y1 = tips
+    c.part(L([(x0, y0), (x1, y1)], 4), RED)
+    for x, y in ((x0, y0), (x1, y1)):
+        c.flat(R((x - 2, y - 2, x + 2, y + 2)), YELLOW)
+    c.part(E((hx - 4, hy - 4, hx + 4, hy + 3)), SKIN)  # fists gripping
+    c.flat(R((hx - 2, hy - 1, hx + 2, hy - 1)), SKIN_D)
+    if k >= 3:  # a few sparks at the tip as it leaves
+        for i, (dx, dy) in enumerate(((-3, -6), (2, 5), (-1, 8))):
+            c.dot(x1 + dx - 2, y1 + dy, (YELLOW, WHITE, ORANGE)[(i + k) % 3])
+    return outline(c.img)
+
+
+def sky_pillar_frame(k: int) -> Image.Image:
+    """Frame k of 12: the staff grows (0-3, lifting off the floor), slams down (4: flash), dust and cracks along
+    the line (5-7), then it shrinks back to nothing while the cracks and dust fade (8-11)."""
+    import random
+    n = PILLAR_W
+    c = Canvas(n)
+    m = n // 2
+    length, thick = ((40, 6), (110, 12), (180, 18), (PILLAR_LEN, PILLAR_T), (PILLAR_LEN, PILLAR_T),
+                     (PILLAR_LEN, PILLAR_T), (PILLAR_LEN, PILLAR_T), (PILLAR_LEN, PILLAR_T), (160, 18), (100, 12),
+                     (45, 6), (0, 0))[k]
+    lift = (10, 10, 10, 8, 0, 0, 0, 0, 0, 0, 0, 0)[k]  # drawn this far above the floor line while airborne
+    x0 = PILLAR_X0
+    # cracks in the floor along both edges of the line, from the slam on, healing nothing: they just fade out
+    if 4 <= k <= 11:
+        rng = random.Random(11)
+        reach = (4, 6, 8, 9, 9, 8, 6, 4)[k - 4]
+        for i in range(0, PILLAR_LEN - 6, 14):
+            for side in (-1, 1):
+                x = x0 + 8 + i + rng.randint(-3, 3)
+                if k >= 8 and rng.random() < (k - 7) * 0.2:
+                    continue
+                y = m + side * (PILLAR_T // 2)
+                pts = [(x, y)]
+                for j in range(3):
+                    x += rng.randint(-3, 3)
+                    y += side * max(2, reach // 3)
+                    pts.append((x, y))
+                c.flat(L(pts, 1), SHADOW if k < 10 else STEEL_D)
+        if k <= 7:
+            c.flat(R((x0, m - PILLAR_T // 2 - 1, x0 + PILLAR_LEN, m + PILLAR_T // 2 + 1)), SHADOW)  # scorched under the staff
+    if length > 0:
+        if lift:  # the shadow it casts on the floor
+            c.flat(R((x0 + 4, m - thick // 2 + 2, x0 + length - 4, m + thick // 2 + 2)), SHADOW)
+        cy = m - lift
+        top, bot = cy - thick // 2, cy + thick // 2 - 1
+        c.part(R((x0, top, x0 + length, bot)), RED)
+        c.flat(R((x0 + 3, top + 2, x0 + length - 3, top + 3)), ORANGE)  # the light running along the top
+        for x in range(x0 + 20, x0 + length - 10, 40):  # gold bands
+            w = max(2, thick // 5)
+            c.part(R((x, top - 1, x + w, bot + 1)), YELLOW)
+        c.part(R((x0 + length - 8, top - 1, x0 + length, bot + 1)), YELLOW)  # tip cap
+        c.part(R((x0 - 6, top - 1, x0, bot + 1)), YELLOW)  # grip cap, where his fists were
+        if k == 4:  # slam flash: white edges and a burst at the tip
+            c.flat(R((x0, top, x0 + length, top)), WHITE)
+            c.flat(R((x0, bot, x0 + length, bot)), WHITE)
+            for i in range(6):
+                c.dot(x0 + length + 2 + i % 3, cy - 6 + i * 2, WHITE if i % 2 else YELLOW)
+    if 4 <= k <= 10:  # dust kicked up along both sides, rising and thinning
+        rng = random.Random(5)
+        age = k - 4
+        for i in range(0, PILLAR_LEN - 10, 26):
+            for side in (-1, 1):
+                r = round((5 + rng.randint(0, 2)) * (1.0 - age / 8))
+                px = x0 + 10 + i + rng.randint(-4, 4)
+                py = m + side * (PILLAR_T // 2 + 3 + age) - age * (2 if side < 0 else 1)
+                py = min(max(py, m - PILLAR_H // 2 + r + 3), m + PILLAR_H // 2 - r - 4)
+                if r >= 1:
+                    c.part(blobs([(px, py, r)]), WHITE if age < 3 else STEEL, shade=False, line=False)
+    if k == 11:  # last wisps
+        for i in range(8):
+            c.dot(x0 + 20 + i * 24, m - 14 + (i % 3) * 14, STEEL)
+    return outline(c.img.crop((0, m - PILLAR_H // 2, n, m + PILLAR_H // 2)))
 
 
 def whirl_ring_frame(k: int) -> Image.Image:
@@ -2826,9 +2932,12 @@ FX = {
     "wukong_whirl": lambda: strip([wukong_whirl_frame(k) for k in range(WHIRL_FRAMES)]),
     "whirl_ring": lambda: strip([whirl_ring_frame(k) for k in range(WHIRL_FRAMES)]),
     "whirl_spark": lambda: strip([whirl_spark_frame(k) for k in range(WHIRL_SPARK_FRAMES)]),
+    "wukong_pillar": lambda: strip([wukong_pillar_frame(k) for k in range(PILLAR_POSE_FRAMES)]),
 }
 ## Not square strips: single images (checked whole).
-FX_IMAGES = {"vine": vine, "vine_top": vine_top}
+## (sky_pillar: frames are wider than tall, so it is checked whole; frames keep clear of their edges by construction.)
+FX_IMAGES = {"vine": vine, "vine_top": vine_top,
+             "sky_pillar": lambda: strip([sky_pillar_frame(k) for k in range(PILLAR_FRAMES)])}
 
 
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint,
