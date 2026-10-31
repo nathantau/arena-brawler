@@ -146,33 +146,43 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
 def flicker(step=None, t=0):
-    """Ninja: black shroud and hood, masked face (just the eyes show), steel forehead plate,
-    a red scarf trailing behind and a ninjato on the back."""
+    """Shade, a kunoichi: long dark hair in a high ponytail that sways behind her, side-swept bangs, a steel
+    forehead plate, big lashed eyes and a little smile; fitted black shroud, red sash and scarf, ninjato on
+    her back."""
     low = Canvas()
     for x, dy in legs(low, SHADOW, NAVY, step):
         low.flat(R((x, 49 + dy, x + 5, 49 + dy)), NAVY)  # leg wraps
         low.flat(R((x, 51 + dy, x + 5, 51 + dy)), NAVY)
     up = Canvas()
     s = SWAY[t % 4]
-    up.part(P([(21, 33), (4, 27 + s), (2, 34 + s), (9, 40 + s), (21, 39)]), RED)  # scarf tails flutter
-    up.part(P([(9, 33 + s), (2, 34 + s), (9, 40 + s)]), MAROON, shade=False)
+    # long ponytail from the crown, flowing down behind her back; the tip swings
+    up.part(P([(20, 6), (13, 9), (7, 18), (5 + s, 30), (4 + s, 42), (8 + s, 47), (11, 38), (14, 26), (19, 16)]), NAVY)
+    up.flat(L([(15, 12), (10, 22), (8 + s, 34)], 1), BLUE)  # hair sheen
     up.part(L([(13, 25), (25, 45)], 4), OUTLINE)  # ninjato on the back
     up.part(RR((9, 21, 15, 27), 1), STEEL)  # its guard and pommel
-    up.part(RR((20, 33, 44, 48), 3), SHADOW)  # shroud
-    up.part(P([(22, 34), (32, 41), (42, 34), (42, 37), (32, 44), (22, 37)]), NAVY, shade=False, line=False)  # wrap fold
-    up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
-    up.part(P([(18, 12), (7, 19), (17, 27)]), SHADOW)  # hood point
-    up.part(E((15, 4, 49, 38)), SHADOW)  # hood
-    up.part(RR((22, 18, 47, 27), 3), SKIN)  # eye slit
-    up.part(R((22, 13, 47, 17)), STEEL)  # forehead plate
-    up.flat(R((32, 14, 36, 15)), STEEL_D)  # its engraving
-    up.part(E((21, 26, 48, 37)), SHADOW)  # mask over the lower face
-    up.flat(E((20, 8, 27, 13)), NAVY)  # hood sheen
-    big_eyes(up, 20, (31, 41), RED, h=5)
-    up.part(RR((19, 31, 45, 37), 2), RED)  # scarf
-    up.part(RR((17, 32, 24, 39), 2), MAROON)  # scarf knot
+    up.part(RR((22, 33, 42, 48), 3), SHADOW)  # fitted shroud
+    up.part(P([(23, 34), (32, 40), (41, 34), (41, 37), (32, 43), (23, 37)]), NAVY, shade=False, line=False)  # wrap
+    up.part(R((22, 43, 42, 45)), RED, line=False)  # sash
+    up.part(E((16, 5, 50, 38)), NAVY)  # hair around the head
+    up.part(P([(16, 18), (21, 18), (23, 40), (17, 37)]), NAVY)  # long lock down the back of her neck
+    up.part(E((21, 12, 47, 38)), SKIN)  # face
+    up.part(P([(19, 11), (49, 11), (49, 18), (45, 16), (41, 20), (37, 15), (31, 21), (27, 16), (22, 21), (19, 19)]),
+            NAVY, shade=False)  # side-swept bangs
+    up.part(P([(45, 14), (50, 16), (50, 33), (46, 29)]), NAVY, shade=False)  # lock framing her face
+    up.flat(L([(23, 9), (33, 8)], 1), BLUE)  # crown sheen
+    up.part(R((29, 9, 40, 11)), STEEL)  # small forehead plate
+    up.flat(R((34, 10, 35, 10)), STEEL_D)  # its engraving
+    up.part(RR((17, 7, 22, 12), 2), RED)  # ribbon tying the ponytail
+    big_eyes(up, 21, (28, 39), TEAL, h=7)
+    if not KO:
+        for x in (28, 39):  # lashes flick up and out at the top outer corner
+            up.flat(R((x + 3, 20, x + 4, 20)), OUTLINE)
+            up.dot(x + 5, 19, OUTLINE)
+    face(up, (24, 45, 30))
+    up.flat(L([(33, 32), (34, 33), (36, 33), (37, 32)], 1), MAROON)  # little smile
+    up.part(RR((24, 38, 41, 41), 2), RED)  # scarf, under the chin
+    up.part(RR((20, 38, 26, 44), 2), MAROON)  # scarf knot
     return low, up
-
 
 def warden(step=None, t=0):
     """Shield: armoured knight with a plume, cape and tower shield."""
@@ -348,6 +358,12 @@ APE_POSES = {"walk": ((((15, 26), (13, 36), (17, 44)), ((49, 26), (51, 36), (47,
              "pound": ((((15, 26), (8, 36), (7, 43)), ((49, 26), (56, 36), (57, 43))), ((2, 47, -2), (50, 47, 9)))}
 
 
+## The Great Ape's circlet: Wukong's, tilted askew and cracked; the morph cracks it one line at a time.
+APE_CIRCLET = [(23, 8), (47, 4), (47, 9), (23, 13)]
+APE_CRACKS = [[(36, 5), (34, 8), (37, 9), (35, 12)], [(29, 7), (30, 9), (28, 11)], [(42, 5), (43, 7), (41, 9)],
+              [(26, 8), (25, 10)]]
+
+
 def wukong_ape(step=None, t=0, pose=None):
     """Great Ape (Wukong's special): an angry, dark-red brute. Hunched, broad-shouldered, long arms
     with big fists, glowing red eyes under a heavy scowl, golden circlet and bracers, storm clouds.
@@ -395,11 +411,11 @@ def wukong_ape(step=None, t=0, pose=None):
         up.flat(R((x + 1, y + 6 + s, x + 11, y + 6 + s)), OUTLINE)
     up.part(E((24, 3, 50, 29)), MAROON)  # head, pushed forward
     up.part(E((28, 11, 50, 29)), BROWN)  # dark face
-    up.part(P([(23, 8), (47, 4), (47, 9), (23, 13)]), YELLOW, shade=False)  # golden circlet, knocked askew
-    up.flat(L([(23, 12), (47, 8)], 1), ORANGE)  # its lower rim
-    up.flat(L([(36, 5), (34, 8), (37, 9), (35, 12)], 1), OUTLINE)  # crack
+    up.part(P(APE_CIRCLET), YELLOW)  # Wukong's golden circlet (same shading and gem), knocked askew
+    up.flat(R((35, 7, 36, 7)), RED)  # gem
+    for crack in APE_CRACKS:
+        up.flat(L(crack, 1), OUTLINE)
     up.flat(P([(43, 4), (47, 4), (47, 6)]), OUTLINE)  # chipped corner
-    up.flat(R((28, 9, 29, 10)), RED)  # gem
     for x in (32, 42):  # glowing red eyes
         if KO:
             x_eye(up, x, 14, RED)
@@ -1093,9 +1109,17 @@ def ape_morph(t: float, scale: float) -> Image.Image:
         if rr >= 1:
             cx, cy = pt((x, y), (x, y), u)
             c.part(E((cx - rr, cy - rr, cx + rr, cy + rr)), WHITE, line=False)
-    # the circlet tilts askew
-    c.part(P(pts([(17, 13), (47, 13), (47, 16), (17, 16)], [(23, 8), (47, 4), (47, 9), (23, 13)], u)), YELLOW,
-           shade=False)
+    # the circlet tilts askew, keeping its gold and gem, and cracks spread across it one by one
+    c.part(P(pts([(17, 13), (47, 13), (47, 16), (17, 16)], APE_CIRCLET, u)), YELLOW)
+    gx, gy = pt((32, 14), (35, 7), u)
+    c.flat(R((gx, gy, gx + w(1, 1), gy)), RED)
+    def on_wukong_band(x, y):  # the same spot on Wukong's straight band (17..47, 13..16)
+        f = (x - 23) / 24
+        return 17 + 30 * f, 13 + 3 * (y - (8 - 4 * f)) / 5
+
+    for j, crack in enumerate(APE_CRACKS):
+        if t > 0.25 + 0.15 * j:
+            c.flat(L(pts([on_wukong_band(x, y) for x, y in crack], crack, u), max(1, round(scale))), OUTLINE)
     for x0, x1 in ((31, 32), (41, 42)):  # eyes slide and narrow; turn red and angry halfway
         ex, ey = pt((x0, 22), (x1, 14), u)
         eh = w(6, 3)
