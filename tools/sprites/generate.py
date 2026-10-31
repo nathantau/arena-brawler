@@ -287,8 +287,9 @@ def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: 
 
 
 def sakura(step=None, t=0):
-    """Blossom: a cool-eyed girl in a white kimono with wide sleeves, red obi tied in a bow at the back, pink hair
-    in a high bun with a blossom hairpin whose charm sways, straight bangs and long side locks; geta on her feet."""
+    """Blossom: a cool-eyed girl in a white kimono with wide sleeves, red obi tied in a bow at the back; pink hair
+    parted in the middle, curtains framing her face, and a long ponytail tied with a cherry blossom that sways
+    behind her; geta on her feet."""
     low = Canvas()
     for x, dy in legs(low, WHITE, BROWN, step):  # white tabi socks, wooden geta
         low.flat(R((x + 1, 53 + dy, x + 4, 53 + dy)), RED)  # geta thong
@@ -306,19 +307,21 @@ def sakura(step=None, t=0):
     up.flat(R((20, 42, 44, 42)), PINK)  # obi cord
     up.part(RR((41, 34, 51, 48), 3), WHITE)  # front sleeve
     up.flat(R((42, 46, 50, 47)), PINK_L)
-    up.part(E((26, 1, 40, 12)), PINK)  # high bun
+    # long ponytail from a high tie at the back of her head, swinging behind her
+    up.part(P([(19, 9), (12, 12), (8, 20), (6 + s, 30), (7 + s, 40), (11 + s, 46), (13, 37), (15, 27), (19, 17)]), PINK)
+    up.flat(L([(13, 15), (10, 24), (9 + s, 36)], 1), PINK_L)  # its sheen
     up.part(E((16, 5, 48, 37)), PINK)  # hair
-    up.part(P([(17, 15), (22, 15), (22, 40), (18, 37)]), PINK)  # long side lock behind
     up.part(E((21, 12, 47, 38)), SKIN)  # face
-    up.part(P([(20, 13), (48, 13), (48, 19), (45, 17), (41, 20), (37, 16), (32, 20), (28, 16), (24, 19), (20, 17)]),
-            PINK, shade=False)  # bangs, in soft points
-    up.part(P([(44, 14), (49, 14), (50, 39), (46, 37)]), PINK, shade=False)  # long side lock in front
-    up.part(L([(34, 6), (44, 3)], 1), STEEL, shade=False)  # hairpin through the bun
+    # middle part: two curtains and two long side locks, mirrored about the face's centre line (x = 34)
+    curtain = [(34, 8), (43, 7), (48, 12), (49, 22), (47, 26), (43, 20), (39, 15), (35, 12)]
+    lock = [(44, 14), (49, 14), (50, 39), (46, 37)]
+    for shape in (curtain, lock):
+        up.part(P(shape), PINK, shade=False)
+        up.part(P([(68 - x, y) for x, y in shape]), PINK, shade=False)
+    up.flat(L([(34, 6), (34, 11)], 1), MAROON)  # the parting
     up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
-                          ((45, 2), (48, 4), (47, 7), (43, 7), (42, 4))], PINK_L)  # its blossom
-    up.dot(45, 5, YELLOW)
-    up.flat(L([(46, 8), (47, 11 + s)], 1), STEEL)  # dangling charm sways
-    up.flat(R((46, 12 + s, 48, 13 + s)), PINK)
+                          ((19, 4), (22, 6), (21, 9), (17, 9), (16, 6))], PINK_L)  # cherry blossom tying the ponytail
+    up.dot(19, 7, YELLOW)
     big_eyes(up, 22, (29, 39), PINK, h=6)
     if not KO:
         for x, out in ((29, -1), (39, 4)):  # calm lids, lashes flicking out at the outer corners
