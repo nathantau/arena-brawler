@@ -75,8 +75,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - Run headless server: `godot --path . --headless -- --server --port 7777` (add `--bots N` for server-side bots)
 - Match options (server / offline): `--mode duel|ffa` (starting mode; players can switch it in the lobby),
   `--arena N` (0 = Pit, 1 = Foundry), `--time-limit S` (shorter matches for testing)
-- Pick a character (client / offline): `--character flicker|warden|twinshot|wukong|flint|sakura`
-  (ids; shown as Shade / Warden / Gunnar / Apex / Flint / Sakura: `display_name` only, ids, files and art keep the old names)
+- Pick a character (client / offline): `--character flicker|warden|twinshot|wukong|flint|sakura|bolt`
+  (ids; shown as Shade / Warden / Gunnar / Apex / Flint / Sakura / Bolt: `display_name` only, ids, files and art keep the old names)
 - Render frames to check visuals without a screen: `godot --path . --write-movie /tmp/f.png --fixed-fps 30 --quit-after 300 -- --offline --autopilot --touch`
 - Net debugging: add `--net-debug` (prints server/client net stats every second, logs reconciliation corrections);
   `--autopilot` makes a client drive + fire on its own, e.g. two headless autopilot clients for soak tests:
@@ -409,6 +409,17 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   draws all of it from the synced active time on every peer: a bolt per tick at each enemy within the radius on the local view
   (else at the cloud's spot).
 - **Apex FX polish** (2026-10-31, art only): Vine Swing pose 12 frames (vine wrap + leaf on the fist, streaming tails, wind streaks), `leaf_burst` 14 / `swing_dust` 12, lit knotted `vine` with berries; Staff Whirl pose + `whirl_ring` 12-frame loops (`WHIRL_FPS` 24), shaded staff with dithered motion-blur wedge, `whirl_spark` 7; Sky Pillar `wukong_pillar` 9 poses, `sky_pillar` 18 frames (slam on frame 6 = u 1/3), shock ring, glowing cracks, flying chips; Storm Cloud merged lit/shaded cloud mass, 12-frame loop (`STORM_LOOP`, `STORM_FPS` 15), gold flashes inside, 8-frame bolt with forks, 8-frame spark. `SpecialFx._strike` only draws a bolt on enemies in line of sight of the cloud (same rule as the damage), so bolts no longer fall on players a wall shields.
+- **Bolt + Overdrive** (2026-10-31): new fighter `bolt` (in rotation; 85 hp, 40 armor, 290 speed, tags bolt/light/arcane). Look: swept-back yellow hair
+  with a zig-zag lightning crest above the art box (generate.py `bolt_crown`, in `CROWNS`), goggles pushed up on the brow, blue runner's suit with a
+  yellow chest flash, white gloves/boots with yellow cuffs, a cyan scarf in the wind; small arcs crackle over the suit and off his body, new
+  random-looking but seeded per tick (`bolt_aura` in `AURAS` + arcs in `bolt()`; every 4th tick a long forked flash). Helpers `zap_zig` / `zap_arc` /
+  `arcs_from`. **Arc Zapper** (signature weapon, `bolt_zapper`): quick weak homing sparks, 4 dmg every 0.12 s (~33 DPS, 12 energy/shot), 6 deg spread,
+  range 300, `homing` 2.5 rad/s, one wall bounce; the held art loops (spark between the prongs). **Overdrive** (`overdrive`, kind OVERDRIVE = 19):
+  move speed x `overdrive_speed_scale` 1.9 for `duration` 3 s, cooldown 9 s; steerable through the normal `move_and_slide` path
+  (`Player.simulate`, derived from the synced active time only, no new synced field), no i-frames, and he CAN fire (unlike Petal Drift).
+  `SpecialFx._sync_overdrive` (every peer, from synced state): `bolt_crack` 14-frame lightning strike on the rising edge, `bolt_overdrive` 8-frame
+  crackle loop over him, `bolt_ghost` afterimages (dithered blue/cyan silhouettes with speed streaks, drawn on the floor layer under him from a
+  position history), `bolt_spark` arcs popping off him while he moves, `bolt_fizzle` 12 frames when it ends; `icon_overdrive`.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

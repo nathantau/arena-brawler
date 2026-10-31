@@ -316,6 +316,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var grapple: CharacterSkill = active_skill(SkillData.Kind.GRAPPLE)
 	var whirl: CharacterSkill = active_skill(SkillData.Kind.WHIRL)
 	var drift: CharacterSkill = active_skill(SkillData.Kind.DRIFT)
+	var overdrive: CharacterSkill = active_skill(SkillData.Kind.OVERDRIVE)
 	var planting: CharacterSkill = active_skill(SkillData.Kind.PILLAR)  # just pressed counts
 	var flaring: CharacterSkill = active_skill(SkillData.Kind.NOVA)
 	var rooted: bool = (planting != null and planting.pillar_winding()) or (flaring != null and flaring.nova_charging())
@@ -339,6 +340,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			* stats.speed_scale()
 		if whirl != null:
 			speed *= whirl.data.whirl_speed_scale
+		if overdrive != null:
+			speed *= overdrive.data.overdrive_speed_scale
 		var steer: Vector2 = input.move_vec
 		if drift != null:  # glides on its own way until the stick says otherwise
 			speed *= drift.data.drift_speed_scale

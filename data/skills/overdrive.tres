@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_overdrive.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"overdrive"
+display_name = "Overdrive"
+kind = 19
+special = true
+blurb = "Super speed"
+tags = Array[StringName]([&"bolt"])
+cooldown = 9.0
+duration = 3.0
+overdrive_speed_scale = 1.9

@@ -19,7 +19,7 @@ func before_all() -> void:
 
 
 func test_catalog_and_skills() -> void:
-	assert_eq(characters.ordered.size(), 4, "Gunnar and Warden are benched")
+	assert_eq(characters.ordered.size(), 5, "Gunnar and Warden are benched")
 	assert_not_null(characters.get_character(&"warden"), "benched characters still load by id")
 	for c: CharacterData in characters.ordered:
 		assert_not_null(c.sprite_sheet, c.id)
@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst", &"cherry_sapling", &"storm_cloud"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst", &"cherry_sapling", &"storm_cloud", &"overdrive"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -1729,3 +1729,98 @@ func test_storm_cloud_replay_matches_and_hurts_nobody() -> void:
 	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
 	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
 	assert_lt(foe.stats.hp + foe.stats.armor, foe.stats.max_hp + foe.stats.max_armor)
+
+
+# --- Bolt's Overdrive ---------------------------------------------------------
+
+func _bolt(world: Node2D, pool: ProjectilePool, id: int = 1, at: Vector2 = Vector2(100, 300)) -> Player:
+	var p := Player.new()
+	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
+		characters.get_character(&"bolt"))
+	world.add_child(p)
+	p.set_skill(1, skills.get_skill(&"overdrive"))
+	p.global_position = at
+	return p
+
+
+func test_overdrive_is_bolts_own() -> void:
+	var d: SkillData = skills.get_skill(&"overdrive")
+	assert_eq(d.kind, SkillData.Kind.OVERDRIVE)
+	assert_eq(int(d.kind), 19)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"bolt", String(c.id))
+	assert_eq(characters.get_character(&"bolt").signature_skill, d)
+	assert_eq(characters.get_character(&"bolt").signature_weapon.id, &"bolt_zapper")
+
+
+func test_overdrive_is_faster_for_its_duration_and_still_fires() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var p: Player = _bolt(world, pool)
+	var walker: Player = _bolt(world, pool, 2, Vector2(100, 700))
+	var d: SkillData = skills.get_skill(&"overdrive")
+	await wait_physics_frames(2)
+	var go := InputFrame.new()
+	go.move_vec = Vector2.RIGHT
+	for i: int in 30:
+		walker.simulate(go, DT)
+	var normal: float = walker.velocity.x
+	assert_almost_eq(normal, 290.0, 1.0)
+	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
+	for i: int in 30:
+		p.simulate(go, DT)
+	assert_almost_eq(p.velocity.x, normal * d.overdrive_speed_scale, 1.0, "super speed")
+	assert_true(p.can_be_hit(), "no i-frames: speed is the defence")
+	var fire := InputFrame.new()
+	fire.move_vec = Vector2.RIGHT
+	fire.fire = true
+	fire.seq = 40
+	watch_signals(p)
+	p.simulate(fire, DT)
+	assert_signal_emitted(p, "shot_fired", "unlike Drift he can still shoot")
+	for i: int in floori(d.duration / DT):
+		p.simulate(go, DT)
+	assert_false(p.skills[1].is_active())
+	for i: int in 40:
+		p.simulate(go, DT)
+	assert_almost_eq(p.velocity.x, normal, 1.0, "back to normal speed")
+	assert_gt(p.skills[1].cooldown_remaining, 0.0)
+
+
+func test_overdrive_is_steerable() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var p: Player = _bolt(world, null)
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
+	var up := InputFrame.new()
+	up.move_vec = Vector2.UP
+	for i: int in 40:
+		p.simulate(up, DT)
+	assert_lt(p.velocity.y, -500.0)
+	assert_lt(absf(p.velocity.x), 20.0)
+
+
+func test_overdrive_replay_matches() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var a: Player = _bolt(world, null)
+	var b: Player = _bolt(world, null, 2, Vector2(300, 100))
+	await wait_physics_frames(2)
+	var snapshot: Array = a.capture_state()
+	var f := InputFrame.new()
+	f.seq = 10
+	f.special = true
+	f.move_vec = Vector2(1, -0.3)
+	f.aim_vec = Vector2.RIGHT
+	a.simulate(f, DT)
+	assert_true(b.apply_state(snapshot, WeaponCatalog.load_all(), characters))
+	b.simulate(f, DT, true)
+	f.special = false
+	for i: int in 200:
+		a.simulate(f, DT)
+		b.simulate(f, DT, true)
+	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
+	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
