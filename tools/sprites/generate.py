@@ -119,6 +119,9 @@ EYES_X = (31, 41)
 EYES_Y = 22
 BLUSH = (27, 45, 29)
 MOUTH = (37, 30)
+## The whole head (hair / back of head) is centred over the body; the face sits right of centre, turned the way
+## the character faces. Characters without hair fill this behind the face.
+HEAD = (17, 12, 47, 37)
 
 
 def big_eyes(c: Canvas, y: int, xs: tuple[int, int], iris, h: int = 6):
@@ -260,6 +263,7 @@ def twinshot(step=None, t=0):
         up.part(RR((x, 42, x + 7, 54), 2), BROWN)  # holster
         up.part(RR((x + 1, 36, x + 5, 43), 1), STEEL_D)  # grip
         up.dot(x + 2, 37, STEEL)
+    up.part(E(HEAD), BROWN)  # hair under the hat: the head sits centred on the body, the face turned right
     up.part(RR(FACE, FACE_R), SKIN)  # face
     big_eyes(up, EYES_Y, EYES_X, BLUE)
     up.flat(R((EYES_X[0], 20, EYES_X[0] + 3, 20)), BROWN)  # brows
@@ -359,14 +363,15 @@ def flint(step=None, t=0):
         up.flat(L(pts, 1), ORANGE)  # glowing cracks
     up.flat(P([(32, 37), (35, 40), (32, 43), (29, 40)]), YELLOW)  # ember heart
     up.dot(32, 40, WHITE)
-    up.part(RR(FACE, FACE_R), ORANGE)  # molten face
+    up.part(lambda d, f: (d.ellipse(HEAD, f), d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)  # molten head, face turned right
     up.part(E((MOUTH[0] - 6, 26, MOUTH[0] + 6, 34)), YELLOW, line=False)  # hot glow around the mouth
     big_eyes(up, EYES_Y, EYES_X, YELLOW)
     up.flat(R((BLUSH[0], BLUSH[2], BLUSH[0] + 1, BLUSH[2])), RED)  # blush
     up.flat(R((BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])), RED)
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
     # Tongues licking up from the forehead; orange rim so no red stripe runs across the face.
-    flame(up, FACE[0], FACE[2], FACE[1] + 4, 7, t + 2, tongues=4, line=False, rim=ORANGE)
+    mid = (HEAD[0] + HEAD[2]) // 2
+    flame(up, mid - 12, mid + 12, FACE[1] + 4, 7, t + 2, tongues=4, line=False, rim=ORANGE)
     return low, up
 
 
@@ -375,7 +380,8 @@ def flint_crown(t: int, dy: int) -> Canvas:
     A CELL canvas drawn behind the body before outlining (the face covers its base); `dy` = the head's bob."""
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
-    flame(c, PAD + FACE[0] + 1, PAD + FACE[2] - 1, top + FACE[1] + 9, 26, t, tongues=4)  # no wider than the face, or the side tongues read as horns
+    mid = PAD + (HEAD[0] + HEAD[2]) // 2  # centred on the head, no wider than the face, or the side tongues read as horns
+    flame(c, mid - 11, mid + 11, top + FACE[1] + 9, 26, t, tongues=4)
     return c
 
 
