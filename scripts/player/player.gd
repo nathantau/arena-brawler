@@ -45,6 +45,8 @@ const WHIRL_SEQ_OFFSET: int = 1 << 26
 const TRAIL_SEQ_OFFSET: int = 1 << 27
 ## Sky Pillar slams are keyed too.
 const PILLAR_SEQ_OFFSET: int = 1 << 28
+## Cherry Sapling shots are keyed too (below the volley offset).
+const SAPLING_SEQ_OFFSET: int = 1 << 22
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
@@ -265,8 +267,14 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var burn_before: float = burning.elapsed() if burning != null else 0.0
 	var pillar: CharacterSkill = active_skill(SkillData.Kind.PILLAR)
 	var pillar_before: float = pillar.elapsed() if pillar != null else 0.0
+	var sapling_before: Array[float] = []
 	for slot: CharacterSkill in skills:
+		sapling_before.append(slot.elapsed() if slot.is_active() else -1.0)
 		slot.tick(delta)
+	if not replay:
+		for i: int in skills.size():
+			if sapling_before[i] >= 0.0 and skills[i].sapling_shot_due(sapling_before[i]):
+				_sapling_shoot(skills[i], input.seq)
 	if burning != null and not replay:
 		_burn_trail(burning, burn_before, input.seq)
 	if pillar != null and not replay and pillar.pillar_slammed(pillar_before):
@@ -364,6 +372,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			slot.direction = (wall.position if not wall.is_empty() else _sight_query.to) - global_position
 		SkillData.Kind.GRAPPLE:
 			_throw_grapple(slot)
+		SkillData.Kind.SAPLING:
+			slot.anchor = global_position + Vector2(0.0, FOOT_RING_Y)
 		SkillData.Kind.ERUPTION:
 			slot.anchor = eruption_spot(slot.direction, slot.data)
 		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE:
@@ -382,6 +392,37 @@ func _whirl(slot: CharacterSkill, seq: int, delta: float, replay: bool) -> void:
 	var d: SkillData = slot.data
 	projectiles.whirl(player_id, seq + WHIRL_SEQ_OFFSET, global_position, d.whirl_radius,
 		d.whirl_damage if slot.whirl_tick_due(delta) else 0, d.whirl_knockback)
+
+
+## The tree shoots one petal at the nearest visible enemy in range (shadow clones count, smoked ones don't). Ties go
+## to the earlier player, so the choice is the same on every peer that simulates it.
+func _sapling_shoot(slot: CharacterSkill, seq: int) -> void:
+	var d: SkillData = slot.data
+	var muzzle: Vector2 = slot.anchor - Vector2(0.0, d.sapling_muzzle_height)
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var best: float = d.sapling_range * d.sapling_range
+	var aim := Vector2.INF
+	for p: Player in projectiles.targets:
+		if p == self or p.dead:
+			continue
+		var spots: PackedVector2Array = p.clone_points()
+		if not p.is_hidden():
+			spots.append(p.global_position)
+		for spot: Vector2 in spots:
+			var dist: float = muzzle.distance_squared_to(spot)
+			if dist >= best:
+				continue
+			for at: Vector2 in [spot, spot + Vector2(0.0, Constants.PLAYER_RADIUS * AutoAim.LOW_SPOT)]:
+				if AutoAim.has_line_of_sight(space, _sight_query, muzzle, at):
+					best = dist
+					aim = at
+					break
+	if aim == Vector2.INF:
+		return
+	var dir: Vector2 = (aim - muzzle).normalized()
+	var key: int = seq + SAPLING_SEQ_OFFSET
+	projectiles.fire_shot(player_id, key, muzzle, dir, d.sapling_weapon, match_seed)
+	shot_fired.emit(self, key, muzzle, dir, d.sapling_weapon.id)
 
 
 ## The Blaze Run trail burns whoever stands within `trail_radius` of its line on every `trail_tick` (no self-damage).
@@ -654,6 +695,9 @@ func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int) ->
 func _die(killer_id: int) -> void:
 	respawn_timer = Constants.RESPAWN_DELAY
 	velocity = Vector2.ZERO
+	for slot: CharacterSkill in skills:
+		if slot.data.kind == SkillData.Kind.SAPLING:
+			slot.active_remaining = 0.0  # the tree goes with her
 	_set_dead(true)
 	died.emit(self, killer_id)
 

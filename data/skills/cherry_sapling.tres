@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_cherry_sapling.png" id="2_icon"]
+[ext_resource type="Resource" path="res://data/weapons/cherry_petal.tres" id="3_petal"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"cherry_sapling"
+display_name = "Cherry Sapling"
+kind = 18
+special = true
+blurb = "Petal-shooting tree"
+tags = Array[StringName]([&"sakura"])
+cooldown = 12.0
+duration = 6.0
+sapling_range = 360.0
+sapling_interval = 0.5
+sapling_muzzle_height = 38.0
+sapling_weapon = ExtResource("3_petal")

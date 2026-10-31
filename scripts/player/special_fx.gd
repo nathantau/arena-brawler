@@ -40,6 +40,15 @@ const SNARE_FPS: float = 8.0
 const SNARE_BURST_TIME: float = 0.5
 ## Row of snare_vines.png the ground ring is centred on (generate.py SNARE_BASE_Y), put on the owner's feet.
 const SNARE_BASE_Y: float = 26.0
+const SAPLING_GROW_ART: Texture2D = preload(FX_DIR + "sapling_grow.png")
+const SAPLING_IDLE_ART: Texture2D = preload(FX_DIR + "sapling_idle.png")
+const SAPLING_FIRE_ART: Texture2D = preload(FX_DIR + "sapling_fire.png")
+const SAPLING_WILT_ART: Texture2D = preload(FX_DIR + "sapling_wilt.png")
+## Row of the sapling strips the trunk stands on (generate.py SAPLING_BASE): it sits on the planting spot.
+const SAPLING_BASE_Y: float = 56.0
+const SAPLING_FPS: float = 12.0
+const SAPLING_IDLE_FPS: float = 5.0
+const SAPLING_FIRE_FPS: float = 16.0
 const CRACK_ART: Texture2D = preload(FX_DIR + "eruption_crack.png")
 const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
 const CRACK_FPS: float = 12.0
@@ -190,6 +199,10 @@ var _poofs: Array[Poof] = []
 var _was_cloning: bool = false
 var _was_transformed: bool = false
 var _erupt_started: bool = false
+## Cherry Sapling: the slot while its tree stands (else null), and seconds into the firing flourish (-1 = none).
+var _sapling: CharacterSkill
+var _sapling_shots: int = 0
+var _sapling_fire_t: float = -1.0
 ## The eruption slot while its crack shows (else null).
 var _crack: CharacterSkill
 var _last_points := PackedVector2Array()
@@ -293,6 +306,7 @@ func sync(p: Player) -> void:
 	_pillar_at = p.global_position + p.visual_offset
 	_sync_swing(p)
 	_sync_drift(p)
+	_sync_sapling(p)
 	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
 	if slow > _snare_left + SNARE_NEW_MARGIN:  # a snare landed (or was refreshed): petals burst
 		_poof(p.global_position + p.visual_offset, SNARE_BURST_ART, SNARE_BURST_TIME)
@@ -333,6 +347,21 @@ func sync(p: Player) -> void:
 	_erupt_started = erupting and (_erupt_started or eruption.active_remaining <= ERUPTION_LEAD)
 	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD else null
 	queue_redraw()
+
+
+## The tree is drawn from the synced skill time (grow, idle loop, wilt over the last strip's length); a flourish
+## plays each time a shot falls due.
+func _sync_sapling(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.SAPLING)
+	_sapling = slot if slot != null and slot.is_active() and not p.dead else null
+	if _sapling == null:
+		_sapling_shots = 0
+		_sapling_fire_t = -1.0
+		return
+	var shots: int = floori((_sapling.elapsed() + CharacterSkill.WHIRL_EPSILON) / _sapling.data.sapling_interval)
+	if shots > _sapling_shots:
+		_sapling_fire_t = 0.0
+	_sapling_shots = shots
 
 
 func _sync_drift(p: Player) -> void:
@@ -411,6 +440,10 @@ func _process(delta: float) -> void:
 		_reform_t += delta
 		if _reform_t > DRIFT_STRIP_FRAMES / DRIFT_FPS:
 			_reform_t = -1.0
+	if _sapling_fire_t >= 0.0:
+		_sapling_fire_t += delta
+		if _sapling_fire_t > SAPLING_FIRE_ART.get_width() / SAPLING_FIRE_ART.get_height() / SAPLING_FIRE_FPS:
+			_sapling_fire_t = -1.0
 	if _vine_t >= 0.0:
 		_vine_t += delta
 		if _vine_t > VINE_RETRACT_TIME:
@@ -527,6 +560,7 @@ func _draw() -> void:
 	_draw_swing()
 	_draw_drift()
 	_draw_snare()
+	_draw_sapling()
 	_draw_blaze()
 	_draw_flourishes()
 	if _owner == null:
@@ -587,6 +621,30 @@ func _draw_ward() -> void:
 		return
 	var frame: int = int((_ward_t - WARD_OPEN_TIME) * WARD_FPS) % (WARD_ART.get_width() / WARD_ART.get_height())
 	_draw_frame(WARD_ART, frame, WARD_ART.get_height(), _ward_at, px)
+
+
+func _draw_sapling() -> void:
+	if _sapling == null:
+		return
+	var art: Texture2D = SAPLING_IDLE_ART
+	var frame: int = int(_time * SAPLING_IDLE_FPS)
+	var t: float = _sapling.elapsed()
+	var grow_time: float = SAPLING_GROW_ART.get_width() / SAPLING_GROW_ART.get_height() / SAPLING_FPS
+	var wilt_time: float = SAPLING_WILT_ART.get_width() / SAPLING_WILT_ART.get_height() / SAPLING_FPS
+	if t < grow_time:
+		art = SAPLING_GROW_ART
+		frame = int(t * SAPLING_FPS)
+	elif _sapling.active_remaining < wilt_time:
+		art = SAPLING_WILT_ART
+		frame = int((wilt_time - _sapling.active_remaining) * SAPLING_FPS)
+	elif _sapling_fire_t >= 0.0:
+		art = SAPLING_FIRE_ART
+		frame = int(_sapling_fire_t * SAPLING_FIRE_FPS)
+	var n: int = art.get_width() / art.get_height()
+	var px: float = Constants.SPRITE_SCALE
+	var up: float = (art.get_height() * 0.5 - SAPLING_BASE_Y) * px
+	_draw_frame(art, mini(frame, n - 1) if art != SAPLING_IDLE_ART else frame % n, art.get_height(),
+		_sapling.anchor + Vector2(0.0, up), px)
 
 
 ## Vines coiled round the snared player's feet, looping while the slow lasts.
