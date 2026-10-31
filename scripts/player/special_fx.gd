@@ -80,8 +80,15 @@ const MORPH_TIME: float = 1.0
 const ZIP_ART: Texture2D = preload(FX_DIR + "flicker_zip.png")
 const SPARK_ART: Texture2D = preload(FX_DIR + "grapple_spark.png")
 const CHAIN_ART: Texture2D = preload(FX_DIR + "grapple_chain.png")
+const THROW_ART: Texture2D = preload(FX_DIR + "grapple_throw.png")
+const LAND_ART: Texture2D = preload(FX_DIR + "grapple_land.png")
 const KUNAI_ART: Texture2D = preload("res://assets/sprites/projectiles/flicker_kunai.png")
-const ZIP_FPS: float = 12.0
+const ZIP_FPS: float = 24.0  # 8-frame loop (was 4 at 12): same cycle time
+const CHAIN_FPS: float = 16.0
+const THROW_TIME: float = 0.2
+const LAND_TIME: float = 0.25
+## The landing strip's floor line is 12 art px below its cell centre; her soles are this far below her centre (world px).
+const LAND_FEET_Y: float = 26.0
 ## Staff Whirl: the spin pose and the ring on the floor loop at WHIRL_FPS; the ring art is drawn for this radius
 ## (generate.py WHIRL_R art px x SPRITE_SCALE), other radii scale it. Sparks fly off the rim on every damage tick.
 const WHIRL_ART: Texture2D = preload(FX_DIR + "wukong_whirl.png")
@@ -502,10 +509,15 @@ func _sync_grapple(p: Player) -> void:
 	var was: CharacterSkill = _grapple
 	_grapple = g if g != null and g.is_active() and not p.dead else null
 	_grapple_at = p.global_position + p.visual_offset
+	if was != null and _grapple == null and _grapple_bit and not p.dead:  # the zip ended: she lands
+		_poof(_grapple_at + Vector2(0.0, LAND_FEET_Y - 12.0 * Constants.SPRITE_SCALE), LAND_ART, LAND_TIME)
 	if g == null:
 		return
 	if _grapple != null and was == null:
 		_grapple_bit = false
+		var flip0: bool = _grapple.direction.x < 0.0
+		_poof(_grapple_at + Vector2(-ZIP_HAND.x if flip0 else ZIP_HAND.x, ZIP_HAND.y), THROW_ART, THROW_TIME,
+			-1.0 if flip0 else 1.0)
 	elif _grapple == null and not p.dead and g.cooldown_remaining > _grapple_cd + 0.01 \
 			and g.cooldown_remaining <= g.data.grapple_miss_cooldown:  # a fresh miss (a bite charges the full cooldown)
 		_miss_t = 0.0
@@ -782,7 +794,12 @@ func _draw_flourishes() -> void:
 	for pf: Poof in _poofs:
 		var n: int = pf.art.get_width() / pf.art.get_height()
 		var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
-		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale)
+		if pf.scale < 0.0:  # a negative scale mirrors the strip (faces left)
+			draw_set_transform(pf.pos, 0.0, Vector2(-1.0, 1.0))
+			_draw_frame(pf.art, frame, pf.art.get_height(), Vector2.ZERO, px * -pf.scale)
+			draw_set_transform(Vector2.ZERO)
+		else:
+			_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale)
 
 
 ## Where the kunai bit: the stop point is a player radius short of the feet-level wall; the wall itself is drawn
@@ -829,9 +846,10 @@ func _draw_chain(hand: Vector2, tip: Vector2) -> void:
 	var ring: Vector2 = tip - dir * (KUNAI_TIP + KUNAI_RING) * s
 	var links: int = int(maxf(0.0, (ring - hand).dot(dir)) / (CHAIN_LINK_STEP * s))
 	var link: float = CHAIN_ART.get_height()
+	var chain_n: int = CHAIN_ART.get_width() / CHAIN_ART.get_height()
 	for i: int in links:
 		draw_set_transform(hand + dir * (i + 0.5) * CHAIN_LINK_STEP * s, dir.angle(), Vector2(s, s))
-		draw_texture_rect_region(CHAIN_ART, Rect2(-link * 0.5, -link * 0.5, link, link), Rect2(i % 2 * link, 0, link, link))
+		draw_texture_rect_region(CHAIN_ART, Rect2(-link * 0.5, -link * 0.5, link, link), Rect2((i + int(_time * CHAIN_FPS)) % chain_n * link, 0, link, link))
 	var kh: float = KUNAI_ART.get_height()
 	draw_set_transform(tip - dir * KUNAI_TIP * s, dir.angle(), Vector2(s, s))
 	draw_texture_rect_region(KUNAI_ART, Rect2(-kh * 0.5, -kh * 0.5, kh, kh), Rect2(0, 0, kh, kh))
