@@ -194,8 +194,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   slot-0 sidearm (bots keep the Dummy Blaster): Flicker's Ripple Kunai (3-knife fan, `pierce` = passes through
   1 player), Warden's Oath Hammer (melee slam: one blast at the tip of the reach, not behind walls), Twinshot's
   Ricochet Six (bullets bounce off walls twice and still hit), Wukong's Cloud Staff (`thrust`: long narrow stab).
-  No hands or arms: weapons float in front of the body, the grip as high as it can go without the weapon's base
-  covering the face (`Player.hand_y(angle)`, `WEAPON_BASE`, `FACE_BOTTOM_Y`, `WEAPON_HOLD_DISTANCE`) and follow the aim; shots start from there (`shot_origin`, `muzzle_distance`).
+  No hands or arms: weapons float at chest height in front of the body (`Player.WEAPON_HAND_Y`,
+  `WEAPON_HOLD_DISTANCE`) and follow the aim; shots start from there (`shot_origin`, `muzzle_distance`).
   Weapons are drawn from their sprite at the character's pixel scale, pivoting on the grip: guns
   kick back and up, melee sweeps the arc from a raised guard, thrusts stab out and back (`Player._draw_gun`).
   Clients don't stop piercing pellets on server hit events.

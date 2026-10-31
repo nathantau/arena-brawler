@@ -331,14 +331,3 @@ func test_ape_slam_lands_after_its_windup() -> void:
 		p.simulate(idle, Constants.PHYSICS_DT)
 	assert_signal_emit_count(p, "shot_fired", 1, "lands when the fists come down")
 
-
-
-func test_weapon_base_stays_below_the_face_at_every_aim() -> void:
-	for deg: int in range(-180, 180, 5):
-		var a: float = deg_to_rad(deg)
-		var flip: float = -1.0 if cos(a) < 0.0 else 1.0
-		var base_back: Vector2 = Vector2(Player.WEAPON_BASE.position.x, Player.WEAPON_BASE.position.y * flip)
-		var base_top: float = Player.hand_y(a) + (base_back * Constants.SPRITE_SCALE).rotated(a).y
-		assert_gte(base_top, Player.FACE_BOTTOM_Y - 0.01, "aim %d deg" % deg)
-	# Aiming straight up the weapon hides behind the body, so it can sit at the face's edge.
-	assert_almost_eq(Player.hand_y(-PI / 2.0), Player.FACE_BOTTOM_Y, 0.01)

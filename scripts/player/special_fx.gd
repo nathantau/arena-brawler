@@ -171,7 +171,7 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 		return
 	var flip_v: float = -1.0 if dir.x < 0.0 else 1.0
 	var s: float = Constants.SPRITE_SCALE
-	draw_set_transform(at + Vector2(0.0, Player.hand_y(dir.angle())) + dir * Player.WEAPON_HOLD_DISTANCE, dir.angle(),
+	draw_set_transform(at + Vector2(0.0, Player.WEAPON_HAND_Y) + dir * Player.WEAPON_HOLD_DISTANCE, dir.angle(),
 		Vector2(s, s * flip_v))
 	var tint := Color(1, 1, 1, alpha)
 	draw_texture(w.sprite, -Player.WEAPON_GRIP, tint)
