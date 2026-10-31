@@ -130,25 +130,28 @@ const DUST_TIME: float = 0.4
 const SWING_FEET_Y: float = 26.0
 ## Blaze Run: burning ground stamped along the trail (generate.py BLAZE_*), an ignition flare at takeoff, the fire dying
 ## out over the last BLAZE_DIE_TIME (stamp by stamp from the start), and a streak of flame on the runner while he dashes.
-const BLAZE_GROUND_ART: Texture2D = preload(FX_DIR + "blaze_run_ground.png")
 const BLAZE_FLAMES_ART: Texture2D = preload(FX_DIR + "blaze_run_flames.png")
 const BLAZE_IGNITE_ART: Texture2D = preload(FX_DIR + "blaze_run_ignite.png")
 const BLAZE_STREAK_ART: Texture2D = preload(FX_DIR + "blaze_run_streak.png")
 const BLAZE_FPS: float = 10.0
 const BLAZE_STREAK_FPS: float = 12.0
-## Distance between stamps along the trail, in px.
-const BLAZE_GROUND_STEP: float = 9.0
-## Flame spacing along the run: wide on horizontal runs, wider on vertical ones (flames are tall, so they'd stack into
-## a column), each jittered by up to BLAZE_JITTER of a step and pushed off the line by up to the sideways reach.
-const BLAZE_FLAME_STEP_H: float = 58.0
-const BLAZE_FLAME_STEP_V: float = 84.0
+## Flame spacing along the run: close on horizontal runs so the trail reads continuous, wider on vertical ones (flames
+## are tall, so they'd stack into a column), each jittered by up to BLAZE_JITTER of a step and pushed off the line by up
+## to the sideways reach.
+const BLAZE_FLAME_STEP_H: float = 42.0
+const BLAZE_FLAME_STEP_V: float = 72.0
 const BLAZE_JITTER: float = 0.3
-const BLAZE_SIDE_H: float = 7.0
+const BLAZE_SIDE_H: float = 6.0
 const BLAZE_SIDE_V: float = 12.0
-## Strip layout (generate.py blaze_ground_strip / BLAZE_FLAME_*): ground frames 0 rim, 1 base, then per variant
-## 4 glow + BLAZE_GROUND_DIES cooling frames; flame frames are 4 loop frames per variant, then BLAZE_FLAME_DIES per variant.
-const BLAZE_GROUND_VARIANTS: int = 3
-const BLAZE_GROUND_DIES: int = 8
+## The ember line joining the flames is plotted in art pixels (palette colours): hot spots run along it, loose sparks rise
+## off it, and while dying it cools ORANGE, RED, dark cracks (dithered away) over BLAZE_DIE_FRAME_TIME.
+const BLAZE_LINE_YELLOW := Color("f5d256")
+const BLAZE_LINE_ORANGE := Color("f08a3e")
+const BLAZE_LINE_RED := Color("d9474b")
+const BLAZE_LINE_MAROON := Color("7a2e38")
+const BLAZE_LINE_CHAR := Color("3a3a5c")
+const BLAZE_LINE_COOL: Array[Color] = [BLAZE_LINE_ORANGE, BLAZE_LINE_RED, BLAZE_LINE_MAROON, BLAZE_LINE_MAROON]
+## Strip layout (generate.py BLAZE_FLAME_*): flame frames are 4 loop frames per variant, then BLAZE_FLAME_DIES per variant.
 const BLAZE_FLAME_VARIANTS: int = 4
 const BLAZE_FLAME_DIES: int = 4
 ## Row of a stamp cell the floor spot sits on (generate.py BLAZE_FLOOR_Y); the cell's centre column is the spot's x.
@@ -365,7 +368,7 @@ func _sync_blaze(p: Player) -> void:
 	_blaze_at = p.global_position + p.visual_offset
 
 
-## Offset from a flame cell's centre to its floor spot, which is the centre of a ground cell.
+## Offset from a flame cell's centre to its floor spot.
 func _blaze_ground_off(px: float) -> Vector2:
 	return Vector2(0.0, (BLAZE_FLOOR_Y - BLAZE_FLAMES_ART.get_height() * 0.5) * px)
 
@@ -742,8 +745,8 @@ func _blaze_hash(n: int) -> int:
 	return (n >> 16) ^ n
 
 
-## The trail: one continuous band of scorched, cracked ground from takeoff to where he stopped (laid down as he runs,
-## cooling in turn), with sparse flames of varying shape, size and phase on it, far ones drawn first.
+## The trail: flames (each on its own small scorch mark, baked into the strip) joined by a thin jagged glowing line on
+## the floor from takeoff to where he stopped, laid down as he runs and cooling in turn. Far flames are drawn first.
 func _draw_blaze() -> void:
 	if _blaze == null:
 		return
@@ -756,31 +759,11 @@ func _draw_blaze() -> void:
 	var spread: float = BLAZE_DIE_TIME - BLAZE_DIE_FRAME_TIME
 	var loop: int = int(_blaze.elapsed() * BLAZE_FPS)
 	var seed: int = _blaze_hash(int(_blaze.anchor.x) * 73856093 ^ int(_blaze.anchor.y) * 19349663)
-	var spots: Array[Vector2] = []
-	var frames: Array[int] = []
-	var gsize: float = BLAZE_GROUND_ART.get_height()
-	var cool: int = 4 + BLAZE_GROUND_DIES
-	for j: int in int(length / BLAZE_GROUND_STEP) + 1:
-		var along: float = j * BLAZE_GROUND_STEP
-		if along > run:
-			break
-		var v: int = _blaze_hash(seed + j * 7 + 1) % BLAZE_GROUND_VARIANTS
-		var local: float = dying - along / maxf(length, 1.0) * spread
-		var f: int = 2 + v * cool + (j / 2 + loop) % 4
-		if local >= 0.0:
-			f = 2 + v * cool + 4 + mini(int(local / BLAZE_DIE_FRAME_TIME * BLAZE_GROUND_DIES), BLAZE_GROUND_DIES - 1)
-		spots.append(_blaze_floor(_blaze.anchor + dir * along) + _blaze_ground_off(px))
-		frames.append(f)
-	var crack_stride: int = 1 + roundi(absf(dir.y) * 1.5)
-	for layer: int in 3:  # rims, then bases, then cracks, so overlapping blobs merge into one outlined strip
-		for n: int in spots.size():
-			if layer == 2 and n % crack_stride != 0:  # blobs stack tighter on screen going up/down: fewer cracks
-				continue
-			_draw_frame(BLAZE_GROUND_ART, frames[n] if layer == 2 else layer, gsize, spots[n], px)
 	var vertical: float = absf(dir.y)
 	var step: float = lerpf(BLAZE_FLAME_STEP_H, BLAZE_FLAME_STEP_V, vertical)
 	var side: float = lerpf(BLAZE_SIDE_H, BLAZE_SIDE_V, vertical)
 	var flames: Array[Dictionary] = []
+	var nodes: Array[Dictionary] = [{"along": 0.0, "at": _blaze_floor(_blaze.anchor) + _blaze_ground_off(px)}]
 	for i: int in int(length / step) + 1:
 		var r: int = _blaze_hash(seed + i * 3)
 		var along: float = maxf(i * step + ((r >> 8) % 1000 / 1000.0 - 0.5) * 2.0 * BLAZE_JITTER * step, 0.0)
@@ -788,6 +771,7 @@ func _draw_blaze() -> void:
 			continue
 		var off: float = (0.5 + 0.5 * ((r >> 12) % 1000 / 1000.0)) * side * (1.0 if i % 2 == 0 else -1.0)
 		var at: Vector2 = _blaze_floor(_blaze.anchor + dir * along + dir.orthogonal() * off)
+		nodes.append({"along": along, "at": at + _blaze_ground_off(px)})
 		var v: int = r % BLAZE_FLAME_VARIANTS
 		var local: float = dying - along / maxf(length, 1.0) * spread
 		var frame: int = v * 4 + (loop + (r >> 4)) % 4
@@ -797,10 +781,13 @@ func _draw_blaze() -> void:
 				continue
 			frame = BLAZE_FLAME_VARIANTS * 4 + v * BLAZE_FLAME_DIES + die
 		flames.append({"at": at, "frame": frame})
+	nodes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.along < b.along)
+	nodes.append({"along": run, "at": _blaze_floor(_blaze.anchor + dir * run) + _blaze_ground_off(px)})
 	flames.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.at.y < b.at.y)  # nearer the camera on top
 	var fsize: float = BLAZE_FLAMES_ART.get_height()
 	for fl: Dictionary in flames:
 		_draw_frame(BLAZE_FLAMES_ART, fl.frame, fsize, fl.at, px)
+	_draw_blaze_line(nodes, seed, length, dying, spread, loop, px)
 	var dashing: float = d.trail_dash_time - _blaze.elapsed()
 	if dashing > -BLAZE_STREAK_FADE:  # flame streaming off him, fading once he's stopped
 		var cell: float = BLAZE_STREAK_ART.get_height()
@@ -808,6 +795,50 @@ func _draw_blaze() -> void:
 		_draw_frame(BLAZE_STREAK_ART, int(_time * BLAZE_STREAK_FPS) % 4, cell, Vector2.ZERO, px,
 			clampf((dashing + BLAZE_STREAK_FADE) / BLAZE_STREAK_FADE, 0.0, 1.0) if dashing < 0.0 else 1.0)
 		draw_set_transform(Vector2.ZERO)
+
+
+## The glowing crack along the polyline `nodes` ({along, at}): 1 art px wide (2 now and then), jagged by up to 1 px,
+## hot spots running along it, a charred pixel under it, a few sparks rising off it.
+func _draw_blaze_line(nodes: Array[Dictionary], seed: int, length: float, dying: float, spread: float, loop: int,
+		px: float) -> void:
+	var q: int = 0
+	var cell := Vector2(px, px)
+	for n: int in nodes.size() - 1:
+		var a: Vector2 = nodes[n].at
+		var seg: Vector2 = nodes[n + 1].at - a
+		var steps: int = ceili(seg.length() / px)
+		if steps == 0:
+			continue
+		var norm: Vector2 = seg.orthogonal().normalized()
+		var flat: bool = absf(seg.x) >= absf(seg.y)
+		for s: int in steps + 1:
+			q += 1
+			var t: float = float(s) / steps
+			var h: int = _blaze_hash(seed + (q / 3) * 5 + 11)  # one kink per 3 px
+			var jag: float = 0.0 if s < 2 or s > steps - 2 else float(h % 3 - 1) * px
+			var at: Vector2 = a + seg * t + norm * jag
+			at = (at / px).floor() * px
+			var along: float = lerpf(nodes[n].along, nodes[n + 1].along, t)
+			var local: float = dying - along / maxf(length, 1.0) * spread
+			var col: Color = BLAZE_LINE_ORANGE
+			if local < 0.0:
+				if (q / 2 - loop) % 7 == 0:
+					col = BLAZE_LINE_YELLOW
+				elif (q + loop) % 5 == 0:
+					col = BLAZE_LINE_RED
+				if h % 29 == 0:  # a loose spark lifting off the line
+					var rise: int = (loop + q) % 4
+					draw_rect(Rect2(at + Vector2(0.0, -(2 + rise * 2) * px), cell),
+						[BLAZE_LINE_YELLOW, BLAZE_LINE_ORANGE, BLAZE_LINE_RED, BLAZE_LINE_MAROON][rise])
+			else:
+				var die: int = int(local / BLAZE_DIE_FRAME_TIME * BLAZE_LINE_COOL.size())
+				if die >= BLAZE_LINE_COOL.size() or (die == BLAZE_LINE_COOL.size() - 1 and q % 2 == 0):  # gone / fading
+					continue
+				col = BLAZE_LINE_COOL[die]
+			draw_rect(Rect2(at + Vector2(0.0, px), cell), BLAZE_LINE_CHAR)
+			draw_rect(Rect2(at, cell), col)
+			if h % 3 == 0:  # now and then 2 px wide
+				draw_rect(Rect2(at + (Vector2(0.0, -px) if flat else Vector2(px, 0.0)), cell), col)
 
 
 ## The vine hanging from `top` down to `end` (cropped to length, never stretched), under its leafy clump.
