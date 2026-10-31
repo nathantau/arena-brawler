@@ -344,3 +344,17 @@ func test_staff_thrust_is_long_and_narrow() -> void:
 	pool.fire_shot(SHOOTER, 1, Vector2(100, 300), Vector2.RIGHT, _w(&"wukong_staff"), SEED)
 	assert_lt(far.stats.armor, far.stats.max_armor, "beyond sword reach")
 	assert_eq(side.stats.armor, side.stats.max_armor, "outside the narrow cone")
+
+
+func test_petal_storm_homes_in_on_enemies() -> void:
+	var target: Player = _player(TARGET, Vector2(500, 300))
+	var me: Player = _player(SHOOTER, Vector2(200, 300))
+	pool.targets = [target, me] as Array[Player]
+	await wait_physics_frames(2)
+	var storm: WeaponData = _w(&"petal_storm")
+	pool.fire_shot(SHOOTER, 1, me.global_position, Vector2.RIGHT, storm, SEED)
+	await wait_physics_frames(150)
+	var taken: int = target.stats.max_armor - target.stats.armor + target.stats.max_hp - target.stats.hp
+	# Flying straight, only the 1-2 petals aimed at it would land; homing brings most of the ring around.
+	assert_gt(taken, storm.damage * storm.pellets / 2, "most petals curve onto the target")
+	assert_eq(me.stats.hp, me.stats.max_hp, "never the shooter")

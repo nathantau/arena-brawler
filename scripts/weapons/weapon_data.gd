@@ -64,6 +64,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export_range(0.0, 1.0) var bounce_damping: float = 0.7
 ## Exponential slow-down per second (rolling grenades).
 @export var drag: float = 0.0
+## Turn rate (rad/s) toward the nearest enemy; 0 = flies straight (Sakura's petal storm).
+@export var homing: float = 0.0
 
 @export_group("Melee")
 @export var melee_range: float = 64.0

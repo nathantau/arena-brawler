@@ -62,6 +62,7 @@ class Slot:
 	var bounces_left: int = 0
 	var bounce_damping: float = 1.0
 	var drag: float = 0.0
+	var homing: float = 0.0
 	var pierce_left: int = 0
 	## Clients let piercing pellets fly on after server hit events (they stop where they stop locally).
 	var piercing: bool = false
@@ -76,6 +77,8 @@ class Impact:
 
 
 var authoritative: bool = true
+## Players homing projectiles steer toward (the Arena hands over its list).
+var targets: Array[Player] = []
 
 var _slots: Array[Slot] = []
 var _impacts: Array[Impact] = []
@@ -185,6 +188,7 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.bounces_left = weapon.bounces
 	slot.bounce_damping = weapon.bounce_damping
 	slot.drag = weapon.drag
+	slot.homing = weapon.homing
 	slot.pierce_left = weapon.pierce
 	slot.piercing = weapon.pierce > 0
 	if not AutoAim.has_line_of_sight(space, _los_query, origin, muzzle):
@@ -304,6 +308,8 @@ func _physics_process(delta: float) -> void:
 func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void:
 	if s.drag > 0.0:
 		s.vel *= exp(-s.drag * delta)
+	if s.homing > 0.0:
+		_steer(s, delta)
 	var to: Vector2 = s.pos + s.vel * delta
 	_query.from = s.pos
 	_query.to = to
@@ -347,6 +353,25 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 			_explode(s, s.pos)
 		else:
 			s.active = false
+
+
+## Turns toward the nearest enemy that can be hit and isn't hidden in smoke, at most `homing` rad/s.
+## shortcut: clients steer toward interpolated (slightly old) positions, so cosmetic petals can curve a little
+## differently from the server's; hits still come only from the server.
+func _steer(s: Slot, delta: float) -> void:
+	var best: Player = null
+	var best_d: float = INF
+	for p: Player in targets:
+		if p.player_id == s.attacker_id or not p.can_be_hit() or p.is_hidden():
+			continue
+		var d: float = s.pos.distance_squared_to(p.global_position)
+		if d < best_d:
+			best_d = d
+			best = p
+	if best == null:
+		return
+	var turn: float = s.vel.angle_to(best.global_position - s.pos)
+	s.vel = s.vel.rotated(clampf(turn, -s.homing * delta, s.homing * delta))
 
 
 ## Owners pass through their own shield; i-framing / dead players don't block shots.

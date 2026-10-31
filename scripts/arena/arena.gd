@@ -103,6 +103,7 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 	projectiles = ProjectilePool.new()
 	projectiles.name = "Projectiles"
 	projectiles.authoritative = mode != Mode.CLIENT
+	projectiles.targets = players
 	projectiles.z_index = PROJECTILE_Z
 	pickups = PickupField.new()
 	pickups.name = "Pickups"
