@@ -410,6 +410,30 @@ func test_petal_storm_homes_in_on_enemies() -> void:
 	assert_eq(me.stats.hp, me.stats.max_hp, "never the shooter")
 
 
+func _ring_damage_at(weapon_id: StringName, dist: float) -> int:
+	var target: Player = _player(TARGET, Vector2(200 + dist, 300))
+	var me: Player = _player(SHOOTER, Vector2(200, 300))
+	pool.targets = [target, me] as Array[Player]
+	await wait_physics_frames(2)
+	pool.fire_shot(SHOOTER, 1, me.global_position, Vector2.RIGHT, _w(weapon_id), SEED)
+	await wait_physics_frames(150)
+	return target.stats.max_armor - target.stats.armor + target.stats.max_hp - target.stats.hp
+
+
+func test_fan_of_blades_lands_on_a_target_at_mid_range() -> void:
+	var fan: WeaponData = _w(&"blade_fan")
+	var taken: int = await _ring_damage_at(&"blade_fan", 200.0)
+	assert_gte(taken, fan.damage * 3, "the ring curves back: several kunai land")
+	assert_lt(taken, 70, "but never a one-shot")
+
+
+func test_supernova_ring_lands_on_a_target() -> void:
+	var ring: WeaponData = _w(&"flare_ring")
+	var taken: int = await _ring_damage_at(&"flare_ring", 200.0)
+	assert_gte(taken, ring.damage * 2, "more than one fireball connects")
+	assert_lt(taken, 70, "but never a one-shot")
+
+
 func test_aim_at_sends_shots_through_the_target() -> void:
 	var p: Player = _player(SHOOTER, Vector2.ZERO)
 	var w: WeaponData = p.held_weapon().data
