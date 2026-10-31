@@ -7,9 +7,8 @@ static func step_velocity(velocity: Vector2, move_vec: Vector2, skill: Character
 		delta: float) -> Vector2:
 	if skill.is_dashing():
 		return skill.direction * skill.data.dash_speed
-	var input: Vector2 = move_vec.limit_length(1.0)
-	if input.length() < Constants.INPUT_DEADZONE:
-		input = Vector2.ZERO
+	# Direction only: any push past the deadzone is full speed (no half-speed from a short joystick drag).
+	var input: Vector2 = move_vec.normalized() if move_vec.length() >= Constants.INPUT_DEADZONE else Vector2.ZERO
 	var target: Vector2 = input * max_speed
 	var rate: float = Constants.PLAYER_ACCEL if input != Vector2.ZERO else Constants.PLAYER_DECEL
 	if velocity.length() > max_speed:

@@ -151,6 +151,17 @@ func test_deadzone_ignored() -> void:
 	assert_eq(v, Vector2.ZERO)
 
 
+func test_short_push_is_full_speed() -> void:
+	var skill := CharacterSkill.new(skills.dash())
+	var small := Vector2.ZERO
+	var full := Vector2.ZERO
+	for i: int in 60:
+		small = MovementSim.step_velocity(small, Vector2(0, Constants.INPUT_DEADZONE * 1.5), skill, flicker.move_speed, DT)
+		full = MovementSim.step_velocity(full, Vector2(0, 1), skill, flicker.move_speed, DT)
+	assert_almost_eq(small.length(), flicker.move_speed, 0.01)
+	assert_almost_eq(small, full, Vector2(0.01, 0.01))
+
+
 func test_character_sets_stat_maxes() -> void:
 	var p := Player.new()
 	var weapons: Array[WeaponData] = WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName])

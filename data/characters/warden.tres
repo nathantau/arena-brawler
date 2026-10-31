@@ -5,12 +5,14 @@
 [ext_resource type="Resource" path="res://data/weapons/warden_hammer.tres" id="3_sig"]
 [ext_resource type="Texture2D" path="res://assets/sprites/warden_hand.png" id="4_hand"]
 [ext_resource type="Resource" path="res://data/skills/barrier.tres" id="5_skill"]
+[ext_resource type="Texture2D" path="res://assets/sprites/warden_arm.png" id="9_arm"]
 
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
 signature_weapon = ExtResource("3_sig")
 hand_sprite = ExtResource("4_hand")
+arm_sprite = ExtResource("9_arm")
 signature_skill = ExtResource("5_skill")
 weapon_tags = Array[StringName]([&"warden", &"blade", &"heavy", &"arcane"])
 id = &"warden"
