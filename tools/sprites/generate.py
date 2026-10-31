@@ -301,6 +301,9 @@ def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: 
     c.part(P(shape(t, 6)), YELLOW, shade=False, line=False)
 
 
+HAIR_FLOW = [0, 1, 2, 1]  # px a lock blows back per tick (period 4, so idle and walk loop)
+
+
 def sakura(step=None, t=0):
     """Blossom: a cool-eyed girl in a white kimono with wide sleeves, red obi tied in a bow at the back; pink hair
     parted in the middle, curtains framing her face, and a long ponytail tied with a cherry blossom that sways
@@ -322,19 +325,23 @@ def sakura(step=None, t=0):
     up.flat(R((20, 42, 44, 42)), PINK)  # obi cord
     up.part(RR((41, 34, 51, 48), 3), WHITE)  # front sleeve
     up.flat(R((42, 46, 50, 47)), PINK_L)
-    # long ponytail from a high tie at the back of her head, swinging behind her
-    up.part(P([(19, 9), (12, 12), (8, 20), (6 + s, 30), (7 + s, 40), (11 + s, 46), (13, 37), (15, 27), (19, 17)]), PINK)
-    up.flat(L([(13, 15), (10, 24), (9 + s, 36)], 1), PINK_L)  # its sheen
+    # long ponytail from a high tie at the back of her head, flowing in the wind: a wave runs from the tie to the
+    # tip (each point further down lags a step behind and swings wider); loops every 4 ticks for idle and walk
+    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
+    up.part(P([(19, 9), (12, 12), (8 - wave(0, 0.5), 20), (6 - wave(1, 1), 30), (6 - wave(2, 1.5), 40),
+               (9 - wave(3, 2), 46), (12 - wave(2, 1.5), 38), (15 - wave(1, 1), 28), (19, 17)]), PINK)
+    up.flat(L([(13, 15), (10 - wave(1, 0.5), 24), (9 - wave(2, 1), 36)], 1), PINK_L)  # its sheen
     up.part(E((16, 5, 48, 37)), PINK)  # hair
     up.part(RR(FACE, FACE_R), SKIN)  # face
     # middle part: two curtains and two long side locks, mirrored about the face's centre line
     mid = (FACE[0] + FACE[2]) // 2
     curtain = [(mid, 10), (mid + 9, 9), (mid + 13, 14), (mid + 14, 23), (mid + 12, 23), (mid + 11, 19), (mid + 6, 15),
                (mid + 1, 14)]  # sweeps off the forehead
-    lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16, 38), (mid + 12, 36)]
-    for shape in (curtain, lock):
-        up.part(P(shape), PINK, shade=False)
-        up.part(P([(2 * mid - x, y) for x, y in shape]), PINK, shade=False)
+    drift = wave(2, 0.5)  # the side locks' ends drift with the breeze
+    lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16 - drift, 38), (mid + 12 - drift, 36)]
+    for side in (1, -1):  # each curtain and its lock as one shape, so no line where the lock meets the curtain
+        c_pts, l_pts = ([(mid + side * (x - mid), y) for x, y in pts] for pts in (curtain, lock))
+        up.part(lambda d, f, c_pts=c_pts, l_pts=l_pts: (d.polygon(c_pts, f), d.polygon(l_pts, f)), PINK, shade=False)
     up.flat(L([(mid, 8), (mid, 13)], 1), MAROON)  # the parting
     up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
                           ((19, 4), (22, 6), (21, 9), (17, 9), (16, 6))], PINK_L)  # cherry blossom tying the ponytail
