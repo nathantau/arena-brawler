@@ -1058,16 +1058,16 @@ def ape_morph(t: float, scale: float) -> Image.Image:
         c.part(RR(box((x0 - 1, 53, x0 + 7, 57), (x1 - 2, 53, x1 + 10, 58)), w(2, 2)), BROWN)
     # the hunched back swells out from behind the armour
     c.part(E(box((20, 31, 44, 48), (10, 14, 54, 45), u)), fur)
-    if t > 0.1:  # the back arm sprouts from the shoulder
-        c.part(L(pts([(22, 36), (20, 40), (20, 42)], APE_POSES["walk"][0][0], u), w(2, 9)), fur)
     # the golden armour shrinks into the ape's chest
     c.part(RR(box((20, 33, 44, 48), (22, 26, 44, 43), u), w(3, 8)), BROWN if ape else YELLOW)
-    if t > 0.1:  # front arm and both fists grow
-        c.part(L(pts([(42, 36), (44, 40), (44, 42)], APE_POSES["walk"][0][1], u), w(2, 9)), fur)
-        for x0, (x1, y1, _thumb) in zip((18, 40), APE_POSES["walk"][1]):
-            if ape:
-                c.part(R(box((x0 + 1, 41, x0 + 5, 42), (x1 + 2, y1 - 4, x1 + 10, y1 - 1), u)), YELLOW)
-            c.part(RR(box((x0, 42, x0 + 6, 46), (x1, y1, x1 + 12, y1 + 11), u), w(1, 3)), fur)
+    # arms and fists grow out from the sides of the body, poking out on the first in-between; the back arm
+    # swings across the chest into the ape's knuckle-walk
+    c.part(L(pts([(21, 35), (16, 39), (15, 43)], APE_POSES["walk"][0][0], u), w(4, 9)), fur)
+    c.part(L(pts([(43, 35), (48, 39), (49, 43)], APE_POSES["walk"][0][1], u), w(4, 9)), fur)
+    for x0, (x1, y1, _thumb) in zip((11, 46), APE_POSES["walk"][1]):
+        if ape:
+            c.part(R(box((x0 + 1, 41, x0 + 6, 42), (x1 + 2, y1 - 4, x1 + 10, y1 - 1), u)), YELLOW)
+        c.part(RR(box((x0, 42, x0 + 7, 48), (x1, y1, x1 + 12, y1 + 11), u), w(2, 3)), fur)
     # head: Wukong's round head pushes forward and shrinks into the ape's
     if t < 0.75:
         c.part(E(box((11, 17, 21, 28), (20, 10, 28, 20), u)), fur)  # ear tucks in
