@@ -82,4 +82,4 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 func muzzle_distance() -> float:
 	if muzzle_x <= 0.0:
 		return Constants.PLAYER_RADIUS + projectile_radius + Constants.MUZZLE_OFFSET
-	return Player.WEAPON_HOLD_DISTANCE + (muzzle_x - Player.WEAPON_GRIP.x) * Constants.SPRITE_SCALE
+	return (muzzle_x - Player.WEAPON_GRIP.x) * Constants.SPRITE_SCALE

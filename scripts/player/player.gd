@@ -22,9 +22,8 @@ enum StateField {
 
 ## Weapon art (WeaponData.sprite) is drawn at the character's pixel scale, pivoting on its grip.
 const WEAPON_GRIP: Vector2 = Vector2(6, 12)
-const WEAPON_HOLD_DISTANCE: float = 8.0
-## Hands sit below the sprite's centre.
-const WEAPON_HAND_Y: float = 6.0
+## The front hand (generate.py arm() at ARM_X[1]) in local px, mirrored when facing left: weapon grips sit on it.
+const WEAPON_HAND: Vector2 = Vector2(20, 22)
 ## Sheet cell rows from the top down to the chin (generate.py PAD + FACE bottom + UPPER_DY, + outline and bob): redrawn over a
 ## front weapon so it sits in front of the body but behind the head.
 const SPRITE_HEAD_ROWS: int = 56
@@ -357,7 +356,12 @@ func _release_shot(seq: int, w: WeaponData) -> void:
 ## Guns fire from the hand holding them (shots then spawn at the barrel tip, WeaponData.muzzle_distance);
 ## melee swings stay centred on the body.
 func shot_origin(w: WeaponData) -> Vector2:
-	return global_position + (Vector2.ZERO if w.kind == WeaponData.Kind.MELEE else Vector2(0.0, WEAPON_HAND_Y))
+	return global_position + (Vector2.ZERO if w.kind == WeaponData.Kind.MELEE else hand_offset(facing))
+
+
+## Where the front hand is for a character facing `dir` (the sprite flips when facing left, so it's on the aim side).
+static func hand_offset(dir: Vector2) -> Vector2:
+	return Vector2(-WEAPON_HAND.x if dir.x < 0.0 else WEAPON_HAND.x, WEAPON_HAND.y)
 
 
 ## `skip` seconds into the attack animation: remote peers only hear of a wound-up hit when it lands.
@@ -523,7 +527,7 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	return true
 
 
-## Ground layer (under the sprite child): shadow, player-colour foot ring, rings, gun when aiming up.
+## Ground layer (under the sprite child): shadow, player-colour foot ring, rings.
 func _draw() -> void:
 	var r: float = Constants.PLAYER_RADIUS
 	var gun_color: Color = loadout.active().data.color
@@ -534,12 +538,10 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, r + DUAL_GLOW_PAD, 0.0, TAU, CIRCLE_SEGMENTS, gun_color, RING_WIDTH)
 	if targeted:
 		draw_arc(Vector2.ZERO, r + TARGET_RING_PAD, 0.0, TAU, CIRCLE_SEGMENTS, COLOR_TARGET, RING_WIDTH)
-	if facing.y < 0.0:
-		_draw_guns(self)
 
 
 func _draw_overlay() -> void:
-	if facing.y >= 0.0 and held_weapon().data.sprite != null and held_weapon().data.held_art:
+	if held_weapon().data.sprite != null and held_weapon().data.held_art:
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)
@@ -574,7 +576,7 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 	var flip_v: float = -1.0 if facing.x < 0.0 else 1.0
 	var t: float = _recoil / _recoil_len  # 1 the moment the attack starts, 0 at rest
 	var angle: float = facing.angle()
-	var hold: float = WEAPON_HOLD_DISTANCE
+	var hold: float = 0.0
 	if w.kind != WeaponData.Kind.MELEE:
 		hold -= GUN_RECOIL_PX * t
 		angle -= deg_to_rad(GUN_KICK_DEG) * t * flip_v
@@ -585,7 +587,7 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 	else:
 		angle -= deg_to_rad(MELEE_REST_DEG) * flip_v
 	var scale_px: float = Constants.SPRITE_SCALE
-	var hand_at: Vector2 = visual_offset + offset + Vector2(0.0, WEAPON_HAND_Y) + facing * hold
+	var hand_at: Vector2 = visual_offset + offset + hand_offset(facing) + facing * hold
 	var tint := Color(1, 1, 1, _sprite.modulate.a)
 	ci.draw_set_transform(hand_at, angle, Vector2(scale_px, scale_px * flip_v))
 	ci.draw_texture(w.sprite, -WEAPON_GRIP, tint)

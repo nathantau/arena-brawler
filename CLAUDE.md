@@ -195,8 +195,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   1 player), Warden's Oath Hammer (melee slam: one blast at the tip of the reach, not behind walls), Twinshot's
   Ricochet Six (bullets bounce off walls twice and still hit), Wukong's Cloud Staff (`thrust`: long narrow stab).
   Arms and hands are small and part of each sprite's art (generate.py `arm()`, `ARM_X`; Sakura's small kimono sleeves,
-  Flint's fire fists); weapons never touch them: they float at chest height, in front of the body but behind the head (the frame's head rows, `Player.SPRITE_HEAD_ROWS`, are redrawn over them; aiming up they go behind) (`Player.WEAPON_HAND_Y`,
-  `WEAPON_HOLD_DISTANCE`) and follow the aim; shots start from there (`shot_origin`, `muzzle_distance`).
+  Flint's fire fists); a weapon's grip sits on the front hand, on the aim side (`Player.WEAPON_HAND`, `hand_offset()`), drawn over the body
+  but behind the head (the frame's head rows, `Player.SPRITE_HEAD_ROWS`, are redrawn over it) and follows the aim; shots start from there (`shot_origin`, `muzzle_distance`).
   Weapons are drawn from their sprite at the character's pixel scale, pivoting on the grip: guns
   kick back and up, melee sweeps the arc from a raised guard, thrusts stab out and back (`Player._draw_gun`).
   Clients don't stop piercing pellets on server hit events.

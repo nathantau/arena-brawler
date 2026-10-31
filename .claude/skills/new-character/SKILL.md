@@ -48,8 +48,8 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
   eyes need an `if KO: x_eye(...)` branch (see Warden / Great Ape) so the knocked-out frames get X eyes.
 - Leg details must use the `(x, dy)` list `legs()` returns, so they follow the walk cycle.
 - Small arms and hands are part of the art: `arm(up, ARM_X[0], sleeve, hand)` before the body, `ARM_X[1]` after it
-  (or the character's own take: small sleeves, fire fists). Weapons float at the chest and never hold or cover
-  them; a character whose hands are the weapon sets `held_art = false` on it.
+  (or the character's own take: small sleeves, fire fists). A weapon's grip is drawn over the front hand (`Player.WEAPON_HAND`, keep `ARM_X[1]` where it is or
+  update it); a character whose hands are the weapon sets `held_art = false` on it.
 
 ## Steps
 
