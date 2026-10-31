@@ -1062,12 +1062,18 @@ def ape_morph(t: float, scale: float) -> Image.Image:
     c.part(RR(box((20, 33, 44, 48), (22, 26, 44, 43), u), w(3, 8)), BROWN if ape else YELLOW)
     # arms and fists grow out from the sides of the body, poking out on the first in-between; the back arm
     # swings across the chest into the ape's knuckle-walk
-    c.part(L(pts([(21, 35), (16, 39), (15, 43)], APE_POSES["walk"][0][0], u), w(4, 9)), fur)
-    c.part(L(pts([(43, 35), (48, 39), (49, 43)], APE_POSES["walk"][0][1], u), w(4, 9)), fur)
+    for start, arm in zip(([(21, 35), (16, 39), (15, 43)], [(43, 35), (48, 39), (49, 43)]), APE_POSES["walk"][0]):
+        (sx, sy), (ex, ey), (wx, wy) = pts(start, arm, u)
+        c.part(L([(sx, sy), (ex, ey), (wx, wy)], w(4, 9)), fur)
+        # the muscles swell with it (wukong_ape's deltoid, bicep, forearm)
+        for (mx, my), rx, ry in (((sx, sy), w(2, 6), w(2, 6)), (((sx + ex) / 2, (sy + ey) / 2), w(2, 6), w(2, 5)),
+                                 (((ex * 2 + wx) / 3, (ey * 2 + wy) / 3), w(2, 5), w(2, 4))):
+            c.part(E((mx - rx, my - ry, mx + rx, my + ry)), fur)
     for x0, (x1, y1, _thumb) in zip((11, 46), APE_POSES["walk"][1]):
         if ape:
             c.part(R(box((x0 + 1, 41, x0 + 6, 42), (x1 + 2, y1 - 4, x1 + 10, y1 - 1), u)), YELLOW)
         c.part(RR(box((x0, 42, x0 + 7, 48), (x1, y1, x1 + 12, y1 + 11), u), w(2, 3)), fur)
+        c.flat(RR(box((x0 + 1, 45, x0 + 6, 48), (x1 + 1, y1 + 6, x1 + 11, y1 + 11), u), w(1, 1)), BROWN)  # curled fingers
     # head: Wukong's round head pushes forward and shrinks into the ape's
     if t < 0.75:
         c.part(E(box((11, 17, 21, 28), (20, 10, 28, 20), u)), fur)  # ear tucks in
