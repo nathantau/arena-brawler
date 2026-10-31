@@ -69,6 +69,8 @@ const BOT_PREFERRED_DISTANCE: float = 300.0
 const BOT_RADIAL_WEIGHT: float = 0.6
 const BOT_STRAFE_WEIGHT: float = 0.8
 const BOT_AIM_ERROR_DEG: float = 10.0
+## Bots keep facing a target this long after losing sight of it (no flip-flopping at wall edges).
+const BOT_TARGET_MEMORY: float = 0.5
 const BOT_SIGHT_RANGE: float = 600.0
 const BOT_SKILL_CHANCE_PER_SEC: float = 0.4
 const BOT_SPECIAL_CHANCE_PER_SEC: float = 0.15

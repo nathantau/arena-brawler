@@ -11,6 +11,10 @@ var _query := PhysicsRayQueryParameters2D.new()
 var _decision_timer: float = 0.0
 var _wander_dir: Vector2 = Vector2.ZERO
 var _strafe_sign: float = 1.0
+## Re-rolled with each decision, not every frame: a fresh error each frame flipped bots left/right when aiming up/down.
+var _aim_error: float = 0.0
+var _last_aim: Vector2 = Vector2.ZERO
+var _since_target: float = INF
 
 
 func _init(p_arena: Arena, bot_seed: int) -> void:
@@ -31,6 +35,7 @@ func get_input(player: Player, delta: float) -> InputFrame:
 		if _wander_dir.dot(wall) < 0.0:
 			_wander_dir = _wander_dir.bounce(wall.normalized())
 		_strafe_sign = 1.0 if rng.randf() < 0.5 else -1.0
+		_aim_error = deg_to_rad(rng.randf_range(-Constants.BOT_AIM_ERROR_DEG, Constants.BOT_AIM_ERROR_DEG))
 
 	_frame.move_vec = _wander_dir * Constants.BOT_MOVE_SCALE
 	_frame.aim_vec = Vector2.ZERO
@@ -39,6 +44,9 @@ func get_input(player: Player, delta: float) -> InputFrame:
 	_frame.special = false
 
 	var target: Variant = _nearest_visible_enemy(player)
+	_since_target = 0.0 if target != null else _since_target + delta
+	if target == null and _since_target < Constants.BOT_TARGET_MEMORY:
+		_frame.aim_vec = _last_aim
 	if target != null:
 		var to: Vector2 = (target as Vector2) - player.global_position
 		var dist: float = to.length()
@@ -47,8 +55,8 @@ func get_input(player: Player, delta: float) -> InputFrame:
 		var strafe: Vector2 = dir.orthogonal() * _strafe_sign
 		var move: Vector2 = radial * Constants.BOT_RADIAL_WEIGHT + strafe * Constants.BOT_STRAFE_WEIGHT
 		_frame.move_vec = move.normalized() * Constants.BOT_MOVE_SCALE
-		var err: float = deg_to_rad(Constants.BOT_AIM_ERROR_DEG)
-		_frame.aim_vec = player.aim_at(target as Vector2).rotated(rng.randf_range(-err, err))
+		_frame.aim_vec = player.aim_at(target as Vector2).rotated(_aim_error)
+		_last_aim = _frame.aim_vec
 		_frame.fire = true
 		# Skills are edge-triggered: a one-frame press now and then.
 		_frame.skill = rng.randf() < Constants.BOT_SKILL_CHANCE_PER_SEC * delta

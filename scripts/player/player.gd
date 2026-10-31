@@ -213,6 +213,9 @@ func _process(delta: float) -> void:
 		anim = &"walk"
 	var tf: CharacterSkill = form()
 	var frames: SpriteFrames = tf.data.form_frames() if tf != null else character.sprite_frames()
+	if anim == &"attack" and not frames.has_animation(anim):  # the form ended mid-swing
+		_attack_anim = 0.0
+		anim = &"idle"
 	if _sprite.sprite_frames != frames:
 		_sprite.sprite_frames = frames
 		_sprite.scale = Vector2.ONE * Constants.SPRITE_SCALE * (tf.data.form_scale if tf != null else 1.0)
