@@ -23,8 +23,10 @@ enum StateField {
 ## Weapon art (WeaponData.sprite) is drawn at the character's pixel scale, pivoting on its grip.
 const WEAPON_GRIP: Vector2 = Vector2(6, 12)
 const WEAPON_HOLD_DISTANCE: float = 8.0
-## Hands sit below the sprite's centre.
-const WEAPON_HAND_Y: float = 6.0
+## The weapon's base never covers the face: the grip sits just low enough that the back end of the weapon art
+## (WEAPON_BASE, art px around the grip: behind it and above/below it) stays under the face's bottom edge.
+const FACE_BOTTOM_Y: float = 10.5
+const WEAPON_BASE: Rect2 = Rect2(-5, -5, 5, 13)
 const GUN_RECOIL_PX: float = 4.0
 const GUN_KICK_DEG: float = 14.0
 const RECOIL_TIME: float = 0.06
@@ -354,7 +356,18 @@ func _release_shot(seq: int, w: WeaponData) -> void:
 ## Guns fire from the hand holding them (shots then spawn at the barrel tip, WeaponData.muzzle_distance);
 ## melee swings stay centred on the body.
 func shot_origin(w: WeaponData) -> Vector2:
-	return global_position + (Vector2.ZERO if w.kind == WeaponData.Kind.MELEE else Vector2(0.0, WEAPON_HAND_Y))
+	return global_position + (Vector2.ZERO if w.kind == WeaponData.Kind.MELEE else Vector2(0.0, hand_y(facing.angle())))
+
+
+## How far below the sprite's centre the grip sits for a weapon drawn at `angle` (mirrored when aiming left,
+## like _draw_gun): the highest corner of WEAPON_BASE lands on FACE_BOTTOM_Y.
+static func hand_y(angle: float) -> float:
+	var flip_v: float = -1.0 if cos(angle) < 0.0 else 1.0
+	var top: float = 0.0
+	for corner: Vector2 in [WEAPON_BASE.position, WEAPON_BASE.end, Vector2(WEAPON_BASE.position.x, WEAPON_BASE.end.y),
+			Vector2(WEAPON_BASE.end.x, WEAPON_BASE.position.y)]:
+		top = minf(top, (Vector2(corner.x, corner.y * flip_v) * Constants.SPRITE_SCALE).rotated(angle).y)
+	return FACE_BOTTOM_Y - top
 
 
 ## `skip` seconds into the attack animation: remote peers only hear of a wound-up hit when it lands.
@@ -571,7 +584,7 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 	else:
 		angle -= deg_to_rad(MELEE_REST_DEG) * flip_v
 	var scale_px: float = Constants.SPRITE_SCALE
-	var hand_at: Vector2 = visual_offset + offset + Vector2(0.0, WEAPON_HAND_Y) + facing * hold
+	var hand_at: Vector2 = visual_offset + offset + Vector2(0.0, hand_y(angle)) + facing * hold
 	var tint := Color(1, 1, 1, _sprite.modulate.a)
 	ci.draw_set_transform(hand_at, angle, Vector2(scale_px, scale_px * flip_v))
 	ci.draw_texture(w.sprite, -WEAPON_GRIP, tint)
