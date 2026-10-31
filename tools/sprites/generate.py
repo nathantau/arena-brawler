@@ -1533,38 +1533,34 @@ BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
 
 
 def smoke_frame(k: int, size: int = 136) -> Image.Image:
-    """Smoke Bomb cloud: a dark mass with puffs churning around it, light catching their top-left edges, darker
-    billows churning in its lower right, swirl lines turning through it and wisps rising off the top, thinning away.
-    Loops over SMOKE_FRAMES: the outer ring turns two puffs' worth (big and small alternate, so one puff would pop)."""
+    """Smoke Bomb cloud, drawn like the clone poof but dark: lumps spread through the cloud over a darker shadow
+    layer, each its own part drawn back to front (outlined where they overlap, so they read as separate puffs), light
+    catching their tops, wisps rising off the top and thinning away. Loops over SMOKE_FRAMES: the outer ring turns two
+    lumps' worth (big and small alternate, so one would pop), the inner lumps churn the other way, all breathing."""
     c = Canvas(size)
     m = size // 2
     phase = k / SMOKE_FRAMES  # 0..1 round the loop
     turn = math.tau / 10 * 2 * phase
-    puffs = [(m, m, 40)]
+    lumps = []  # spread through the whole cloud: an outer ring and a few inside, all breathing
     for i in range(10):
         ang = math.tau * i / 10 + turn
-        reach = 34 + 6 * math.sin(math.tau * phase + i)
-        puffs.append((m + math.cos(ang) * reach, m + math.sin(ang) * reach, 20 + 4 * (i % 2)))
+        reach = 34 + 4 * math.sin(math.tau * phase + i)
+        lumps.append((m + math.cos(ang) * reach, m + math.sin(ang) * reach,
+                      17 + 4 * (i % 2) + 2 * math.sin(math.tau * phase + i * 1.7)))
+    for i in range(5):
+        ang = math.tau * i / 5 - math.tau / 5 * phase + 0.3
+        lumps.append((m + math.cos(ang) * 14, m + math.sin(ang) * 12, 16 + 2 * math.sin(math.tau * phase + i * 2)))
     blob = lambda pts: lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in pts]
-    c.part(blob(puffs), SHADOW)
-    inner = []  # darker billows churning in its lower right, away from the light
-    for i in range(4):
-        ang = math.tau * i / 4 - math.tau / 4 * phase
-        inner.append((m + 10 + math.cos(ang) * 12, m + 14 + math.sin(ang) * 8, 9 + 2 * math.sin(math.tau * phase + i * 2)))
-    c.flat(blob(inner), NAVY)
-    for x, y, r in puffs[1:]:  # light catching the top-left edge of each puff on that side
-        if x + y < 2 * m - 10:
-            c.flat(lambda dr, f, x=x, y=y, r=r: dr.arc((x - r + 3, y - r + 3, x + r - 3, y + r - 3), 190, 260, f, width=2),
-                   STEEL_D)
-    for j in range(2):  # swirl lines turning through it
-        spin = 360 * phase + 180 * j
-        rr = 18 + 9 * j
-        c.flat(lambda dr, f, spin=spin, rr=rr: dr.arc((m - rr, m - rr, m + rr, m + rr), spin, spin + 100, f, width=1),
-               STEEL_D)
+    sh = 4  # the shadow layer sits down and right of the lumps
+    c.part(blob([(x + sh, y + sh, r) for x, y, r in lumps]), OUTLINE, shade=False)
+    for x, y, r in sorted(lumps, key=lambda p: p[1]):  # back to front: lower lumps overlap the ones behind
+        c.part(E((x - r, y - r, x + r, y + r)), SHADOW)
+        if x + y < 2 * m + 10:  # light catching the tops facing up-left
+            c.flat(E((x - r * 0.55, y - r * 0.7, x - r * 0.1, y - r * 0.45)), STEEL_D)
     for i in range(3):  # wisps rising off the top, shrinking as they go, one after another
         w = (phase + i / 3) % 1.0
         x = m - 24 + 24 * i + 4 * math.sin(math.tau * w)
-        y = m - 44 - 20 * w
+        y = m - 46 - 18 * w
         r = round(6 * (1 - w))
         if r >= 1:
             c.part(E((x - r, y - r * 0.7, x + r, y + r * 0.7)), SHADOW, shade=False)
