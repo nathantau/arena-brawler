@@ -1204,8 +1204,6 @@ ICONS = {
     "dash": lambda c: (c.flat(P([(5, 2), (11, 6), (5, 10), (7, 6)]), WHITE), c.flat(R((1, 3, 4, 3)), TEAL_L),
                        c.flat(R((0, 6, 4, 6)), TEAL_L), c.flat(R((1, 9, 4, 9)), TEAL_L)),
     "barrier": lambda c: (c.flat(RR((2, 1, 10, 11), 2), BLUE), c.flat(P([(6, 3), (8, 6), (6, 9), (4, 6)]), YELLOW)),
-    "dual": lambda c: (c.flat(R((1, 3, 8, 5)), STEEL), c.flat(R((1, 5, 3, 8)), BROWN),
-                       c.flat(R((4, 7, 11, 9)), STEEL), c.flat(R((9, 9, 11, 12)), BROWN)),
     "ape": lambda c: (c.flat(E((1, 1, 11, 11)), MAROON), c.flat(E((3, 5, 10, 11)), BROWN),
                       c.flat(R((2, 2, 10, 3)), YELLOW), c.flat(R((4, 6, 5, 7)), RED), c.flat(R((7, 6, 8, 7)), RED),
                       c.flat(R((5, 9, 8, 9)), OUTLINE)),
