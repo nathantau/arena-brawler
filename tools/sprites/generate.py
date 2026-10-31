@@ -340,10 +340,18 @@ def wukong(step=None, t=0):
     return low, up
 
 
-def wukong_ape(step=None, t=0):
+## Great Ape arms per pose (None = rest, 0 = fists raised for a slam, 1 = fists smashed down in front):
+## (shoulder, elbow, wrist) per arm, then (x, top, thumb dx) per fist. Back arm / fist first.
+APE_ARMS = {None: (((15, 26), (11, 36), (11, 44)), ((49, 26), (53, 36), (53, 44))),
+            0: (((15, 26), (9, 18), (8, 13)), ((49, 26), (55, 18), (56, 13))),
+            1: (((15, 26), (28, 36), (36, 44)), ((49, 26), (53, 36), (52, 44)))}
+APE_FISTS = {None: ((5, 42, -2), (47, 42, 9)), 0: ((2, 2, -2), (50, 2, 9)), 1: ((30, 45, -2), (46, 45, 9))}
+
+
+def wukong_ape(step=None, t=0, pose=None):
     """Great Ape (Wukong's special): an angry, dark-red brute. Hunched, broad-shouldered, long arms
     with big fists, glowing red eyes under a heavy scowl, golden circlet and bracers, storm clouds.
-    A transformation form, drawn bigger in game (SkillData.form_scale)."""
+    A transformation form, drawn bigger in game (SkillData.form_scale). `pose`: APE_ARMS (attack frames)."""
     low = Canvas()
     for x, (dx, dy) in zip((21, 35), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
         x += dx  # thick, slightly bowed ape legs with broad flat feet, on the same stride as everyone
@@ -360,16 +368,19 @@ def wukong_ape(step=None, t=0):
     up.part(E((22, 26, 44, 43)), BROWN)  # chest
     for x, y in ((14, 18), (20, 13), (27, 11)):
         up.part(P([(x, y + 5), (x + 3, y), (x + 6, y + 5)]), MAROON)  # bristling back fur
-    up.part(L([(15, 26), (11, 36), (11, 44)], 7), MAROON)  # back arm
-    up.part(L([(49, 26), (53, 36), (53, 44)], 7), MAROON)  # front arm
-    for x, thumb in ((5, -2), (47, 9)):  # clenched fists, knuckles down; they bob with the stride
-        up.part(R((x + 2, 38, x + 10, 41)), YELLOW)  # golden bracers
-        up.part(RR((x, 42 + s, x + 12, 53 + s), 3), MAROON)
-        up.part(E((x + thumb, 43 + s, x + thumb + 5, 48 + s)), MAROON)  # thumb wrapped over the fingers
-        up.flat(RR((x + 1, 48 + s, x + 11, 53 + s), 1), BROWN)  # curled fingers
+    for arm in APE_ARMS[pose]:
+        up.part(L(arm, 7), MAROON)
+    if pose is not None:
+        s = 0  # attack poses don't bob
+    for x, y, thumb in APE_FISTS[pose]:  # clenched fists, knuckles down; they bob with the stride
+        by = y + 12 if pose == 0 else y - 4  # golden bracers on the forearm: below a raised fist
+        up.part(R((x + 2, by, x + 10, by + 3)), YELLOW)
+        up.part(RR((x, y + s, x + 12, y + 11 + s), 3), MAROON)
+        up.part(E((x + thumb, y + 1 + s, x + thumb + 5, y + 6 + s)), MAROON)  # thumb wrapped over the fingers
+        up.flat(RR((x + 1, y + 6 + s, x + 11, y + 11 + s), 1), BROWN)  # curled fingers
         for kx in (x + 4, x + 7):
-            up.flat(R((kx, 48 + s, kx, 53 + s)), OUTLINE)  # knuckle splits
-        up.flat(R((x + 1, 48 + s, x + 11, 48 + s)), OUTLINE)
+            up.flat(R((kx, y + 6 + s, kx, y + 11 + s)), OUTLINE)  # knuckle splits
+        up.flat(R((x + 1, y + 6 + s, x + 11, y + 6 + s)), OUTLINE)
     up.part(E((24, 3, 50, 29)), MAROON)  # head, pushed forward
     up.part(E((28, 11, 50, 29)), BROWN)  # dark face
     up.part(P([(23, 8), (47, 4), (47, 9), (23, 13)]), YELLOW, shade=False)  # golden circlet, knocked askew
@@ -1397,6 +1408,9 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
 CROWNS = {"flint": flint_crown}  # optional per-frame effects drawn behind
+## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
+## build(None, i, pose). Wind up high, then smash down with the body squashed.
+ATTACKS = {"wukong_ape": [(0, -2), (1, 2), (1, 1)]}
 
 
 # --- frame processing -------------------------------------------------------
@@ -1447,6 +1461,18 @@ def frames(build, aura=None, crown=None) -> list[Image.Image]:
     hit = [recolor(idle[0], lambda _c: WHITE), recolor(idle[0], LIGHTER.__getitem__)]
     walk = [frame(i, dy, i) for i, dy in enumerate(WALK_BOB)]
     return idle + hit + walk
+
+
+def attack_frames(build, aura, poses) -> list[Image.Image]:
+    """SIZE px attack frames (ATTACKS), composed like idle frames."""
+    out = []
+    for i, (pose, dy) in enumerate(poses):
+        low, up = build(None, i, pose)
+        f = aura(i).img if aura else Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+        f.alpha_composite(low.img)
+        f.alpha_composite(up.img, (0, UPPER_DY + dy))
+        out.append(outline(f))
+    return out
 
 
 ## Sheet cells are bigger than the art so the toppling death frames fit; frames are centred in them.
@@ -1524,6 +1550,7 @@ def main() -> None:
         else:
             fs = [cell(f) for f in frames(build, AURAS.get(name))]
         fs += death_frames(build)
+        fs += [cell(f) for f in attack_frames(build, AURAS.get(name), ATTACKS.get(name, []))]
         sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
         for i, f in enumerate(fs):
             sheet.paste(f, (i * CELL, 0))

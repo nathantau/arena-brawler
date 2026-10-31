@@ -61,7 +61,7 @@ func portrait(i: int = 0) -> Texture2D:
 	return _portraits[i % _portraits.size()]
 
 
-## "idle" (looping bob) + "hit" (one-shot flash) + "walk" (looping) + "die" animations cut from
+## "idle" (looping bob) + "hit" (one-shot flash) + "walk" (looping) + "die" (+ optional "attack") animations cut from
 ## sprite_sheet (whole cells, so art above the body box shows); built once, shared.
 func sprite_frames() -> SpriteFrames:
 	if _sprite_frames == null:
@@ -79,6 +79,11 @@ static func frames_from_sheet(sheet: Texture2D) -> SpriteFrames:
 		Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_WALK_FPS, true)
 	_add_animation(frames, sheet, &"die", Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES
 		+ Constants.SPRITE_WALK_FRAMES, Constants.SPRITE_DIE_FRAMES, Constants.SPRITE_DIE_FPS, false)
+	var attack_at: int = Constants.SPRITE_IDLE_FRAMES + Constants.SPRITE_HIT_FRAMES + Constants.SPRITE_WALK_FRAMES \
+		+ Constants.SPRITE_DIE_FRAMES
+	if sheet.get_width() >= (attack_at + Constants.SPRITE_ATTACK_FRAMES) * Constants.SPRITE_CELL_SIZE:
+		_add_animation(frames, sheet, &"attack", attack_at, Constants.SPRITE_ATTACK_FRAMES,
+			Constants.SPRITE_ATTACK_FPS, false)
 	return frames
 
 

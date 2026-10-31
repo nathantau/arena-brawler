@@ -98,6 +98,8 @@ var _hit_flash: float = 0.0
 ## Attack animation time left, and its full length (depends on the weapon used).
 var _recoil: float = 0.0
 var _recoil_len: float = RECOIL_TIME
+## Time left on the sprite's "attack" animation (sheets that have one, e.g. the Great Ape).
+var _attack_anim: float = 0.0
 var _sprite := AnimatedSprite2D.new()
 ## Drawn after the sprite: the gun when it's in front of the body, and health bars.
 var _overlay := Node2D.new()
@@ -185,8 +187,11 @@ func _process(delta: float) -> void:
 	_hit_flash = maxf(0.0, _hit_flash - delta)
 	_recoil = maxf(0.0, _recoil - delta)
 	visual_offset *= exp(-Constants.CORRECTION_DECAY * delta)
+	_attack_anim = maxf(0.0, _attack_anim - delta)
 	var anim: StringName = &"idle"
-	if _hit_flash > 0.0:
+	if _attack_anim > 0.0:
+		anim = &"attack"
+	elif _hit_flash > 0.0:
 		anim = &"hit"
 	elif velocity.length() > Constants.SPRITE_WALK_MIN_SPEED:
 		anim = &"walk"
@@ -330,6 +335,10 @@ func _try_fire(seq: int, replay: bool) -> void:
 func play_recoil() -> void:
 	_recoil_len = MELEE_ANIM_TIME if held_weapon().data.kind == WeaponData.Kind.MELEE else RECOIL_TIME
 	_recoil = _recoil_len
+	if _sprite.sprite_frames != null and _sprite.sprite_frames.has_animation(&"attack"):
+		_attack_anim = Constants.SPRITE_ATTACK_FRAMES / Constants.SPRITE_ATTACK_FPS
+		_sprite.play(&"attack")
+		_sprite.frame = 0  # restart on every swing
 
 
 func flash() -> void:

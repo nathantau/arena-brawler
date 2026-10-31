@@ -180,6 +180,8 @@ func test_great_ape_halves_damage_and_swaps_to_fists() -> void:
 	assert_ne(p.held_weapon().data.id, &"ape_fists")
 	assert_true(p.special.try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
 	assert_eq(p.held_weapon().data.id, &"ape_fists")
+	assert_eq(ape.form_frames().get_frame_count(&"attack"), Constants.SPRITE_ATTACK_FRAMES, "fists swing")
+	assert_false(p.character.sprite_frames().has_animation(&"attack"), "no attack strip on plain sheets")
 	var before: int = p.stats.hp + p.stats.armor
 	p.take_hit(40, false, Vector2.ZERO, 2)
 	assert_eq(before - (p.stats.hp + p.stats.armor), roundi(40 * ape.form_damage_scale))
