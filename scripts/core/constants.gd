@@ -88,7 +88,7 @@ const SPRITE_IDLE_FRAMES: int = 4
 const SPRITE_HIT_FRAMES: int = 2
 const SPRITE_IDLE_FPS: float = 6.0
 const SPRITE_WALK_FRAMES: int = 8
-const SPRITE_WALK_FPS: float = 16.0
+const SPRITE_WALK_FPS: float = SPRITE_IDLE_FPS  # same pace as idle, so the walk frames read clearly
 ## Below this speed (px/s) a player shows the idle bob instead of the walk cycle.
 const SPRITE_WALK_MIN_SPEED: float = 40.0
 ## On-screen size of a sprite pixel (64 px art -> 96 px tall on a 720 px-high view).
