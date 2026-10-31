@@ -1,4 +1,4 @@
-"""Shared 16-colour palette for all generated sprites (RGB), plus shade/highlight ramps."""
+"""Shared 18-colour palette for all generated sprites (RGB), plus shade/highlight ramps."""
 
 OUTLINE = (27, 26, 46)
 SHADOW = (58, 58, 92)
@@ -16,21 +16,23 @@ TEAL_L = (126, 224, 207)
 BLUE = (60, 111, 209)
 NAVY = (43, 58, 107)
 BROWN = (110, 70, 48)
+PINK = (226, 110, 160)  # cherry blossom (Sakura)
+PINK_L = (250, 196, 214)
 
 PALETTE = [OUTLINE, SHADOW, STEEL_D, STEEL, WHITE, SKIN_D, SKIN, RED,
-           ORANGE, YELLOW, MAROON, TEAL, TEAL_L, BLUE, NAVY, BROWN]
-assert len(set(PALETTE)) == 16
+           ORANGE, YELLOW, MAROON, TEAL, TEAL_L, BLUE, NAVY, BROWN, PINK, PINK_L]
+assert len(set(PALETTE)) == 18
 
 # Shade (bottom/right edges of a part) and highlight (top/left edges; also the 2nd hit-flash frame).
 DARKER = {
     OUTLINE: OUTLINE, SHADOW: OUTLINE, STEEL_D: SHADOW, STEEL: STEEL_D, WHITE: STEEL,
     SKIN_D: BROWN, SKIN: SKIN_D, RED: MAROON, ORANGE: RED, YELLOW: ORANGE, MAROON: SHADOW,
-    TEAL: NAVY, TEAL_L: TEAL, BLUE: NAVY, NAVY: SHADOW, BROWN: MAROON,
+    TEAL: NAVY, TEAL_L: TEAL, BLUE: NAVY, NAVY: SHADOW, BROWN: MAROON, PINK: MAROON, PINK_L: PINK,
 }
 LIGHTER = {
     OUTLINE: SHADOW, SHADOW: STEEL_D, STEEL_D: STEEL, STEEL: WHITE, WHITE: WHITE,
     SKIN_D: SKIN, SKIN: WHITE, RED: ORANGE, ORANGE: YELLOW, YELLOW: WHITE, MAROON: RED,
-    TEAL: TEAL_L, TEAL_L: WHITE, BLUE: STEEL, NAVY: BLUE, BROWN: SKIN_D,
+    TEAL: TEAL_L, TEAL_L: WHITE, BLUE: STEEL, NAVY: BLUE, BROWN: SKIN_D, PINK: PINK_L, PINK_L: WHITE,
 }
 for ramp in (DARKER, LIGHTER):
     assert set(ramp) == set(PALETTE) and set(ramp.values()) <= set(PALETTE)

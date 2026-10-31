@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/petal_storm.png" id="9_proj"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+id = &"petal_storm"
+display_name = "Petal Storm"
+pickup = false
+damage = 6
+fire_interval = 0.1
+pellets = 24
+pellet_spread_deg = 345.0
+projectile_speed = 520.0
+projectile_range = 420.0
+projectile_radius = 4.0
+energy_cost = 0
+knockback = 60.0
+color = Color(0.98, 0.72, 0.82, 1)
+screen_shake = 0.15
+sfx = &"shot_light"
+bounces = 1
+drag = 0.6
+tags = Array[StringName]([&"sakura_volley"])

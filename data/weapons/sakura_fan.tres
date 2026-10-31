@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/sakura_fan.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/sakura_fan.png" id="9_proj"]
+
+[resource]
+script = ExtResource("1_wd")
+muzzle_x = 31.0
+projectile_sprite = ExtResource("9_proj")
+id = &"sakura_fan"
+display_name = "Blossom Fan"
+pickup = false
+damage = 5
+fire_interval = 0.3
+pellets = 5
+pellet_spread_deg = 34.0
+projectile_speed = 560.0
+projectile_range = 380.0
+projectile_radius = 4.0
+energy_cost = 0
+crit_chance = 0.08
+knockback = 20.0
+color = Color(0.98, 0.72, 0.82, 1)
+screen_shake = 0.02
+sfx = &"shot_light"
+bounces = 1
+drag = 1.0
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"sakura"])

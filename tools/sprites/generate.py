@@ -19,8 +19,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from palette import (BLUE, BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, PALETTE, RED, SHADOW,
-                     SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, WHITE, YELLOW)
+from palette import (BLUE, BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, PALETTE, PINK, PINK_L, RED,
+                     SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, WHITE, YELLOW)
 
 SIZE = 64
 IDLE_BOB = [0, 1, 2, 1]  # upper-body offset (px down) per idle frame; legs stay planted
@@ -284,6 +284,51 @@ def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: 
     c.part(P(shape(t, 0)), rim, shade=False, line=line)
     c.part(P(shape(t, 3)), ORANGE, shade=False, line=False)
     c.part(P(shape(t, 6)), YELLOW, shade=False, line=False)
+
+
+def sakura(step=None, t=0):
+    """Blossom: a cool-eyed girl in a white kimono with wide sleeves, red obi tied in a bow at the back, pink hair
+    in a high bun with a blossom hairpin whose charm sways, straight bangs and long side locks; geta on her feet."""
+    low = Canvas()
+    for x, dy in legs(low, WHITE, BROWN, step):  # white tabi socks, wooden geta
+        low.flat(R((x + 1, 53 + dy, x + 4, 53 + dy)), RED)  # geta thong
+    up = Canvas()
+    s = SWAY[t % 4]
+    up.part(P([(22, 39), (10, 34 + s), (9, 41 + s), (15, 44 + s), (22, 43)]), RED)  # obi bow ends flutter behind
+    up.part(RR((13, 34, 23, 48), 3), WHITE)  # back sleeve, wide and hanging
+    up.flat(R((14, 46, 22, 47)), PINK_L)  # its hem
+    up.part(RR((20, 33, 44, 49), 3), WHITE)  # kimono
+    up.flat(L([(26, 33), (32, 40)], 1), RED)  # crossed collar
+    up.flat(L([(38, 33), (32, 40)], 1), RED)
+    for x, y in ((24, 36), (40, 37), (27, 46), (37, 47)):  # blossom pattern
+        up.flat(R((x, y, x + 1, y + 1)), PINK_L)
+    up.part(R((20, 40, 44, 44)), RED, line=False)  # obi
+    up.flat(R((20, 42, 44, 42)), PINK)  # obi cord
+    up.part(RR((41, 34, 51, 48), 3), WHITE)  # front sleeve
+    up.flat(R((42, 46, 50, 47)), PINK_L)
+    up.part(E((26, 1, 40, 12)), PINK)  # high bun
+    up.part(E((16, 5, 48, 37)), PINK)  # hair
+    up.part(P([(17, 15), (22, 15), (22, 40), (18, 37)]), PINK)  # long side lock behind
+    up.part(E((21, 12, 47, 38)), SKIN)  # face
+    up.part(P([(20, 13), (48, 13), (48, 19), (45, 17), (41, 20), (37, 16), (32, 20), (28, 16), (24, 19), (20, 17)]),
+            PINK, shade=False)  # bangs, in soft points
+    up.part(P([(44, 14), (49, 14), (50, 39), (46, 37)]), PINK, shade=False)  # long side lock in front
+    up.part(L([(34, 6), (44, 3)], 1), STEEL, shade=False)  # hairpin through the bun
+    up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
+                          ((45, 2), (48, 4), (47, 7), (43, 7), (42, 4))], PINK_L)  # its blossom
+    up.dot(45, 5, YELLOW)
+    up.flat(L([(46, 8), (47, 11 + s)], 1), STEEL)  # dangling charm sways
+    up.flat(R((46, 12 + s, 48, 13 + s)), PINK)
+    big_eyes(up, 22, (29, 39), PINK, h=6)
+    if not KO:
+        for x, out in ((29, -1), (39, 4)):  # calm lids, lashes flicking out at the outer corners
+            up.flat(R((x, 21, x + 3, 21)), OUTLINE)
+            up.dot(x + out, 21, OUTLINE)
+            up.dot(x + out + (1 if out > 0 else -1), 20, OUTLINE)
+    up.flat(R((25, 30, 27, 30)), PINK)  # pink blush
+    up.flat(R((44, 30, 45, 30)), PINK)
+    up.flat(R((34, 33, 35, 33)), MAROON)  # small mouth
+    return low, up
 
 
 def flint(step=None, t=0):
@@ -589,6 +634,16 @@ def revolver(c):
     c.dot(5, 7, STEEL_D)  # hammer
 
 
+def blossom_fan(c):  # Sakura: a folding fan, open, ribs fanning out from the rivet
+    c.part(lambda d, f: d.pieslice((-6, -4, 30, 28), -38, 38, f), PINK_L)
+    for a in (-30, -15, 0, 15, 30):
+        r = math.radians(a)
+        c.flat(L([(12, 12), (12 + round(17 * math.cos(r)), 12 + round(17 * math.sin(r)))], 1), PINK)
+    c.flat(lambda d, f: d.arc((-6, -4, 30, 28), -38, 38, f, 2), RED)
+    c.part(E((4, 9, 10, 15)), BROWN)  # rivet / guard end
+    c.dot(7, 12, YELLOW)
+
+
 def ember_palm(c):  # Flint: a burning orb held in the palm, a tongue of fire licking forward
     c.part(P([(10, 8), (24, 11), (10, 15)]), RED, shade=False)
     c.part(P([(11, 10), (20, 11), (11, 13)]), YELLOW, shade=False, line=False)
@@ -598,7 +653,7 @@ def ember_palm(c):  # Flint: a burning orb held in the palm, a tongue of fire li
 
 
 # Hands are drawn by the game on the weapon's grip (they follow the aim), not baked into the sheets.
-HANDS = {"flicker": NAVY, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN, "flint": ORANGE}
+HANDS = {"flicker": NAVY, "warden": STEEL, "twinshot": BROWN, "wukong": SKIN, "flint": ORANGE, "sakura": SKIN}
 HAND_SIZE = 10
 
 
@@ -610,7 +665,8 @@ def hand_image(color) -> Image.Image:
 
 WEAPONS = {"pistol": pistol, "bot_blaster": bot_blaster, "smg": smg, "shotgun": shotgun, "sniper": sniper,
            "rocket": rocket, "grenade": grenade, "laser": laser, "sword": sword,
-           "flicker_kunai": kunai, "warden_hammer": hammer, "twinshot_revolver": revolver, "wukong_staff": staff, "flint_palm": ember_palm}
+           "flicker_kunai": kunai, "warden_hammer": hammer, "twinshot_revolver": revolver, "wukong_staff": staff, "flint_palm": ember_palm,
+           "sakura_fan": blossom_fan}
 
 
 def weapon_image(draw) -> Image.Image:
@@ -958,6 +1014,10 @@ ICONS = {
                                ORANGE) for dx, dy in ((1, 0), (0.7, 0.7), (0, 1), (-0.7, 0.7), (-1, 0), (-0.7, -0.7),
                                                       (0, -1), (0.7, -0.7))]
                        + [c.flat(E((3, 3, 9, 9)), RED), c.flat(E((4, 4, 8, 8)), YELLOW)],
+    "petals": lambda c: [c.flat(P([(6, 6), (6 + round(5 * dx - 2 * dy), 6 + round(5 * dy + 2 * dx)),
+                                    (6 + round(6 * dx), 6 + round(6 * dy)), (6 + round(5 * dx + 2 * dy), 6 + round(5 * dy - 2 * dx))]),
+                                 PINK_L) for dx, dy in ((0, -1), (0.95, -0.31), (0.59, 0.81), (-0.59, 0.81), (-0.95, -0.31))]
+                        + [c.flat(E((4, 4, 8, 8)), PINK), c.dot(6, 6, YELLOW)],
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -1379,6 +1439,14 @@ def fireball(c, f):  # Flint: a fireball with a licking tail that flickers
     c.dot(m + 1, m - 1, WHITE)
 
 
+def petal(c, f):  # Sakura: a cherry blossom petal, notched at the tip, tumbling (it flips each frame)
+    m = PROJ // 2
+    h = 4 if f else 2
+    c.part(P([(m - 5, m), (m - 1, m - h), (m + 4, m - h + 1), (m + 6, m - 1), (m + 4, m), (m + 6, m + 1),
+              (m + 4, m + h - 1), (m - 1, m + h)]), PINK_L)
+    c.flat(L([(m - 4, m), (m + 2, m)], 1), PINK)
+
+
 def plasma(c, f):  # bot blaster: a wobbling pink-red plasma blob
     m = PROJ // 2
     r = 5 if f else 4
@@ -1399,6 +1467,8 @@ PROJECTILES = {
     "bot_blaster": plasma,
     "flint_palm": fireball,
     "flare_ring": fireball,
+    "sakura_fan": petal,
+    "petal_storm": petal,
 }
 
 
@@ -1434,7 +1504,8 @@ FX = {
 }
 
 
-CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint}
+CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint,
+              "sakura": sakura}
 ## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
 FORMS = {"wukong_ape": wukong_ape}
 AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm}
