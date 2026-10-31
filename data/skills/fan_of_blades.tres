@@ -13,6 +13,6 @@ kind = 5
 special = true
 blurb = "Ring of kunai"
 tags = Array[StringName]([&"flicker"])
-cooldown = 6.0
+cooldown = 4.7
 duration = 0.1
 volley_weapon = ExtResource("3_fan")
