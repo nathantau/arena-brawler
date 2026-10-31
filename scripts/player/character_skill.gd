@@ -12,7 +12,10 @@ extends RefCounted
 ## - SWING: from `anchor` (takeoff) to `anchor + direction` (landing; the Player sets `direction` to that whole
 ##   vector, not a unit one, so both ends are in the snapshot).
 ## - ERUPTION: `anchor` = the marked spot (the Player places it against the walls); it goes off as it ends.
+## - WHIRL: a spinning staff round the player (wherever they are now); the Player damages and reflects.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
+
+const WHIRL_EPSILON: float = 0.0001
 
 var data: SkillData
 var cooldown_remaining: float = 0.0
@@ -59,6 +62,17 @@ func is_cloning() -> bool:
 
 func is_warding() -> bool:
 	return data.kind == SkillData.Kind.WARD and is_active()
+
+
+func is_whirling() -> bool:
+	return data.kind == SkillData.Kind.WHIRL and is_active()
+
+
+## WHIRL: true on the one frame (of length `delta`, already ticked) a damage tick falls due.
+func whirl_tick_due(delta: float) -> bool:
+	var interval: float = data.whirl_interval
+	var t: float = elapsed() + WHIRL_EPSILON  # float noise must not tip a frame over a boundary
+	return floori(t / interval) != floori((t - delta) / interval)
 
 
 ## Seconds since activation (drives clone paths).

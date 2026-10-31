@@ -16,7 +16,9 @@ extends Resource
 ## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
 ## ERUPTION: marks a spot on the floor ahead along the aim (short of walls); when `duration` (the telegraph) runs out,
 ## `eruption_blast` goes off there.
-enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10 }
+## WHIRL: spins a staff round you for `duration`: enemies within `whirl_radius` take damage every `whirl_interval`,
+## enemy projectiles touching the spin are sent back, you move slower and can't fire.
+enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -66,6 +68,15 @@ enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7, GR
 @export_group("Ward")
 ## Enemy projectiles crossing into this radius round the player are caught.
 @export var ward_radius: float = 70.0
+
+@export_group("Whirl")
+@export var whirl_radius: float = 70.0
+@export var whirl_damage: int = 8
+## Seconds between damage ticks (the first lands on the press).
+@export var whirl_interval: float = 0.25
+## Push outward from him per tick.
+@export var whirl_knockback: float = 120.0
+@export var whirl_speed_scale: float = 0.75
 
 @export_group("Volley")
 @export var volley_weapon: WeaponData

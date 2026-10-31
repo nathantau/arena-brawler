@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_staff_whirl.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"staff_whirl"
+display_name = "Staff Whirl"
+kind = 11
+special = true
+blurb = "Spin the staff: hurts and reflects"
+tags = Array[StringName]([&"wukong"])
+cooldown = 9.0
+duration = 1.5
+whirl_radius = 70.0
+whirl_damage = 8
+whirl_interval = 0.25
+whirl_knockback = 120.0
+whirl_speed_scale = 0.75

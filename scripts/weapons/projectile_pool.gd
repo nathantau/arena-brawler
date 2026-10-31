@@ -263,6 +263,29 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 
 ## Hammer-style melee: a blast centred at the tip of the reach (pulled in to the wielder if a
 ## wall is in the way, so it never lands on the far side of a wall).
+## Staff Whirl: enemy projectiles within `radius` of `origin` fly back outward and become `owner_id`'s (every
+## peer). `damage` > 0 (authoritative only): players and crates in reach take it, pushed away from `origin`.
+func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
+	for s: Slot in _slots:
+		if s.active and s.attacker_id != owner_id and s.pos.distance_to(origin) <= radius + s.radius:
+			s.vel = (s.pos - origin).normalized() * s.vel.length()
+			s.attacker_id = owner_id
+			s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
+	if not authoritative or damage <= 0:
+		return
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	for result: Dictionary in _overlaps(space, origin, radius, Constants.LAYER_PLAYERS | Constants.LAYER_CRATES):
+		var target := result.collider as Player
+		if target != null:
+			if target.player_id == owner_id or not target.can_be_hit() \
+					or not AutoAim.has_line_of_sight(space, _los_query, origin, target.global_position):
+				continue
+			var push: Vector2 = (target.global_position - origin).normalized() * knockback
+			_damage_player(target, owner_id, seq, 0, damage, false, push, target.global_position)
+		elif result.collider is Crate:
+			(result.collider as Crate).take_damage(damage)
+
+
 func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData) -> void:
 	var at: Vector2 = origin + facing * weapon.melee_range
 	if not AutoAim.has_line_of_sight(get_world_2d().direct_space_state, _los_query, origin, at):
