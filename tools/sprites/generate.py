@@ -829,18 +829,31 @@ def flint_inferno(step=None, t=0):
     return flint(step, t, heat=1.0)
 
 
+INFERNO_MORPH_FRAMES = 24
+
+
 def flint_inferno_morph() -> Image.Image:
-    """Flint stoking up: his idle frame with heat rising 0 → 1 over 12 frames (no growth: form_scale 1)."""
+    """Flint stoking up: his idle frame with heat rising 0 -> 1 over 24 frames (no growth: form_scale 1), flames licking up
+    round him more and more and a spray of fire sparks building to a burst as he flares into Inferno."""
     out = []
-    for k in range(12):
-        h = k / 11
+    n = INFERNO_MORPH_FRAMES
+    for k in range(n):
+        h = k / (n - 1)
         low, up = flint(None, k % 4, heat=h)
-        f = flint_embers(k % 4, h).img
+        f = flint_inferno_aura(k % 4, h * h).img
         f.alpha_composite(low.img)
         f.alpha_composite(up.img, (0, UPPER_DY))
         cell_img = flint_crown(k % 4, 0, h).img
         cell_img.alpha_composite(f, (PAD, PAD))
-        out.append(outline(cell_img))
+        img = outline(cell_img)
+        ov = Canvas(CELL)
+        cx, cy = CELL // 2, PAD + 40
+        spark_cloud(ov, 29, int(10 + 30 * h), k, lambda r: (cx + r.uniform(-12, 12), cy + r.uniform(-4, 16)), (0.8, 2.6),
+                    (5, 9), n, angle=(-2.6, -0.55), g=0.06, trail=3, up=0.3 + h)
+        if k >= n - 6:  # the flare: a burst flying out in every direction as he finishes
+            spark_cloud(ov, 31, 36, k - (n - 6), (cx, cy), (1.5, 4.5), (4, 8), 3, g=0.1, trail=3)
+        img.alpha_composite(ov.img)
+        out.append(img)
     return strip(out)
 
 
@@ -2889,11 +2902,12 @@ def slam_frame(k: int) -> Image.Image:
 ERUPT_SIZE = 128  # telegraph frames, art px (the floor spot is the centre)
 ERUPT_R = 53  # blast radius in art px (eruption_blast.tres splash 80 / SPRITE_SCALE 1.5): SpecialFx.ERUPTION_ART_RADIUS
 ERUPT_SQUASH = 0.6  # the floor seen in 3/4 view
-CRACK_FRAMES = 8  # the telegraph loop: a rocky mound over the cracked floor, lava pulsing in its cracks, rumbling
+CRACK_FRAMES = 16  # the telegraph loop: a rocky mound over the cracked floor, lava pulsing in its cracks, rumbling
 VOLC_SIZE = 256  # eruption strip frames, art px
 ERUPT_BASE = 204  # eruption strip: the floor spot's y (the volcano grows from here); SpecialFx.ERUPTION_BASE_Y
-ERUPT_FRAMES = 26
-ERUPT_BLAST = 4  # the frame the burst lands on; the ones before lead in from the telegraph (SpecialFx.ERUPTION_LEAD)
+ERUPT_FRAMES = 39  # designed in 26 frames (ERUPT_OLD) at 15 fps, sampled 1.5x finer: SpecialFx ERUPTION_FPS 22.5
+ERUPT_STEP = 1.5
+ERUPT_BLAST = 4  # the burst's frame in design time; the output lands on frame 6 (SpecialFx.ERUPTION_BLAST_FRAME), the ones before lead in from the telegraph
 MOUND_W, MOUND_H = 26, 18  # the telegraph mound, which the strip's first frames grow on from
 CONE_W, CONE_WT, CONE_H = 44, 15, 40  # the volcanic cone: foot half-width, crater half-width, height
 POOL_R = 54  # the magma pool's reach
@@ -3042,7 +3056,7 @@ def ash_plume(c: Canvas, k: int, cx: float, cy: float):
         v = i / n
         rise = (8 + 7 * i) * (1 - math.exp(-a / 4)) + max(0, k - 16) * 1.5
         r = min(24.0, 7 + 14 * v + 0.7 * a) * max(0.0, 1 - max(0, k - 16) / 12)
-        x = cx + spread * (8 + 30 * v) + SWAY[(k + i) % 4] + a * (0.35 + 0.3 * v) + max(0, k - 14) * 1.2
+        x = cx + spread * (8 + 30 * v) + SWAY[int(k + i) % 4] + a * (0.35 + 0.3 * v) + max(0, k - 14) * 1.2
         (hot if a < 3.5 and i < 5 else cold).append((x, cy - 6 - rise, round(r)))
     erupt_smoke(c, cold)
     erupt_smoke(c, hot, MAROON, RED)
@@ -3070,48 +3084,58 @@ def eruption_crack_frame(k: int) -> Image.Image:
     a scorch, a rocky mound heaving up out of it with lava pulsing in its cracks, small rocks hopping off it, dust
     and smoke rumbling up, and a ring of glowing embers marking where the blast will reach (squashed for 3/4 view)."""
     c = Canvas(ERUPT_SIZE)
+    ov = Canvas(ERUPT_SIZE)
     m = ERUPT_SIZE // 2
     ph = math.tau * k / CRACK_FRAMES
+    kh = k // 2  # the old 8-frame tick
     rx, ry = ERUPT_R, ERUPT_R * ERUPT_SQUASH
     for i in range(32):  # the reach: embers round the ring, marching every tick
         a = math.tau * i / 32
         x, y = round(m + math.cos(a) * rx), round(m + math.sin(a) * ry)
-        if (i + k) % 4 != 3:
-            c.flat(R((x - 1, y, x + 1, y)), (RED, ORANGE, YELLOW, ORANGE)[(i + k) % 4])
+        if (i + kh) % 4 != 3:
+            c.flat(R((x - 1, y, x + 1, y)), (RED, ORANGE, YELLOW, ORANGE)[(i + kh) % 4])
     c.part(E((m - 30, m - 17, m + 30, m + 17)), MAROON, shade=False)  # scorched floor
-    heat = 0.62 + 0.3 * (0.5 + 0.5 * math.sin(ph))
+    heat = 0.62 + 0.3 * (0.5 + 0.5 * math.sin(ph)) + 0.05 * math.sin(3 * ph)
+    glow = random.Random(6)
+    for _ in range(46):  # a dithered halo of firelight on the floor round the mound, pulsing with the lava
+        a, d = glow.uniform(0, math.tau), glow.uniform(0.0, 1.0) ** 0.7
+        if d * 36 < 38 * (0.35 + 0.65 * heat):
+            x, y = round(m + math.cos(a) * (14 + d * 36)), round(m + 2 + math.sin(a) * (7 + d * 20))
+            if (x + y) % 2 == 0:
+                c.flat(R((x, y, x + 1, y)), RED if d > 0.5 else ORANGE)
     erupt_cracks(c, m, m, ERUPT_R * 0.8, lava_cols(heat)[1])
-    quake = (0, -1, 0, 0, -1, 0, 1, 0)[k]  # the whole mound shudders
-    rock_cone(c, m, m + 1 + quake, MOUND_W + (k % 2), MOUND_W * 0.55, MOUND_H + quake, MOUND_H * 0.6, heat)
+    quake = (0, -1, 0, 0, -1, 0, 1, 0)[kh]  # the whole mound shudders
+    rock_cone(c, m, m + 1 + quake, MOUND_W + (kh % 2), MOUND_W * 0.55, MOUND_H + quake, MOUND_H * 0.6, heat)
     rng = random.Random(4)
     for i in range(6):  # rocks shaken loose, hopping
         ang = math.tau * i / 6 + rng.uniform(-0.3, 0.3)
-        hop = (0, 0, 2, 4, 5, 3, 1, 0)[(k + i * 3) % 8]
+        hop = round(lerp_tab((0, 0, 2, 4, 5, 3, 1, 0, 0), ((k + i * 6) % 16) / 2))
         x = m + math.cos(ang) * (MOUND_W + 6 + rng.uniform(0, 6))
         y = m + 3 + math.sin(ang) * 11 - hop
         c.part(R((round(x) - 1, round(y) - 1, round(x) + 1, round(y))), BROWN if i % 2 else MAROON, shade=False)
     for i in range(5):  # dust and smoke puffing off the mound, each its own phase
-        t = ((k + i * 2) % 8) / 7
-        x = m + (i - 2) * 11 + SWAY[(k + i) % 4] * 2
+        t = ((k + i * 4) % 16) / 15
+        x = m + (i - 2) * 11 + SWAY[(kh + i) % 4] * 2
         r = round(1 + 2 * math.sin(math.pi * min(1.0, t * 1.1)))
         if r >= 1:
             c.part(E((x - r, m - 4 - 30 * t - r, x + r, m - 4 - 30 * t + r)), SHADOW if t < 0.5 else STEEL_D,
                    shade=False)
-    for i in range(4):  # sparks popping off the cracks
-        t = ((k + i * 2) % 8) / 8
-        if t < 0.75:
-            c.dot(round(m - 18 + 12 * i + SWAY[(k + i) % 4]), round(m - 8 - 26 * t),
-                  (WHITE, YELLOW, ORANGE, RED)[int(t * 5.3)])
-    return outline(c.img)
+    spark_cloud(ov, 3, 26, k, lambda r: (m + r.uniform(-30, 30), m + r.uniform(-8, 5)), (0.0, 0.0), (8, 14), CRACK_FRAMES,
+                loop=CRACK_FRAMES, up=1.7, g=0.03, trail=3)  # sparks popping off the cracks, rising and cooling
+    spark_cloud(ov, 4, 10, k, lambda r: (m + r.uniform(-14, 14), m - MOUND_H + 4), (0.4, 1.0), (7, 12), CRACK_FRAMES,
+                angle=(-2.5, -0.65), loop=CRACK_FRAMES, g=0.06, trail=3)  # and thrown off the heaving top
+    return finish(c, ov)
 
 
-def eruption_frame(k: int) -> Image.Image:
+def eruption_frame(kk: int) -> Image.Image:
     """Eruption, a one-shot growing from the floor spot (ERUPT_BASE): the telegraph's mound heaves up, cracks, glows and
     splits (frames 0-3), then bursts into a volcanic cone blasting a fountain of lava and fire, a ring of dust rolling
     out, lava bombs arcing out to splat and pool, a dark ash plume billowing up and magma flooding the base; it cools:
     the fire sinks, the cone crumbles, the lava darkens to crusted rock, embers fade and the smoke drifts away."""
     c = Canvas(VOLC_SIZE)
+    ov = Canvas(VOLC_SIZE)
     m, b = VOLC_SIZE // 2, ERUPT_BASE
+    k = kk / ERUPT_STEP  # design time; all the timings below are in it
     t = k - ERUPT_BLAST
     fade = 1.0 if k < 21 else max(0.0, (25 - k) / 5)  # the debris sinks into the floor at the end
     heat = 1.0 if k < 9 else max(0.0, 1 - (k - 8) / 15)
@@ -3123,7 +3147,7 @@ def eruption_frame(k: int) -> Image.Image:
     else:
         cr = min(1.0, max(0.0, (k - 12) / 12))  # the crumble
         wb, wt, dome = CONE_W + 8 * cr, CONE_WT + 10 * cr, -4 * (1 - cr) + 6 * cr
-        h = (CONE_H + 5 * (k == ERUPT_BLAST)) * (1 - cr ** 1.4)
+        h = (CONE_H + 5 * (abs(k - ERUPT_BLAST) < 0.4)) * (1 - cr ** 1.4)
         cone_heat = heat
     cy = b - h  # the crater: where fire and bombs come from
     rng = random.Random(21)
@@ -3155,29 +3179,30 @@ def eruption_frame(k: int) -> Image.Image:
                          round(max(0.0, 5 - 0.8 * t + (i % 2)))) for i in range(12)], STEEL_D, STEEL)
     elif 1 <= k < ERUPT_BLAST:  # the rumble before it: dust puffing up off the base
         erupt_smoke(c, [(m + math.cos(math.tau * i / 5 + 0.7) * (30 + k * 3), b + 6 + math.sin(math.tau * i / 5 + 0.7) * 9
-                         - 3 * k, 3 + (i + k) % 2) for i in range(5)])
+                         - 3 * k, 3 + (i + int(k)) % 2) for i in range(5)])
     # --- the ash plume behind everything, then the cone and the fire it throws
     ash_plume(c, k, m, cy)
     rock_cone(c, m, b, wb, wt, h, dome, cone_heat)
     g = min(1.0, (19 - k) / 7)
-    if FIRE_H[k]:
-        hw, ht = FIRE_HW[k], FIRE_H[k]
+    ki = int(kk)
+    if lerp_tab(FIRE_H, k) > 0.5:
+        hw, ht = lerp_tab(FIRE_HW, k), lerp_tab(FIRE_H, k)
         if t >= 0 and g > 0.1:  # the bonfire at the crater's foot
             c.part(E((m - 22 * g, cy - 6 * g, m + 22 * g, cy + 6 * g)), RED, shade=False, line=False)
         if ht > 40:
             for side in (-1, 1):  # smaller jets either side of the main fountain
-                fire_column(c, m + side * hw * 0.8, cy + 2, ht * 0.6, hw * 0.6, k + side, lean=side * 0.25)
-        fire_column(c, m, cy + 2, ht, hw, k, 4 <= k <= 8)
+                fire_column(c, m + side * hw * 0.8, cy + 2, ht * 0.6, hw * 0.6, ki + side, lean=side * 0.25)
+        fire_column(c, m, cy + 2, ht, hw, ki, 4 <= k <= 8.5)
         if t >= 0:
-            flame(c, round(m - 24 * g), round(m + 24 * g), round(cy + 5), max(4, round(30 * g)), k, tongues=7, line=False)
-    if k == ERUPT_BLAST:  # the burst: a flash at the crater
+            flame(c, round(m - 24 * g), round(m + 24 * g), round(cy + 5), max(4, round(30 * g)), ki, tongues=7, line=False)
+    if abs(k - ERUPT_BLAST) < 0.4:  # the burst: a flash at the crater
         c.part(blobs([(m - 11, cy, 9), (m + 11, cy, 9), (m, cy - 6, 13)]), WHITE, shade=False)
-    elif k == ERUPT_BLAST + 1:
+    elif 0.4 <= k - ERUPT_BLAST < 1.4:
         c.part(blobs([(m - 8, cy - 2, 6), (m + 8, cy - 2, 6), (m, cy - 8, 8)]), YELLOW, shade=False, line=False)
     if 0 < k < ERUPT_BLAST:  # first sparks leaking out of the splitting top
-        for i in range(k * 2):
-            c.dot(round(m - 8 + 4 * i + SWAY[(k + i) % 4]), round(cy - 3 - (i * 5 + k * 3) % 14),
-                  (WHITE, YELLOW, ORANGE)[i % 3])
+        for i in range(int(k * 2)):
+            sdot(ov, round(m - 8 + 4 * i + SWAY[(ki + i) % 4]), round(cy - 3 - (i * 5 + int(k * 3)) % 14),
+                 (WHITE, YELLOW, ORANGE)[i % 3])
     # --- in the air: lava bombs, rocks, embers
     for dx, ly, apex, k0, dur, r, x0 in bombs:
         s = (k - k0) / dur
@@ -3192,13 +3217,29 @@ def eruption_frame(k: int) -> Image.Image:
             x, y = arc(m, cy, m + dx, b + ly, apex, s)
             c.part(R((round(x) - 1, round(y) - 1, round(x) + 1, round(y) + 1)), BROWN if int(s * 6) % 2 else MAROON,
                    shade=False)
-    for dx, ly, apex, k0, dur in embers:
+    for dx, ly, apex, k0, dur in embers:  # embers thrown up with the fountain: bright heads, cooling trails
         s = (t - k0) / dur
         if 0 <= s < 1:
             x, y = arc(m, cy, m + dx, b + ly, apex, s)
-            c.flat(R((round(x), round(y), round(x) + (1 if s < 0.6 else 0), round(y) + 1)),
-                   (WHITE, YELLOW, ORANGE, RED, MAROON)[min(4, int(s * 5))])
-    return outline(c.img)
+            col = SPARK_COLS[min(6, int(s * 7))]
+            for j, tc in ((1, ORANGE), (2, RED), (3, MAROON)):
+                tx, ty = arc(m, cy, m + dx, b + ly, apex, max(0.0, s - 0.045 * j))
+                sdot(ov, round(tx), round(ty), tc if s < 0.7 else (RED, MAROON, MAROON)[j - 1])
+            sdot(ov, round(x), round(y), col)
+            if s < 0.4:
+                sdot(ov, round(x) + 1, round(y), YELLOW)
+    if k >= ERUPT_BLAST - 1:  # a spray of fine sparks off the fountain: fast, up and out, falling back cooling
+        spark_cloud(ov, 88, 90, t, (m, cy - 2), (1.6, 5.2), (6, 12), 12.5, angle=(-2.55, -0.6), g=0.2, trail=3)
+        spark_cloud(ov, 89, 30, t, lambda r: (m + r.uniform(-20, 20), cy + 4), (0.8, 2.2), (6, 11), 12.5,
+                    angle=(-2.2, -0.9), g=0.1, trail=3, up=1.0)
+        if 0 <= t < 14:  # the lava glows on the floor: firelight dithered round the pool
+            gr = random.Random(2)
+            for _ in range(70):
+                a_, d_ = gr.uniform(0, math.tau), gr.uniform(0.3, 1.25)
+                x, y = round(m + math.cos(a_) * POOL_R * d_), round(b + 2 + math.sin(a_) * POOL_R * d_ * 0.52)
+                if (x + y) % 2 == 0 and d_ > 0.9 - 0.03 * t and d_ * (1 + 0.03 * t) < 1.25 and fade > 0.5:
+                    sdot(ov, x, y, ORANGE if d_ < 1.0 else RED)
+    return finish(c, ov)
 
 
 SLASH_FRAMES = 6
@@ -3366,32 +3407,119 @@ def projectile_strip(draw, n: int = 2) -> Image.Image:
     return strip(frames_)
 
 
-## Flare Burst (Flint): his flames swell and brighten (FLARE_CHARGE_FRAMES CELL frames, one per ~0.04 s of the 0.25 s charge),
-## then a ring of fire races out along the floor (FLARE_FRAMES frames of FLARE_W x FLARE_W art px, centred on his feet;
-## its reach FLARE_R = flare_burst_blast.tres splash 120 / SPRITE_SCALE 1.5 = SpecialFx.FLARE_ART_RADIUS) and leaves embers and smoke.
-FLARE_CHARGE_FRAMES = 6
-FLARE_FRAMES = 18
+## --- Fire sparks (Flint's FX): small bright embers that fly off a fire and cool as they go ---------------------------
+## Sparks are drawn on their own canvas AFTER outline() (bright, unoutlined, `sdot` keeps them off the frame edge).
+SPARK_COLS = (WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED, MAROON)
+
+
+def finish(c: Canvas, ov: Canvas) -> Image.Image:
+    """Outlines the drawn art, then lays the spark canvas on top."""
+    img = outline(c.img)
+    img.alpha_composite(ov.img)
+    return img
+
+
+def lerp_tab(tab, u: float) -> float:
+    """tab[u] with linear interpolation (u clamped to the table)."""
+    u = min(max(u, 0.0), len(tab) - 1.0)
+    i = min(int(u), len(tab) - 2)
+    return tab[i] + (tab[i + 1] - tab[i]) * (u - i)
+
+
+def ember_spark(c: Canvas, x, y, vx, vy, age, life, g=0.0, trail=3):
+    """One fire spark `age` into its `life` (same time unit as vx / vy per unit): a bright 1-2 px head (white, yellow, then
+    cooling orange, red, maroon) with a trail of cooler dots along the path it just flew; gravity `g` (+ = falls)."""
+    if age < 0 or age >= life:
+        return
+    f = age / life
+    pos = lambda a: (x + vx * a, y + vy * a + 0.5 * g * a * a)
+    for j in range(trail, 0, -1):
+        a = age - j * 0.55
+        if a >= 0:
+            tx, ty = pos(a)
+            sdot(c, round(tx), round(ty), (ORANGE, RED, MAROON, MAROON)[min(3, j - 1 + (f > 0.7))])
+    hx, hy = pos(age)
+    sdot(c, round(hx), round(hy), SPARK_COLS[min(6, int(f * 7))])
+    if f < 0.45:  # still white-hot: a second px behind it along its flight
+        vxa, vya = vx, vy + g * age
+        n = math.hypot(vxa, vya) or 1.0
+        sdot(c, round(hx - vxa / n), round(hy - vya / n), WHITE if f < 0.15 else YELLOW)
+
+
+def spark_cloud(c: Canvas, seed: int, n: int, k: float, origin, speed, life, window, angle=(0.0, math.tau), g=0.0,
+                loop: float = 0, squash: float = 1.0, up: float = 0.0, trail: int = 3):
+    """`n` sparks born at random moments in [0, window) from `origin` ((x, y) or a callable(rng) -> (x, y)), flying at
+    random angles in `angle` and speeds in `speed` (px per frame), each living `life` (a range) frames. With `loop` > 0 the
+    births repeat every `loop` frames, so a loop strip stays seamless (window == loop, life < loop)."""
+    rng = random.Random(seed)
+    for _ in range(n):
+        ox, oy = origin(rng) if callable(origin) else origin
+        a, sp, lf, birth = rng.uniform(*angle), rng.uniform(*speed), rng.uniform(*life), rng.uniform(0, window)
+        age = (k - birth) % loop if loop else k - birth
+        ember_spark(c, ox, oy, math.cos(a) * sp, math.sin(a) * sp * squash - up, age, lf, g, trail)
+
+
+## Flare Burst (Flint): his flames swell and brighten (FLARE_CHARGE_FRAMES CELL frames over the 0.25 s charge, embers
+## streaming in to a white-hot heart), then a ring of fire races out along the floor (FLARE_FRAMES frames of FLARE_W x
+## FLARE_W art px, centred on his feet; its reach FLARE_R = flare_burst_blast.tres splash 120 / SPRITE_SCALE 1.5 =
+## SpecialFx.FLARE_ART_RADIUS) and leaves embers and smoke. The poof plays it over a fixed time, so more frames = smoother.
+FLARE_CHARGE_FRAMES = 10
+FLARE_FRAMES = 30
 FLARE_W = 192
 FLARE_R = 80
 FLARE_SQUASH = 0.75  # the floor seen in 3/4 view
 
 
 def flint_flare_frame(k: int) -> Image.Image:
-    """Charging: his idle look stoked up (heat rises 0 -> 1) with a white-hot core swelling in his chest."""
-    h = k / (FLARE_CHARGE_FRAMES - 1)
+    """Charging: his idle look stoked up (heat rises 0 -> 1) with a white-hot core swelling in his chest, a flickering
+    halo round it and embers streaming in from all round to feed it."""
+    n = FLARE_CHARGE_FRAMES
+    h = k / (n - 1)
     low, up = flint(None, k % 4, heat=h)
     f = flint_embers(k % 4, h).img
     f.alpha_composite(low.img)
     f.alpha_composite(up.img, (0, UPPER_DY))
+    r = 0
     core = Canvas()
-    if k >= 2:  # the heart blazes through his suit
-        r = 3 + 2 * (k - 2)
+    if k >= 3:  # the heart blazes through his suit
+        r = 3 + round(8 * (k - 3) / (n - 4))
         core.flat(E((32 - r, 40 - r, 32 + r, 40 + r)), YELLOW)
         core.flat(E((32 - r + 2, 40 - r + 2, 32 + r - 2, 40 + r - 2)), WHITE)
         f.alpha_composite(core.img, (0, UPPER_DY))
     c = flint_crown(k % 4, 0, h).img
     c.alpha_composite(f, (PAD, PAD))
-    return outline(c)
+    img = outline(c)
+    hx, hy = PAD + 32, PAD + UPPER_DY + 40
+    ov = Canvas(CELL)
+    px = img.load()
+    if k >= 4:  # a flickering halo of heat round the heart, dithered, brighter as it swells
+        for y in range(hy - r - 9, hy + r + 10):
+            for x in range(hx - r - 9, hx + r + 10):
+                d = math.hypot(x - hx, (y - hy) * 1.1)
+                if r + 1 <= d <= r + 3 + 6 * h and (x + y + k) % 2 == 0 and not px[x, y][3]:
+                    ov.dot(x, y, YELLOW if d < r + 3 + h else ORANGE)
+    rng = random.Random(11)
+    for i in range(34):  # embers gathering in: faint at the edge, white-hot as they reach the heart
+        a, r0 = rng.uniform(0, math.tau), rng.uniform(20, 42)
+        birth, life = rng.uniform(-3, n - 3), rng.uniform(4, 7)
+        age = k - birth
+        if not 0 <= age < life:
+            continue
+        s = age / life
+        e = s * s * (3 - 2 * s * 0.5)  # accelerating inwards
+        for back, col in ((0.12, RED), (0.06, ORANGE)):
+            e2 = max(0.0, s - back)
+            e2 = e2 * e2 * (3 - 2 * e2 * 0.5)
+            q = r0 * (1 - e2)
+            sdot(ov, round(hx + math.cos(a) * q), round(hy + math.sin(a) * q * 0.85), col)
+        q = r0 * (1 - e)
+        col = (RED, ORANGE, YELLOW, WHITE)[min(3, int(s * 4))]
+        sdot(ov, round(hx + math.cos(a) * q), round(hy + math.sin(a) * q * 0.85), col)
+        if s > 0.5:
+            sdot(ov, round(hx + math.cos(a) * q) + 1, round(hy + math.sin(a) * q * 0.85), YELLOW)
+    spark_cloud(ov, 12, 7, k, (hx, PAD + 12), (0.5, 1.2), (3, 6), n - 4, angle=(-2.4, -0.75), up=0.2, trail=2)
+    img.alpha_composite(ov.img)
+    return img
 
 
 def flare_lick(c: Canvas, x: float, y: float, s: float, col_idx: int):
@@ -3410,46 +3538,72 @@ def flare_lick(c: Canvas, x: float, y: float, s: float, col_idx: int):
         c.flat(P([(x - s * 0.12, y), (x, y - s * 0.9), (x + s * 0.12, y)]), YELLOW)
 
 
+def flare_tongues() -> list:
+    """The wall's tongues, uneven on purpose: spacing, height (a few tall, many short), width, lean, when each catches
+    and burns out, its flicker rate. Plus a low bed of small flames between them. (angle, height, width, lean, appear,
+    burnout, rate, phase, big) sorted back to front."""
+    rng = random.Random(77)
+    out = []
+    a = rng.uniform(0, 0.2)
+    while a < math.tau - 0.08:
+        roll = rng.random()
+        hv = rng.uniform(1.35, 1.75) if roll < 0.22 else rng.uniform(0.5, 0.78) if roll < 0.5 else rng.uniform(0.86, 1.18)
+        out.append((a, hv, rng.uniform(0.6, 1.5), rng.uniform(-0.18, 0.22), rng.uniform(0.6, 3.2), 8 + rng.uniform(0, 3.5),
+                    rng.choice((1.0, 1.5, 2.0, 2.5)), rng.uniform(0, math.tau), True))
+        if rng.random() < 0.4:  # a smaller lick leaning against it
+            out.append((a + rng.choice((-1, 1)) * rng.uniform(0.05, 0.1), hv * rng.uniform(0.3, 0.5), rng.uniform(0.5, 0.8),
+                        rng.uniform(-0.1, 0.3), rng.uniform(1.0, 3.6), 7.5 + rng.uniform(0, 3), 2.5, rng.uniform(0, math.tau),
+                        False))
+        a += rng.uniform(0.07, 0.27)
+    for _ in range(40):  # the bed of low flames
+        out.append((rng.uniform(0, math.tau), rng.uniform(0.17, 0.34), rng.uniform(0.45, 0.75), 0.0, rng.uniform(0.8, 3.0),
+                    7 + rng.uniform(0, 3), 3.0, rng.uniform(0, math.tau), False))
+    out.sort(key=lambda q: math.sin(q[0]))
+    return out
+
+
 def flare_ring_frame(k: int) -> Image.Image:
-    """Frame k of 18: a white flash (0-1), a dense wall of flame tongues, leaning outward, racing out along the floor
-    over a scorched band (2-9) while the flash cools in the middle; then the wall tears into free licks of flame that
-    lift off, shrink and cool to embers, the scorch cracks glow and dither away, and thin smoke wisps and ash drift
-    up and out (10-17). No stems or caps: everything disperses outward and upward."""
+    """Frame k of FLARE_FRAMES: a white flash, a wall of uneven flame tongues (tall and stubby, each catching, flickering
+    and dying on its own beat, with a low bed of flame between and embers snapping off the tips) racing out along the
+    floor over a scorched band while the flash cools in the middle; then the wall tears into free licks of flame that
+    lift off, shrink and cool to embers, the scorch cracks glow and dither away, and smoke wisps and ash drift up and
+    out, a spray of sparks flying all the way through. Designed in 18 "old" frames (u) and sampled finer."""
     n = FLARE_W
     c = Canvas(n)
+    ov = Canvas(n)
     m = n // 2
     rng = random.Random(41)
     sq = FLARE_SQUASH
-    last = FLARE_FRAMES - 1
-    run = min(1.0, k / 9)
-    r = 10 + (FLARE_R - 10) * (1 - (1 - run) ** 2)  # races out, slowing at the edge
-    if k > 9:
-        r -= (k - 9) * 0.6  # the dying front draws in a touch as the band thins
-    d_age = max(0, k - 9)  # frames since the wall broke up
-    life = 1.0 if k <= 9 else max(0.0, 1 - (k - 9) / 5)
-    if 2 <= k <= 14:  # a scorched band on the floor behind the front, thinning to dots as it cools
-        band = 18 if k <= 9 else 7
+    u = k * 17 / (FLARE_FRAMES - 1)
+    ui = int(u)
+    ring_r = lambda uu: 10 + (FLARE_R - 10) * (1 - (1 - min(1.0, uu / 9)) ** 2) - max(0.0, uu - 9) * 0.6
+    run = min(1.0, u / 9)
+    r = ring_r(u)
+    d_age = max(0.0, u - 9)
+    if 2 <= u <= 14.99:  # a scorched band on the floor behind the front, thinning to dots as it cools
+        band = 18 if u <= 9 else 7
         d = ImageDraw.Draw(c.img)
-        for rr, col in ((r, MAROON if k < 11 else SHADOW), (r - band, None)):
+        for rr, col in ((r, MAROON if u < 11 else SHADOW), (r - band, None)):
             if rr > 2:
                 d.ellipse((m - rr, m - rr * sq, m + rr, m + rr * sq), fill=(col + (255,)) if col else (0, 0, 0, 0))
-        if k >= 10:  # dither it away
+        if u >= 10:  # dither it away
+            mod = 2 + int(u - 10) // 2
             for y in range(n):
                 for x in range(n):
-                    if c.px[x, y][3] and (x + y * 2) % (2 + (k - 10) // 2) != 0:
+                    if c.px[x, y][3] and (x + y * 2) % mod != 0:
                         c.px[x, y] = (0, 0, 0, 0)
-        if k <= 6:  # the flash cooling at the middle
-            fr = (26, 21, 16, 12, 8)[k - 2] if k - 2 < 5 else 5
-            c.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), (WHITE, WHITE, YELLOW, ORANGE, RED)[min(4, k - 2)])
-        if 3 <= k <= 9:  # the inner edge glows, a hot highlight lower down on the far side
+        if u < 7:  # the flash cooling at the middle
+            fr = (26, 21, 16, 12, 8)[ui - 2] if ui - 2 < 5 else 5
+            c.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), (WHITE, WHITE, YELLOW, ORANGE, RED)[min(4, ui - 2)])
+        if 3 <= u < 10:  # the inner edge glows, a hot highlight lower down on the far side
             ri = r - band + 3
             c.flat(lambda dd, f: dd.ellipse((m - ri, m - ri * sq, m + ri, m + ri * sq), outline=f, width=2),
-                   ORANGE if k < 8 else RED)
-            if k <= 8:
+                   ORANGE if u < 8 else RED)
+            if u < 9:
                 c.flat(lambda dd, f: dd.arc((m - ri + 2, m - (ri - 2) * sq, m + ri - 2, m + (ri - 2) * sq), 20, 160, fill=f,
                                             width=1), YELLOW)
-        if 7 <= k <= 13:  # glowing cracks in the scorch, cooling
-            col = (YELLOW, ORANGE, ORANGE, RED, RED, MAROON, MAROON)[k - 7]
+        if 7 <= u < 14:  # glowing cracks in the scorch, cooling
+            col = (YELLOW, ORANGE, ORANGE, RED, RED, MAROON, MAROON)[ui - 7]
             cr = random.Random(8)
             for _ in range(11):
                 a = cr.uniform(0, math.tau)
@@ -3457,33 +3611,35 @@ def flare_ring_frame(k: int) -> Image.Image:
                 x0, y0 = m + math.cos(a) * rad, m + math.sin(a) * rad * sq
                 c.flat(L([(x0, y0), (x0 + cr.uniform(-5, 5), y0 + cr.uniform(-2, 2)),
                           (x0 + cr.uniform(-9, 9), y0 + cr.uniform(-3, 3))], 1), col)
-    if k <= 1:  # the flash: a white-hot disc with rays
-        fr = (16, 30)[k]
+    if u < 2:  # the flash: a white-hot disc with rays
+        fr = (16, 30)[ui]
         c.flat(E((m - fr, m - fr * sq, m + fr, m + fr * sq)), YELLOW)
         c.flat(E((m - fr + 5, m - (fr - 5) * sq, m + fr - 5, m + (fr - 5) * sq)), WHITE)
-        if k == 1:
+        if ui == 1:
             for a in range(0, 360, 45):
                 ca, sa = math.cos(math.radians(a)), math.sin(math.radians(a))
                 c.flat(L([(m + ca * (fr + 2), m + sa * (fr + 2) * sq), (m + ca * (fr + 16), m + sa * (fr + 16) * sq)], 2),
                        WHITE)
-    count = 22
-    ring = []
-    for i in range(count):
-        a = math.tau * (i + 0.5 * (k % 2)) / count + rng.uniform(-0.08, 0.08)
-        ring.append((a, rng.uniform(0.7, 1.25), rng.uniform(0.7, 1.3), rng.uniform(0.0, 1.0)))
-    ring.sort(key=lambda q: math.sin(q[0]))  # back to front
-    if 1 <= k <= 14 and life > 0:  # the wall of tongues, leaning out, shrinking towards the end
-        for a, hv, wv, _ in ring:
-            ca, sa = math.cos(a), math.sin(a)
-            x, y = m + ca * r, m + sa * r * sq
-            hgt = max(3.0, (24 + 10 * (1 - run)) * life * hv)
-            lean = ca * hgt * 0.2 * (1 + 0.5 * (1 - life))
-            ph = math.tau * k / 8 + a * 3
-            for off, scale in ((0.0, 1.0),):
-                flame_tongue(c, (x, y), (x + lean * 0.5, y - hgt * 0.55), (x + lean + SWAY[(k + int(a * 5)) % 4], y - hgt),
-                             ph, 1, 4.6 * wv * (0.55 + 0.45 * life), m)
-    if d_age >= 1:  # free licks lifting off where the wall stood, cooling as they climb
-        for a, hv, wv, rs in ring:
+    tongues = flare_tongues()
+    for a, hv, wv, lean_j, appear, burn, rate, ph0, big in tongues:  # the wall, back to front
+        life = 1.0 if u <= burn else max(0.0, 1 - (u - burn) / 4)
+        grow = min(1.0, max(0.0, (u - appear) / 2.4))
+        if life <= 0 or grow <= 0:
+            continue
+        ca, sa = math.cos(a), math.sin(a)
+        rr = ring_r(max(u, appear)) + (0 if big else 3 * math.sin(a * 5 + ph0))
+        x, y = m + ca * rr, m + sa * rr * sq
+        flick = 1 + 0.3 * math.sin(math.tau * u * rate / 8 + ph0) + 0.1 * math.sin(math.tau * u * rate / 3 + ph0 * 2)
+        hgt = max(2.0, (24 + 10 * (1 - run)) * hv * life * (grow ** 0.7) * flick)
+        hgt = min(hgt, y - 9)  # the far side's tall tongues stay inside the frame
+        lean = ca * hgt * 0.2 * (1 + 0.5 * (1 - life)) + lean_j * hgt
+        tipx = x + lean + SWAY[(k + int(a * 5)) % 4] + 2 * math.sin(math.tau * u / 5 + ph0)
+        flame_tongue(c, (x, y), (x + lean * 0.5 + math.sin(ph0 + u) * 1.2, y - hgt * 0.55), (tipx, y - hgt),
+                     math.tau * u / 4 + ph0, 1, (4.6 if big else 3.0) * wv * (0.55 + 0.45 * life) * min(1.0, 0.5 + grow), m)
+    big_ones = [q for q in tongues if q[8]]
+    if d_age > 0:  # free licks lifting off where the wall stood, cooling as they climb
+        for a, hv, wv, lean_j, appear, burn, rate, ph0, big in big_ones:
+            rs = (ph0 / math.tau)
             age = d_age - rs * 3
             if age < 0:
                 continue
@@ -3493,29 +3649,17 @@ def flare_ring_frame(k: int) -> Image.Image:
             x, y = m + ca * rad + SWAY[(k + int(a * 7)) % 4], m + sa * rad * sq - lift
             if y < 12:
                 continue  # lifted clear out of the frame
-            s = (4.2 - 0.5 * age) * hv
+            s = (4.2 - 0.5 * age) * min(hv, 1.3)
             if s > 0.7:
                 flare_lick(c, x, y, s, min(2, int(age / 2.2)))
             elif age < 9:
                 c.dot(round(x), round(y), (ORANGE, RED, MAROON)[min(2, int((age - 6) / 1.2)) if age > 6 else 0])
-    if k >= 4:  # sparks flung off the front all the way through
-        for j in range(16):
-            a = rng.uniform(0, math.tau)
-            rad = r * rng.uniform(0.6, 1.1)
-            age = k - 4 - (j % 5)
-            if age < 0 or age > 7 + j % 4:
-                continue
-            rad = min(rad + age * 2.5, 84)
-            ex = m + math.cos(a) * rad
-            ey = m + math.sin(a) * rad * sq - age * (3 + j % 3) - 2
-            if ey > 12:
-                c.dot(round(ex), round(ey), (WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED, RED, MAROON, MAROON)[min(8, age)])
-    if k >= 7:  # wisps of smoke: small lumps, dark under, lit on top, drifting up and out, thinning away
+    if u >= 7:  # wisps of smoke: small lumps, dark under, lit on top, drifting up and out, thinning away
         for j in range(9):
             ang = rng.uniform(0, math.tau)
             rad = rng.uniform(0.25, 0.9) * FLARE_R
-            age = k - 7 - j % 3
-            if age < 0 or k - 7 - j % 3 > 9:
+            age = u - 7 - j % 3
+            if age < 0 or age > 9:
                 continue
             px_, py_ = m + math.cos(ang) * (rad + age * 1.2), m + math.sin(ang) * rad * sq - 6 - age * 3.2
             if py_ < 12:
@@ -3530,7 +3674,23 @@ def flare_ring_frame(k: int) -> Image.Image:
                        STEEL if age < 5 else STEEL_D)
             if age <= 2:  # still lit red from the fire below
                 c.dot(round(px_), round(py_ + sr * 0.6), RED)
-    return outline(c.img)
+    # --- sparks (old-frame units): snapping off the tips of the tall tongues, and a spray off the racing front
+    sr_ = random.Random(5)
+    for a, hv, wv, lean_j, appear, burn, rate, ph0, big in big_ones:
+        for _ in range(2):
+            birth = appear + 1.5 + sr_.uniform(0, 7)
+            vx, vy, lf = sr_.uniform(-0.5, 0.5), -sr_.uniform(1.1, 2.4), sr_.uniform(4, 8)
+            ca, sa = math.cos(a), math.sin(a)
+            rb = ring_r(birth)
+            ember_spark(ov, m + ca * rb, m + sa * rb * sq - 24 * hv, vx + ca * sr_.uniform(0.4, 1.2), vy, u - birth, lf,
+                        0.08, 3)
+    for _ in range(56):
+        a, birth = sr_.uniform(0, math.tau), sr_.uniform(1.5, 12)
+        sp, lf = sr_.uniform(0.8, 2.6), sr_.uniform(4, 9)
+        rb = ring_r(birth) * sr_.uniform(0.7, 1.05)
+        ca, sa = math.cos(a), math.sin(a)
+        ember_spark(ov, m + ca * rb, m + sa * rb * sq - 4, ca * sp, sa * sp * sq - sr_.uniform(0.6, 2.0), u - birth, lf, 0.07, 3)
+    return finish(c, ov)
 
 
 def strip(frames_: list[Image.Image]) -> Image.Image:
@@ -3589,9 +3749,100 @@ FX_IMAGES = {"vine": vine, "vine_top": vine_top,
 CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukong": wukong, "flint": flint,
               "sakura": sakura}
 ## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
+# --- Inferno (Flint's form): flames licking up round him and fire sparks flying off ----------------------------------
+INFERNO_LICKS = ((8, 52, 15, -1), (56, 52, 16, 1), (5, 34, 12, -1), (59, 36, 13, 1), (14, 22, 10, -1), (50, 20, 11, 1))
+
+
+def flint_inferno_aura(i: int, h: float = 1.0) -> Canvas:
+    """Behind Inferno Flint (period 4): flames licking up on both sides of him, each on its own beat, with fire sparks
+    (bright heads, cooling trails) streaming up and out. `h` 0..1 scales it for the morph."""
+    c = flint_embers(i, h)
+    ph = math.tau * i / 4
+    for n, (x, y, height, side) in enumerate(INFERNO_LICKS):
+        hh = height * h * (1 + 0.18 * math.sin(ph + n * 1.9))
+        if hh < 4:
+            continue
+        sw = side * (1.2 + 1.5 * math.sin(ph + n)) + side * 1.5
+        flame_tongue(c, (x, y), (x + sw * 0.5, y - hh * 0.55), (x + sw + side * 1.5, y - hh), ph + n * 2.3, 1, 3.2 * min(1.0, 0.4 + h) , 32)
+    spark_cloud(c, 17, int(3 + 7 * h), i, lambda r: (r.choice((r.uniform(4, 14), r.uniform(50, 60))), r.uniform(20, 52)),
+                (0.2, 0.8), (3, 4), 4, angle=(-2.4, -0.75), loop=4, up=1.4, trail=2)
+    return c
+
+
+# --- Supernova (Flint, VOLLEY of 16 fireballs): the burst the ring of fireballs leaves from -------------------
+SUPERNOVA_W = 160
+SUPERNOVA_FRAMES = 16
+SUPERNOVA_R = 50  # the ring's reach in art px
+
+
+def supernova_frame(k: int) -> Image.Image:
+    """Supernova (SUPERNOVA_FRAMES, centred on him, a one-shot): embers rush in and a white-hot core flashes with rays,
+    then a ring of fire races out - 16 long spokes of flame, one per fireball, between smaller uneven licks, round a thin
+    ring of flame - while sparks fly off in every direction; the ring tears into embers and thins out."""
+    n = SUPERNOVA_W
+    c = Canvas(n)
+    ov = Canvas(n)
+    m = n // 2
+    rng = random.Random(23)
+    run = min(1.0, max(0.0, (k - 1) / 9))
+    r = 6 + (SUPERNOVA_R - 6) * (1 - (1 - run) ** 2)
+    life = 1.0 if k <= 9 else max(0.0, 1 - (k - 9) / 6)
+    spokes = []
+    for i in range(16):  # one spoke per fireball, uneven in length and timing
+        spokes.append((math.tau * (i + 0.5) / 16, rng.uniform(0.7, 1.3), rng.uniform(0, math.tau), rng.uniform(0, 1.0)))
+    for _ in range(18):  # smaller licks between
+        spokes.append((rng.uniform(0, math.tau), rng.uniform(0.3, 0.55), rng.uniform(0, math.tau), rng.uniform(0, 1.0)))
+    if k >= 1 and life > 0:
+        for rr, col, w in ((r, RED, 5), (r - 1, ORANGE, 3), (r - 2, YELLOW, 1)):  # the ring of flame itself
+            if k < 11 or col == RED:
+                c.flat(lambda d, f, rr=rr, w=w: d.ellipse((m - rr, m - rr * 0.9, m + rr, m + rr * 0.9), outline=f,
+                                                         width=max(1, round(w * life))), col)
+    for a, lv, ph0, d in spokes:  # flame tongues pointing outward
+        if k < 1 + d * 2 or life <= 0:
+            continue
+        ca, sa = math.cos(a), math.sin(a)
+        length = (22 + 8 * (1 - run)) * lv * life * min(1.0, (k - d * 2) / 3) * (1 + 0.22 * math.sin(k * 1.1 + ph0))
+        length = min(length, 70 - r)  # stays inside the frame
+        if length < 3:
+            continue
+        bend = math.sin(k * 0.7 + ph0) * 3
+        root = (m + ca * (r - 2), m + sa * (r - 2) * 0.9)
+        ctrl = (m + ca * (r + length * 0.5) - sa * bend * 0.5, m + sa * (r + length * 0.5) * 0.9 + ca * bend * 0.5)
+        tip = (m + ca * (r + length) - sa * bend, m + sa * (r + length) * 0.9 + ca * bend)
+        flame_tongue(c, root, ctrl, tip, math.tau * k / 6 + ph0, 1, (4.2 if lv > 0.6 else 2.4) * (0.5 + 0.5 * life), m)
+    if k <= 5:  # the core: white-hot, shrinking back as the ring leaves
+        cr = (12, 20, 17, 13, 9, 5)[k]
+        c.flat(E((m - cr, m - cr * 0.9, m + cr, m + cr * 0.9)), YELLOW if k else WHITE)
+        c.flat(E((m - cr + 3, m - (cr - 3) * 0.9, m + cr - 3, m + (cr - 3) * 0.9)), WHITE)
+        if k in (1, 2):  # rays
+            for j in range(16):
+                a = math.tau * (j + 0.5) / 16
+                ln = (cr + 12 + (j % 3) * 5) * (1 + 0.3 * (k == 1))
+                c.flat(L([(m + math.cos(a) * (cr + 2), m + math.sin(a) * (cr + 2) * 0.9),
+                          (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.9)], 1), WHITE if j % 2 else YELLOW)
+    for _ in range(26):  # embers rushing in to the core
+        a, r0, birth = rng.uniform(0, math.tau), rng.uniform(30, 52), rng.uniform(-2, 1.0)
+        s = (k - birth) / 2.6
+        if 0 <= s < 1:
+            q = r0 * (1 - s * s)
+            sdot(ov, round(m + math.cos(a) * q), round(m + math.sin(a) * q * 0.9), (RED, ORANGE, YELLOW, WHITE)[int(s * 4)])
+            q2 = r0 * (1 - max(0.0, s - 0.2) ** 2)
+            sdot(ov, round(m + math.cos(a) * q2), round(m + math.sin(a) * q2 * 0.9), ORANGE)
+    # sparks: streaming off the spokes' tips and thrown out of the ring in every direction
+    spark_cloud(ov, 5, 110, k, lambda rr: (m + math.cos(a_ := rr.uniform(0, math.tau)) * 22, m + math.sin(a_) * 20),
+                (2.2, 6.0), (5, 10), 9, g=0.06, trail=3, squash=0.9)
+    for j in range(16):  # a fast streak spark down each fireball's path
+        a = math.tau * (j + 0.5) / 16
+        ember_spark(ov, m + math.cos(a) * 12, m + math.sin(a) * 11, math.cos(a) * 5, math.sin(a) * 4.5, k - 1, 9, 0.0, 4)
+    return finish(c, ov)
+
+
+FX.update({"supernova_burst": lambda: strip([supernova_frame(k) for k in range(SUPERNOVA_FRAMES)])})
+
+
 FORMS = {"wukong_ape": wukong_ape, "flint_inferno": flint_inferno}
 AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers,
-         "flint_inferno": lambda i: flint_embers(i, 1.0)}
+         "flint_inferno": flint_inferno_aura}
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
 CROWNS = {"flicker": flicker_topknot, "flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
@@ -3728,7 +3979,7 @@ def death_frames(build, crown=None) -> list[Image.Image]:
 BLAZE_CELL = 48  # art px, square: one stamp of burning ground; its floor spot is (cell centre, BLAZE_FLOOR_Y)
 BLAZE_FLOOR_Y = 36  # SpecialFx.BLAZE_FLOOR_Y
 BLAZE_SQUASH = 0.32  # the floor seen in 3/4 view
-BLAZE_IGNITE_FRAMES = 12
+BLAZE_IGNITE_FRAMES = 20
 BLAZE_STREAK_CELL = 96
 
 
@@ -3756,52 +4007,59 @@ def blaze_scorch(c: Canvas, m: int, rx: float, seed: int, glow=None):
                       (x0 + rng.uniform(5, 7), y0 + rng.choice((-1, 0, 1)))], 1), glow)
 
 
-BLAZE_LOOP = 8  # frames of a flame stamp's loop / of the streak (SpecialFx.BLAZE_FLAME_LOOP)
-BLAZE_DIES = 6  # frames of the die-out (SpecialFx.BLAZE_FLAME_DIES)
+BLAZE_LOOP = 16  # frames of a flame stamp's loop / of the streak (SpecialFx.BLAZE_FLAME_LOOP)
+BLAZE_DIES = 10  # frames of the die-out (SpecialFx.BLAZE_FLAME_DIES)
 
 
 def blaze_flames(c: Canvas, m: int, k: int, scale: float, xs=(-11, 0, 11), heights=(19, 27, 17), wide=4.5):
-    """Tongues of fire rising from the floor (period 8 in k): each breathes taller and shorter on its own beat, sways
-    side to side, a wave rolling up it; a white-hot sliver in the heart of the tall ones and a glow on the floor under."""
+    """Tongues of fire rising from the floor (period BLAZE_LOOP in k): each breathes taller and shorter on its own beat
+    (two harmonics, so no two match), sways side to side, a wave rolling up it; small licks leaning on the tall ones, a
+    white-hot sliver in the heart and a glow on the floor under."""
     ph = math.tau * k / BLAZE_LOOP
     fy = BLAZE_FLOOR_Y
     gw = (max(abs(x) for x in xs) + 5) * min(1.0, 0.4 + scale)
     if scale > 0.3:  # the heat glow where the flames sit
         c.flat(E((m - gw, fy - 1, m + gw, fy + 2)), RED)
-        c.flat(E((m - gw * 0.6, fy - 1, m + gw * 0.6, fy + 1)), ORANGE if k % 2 else YELLOW)
+        c.flat(E((m - gw * 0.6, fy - 1, m + gw * 0.6, fy + 1)), ORANGE if (k // 2) % 2 else YELLOW)
     for i in sorted(range(len(xs)), key=lambda i: -heights[i]):  # tallest behind
-        h = heights[i] * scale * (1 + 0.14 * math.sin(ph + i * 2.1) + 0.05 * math.sin(2 * ph + i))
+        h = heights[i] * scale * (1 + 0.15 * math.sin(ph + i * 2.1) + 0.08 * math.sin(2 * ph + i * 1.3)
+                                  + 0.04 * math.sin(3 * ph + i))
         if h < 3:
             continue
         x = m + xs[i]
-        sw = math.sin(ph + i * 1.3) * 2.2
+        sw = math.sin(ph + i * 1.3) * 2.2 + math.sin(2 * ph + i) * 0.8
         flame_tongue(c, (x, fy), (x + sw * 0.4, fy - h * 0.55), (x + sw, fy - h),
                      ph + i * 2, 1, wide * min(1.0, 0.4 + scale), m)
+        if h >= 12 and scale > 0.4:  # a small lick leaning on it, on its own beat
+            side = -1 if xs[i] > 0 else 1  # leaning in towards the middle
+            h2 = h * (0.38 + 0.1 * math.sin(2 * ph + i * 2.7))
+            flame_tongue(c, (x + side * wide * 0.8, fy), (x + side * (wide + 2), fy - h2 * 0.5),
+                         (x + side * (wide + 3 + sw * 0.5), fy - h2), 2 * ph + i, 1, wide * 0.55, m)
         if h >= 14:  # white-hot sliver low in the heart, a lit edge up the left side
             c.flat(L([(x - 0.5, fy - 1), (x + sw * 0.15 - 0.5, fy - h * 0.34)], 1), WHITE)
             c.flat(L([(x - wide * 0.55, fy - 2), (x - wide * 0.4 + sw * 0.3, fy - h * 0.4)], 1), YELLOW)
 
 
-def blaze_embers(c: Canvas, m: int, k: int, n: int = 4, rise: int = 6, seed: int = 3):
-    """Sparks and loose flame licks lifting off the fire (period 8), cooling as they rise, with a wisp of smoke above."""
+def blaze_embers(c: Canvas, ov: Canvas, m: int, k: int, n: int = 4, rise: int = 6, seed: int = 3):
+    """Fire sparks (on `ov`, bright, with trails) and loose flame licks (on `c`) lifting off the fire (period BLAZE_LOOP),
+    cooling as they rise, with a wisp of smoke above."""
     rng = random.Random(seed)
-    for i in range(n):
-        x0 = m + rng.randint(-16, 16)
-        ph = (k + i * 3) % BLAZE_LOOP
-        y = BLAZE_FLOOR_Y - 8 - ph * rise * 0.5 - rng.randint(0, 8)
-        if ph < 6:
-            x = x0 + round(math.sin(math.tau * (k + i) / BLAZE_LOOP) * 1.5)
-            if i % 2 == 0 and ph < 4:  # a tiny detached lick of flame
-                c.flat(P([(x - 1, y + 1), (x, y - 2), (x + 1, y + 1)]), (YELLOW, ORANGE, RED, RED)[ph])
-            else:
-                c.dot(x, y, (YELLOW, YELLOW, ORANGE, ORANGE, RED, MAROON)[ph])
+    spark_cloud(ov, seed * 7, n * 2 + 2, k, lambda r: (m + r.uniform(-15, 15), BLAZE_FLOOR_Y - 7 - r.uniform(0, 8)),
+                (0.0, 0.0), (7, 12), BLAZE_LOOP, loop=BLAZE_LOOP, up=rise * 0.27, g=0.01, trail=3)
+    for i in range(max(1, n // 2) + 1):  # tiny detached licks
+        ph = (k + i * 5) % BLAZE_LOOP
+        if ph >= 8:
+            continue
+        x = m + rng.randint(-13, 13) + round(math.sin(math.tau * (k + i) / BLAZE_LOOP) * 1.5)
+        y = BLAZE_FLOOR_Y - 9 - ph * rise * 0.25 - rng.randint(0, 6)
+        c.flat(P([(x - 1, y + 1), (x, y - 2 + (ph > 4)), (x + 1, y + 1)]), (YELLOW, YELLOW, ORANGE, ORANGE, RED, RED, RED, MAROON)[ph])
     for i in range(max(1, n // 2)):  # smoke wisps high above, rising, thin
-        ph = (k + i * 4) % BLAZE_LOOP
-        x = m + rng.randint(-8, 8) + round(math.sin(math.tau * (k + i * 3) / BLAZE_LOOP) * 2)
-        y = BLAZE_FLOOR_Y - 22 - ph * 2.2
-        if y > 2 and ph < 7:
-            c.dot(x, y, STEEL_D if ph < 4 else SHADOW)
-            if ph < 3:
+        ph = (k + i * 8) % BLAZE_LOOP
+        x = m + rng.randint(-8, 8) + round(math.sin(math.tau * (k + i * 6) / BLAZE_LOOP) * 2)
+        y = BLAZE_FLOOR_Y - 22 - ph * 1.1
+        if y > 2 and ph < 14:
+            c.dot(x, y, STEEL_D if ph < 8 else SHADOW)
+            if ph < 6:
                 c.dot(x + 1, y, SHADOW)
 
 
@@ -3813,80 +4071,79 @@ BLAZE_FLAME_VARIANTS = (
     ((0, 9), (27, 10), 5.0),
     ((-8, 1, 9), (11, 18, 12), 3.8),
 )
-BLAZE_FLAME_DIE = (0.9, 0.75, 0.6, 0.44, 0.28, 0.14)  # flame scale per frame of the die-out, after which it's gone
-BLAZE_COOL = (ORANGE, ORANGE, RED, RED, MAROON, MAROON)  # crack colour per frame of the die-out
+BLAZE_FLAME_DIE = (0.92, 0.82, 0.72, 0.62, 0.52, 0.42, 0.32, 0.22, 0.14, 0.07)  # flame scale per die-out frame
+BLAZE_COOL = (ORANGE, ORANGE, ORANGE, RED, RED, RED, MAROON, MAROON, MAROON, MAROON)  # crack colour per die-out frame
 
 
 def blaze_flame_frame(v: int, k: int, scale: float = 1.0, embers: bool = True) -> Image.Image:
-    """One flame stamp (variant `v`): a few flowing tongues on the floor spot, breathing and swaying (period 8 in k),
-    sparks and licks lifting off; dying, it shrinks and cools (cracks in the scorch, smoke curling off)."""
+    """One flame stamp (variant `v`): a few flowing tongues on the floor spot, breathing and swaying (period BLAZE_LOOP in
+    k), sparks and licks lifting off; dying, it shrinks and cools (cracks in the scorch, smoke curling off)."""
     c = Canvas(BLAZE_CELL)
+    ov = Canvas(BLAZE_CELL)
     m = BLAZE_CELL // 2
     xs, heights, wide = BLAZE_FLAME_VARIANTS[v]
     blaze_scorch(c, m, (max(abs(x) for x in xs) + 8) * min(1.0, scale + 0.15), 90 + v,
-                 (ORANGE, YELLOW, YELLOW, ORANGE)[k % 4] if embers else BLAZE_COOL[k % BLAZE_DIES])
+                 (ORANGE, YELLOW, YELLOW, ORANGE)[(k // 2) % 4] if embers else BLAZE_COOL[k % BLAZE_DIES])
     blaze_flames(c, m, k, scale, xs, heights, wide)
     if embers:
-        blaze_embers(c, m, k, 3, 6, 3 + v)
-    else:  # a thread of smoke off the dying fire, climbing frame by frame
+        blaze_embers(c, ov, m, k, 3, 6, 3 + v)
+    else:  # a thread of smoke off the dying fire, climbing frame by frame, a last few sparks cooling
         for i in range(2):
-            y = BLAZE_FLOOR_Y - 8 * scale - k * 3 - i * 5
-            x = m + (-3 if i else 4) + SWAY[(k + i) % 4]
+            y = BLAZE_FLOOR_Y - 8 * scale - k * 1.8 - i * 5
+            x = m + (-3 if i else 4) + SWAY[(k // 2 + i) % 4]
             if y > 2:
-                c.dot(x, y, STEEL_D if k < 4 else SHADOW)
+                c.dot(x, y, STEEL_D if k < 6 else SHADOW)
                 c.dot(x, y + 1, SHADOW)
-    return outline(c.img)
+        spark_cloud(ov, 40 + v, 4, k, lambda r: (m + r.uniform(-8, 8), BLAZE_FLOOR_Y - 6), (0, 0), (5, 8), 3,
+                    up=1.2 * scale + 0.3, g=0.04, trail=2)
+    return finish(c, ov)
 
 
 def blaze_ignite_frame(k: int) -> Image.Image:
-    """Where he took off (12 frames): a white-hot flash ring spreads over the floor with a puff of debris flung out,
-    as the fire catches and flares up, then settles to the height of the trail's flames."""
+    """Where he took off (BLAZE_IGNITE_FRAMES frames): a white-hot flash ring spreads over the floor with sparks and debris
+    flung out, as the fire catches and flares up, then settles to the height of the trail's flames."""
     c = Canvas(BLAZE_CELL)
+    ov = Canvas(BLAZE_CELL)
     m = BLAZE_CELL // 2
-    if k < 8:  # the flash
-        rx = round(4 + 2.4 * k)
+    u = k * 11 / (BLAZE_IGNITE_FRAMES - 1)  # designed in 12 frames
+    if u <= 7.2:  # the flash
+        rx = round(4 + 2.4 * u)
         ry = max(1, round(rx * BLAZE_SQUASH))
-        col = (WHITE, WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED, MAROON)[k]
+        col = (WHITE, WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED, MAROON)[int(u)]
         c.flat(lambda d, f: d.ellipse((m - rx, BLAZE_FLOOR_Y - ry, m + rx, BLAZE_FLOOR_Y + ry), outline=f, width=1), col)
-        if k < 3:
+        if u < 3:
             c.flat(E((m - rx + 2, BLAZE_FLOOR_Y - ry + 1, m + rx - 2, BLAZE_FLOOR_Y + ry - 1)), WHITE)
-    blaze_scorch(c, m, min(19, 7 + 3 * k), 70 + k, YELLOW if k < 7 else ORANGE)
-    blaze_flames(c, m, k, (0.2, 0.45, 0.75, 1.0, 1.18, 1.15, 1.1, 1.05, 1.0, 1.0, 1.0, 1.0)[k], wide=5.5)
-    rng = random.Random(12)
-    for j in range(10):  # debris flung out of the ignition
-        a = rng.uniform(0, math.tau)
-        age = k - j % 3
-        if 0 <= age < 7:
-            d = 4 + age * 2.4
-            c.dot(round(m + math.cos(a) * d), round(BLAZE_FLOOR_Y + math.sin(a) * d * 0.4 - age * 1.5 - 3),
-                  (WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED, MAROON)[age])
-    blaze_embers(c, m, k, 5, 7, 8)
-    return outline(c.img)
+    blaze_scorch(c, m, min(19, 7 + 3 * u), 70 + k // 2, YELLOW if u < 7 else ORANGE)
+    blaze_flames(c, m, k, lerp_tab((0.2, 0.45, 0.75, 1.0, 1.18, 1.15, 1.1, 1.05, 1.0, 1.0, 1.0, 1.0), u), wide=5.5)
+    spark_cloud(ov, 12, 22, k, (m, BLAZE_FLOOR_Y - 3), (1.0, 2.6), (6, 11), 5, angle=(math.pi, math.tau), g=0.12,
+                squash=0.8, up=0.6)
+    blaze_embers(c, ov, m, k, 5, 7, 8)
+    return finish(c, ov)
 
 
 def blaze_streak_frame(k: int) -> Image.Image:
-    """Flame streaming off a runner dashing to the right (period 8): three long tongues sweeping straight back from his
-    shoulders and hips (the sprite's centre is the cell's centre), tapering, waves rolling down them, a white-hot
-    sliver in the centre one, sparks and licks flung off behind."""
+    """Flame streaming off a runner dashing to the right (period BLAZE_LOOP): three long tongues sweeping straight back
+    from his shoulders and hips (the sprite's centre is the cell's centre), tapering, waves rolling down them, a
+    white-hot sliver in the centre one, sparks with trails and licks flung off behind."""
     c = Canvas(BLAZE_STREAK_CELL)
+    ov = Canvas(BLAZE_STREAK_CELL)
     m = BLAZE_STREAK_CELL // 2
     ph = math.tau * k / BLAZE_LOOP
-    for i, (dy, length, wide) in enumerate(((-12, 24, 5.0), (12, 28, 5.0), (0, 31, 6.5))):
-        sw = math.sin(ph + i * 2.0) * 2.4
-        ln = length * (1 + 0.06 * math.sin(2 * ph + i * 1.7))
+    for i, (dy, length, wide) in enumerate(((-12, 24, 5.0), (12, 28, 5.0), (0, 31, 6.5), (-5, 17, 3.2), (7, 20, 3.4))):
+        sw = math.sin(ph + i * 2.0) * 2.4 + math.sin(2 * ph + i) * 0.9
+        ln = length * (1 + 0.07 * math.sin(2 * ph + i * 1.7) + 0.04 * math.sin(3 * ph + i))
         y = m + dy
         flame_tongue(c, (m - 10, y), (m - 10 - ln * 0.55, y + sw * 0.5), (m - 10 - ln, y + sw), ph + i * 2, 1, wide, m)
         if i == 2:
             c.flat(L([(m - 12, y), (m - 10 - ln * 0.45, y + sw * 0.3)], 1), WHITE)
-    for i in range(8):  # sparks and licks flung off behind
-        ph_ = (k + i * 3) % BLAZE_LOOP
-        x = m - 8 - ph_ * 3 - i * 1.2
-        y = m - 18 + i * 5 + SWAY[(k + i) % 4]
-        if i % 3 == 0 and ph_ < 5:
-            c.flat(P([(x, y - 1), (x - 3, y), (x, y + 1)]), (YELLOW, ORANGE, RED, RED, MAROON)[ph_])
-        else:
-            c.dot(x, y, (YELLOW, YELLOW, ORANGE, RED, RED, MAROON, MAROON, MAROON)[ph_])
-    return outline(c.img)
+    for i in range(4):  # loose licks flung off behind
+        t = (k + i * 4) % BLAZE_LOOP
+        if t < 10:
+            x, y = m - 14 - t * 2.4, m - 20 + i * 12 + SWAY[(k // 2 + i) % 4]
+            c.flat(P([(x, y - 1), (x - 3, y), (x, y + 1)]), (YELLOW, YELLOW, ORANGE, ORANGE, ORANGE, RED, RED, RED, MAROON, MAROON)[t])
+    spark_cloud(ov, 31, 26, k, lambda r: (m - 10 - r.uniform(0, 18), m + r.uniform(-22, 22)), (1.4, 3.2), (7, 12),
+                BLAZE_LOOP, angle=(math.pi - 0.35, math.pi + 0.35), loop=BLAZE_LOOP, up=0.2, g=0.04, trail=4)
+    return finish(c, ov)
 
 
 FX.update({
