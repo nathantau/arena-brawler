@@ -4910,6 +4910,205 @@ ICONS["storm_cloud"] = lambda c: (c.flat(E((0, 2, 7, 7)), NAVY), c.flat(E((4, 0,
                                   c.dot(7, 10, WHITE))
 
 
+# --- Title screen art: logo (+ shine strip), parallax arena backdrop, vignette, light beam, boot splash ---
+
+GLYPHS = {
+    "B": ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+    "R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+    "A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+    "W": ["10001", "10001", "10001", "10101", "10101", "11011", "10001"],
+    "L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+    "I": ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+    "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+    "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+}
+LOGO_TEXT = "BRAWLBITS"
+LOGO_K = 2  # art px per glyph px
+LOGO_PAD = 5
+LOGO_DEPTH = 3  # extrusion below the face
+LOGO_SHINE_FRAMES = 14
+BAYER4 = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+
+
+def logo_face() -> tuple[Image.Image, Image.Image]:
+    """(face mask 'L' image, finished logo RGBA): chunky letters, yellow-to-red bands, extrusion, 2 px outline."""
+    n = len(LOGO_TEXT)
+    adv = 6 * LOGO_K
+    w = n * adv - LOGO_K + 2 * LOGO_PAD
+    h = 7 * LOGO_K + LOGO_DEPTH + 2 * LOGO_PAD
+    face = Image.new("L", (w, h), 0)
+    fp = face.load()
+    for i, ch in enumerate(LOGO_TEXT):
+        for gy, row in enumerate(GLYPHS[ch]):
+            for gx, bit in enumerate(row):
+                if bit == "1":
+                    for dy in range(LOGO_K):
+                        for dx in range(LOGO_K):
+                            fp[LOGO_PAD + i * adv + gx * LOGO_K + dx, LOGO_PAD + gy * LOGO_K + dy] = 255
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    op = out.load()
+    for y in range(h):  # extrusion: MAROON up to DEPTH below every face pixel
+        for x in range(w):
+            if not fp[x, y] and any(fp[x, y - d] for d in range(1, LOGO_DEPTH + 1) if y - d >= 0):
+                op[x, y] = MAROON + (255,)
+    for y in range(h):
+        for x in range(w):
+            if not fp[x, y]:
+                continue
+            v = y - LOGO_PAD  # 0..13 down the letter
+            c = WHITE if v == 0 else YELLOW if v < 6 else ORANGE if v < 10 else RED
+            if v < 6 and x and not fp[x - 1, y]:  # lit left edge
+                c = WHITE
+            op[x, y] = c + (255,)
+    return face, outline(outline(out))
+
+
+def logo_shine() -> Image.Image:
+    face, logo = logo_face()
+    w, h = logo.size
+    fp = face.load()
+    frames_ = []
+    for k in range(LOGO_SHINE_FRAMES):
+        f = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        p = f.load()
+        centre = -8 + (w + 24) * k / (LOGO_SHINE_FRAMES - 1)
+        for y in range(h):
+            for x in range(w):
+                if fp[x, y] and abs((x + y * 0.8) - centre) <= 3.5:
+                    p[x, y] = WHITE + (255,)
+        frames_.append(f)
+    return strip(frames_)
+
+
+def dither_mix(a, b, t: float, x: int, y: int):
+    """Ordered dither between two palette colours: t = 0 -> a, 1 -> b."""
+    return b if t * 16 > BAYER4[y % 4][x % 4] + 0.5 else a
+
+
+def title_far() -> Image.Image:
+    w, h, horizon = 416, 200, 104
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 255))
+    px = img.load()
+    rng = random.Random(7)
+    # night sky: flat bands, a 1-px dither row only where two bands meet
+    bands = [(0, OUTLINE), (26, SHADOW), (46, NAVY), (66, BLUE), (84, STEEL_D)]
+    for y in range(h):
+        i = max(k for k, (y0, _) in enumerate(bands) if y >= y0)
+        for x in range(w):
+            c = bands[i][1]
+            if i and y == bands[i][0] and x % 2:
+                c = bands[i - 1][1]
+            px[x, y] = c + (255,)
+    for _ in range(26):  # a few stars
+        sx, sy = rng.randrange(4, w - 4), rng.randrange(9, 60)
+        px[sx, sy] = WHITE + (255,)
+        if rng.random() < 0.2:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                px[sx + dx, sy + dy] = STEEL + (255,)
+    for row, (base, col, amp) in enumerate(((horizon - 22, SHADOW, 5), (horizon - 10, OUTLINE, 6))):
+        x = 0  # crowd: bumpy silhouettes in two rows, a few lit phones and flags
+        while x < w:
+            bw = rng.randint(4, 8)
+            top = base - rng.randint(0, amp)
+            for xx in range(x, min(w, x + bw)):
+                for yy in range(top, horizon + 6):
+                    px[xx, yy] = col + (255,)
+            if row == 0 and rng.random() < 0.28:
+                px[x + 1, top - 1] = rng.choice([YELLOW, PINK, TEAL_L, RED, WHITE]) + (255,)
+            x += bw
+    for x in range(w):  # truss
+        for y in range(0, 7):
+            px[x, y] = (OUTLINE if y in (0, 6) else SHADOW if y in (1, 5) else STEEL_D) + (255,)
+        if x % 9 < 2:
+            px[x, 3] = SHADOW + (255,)
+    for cx in (50, 128, 208, 288, 366):  # stadium lights with a dithered spill
+        for dx in range(-4, 5):
+            for dy in range(7, 11):
+                px[cx + dx, dy] = (OUTLINE if dy == 10 or abs(dx) == 4 else YELLOW if dy > 8 else WHITE) + (255,)
+        for dx in range(-7, 8):
+            for dy in range(11, 17):
+                if abs(dx) <= 7 - (dy - 11) and BAYER4[dy % 4][dx % 4] < 5 - (dy - 11):
+                    px[cx + dx, dy] = YELLOW + (255,)
+    for y in range(horizon + 6, h):  # stage wall below the stands
+        for x in range(w):
+            c = SHADOW if (x // 26) % 2 == 0 else NAVY
+            if y in (horizon + 6, horizon + 7):
+                c = STEEL_D if y == horizon + 6 else OUTLINE
+            px[x, y] = c + (255,)
+    return img
+
+
+def title_mid() -> Image.Image:
+    """Foreground pillars with hanging banners (transparent)."""
+    w, h = 416, 200
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for x0 in (52, 340):
+        d.rectangle([x0, 0, x0 + 24, h], fill=STEEL_D + (255,))
+        d.rectangle([x0, 0, x0 + 5, h], fill=STEEL + (255,))
+        d.rectangle([x0 + 19, 0, x0 + 24, h], fill=SHADOW + (255,))
+        for y in range(10, h, 22):
+            d.rectangle([x0, y, x0 + 24, y + 2], fill=OUTLINE + (255,))
+            d.rectangle([x0, y + 3, x0 + 18, y + 3], fill=WHITE + (255,))
+            for rx in (x0 + 4, x0 + 14):
+                d.rectangle([rx, y + 9, rx + 1, y + 10], fill=OUTLINE + (255,))
+        bx = x0 + (-22 if x0 < 200 else 26)  # banner
+        d.rectangle([bx, 18, bx + 20, 62], fill=RED + (255,))
+        d.polygon([(bx, 62), (bx + 20, 62), (bx + 10, 72)], fill=RED + (255,))
+        d.rectangle([bx, 18, bx + 3, 62], fill=ORANGE + (255,))
+        d.rectangle([bx + 17, 18, bx + 20, 62], fill=MAROON + (255,))
+        d.rectangle([bx + 6, 30, bx + 14, 42], fill=YELLOW + (255,))
+        d.rectangle([bx + 8, 32, bx + 12, 40], fill=ORANGE + (255,))
+        d.rectangle([bx + 4, 52, bx + 15, 53], fill=MAROON + (255,))
+    return outline(img)
+
+
+def title_vignette() -> Image.Image:
+    """Screen-edge darkening: a flat border band, then a thin 1-px pattern ramp (no big dither blocks)."""
+    w, h = 320, 180
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(h):
+        for x in range(w):
+            e = min(x, y, w - 1 - x, h - 1 - y)  # distance to the nearest screen edge
+            if e < 5 or (e < 8 and (x + y) % 2 == 0) or (e < 11 and x % 2 == 0 and y % 2 == 0):
+                px[x, y] = OUTLINE + (255,)
+    return img
+
+
+def title_beam() -> Image.Image:
+    """Stage-light cone, apex top-centre; drawn with a low alpha tint."""
+    w, h = 56, 120
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(h):
+        half = 2 + y * 0.22
+        for x in range(w):
+            dx = abs(x - w / 2 + 0.5)
+            if dx <= half:
+                dens = (1 - y / h) * (1 - dx / (half + 1)) * 1.1
+                if dens * 16 > BAYER4[y % 4][x % 4] + 0.5:
+                    px[x, y] = WHITE + (255,)
+    return img
+
+
+def title_shadow() -> Image.Image:
+    w, h = 40, 12
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    ImageDraw.Draw(img).ellipse([1, 1, w - 2, h - 2], fill=OUTLINE + (255,))
+    return img
+
+
+def title_art() -> dict[str, tuple[Image.Image, bool]]:
+    """name -> (image, check frame edges): everything the title screen draws."""
+    return {
+        "title_far": (title_far(), False), "title_mid": (title_mid(), False),
+        "title_vignette": (title_vignette(), False), "title_beam": (title_beam(), False),
+        "title_shadow": (title_shadow(), True), "logo": (logo_face()[1], True),
+        "logo_shine": (logo_shine(), False),
+    }
+
+
 def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
     """Self-check: palette-only colours, hard alpha, and (`edges`) the outline fits inside each frame."""
     allowed = set(PALETTE)
@@ -4975,6 +5174,12 @@ def main() -> None:
         check(img, img.width, edges=False)  # UI art is outlined right up to its box
         img.save(UI_OUT / f"{name}.png")
     print(f"wrote UI kit to {UI_OUT}")
+    for name, (img, edges) in title_art().items():
+        check(img, img.height if name == "logo_shine" else img.width, edges=edges)
+        img.save(UI_OUT / f"{name}.png")
+    splash = logo_face()[1]  # engine boot splash: the logo at 5x (project.godot sets the dark bg colour)
+    splash.resize((splash.width * 5, splash.height * 5), Image.NEAREST).save(UI_OUT / "boot_splash.png")
+    print("wrote title screen art")
     FX_OUT.mkdir(exist_ok=True)
     for name, make in FX.items():
         img = make()

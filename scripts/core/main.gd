@@ -138,6 +138,8 @@ func _on_client_disconnected(reason: String) -> void:
 
 
 func _show_menu(status: String) -> void:
+	if _menu != null:
+		ScreenFade.play(self)
 	if _menu == null:
 		_menu = MainMenu.new()
 		_menu.offline_pressed.connect(_start_offline)
@@ -155,4 +157,5 @@ func _show_menu(status: String) -> void:
 
 func _hide_menu() -> void:
 	if _menu != null:
+		ScreenFade.play(self)
 		_menu.visible = false
