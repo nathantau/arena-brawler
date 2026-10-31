@@ -1711,7 +1711,7 @@ def fire_column(c: Canvas, cx: float, base: float, height: float, hw: float, t: 
         for i in range(9):
             v = i / 8
             y = base - v * height * 0.72
-            w = w0 * (1 - 0.3 * v)
+            w = w0 * (1 - 0.5 * v ** 0.8)  # a bonfire: broad at the foot, drawing in up the flames
             wave = math.sin(v * math.pi * 2.4 - t * math.pi / 2) * hw * 0.2 * v
             left.append((cx - w + wave, y))
             right.append((cx + w + wave, y))
@@ -1764,7 +1764,7 @@ def eruption_crack_frame(k: int) -> Image.Image:
 
 def eruption_frame(k: int) -> Image.Image:
     """Eruption, a one-shot rising from the floor spot (ERUPT_BASE): the ground bulges and glows, cracks splitting,
-    then a pillar of fire bursts up out of a bonfire of wide licking tongues, flames curling off its sides; it peaks,
+    then a pillar of fire bursts up out of a bonfire of wide licking tongues, one flowing mass; it peaks,
     its crown peels away as wisps that curl up and out, the column sinks back into the ground while embers rain down,
     and smoke lingers over the glowing cracks."""
     c = Canvas(ERUPT_SIZE)
@@ -1773,7 +1773,7 @@ def eruption_frame(k: int) -> Image.Image:
     embers = [(rng.uniform(-1, 1), rng.uniform(0.4, 1.0)) for _ in range(10)]
     puffs = [(rng.uniform(-0.7, 0.7), i / 7, rng.uniform(0.8, 1.2)) for i in range(8)]
     height = (0, 0, 42, 76, 82, 78, 60, 40, 22, 10, 0, 0)[k]  # the column per frame: bulge, burst, peak, sink
-    hw = (0, 0, 24, 21, 20, 18, 16, 13, 10, 8, 0, 0)[k]
+    hw = (0, 0, 28, 27, 26, 24, 21, 17, 13, 9, 0, 0)[k]
     glow = (ORANGE, YELLOW, WHITE, YELLOW, YELLOW, YELLOW, ORANGE, ORANGE, ORANGE, RED, RED, None)[k]
     erupt_cracks(c, m, b, ERUPT_R * (0.5 + 0.03 * min(k, 5)), glow)
     if k >= 7:  # smoke billowing up off the last of it and lingering, behind the fire
@@ -1793,13 +1793,6 @@ def eruption_frame(k: int) -> Image.Image:
         c.part(E((m - 30 * g, b - 8 * g, m + 30 * g, b + 8 * g)), RED, shade=False, line=False)
         flame(c, round(m - 34 * g), round(m + 34 * g), b + 2, max(4, round(26 * g)), k, tongues=7, line=False)
     if height:
-        if 3 <= k <= 6:  # a wide tongue sweeping out and up off each side, out of step
-            for side in (1, -1):
-                lift = 0.1 * (side < 0)
-                out = 0.2 * (k - 3)  # flung further out as it goes
-                flame_tongue(c, (m + hw * 0.6, b - height * (0.16 + lift)), (m + hw * (1.5 + out), b - height * (0.3 + lift)),
-                             (m + hw * (1.9 + out * 1.5), b - height * (0.58 + lift)),
-                             (k + (side < 0) * 2) * math.pi / 2, side, wide=9 - (k - 3), mid=m)
         fire_column(c, m, b, height, hw, k, k in (2, 3, 4))
     if k == 2:  # the burst: a flash at the foot
         c.part(blobs([(m - 9, b - 1, 6), (m + 8, b, 6), (m, b - 3, 8)]), WHITE, shade=False)
