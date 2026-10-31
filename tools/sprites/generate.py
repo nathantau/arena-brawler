@@ -794,8 +794,17 @@ def flint_crown(t: int, dy: int, heat: float = 0.0) -> Canvas:
     base = top + FACE[1] + 9
     hw = 14  # as wide as the squared head's flat top, so the tufts sit along it like a crown
     n = 6 + round(heat * 2)
-    flame(c, mid - hw, mid + hw, base, 22 + round(heat * 8), t, tongues=n)  # outer tufts of uneven height
-    flame(c, mid - hw + 3, mid + hw - 3, base, 14 + round(heat * 6), t + 2, tongues=n - 2, line=False, rim=ORANGE)  # inner tufts, out of step
+    sway = (-0.14, 0.1, 0.14, -0.1)  # the whole crown leans left and right as it flickers
+    flame(c, mid - hw, mid + hw, base, 27 + round(heat * 3), t, tongues=n, lean=sway[t % 4])  # tall outer tufts of uneven height
+    flame(c, mid - hw + 3, mid + hw - 3, base, 19 + round(heat * 6), t + 2, tongues=n - 2, line=False, rim=ORANGE, lean=-sway[t % 4])  # inner tufts, out of step, leaning the other way
+    for k in range(3):  # tips breaking off into small flame wisps that rise and shrink over 4 ticks
+        ph = (t + k * 2) % 4
+        wx = mid - hw + 4 + k * (2 * hw - 8) // 2 + SWAY[(t + k) % 4] * 2
+        wy = top + 4 - 3 * ph - round(heat * 2)
+        r = (3, 2, 1, 0)[ph]
+        if r:
+            c.part(P([(wx - r, wy + r), (wx + SWAY[(t + k) % 4], wy - r - 1), (wx + r, wy + r), (wx, wy + r + 1)]),
+                   (YELLOW, ORANGE, RED)[min(ph, 2)], shade=False, line=False)
     for k in range(3 + round(heat * 2)):  # tiny embers lifting off the tufts and dying out (period 4)
         ph = (t + k) % 4
         ex = mid - hw + 3 + (k * 11 + 5) % (2 * hw - 5) + SWAY[(t + k) % 4]
