@@ -18,6 +18,7 @@ extends RefCounted
 ## - DRIFT: petals for `duration`; the Player moves faster along the stick (else `direction`), untouchable.
 ## - PILLAR: the line runs from `anchor` (his feet-level centre) to `anchor + direction` (the Player sets `direction` to that
 ##   whole vector, cut short by a wall); the slam lands when `pillar_windup` has passed.
+## - STORM: `anchor` = the cloud's spot (the Player places it against the walls); strikes fall due every `storm_interval`.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 const WHIRL_EPSILON: float = 0.0001
@@ -82,6 +83,13 @@ func whirl_tick_due(delta: float) -> bool:
 	var interval: float = data.whirl_interval
 	var t: float = elapsed() + WHIRL_EPSILON  # float noise must not tip a frame over a boundary
 	return floori(t / interval) != floori((t - delta) / interval)
+
+
+## STORM: a strike falls due in the step that ticked from `before` to now (the cloud's last step counts).
+func storm_tick_due(before: float) -> bool:
+	var interval: float = data.storm_interval
+	return data.kind == SkillData.Kind.STORM and floori((elapsed() + WHIRL_EPSILON) / interval) \
+		> floori((before + WHIRL_EPSILON) / interval)
 
 
 ## Seconds since activation (drives clone paths).

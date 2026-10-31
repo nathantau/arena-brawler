@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"storm_cloud"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -1392,3 +1392,116 @@ func test_sky_pillar_cooldown_and_replay_match() -> void:
 	assert_eq(hits.size(), served, "replay damages nothing")
 	assert_eq(foe.stats.hp + foe.stats.armor, foe.stats.max_hp + foe.stats.max_armor - skills.get_skill(&"sky_pillar").pillar_damage)
 	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+
+
+# --- Apex's Storm Cloud -------------------------------------------------------------
+
+func _storm_player(world: Node2D, pool: ProjectilePool, id: int, at: Vector2) -> Player:
+	var p: Player = _whirler(world, pool, id, at)
+	p.set_skill(1, skills.get_skill(&"storm_cloud"))
+	pool.targets.append(p)
+	return p
+
+
+func _storm_setup(wall_x: float = -1.0) -> Array:
+	var w: Array = _whirl_world()
+	if wall_x >= 0.0:
+		_wall(w[0], Vector2(wall_x, 300), Vector2(20, 400))
+	return [w[0], w[1], _storm_player(w[0], w[1], 1, Vector2(100, 300))]
+
+
+func test_storm_cloud_is_apexs_own() -> void:
+	var d: SkillData = skills.get_skill(&"storm_cloud")
+	assert_eq(d.kind, SkillData.Kind.STORM)
+	assert_eq(int(SkillData.Kind.STORM), 16)
+	assert_lte(d.blurb.length(), 20)
+	assert_gt(d.duration, d.storm_interval * 4)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"wukong", String(c.id))
+
+
+func test_storm_cloud_spot_is_ahead_and_stops_at_walls() -> void:
+	var s: Array = _storm_setup()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"storm_cloud")
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	var feet := Vector2(100, 300 + Constants.WALL_FEET_STRIP)
+	assert_almost_eq(p.skills[1].anchor, feet + Vector2(d.storm_distance, 0), Vector2(0.01, 0.01))
+	var walled: Array = _storm_setup(250.0)
+	await wait_physics_frames(2)
+	_press_special(walled[2], Vector2.RIGHT)
+	assert_almost_eq(walled[2].skills[1].anchor.x, 240.0 - d.storm_wall_margin, 0.5, "short of the wall")
+
+
+func test_storm_cloud_strikes_only_enemies_in_range_with_sight_on_each_tick() -> void:
+	var s: Array = _storm_setup(150.0)
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"storm_cloud")
+	# The wall stops the spot at x = 132 (feet y = 322): `near` is in reach and in sight, `hidden` is in reach behind
+	# the wall, `far` is out of reach, and the caster stands in the circle herself.
+	var near: Player = _storm_player(s[0], s[1], 2, Vector2(100, 322))
+	var hidden: Player = _storm_player(s[0], s[1], 3, Vector2(190, 322))
+	var far: Player = _storm_player(s[0], s[1], 4, Vector2(100, 322 + d.storm_radius + 40.0))
+	await wait_physics_frames(2)
+	var hits: Array = _hits(s[1])
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, floori(d.storm_interval / DT) - 3)
+	assert_eq(hits.size(), 0, "nothing before the first interval")
+	_idle(p, 6)
+	assert_eq(hits.size(), 1, "first bolt")
+	assert_eq(hits[0], [2, d.storm_damage])
+	assert_lt(near.velocity.x, 0.0, "pushed away from the spot")
+	_idle(p, floori(d.storm_interval / DT))
+	assert_eq(hits.size(), 2, "a bolt every interval, one victim each")
+	_idle(p, floori(d.duration / DT))
+	assert_eq(hits.size(), 5, "five strikes over the cloud's life")
+	assert_eq(hidden.stats.hp, hidden.stats.max_hp, "no sight from the spot")
+	assert_eq(far.stats.hp, far.stats.max_hp, "out of reach")
+	assert_eq(p.stats.hp, p.stats.max_hp, "not herself")
+	assert_eq(p.stats.armor, p.stats.max_armor)
+
+
+func test_storm_cloud_expires_and_cools_down() -> void:
+	var s: Array = _storm_setup()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"storm_cloud")
+	var foe: Player = _storm_player(s[0], s[1], 2, Vector2(100 + d.storm_distance, 322))
+	await wait_physics_frames(2)
+	var hits: Array = _hits(s[1])
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, ceili(d.duration / DT) + 5)
+	assert_false(p.skills[1].is_active())
+	var served: int = hits.size()
+	assert_eq(served, 5)
+	_idle(p, 120)
+	assert_eq(hits.size(), served, "no strikes once it's gone")
+	assert_gt(p.skills[1].cooldown_remaining, 0.0)
+	assert_lt(foe.stats.hp + foe.stats.armor, foe.stats.max_hp + foe.stats.max_armor)
+
+
+func test_storm_cloud_replay_matches_and_hurts_nobody() -> void:
+	var s: Array = _storm_setup(150.0)
+	var a: Player = s[2]
+	var foe: Player = _storm_player(s[0], s[1], 2, Vector2(100, 322))
+	var b: Player = _storm_player(s[0], s[1], 5, Vector2(100, 300))
+	s[1].targets.erase(b)
+	await wait_physics_frames(2)
+	var snapshot: Array = a.capture_state()
+	var hits: Array = _hits(s[1])
+	_press_special(a, Vector2.RIGHT)
+	_idle(a, 60)
+	var served: int = hits.size()
+	assert_eq(served, 1)
+	assert_true(b.apply_state(snapshot, WeaponCatalog.load_all(), characters))
+	var f := InputFrame.new()
+	f.seq = 10
+	f.aim_vec = Vector2.RIGHT
+	f.special = true
+	b.simulate(f, DT, true)
+	_idle(b, 60, true)
+	assert_eq(hits.size(), served, "replay damages nobody")
+	assert_eq(b.skills[1].anchor, a.skills[1].anchor)
+	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
+	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+	assert_lt(foe.stats.hp + foe.stats.armor, foe.stats.max_hp + foe.stats.max_armor)

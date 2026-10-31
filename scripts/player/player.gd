@@ -45,6 +45,8 @@ const WHIRL_SEQ_OFFSET: int = 1 << 26
 const TRAIL_SEQ_OFFSET: int = 1 << 27
 ## Sky Pillar slams are keyed too.
 const PILLAR_SEQ_OFFSET: int = 1 << 28
+## Storm Cloud lightning strikes are keyed too.
+const STORM_SEQ_OFFSET: int = 1 << 29
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
@@ -265,8 +267,14 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var burn_before: float = burning.elapsed() if burning != null else 0.0
 	var pillar: CharacterSkill = active_skill(SkillData.Kind.PILLAR)
 	var pillar_before: float = pillar.elapsed() if pillar != null else 0.0
+	var storm: CharacterSkill = active_skill(SkillData.Kind.STORM)
+	var storm_before: float = storm.elapsed() if storm != null else 0.0
 	for slot: CharacterSkill in skills:
 		slot.tick(delta)
+	if storm != null and not replay and storm.storm_tick_due(storm_before):
+		var sd: SkillData = storm.data
+		projectiles.strike(player_id, input.seq + STORM_SEQ_OFFSET, storm.anchor, sd.storm_radius, sd.storm_damage,
+			sd.storm_knockback)
 	if burning != null and not replay:
 		_burn_trail(burning, burn_before, input.seq)
 	if pillar != null and not replay and pillar.pillar_slammed(pillar_before):
@@ -366,6 +374,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			_throw_grapple(slot)
 		SkillData.Kind.ERUPTION:
 			slot.anchor = eruption_spot(slot.direction, slot.data)
+		SkillData.Kind.STORM:
+			slot.anchor = storm_spot(slot.direction, slot.data)
 		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
@@ -411,13 +421,22 @@ func _erupt(slot: CharacterSkill, seq: int) -> void:
 ## wall in the way. Measured from the feet, not the centre: standing under a wall puts the centre inside it (a ray
 ## from inside misses it, so the spot would land beyond), but the feet are always in the open (Constants.WALL_FEET_STRIP).
 func eruption_spot(dir: Vector2, d: SkillData) -> Vector2:
+	return spot_ahead(dir, d.eruption_distance, d.eruption_wall_margin)
+
+
+## Where Storm Cloud aimed along `dir` puts its cloud (same rule as the eruption's mark).
+func storm_spot(dir: Vector2, d: SkillData) -> Vector2:
+	return spot_ahead(dir, d.storm_distance, d.storm_wall_margin)
+
+
+func spot_ahead(dir: Vector2, distance: float, margin: float) -> Vector2:
 	var from: Vector2 = global_position + Vector2(0.0, Constants.WALL_FEET_STRIP)
 	_sight_query.from = from
-	_sight_query.to = from + dir * d.eruption_distance
+	_sight_query.to = from + dir * distance
 	var hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(_sight_query)
 	if hit.is_empty():
 		return _sight_query.to
-	return hit.position - dir * minf(d.eruption_wall_margin, from.distance_to(hit.position))
+	return hit.position - dir * minf(margin, from.distance_to(hit.position))
 
 
 ## The first skill slot of `kind` that is active right now, or null.

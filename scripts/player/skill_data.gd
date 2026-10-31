@@ -23,8 +23,10 @@ extends Resource
 ## DRIFT: dissolve into petals and glide (faster, steerable, walls still stop you), untargetable and unhittable, can't fire.
 ## PILLAR: plants the staff, which shoots out along the aim (stopped by walls) and, after `pillar_windup`, slams down
 ## on that line: everyone along it takes damage and is thrown sideways.
+## STORM: a thundercloud at a spot ahead along the aim (short of walls) for `duration`: every `storm_interval` a bolt strikes
+## each enemy within `storm_radius` of the spot that it can see.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -113,6 +115,17 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var pillar_damage: int = 30
 ## Push away from the line (sideways).
 @export var pillar_knockback: float = 260.0
+
+@export_group("Storm")
+## How far ahead along the aim the cloud's spot is (pulled back `storm_wall_margin` off a wall in the way).
+@export var storm_distance: float = 240.0
+@export var storm_wall_margin: float = 8.0
+@export var storm_radius: float = 90.0
+@export var storm_damage: int = 12
+## Seconds between strikes (the first lands one interval after the press).
+@export var storm_interval: float = 0.6
+## Push away from the spot per strike (no stun).
+@export var storm_knockback: float = 80.0
 
 @export_group("Trail")
 ## The dash covers up to trail_distance in trail_dash_time; the trail (takeoff -> where he stopped) burns until `duration` ends.

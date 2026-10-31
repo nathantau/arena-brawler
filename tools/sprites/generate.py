@@ -3232,6 +3232,177 @@ FX.update({
 })
 
 
+# --- Storm Cloud (Apex): a dark thundercloud with a flickering gold heart, rain, lightning strikes ------------------
+
+STORM_SIZE = 136  # art px square; the spot on the floor is (centre, STORM_FLOOR_Y), SpecialFx.STORM_FLOOR_Y
+STORM_FLOOR_Y = 112
+STORM_CLOUD_Y = 36  # row of the cloud's middle
+STORM_FRAMES = 8  # loop / forming / dispersing strips
+BOLT_W, BOLT_H, BOLT_FRAMES, BOLT_END_Y = 36, 144, 5, 136
+STORM_SPARK, STORM_SPARK_FRAMES = 32, 6
+STORM_RAIN_COLS = list(range(-44, 46, 9))
+
+
+def storm_lumps(phase: float, grow: float, lift: float) -> list:
+    """(x, y, r) of every lump, back to front. The outer ring turns two lumps' worth (big and small alternate) and the
+    inner ring a quarter turn over a loop, so a loop is seamless; all breathing."""
+    m = STORM_SIZE // 2
+    cy = STORM_CLOUD_Y - lift
+    lumps = []
+    turn = math.tau / 8 * 2 * phase
+    for i in range(8):
+        a = math.tau * i / 8 + turn
+        lumps.append((m + math.cos(a) * 40 * grow, cy + 4 + math.sin(a) * 12 * grow,
+                      (15 + 3 * (i % 2) + 1.5 * math.sin(math.tau * phase + i * 1.7)) * grow))
+    for i in range(4):
+        a = math.tau * i / 4 - math.tau / 4 * phase + 0.4
+        lumps.append((m + math.cos(a) * 17 * grow, cy + 3 + math.sin(a) * 6 * grow,
+                      (14 + 1.5 * math.sin(math.tau * phase + i * 2.3)) * grow))
+    for i, (dx, dy, r) in enumerate(((-19, -11, 13), (3, -16, 15), (22, -10, 12))):  # the heaped top
+        lumps.append((m + dx * grow, cy + dy * grow, (r + 1.5 * math.sin(math.tau * phase + i * 2.9)) * grow))
+    return sorted(lumps, key=lambda p: p[1])
+
+
+def storm_cloud_art(k: int, grow: float = 1.0, rain: float = 1.0, lift: float = 0.0, fade: float = 0.0) -> Image.Image:
+    """One frame of the cloud (loop frame `k` of STORM_FRAMES): `grow` scales it, `rain` is the share of rain columns
+    falling, `lift` raises it, `fade` dithers it away."""
+    n = STORM_SIZE
+    m = n // 2
+    lumps = storm_lumps(k / STORM_FRAMES, grow, lift)
+    c = Canvas(n)
+    for x, y, r in lumps:
+        if r >= 1:
+            c.part(E((x - r, y - r, x + r, y + r)), SHADOW)
+    for x, y, r in lumps:
+        if r >= 5 and x + y < 2 * m + 20:  # light catching the tops facing up-left
+            c.flat(E((x - r * 0.55, y - r * 0.7, x - r * 0.1, y - r * 0.45)), STEEL_D)
+    for i, (x, y, r) in enumerate(lumps[-9:]):  # the flickering heart: gold light inside a few lumps
+        if r >= 8 and (k + 3 * i) % 8 in (0, 1):
+            c.flat(E((x - 5, y - 2, x + 5, y + 2)), YELLOW)
+            c.flat(E((x - 2, y - 1, x + 2, y + 1)), WHITE)
+            c.flat(L([(x + 3, y + 2), (x + 1, y + 5)], 1), YELLOW)
+    cloud = outline(c.img)
+    out = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    if grow > 0.5:  # a dithered shadow on the floor under the rain
+        sh = Canvas(n)
+        floor = STORM_FLOOR_Y
+        for y in range(floor - 8, floor + 9):
+            for x in range(m - 46, m + 47):
+                if (x + y) % 2 == 0 and ((x - m) / 46) ** 2 + ((y - floor) / 8) ** 2 <= 1:
+                    sh.dot(x, y, SHADOW)
+        out.alpha_composite(outline(sh.img))
+    rn = Canvas(n)
+    cols = STORM_RAIN_COLS[:round(len(STORM_RAIN_COLS) * rain)]
+    for j, dx in enumerate(cols):
+        for rep in range(2):
+            y = 52 + (k * 8 + j * 11 + rep * 32) % 64
+            if y + 7 <= STORM_FLOOR_Y + 4:
+                rn.flat(L([(m + dx, y), (m + dx - 2, y + 6)], 1), STEEL)
+                rn.dot(m + dx - 2, y + 6, WHITE)
+    out.alpha_composite(rn.img)
+    out.alpha_composite(cloud)
+    px = out.load()
+    for y in range(n):
+        for x in range(n):
+            if BAYER[y % 4][x % 4] / 16 < fade:
+                px[x, y] = (0, 0, 0, 0)
+    return out
+
+
+def storm_form_frame(j: int) -> Image.Image:
+    t = (j + 1) / STORM_FRAMES
+    e = 1 - (1 - t) ** 2
+    img = storm_cloud_art(j, 0.2 + 0.8 * e, max(0.0, (j - 3) / 4), 14 * (1 - e))
+    if j < 3:  # white puffs of vapour as it gathers
+        c = Canvas(STORM_SIZE)
+        m = STORM_SIZE // 2
+        for a in range(6):
+            ang = math.tau * a / 6 + j
+            c.dot(round(m + math.cos(ang) * (10 + 8 * j)), round(STORM_CLOUD_Y + math.sin(ang) * (5 + 3 * j)), WHITE)
+        img.alpha_composite(outline(c.img))
+    return img
+
+
+def storm_end_frame(j: int) -> Image.Image:
+    t = (j + 1) / STORM_FRAMES
+    return storm_cloud_art(j, 1 - 0.45 * t, max(0.0, 1 - j / 3), -10 * t, t * 0.95)
+
+
+def storm_bolt_frame(k: int) -> Image.Image:
+    """A lightning bolt from the top of the frame to BOLT_END_Y, glowing then fading. The shape is the same in every
+    frame; drawn bottom-anchored and cropped to length, never stretched."""
+    rng = random.Random(21)
+    x = BOLT_W // 2
+    path = [(x, 7)]
+    for y in range(14, BOLT_END_Y, 14):
+        x = max(9, min(BOLT_W - 10, x + rng.randint(-7, 7)))
+        path.append((x, y))
+    path.append((BOLT_W // 2 + rng.randint(-3, 3), BOLT_END_Y))
+    branches = [[path[3], (path[3][0] + 7, path[3][1] + 8), (path[3][0] + 8, path[3][1] + 17)],
+                [path[6], (path[6][0] - 7, path[6][1] + 7), (path[6][0] - 8, path[6][1] + 15)]]
+    c = Canvas(BOLT_H)
+    img = Image.new("RGBA", (BOLT_W, BOLT_H), (0, 0, 0, 0))
+    c.img, c.px = img, img.load()
+    glow = (WHITE, YELLOW, ORANGE, None, None)[k]
+    core = (WHITE, WHITE, YELLOW, ORANGE, None)[k]
+    width = (5, 3, 2, 1, 1)[k]
+    if glow:
+        c.flat(L(path, width + 2), glow)
+        for b in branches:
+            c.flat(L(b, width), glow)
+    if core:
+        c.flat(L(path, max(1, width - 2)), core)
+        for b in branches:
+            c.flat(L(b, 1), core)
+    if k == 4:  # fading embers along the path
+        for px_, py_ in path[::2]:
+            c.dot(px_, py_, ORANGE)
+    if k < 2:
+        c.flat(E((BOLT_W // 2 - 6, BOLT_END_Y - 3, BOLT_W // 2 + 6, BOLT_END_Y + 3)), WHITE if k == 0 else YELLOW)
+    if k == 3:  # thin out into a dither
+        p = img.load()
+        for yy in range(BOLT_H):
+            for xx in range(BOLT_W):
+                if (xx + yy) % 2:
+                    p[xx, yy] = (0, 0, 0, 0)
+    return outline(img)
+
+
+def storm_spark_frame(k: int) -> Image.Image:
+    """Where a bolt struck: a flash and flying chips over a dithered scorch mark that shrinks away."""
+    n = STORM_SPARK
+    m = n // 2
+    c = Canvas(n)
+    for y in range(m - 4, m + 5):
+        for x in range(m - 10, m + 11):
+            if (x + y) % 2 == 0 and ((x - m) / 10) ** 2 + ((y - m) / 4) ** 2 <= 1 - 0.17 * k:
+                c.dot(x, y, SHADOW)
+    if k == 0:
+        c.flat(E((m - 4, m - 4, m + 4, m + 2)), WHITE)
+    if k < 4:
+        col = (WHITE, YELLOW, YELLOW, ORANGE)[k]
+        for j in range(6):
+            ang = math.tau * j / 6 + 0.4
+            d0, d1 = 3 + 2.5 * k, 5 + 3 * k
+            c.flat(L([(m + math.cos(ang) * d0, m + math.sin(ang) * d0 * 0.7),
+                      (m + math.cos(ang) * d1, m + math.sin(ang) * d1 * 0.7)], 1), col)
+    return outline(c.img)
+
+
+FX.update({
+    "storm_cloud": lambda: strip([storm_cloud_art(k) for k in range(STORM_FRAMES)]),
+    "storm_cloud_form": lambda: strip([storm_form_frame(j) for j in range(STORM_FRAMES)]),
+    "storm_cloud_end": lambda: strip([storm_end_frame(j) for j in range(STORM_FRAMES)]),
+    "storm_spark": lambda: strip([storm_spark_frame(k) for k in range(STORM_SPARK_FRAMES)]),
+})
+FX_IMAGES["storm_bolt"] = lambda: strip([storm_bolt_frame(k) for k in range(BOLT_FRAMES)])
+ICONS["storm_cloud"] = lambda c: (c.flat(E((0, 2, 7, 7)), NAVY), c.flat(E((4, 0, 12, 6)), NAVY),
+                                  c.flat(E((2, 3, 12, 8)), NAVY), c.flat(R((3, 6, 10, 8)), SHADOW),
+                                  c.flat(L([(3, 3), (5, 2)], 1), STEEL_D), c.flat(L([(7, 1), (9, 1)], 1), STEEL_D),
+                                  c.flat(P([(8, 7), (4, 10), (7, 10), (5, 12), (11, 8), (8, 8), (10, 7)]), YELLOW),
+                                  c.dot(7, 10, WHITE))
+
+
 def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:
     """Self-check: palette-only colours, hard alpha, and (`edges`) the outline fits inside each frame."""
     allowed = set(PALETTE)
