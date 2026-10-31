@@ -1257,6 +1257,11 @@ def icon(draw, size: int = 13) -> Image.Image:
 
 
 ICONS = {
+    "blaze_run": lambda c: (c.flat(L([(0, 3), (4, 3)], 1), ORANGE), c.flat(L([(0, 7), (5, 7)], 1), RED),
+                            c.flat(L([(1, 10), (5, 10)], 1), ORANGE),
+                            c.flat(P([(4, 11), (4, 5), (6, 6), (8, 0), (9, 5), (11, 4), (12, 8), (10, 11)]), RED),
+                            c.flat(P([(6, 11), (6, 7), (8, 4), (9, 8), (10, 11)]), ORANGE),
+                            c.flat(P([(7, 11), (8, 8), (9, 11)]), YELLOW)),
     "hp": lambda c: (c.flat(E((1, 2, 6, 7)), RED), c.flat(E((6, 2, 11, 7)), RED),
                      c.flat(P([(1, 5), (11, 5), (6, 11)]), RED), c.dot(3, 3, WHITE)),
     "armor": lambda c: (c.flat(P([(2, 1), (10, 1), (10, 6), (6, 11), (2, 6)]), STEEL),
@@ -2681,6 +2686,122 @@ def death_frames(build, crown=None) -> list[Image.Image]:
 
     return [recolor(pose(0), lambda _c: WHITE), pose(0, 3), pose(35, 2), pose(70, 1),
             pose(90, 3), pose(90, stars=0), pose(90, 0, 0.45, stars=1), pose(90, 0, 0.8, stars=2)]
+
+
+# --- Blaze Run (Flint): burning ground stamped along the trail, ignition, smoulder, flame streak -----------------
+
+BLAZE_CELL = 48  # art px, square: one stamp of burning ground; its floor spot is (cell centre, BLAZE_FLOOR_Y)
+BLAZE_FLOOR_Y = 36  # SpecialFx.BLAZE_FLOOR_Y
+BLAZE_SQUASH = 0.32  # the floor seen in 3/4 view
+BLAZE_DIE_FRAMES = 8
+BLAZE_IGNITE_FRAMES = 8
+BLAZE_STREAK_CELL = 96
+
+
+def blaze_ground(c: Canvas, m: int, rx: int, glow, cracks: bool = True):
+    """Scorched floor with glowing cracks round (m, BLAZE_FLOOR_Y)."""
+    y = BLAZE_FLOOR_Y
+    ry = max(1, round(rx * BLAZE_SQUASH))
+    c.part(E((m - rx, y - ry, m + rx, y + ry)), SHADOW, shade=False)
+    if rx > 6:
+        c.flat(E((m - rx + 4, y - ry + 2, m + rx - 4, y + ry - 2)), MAROON)
+    if cracks:
+        for dx, dy, ex, ey in ((-14, 1, -6, -2), (-8, 3, 0, 1), (4, -2, 12, 2), (9, 3, 15, 0), (-3, -3, 3, -1)):
+            if abs(dx) < rx - 2 and abs(ex) < rx - 2:
+                c.flat(L([(m + dx, y + dy), (m + ex, y + ey)], 1), glow)
+
+
+def blaze_flames(c: Canvas, m: int, k: int, scale: float, xs=(-11, 0, 11), heights=(19, 27, 17), wide=4.5):
+    """Tongues of fire rising from the floor, swaying gently side to side (period 4 in k), never curling out sideways."""
+    for i in sorted(range(len(xs)), key=lambda i: -heights[i]):  # tallest behind
+        h = heights[(i + k) % len(xs)] * scale
+        if h < 3:
+            continue
+        x = m + xs[i]
+        sw = SWAY[(k + i) % 4] * 2
+        flame_tongue(c, (x, BLAZE_FLOOR_Y), (x + sw * 0.4, BLAZE_FLOOR_Y - h * 0.55), (x + sw, BLAZE_FLOOR_Y - h),
+                     math.pi / 2 * k + i, 1, wide * min(1.0, 0.4 + scale), m)
+
+
+def blaze_embers(c: Canvas, m: int, k: int, n: int = 4, rise: int = 6, seed: int = 3):
+    rng = random.Random(seed)
+    for i in range(n):
+        x0 = m + rng.randint(-16, 16)
+        ph = (k + i * 3) % 4
+        y = BLAZE_FLOOR_Y - 8 - ph * rise - rng.randint(0, 8)
+        if ph < 3:
+            c.dot(x0 + SWAY[(k + i) % 4], y, (YELLOW, ORANGE, RED)[ph])
+
+
+def blaze_trail_frame(k: int) -> Image.Image:
+    """Burning ground, a period-4 loop: flames licking up from scorched, glowing cracks, embers drifting up."""
+    c = Canvas(BLAZE_CELL)
+    m = BLAZE_CELL // 2
+    blaze_ground(c, m, 21, (ORANGE, YELLOW, YELLOW, ORANGE)[k])
+    blaze_flames(c, m, k, 1.0)
+    blaze_embers(c, m, k)
+    return outline(c.img)
+
+
+def blaze_die_frame(k: int) -> Image.Image:
+    """The fire dying out: flames shrink to nothing, the cracks cool from yellow to red, embers and smoke drift off
+    the scorch, which is all that's left."""
+    c = Canvas(BLAZE_CELL)
+    m = BLAZE_CELL // 2
+    if k == BLAZE_DIE_FRAMES - 1:  # a couple of last embers over the cool scorch
+        c.part(E((m - 21, BLAZE_FLOOR_Y - 7, m + 21, BLAZE_FLOOR_Y + 7)), SHADOW, shade=False)
+        c.dot(m - 5, BLAZE_FLOOR_Y - 9, RED)
+        c.dot(m + 8, BLAZE_FLOOR_Y - 14, MAROON)
+        return outline(c.img)
+    blaze_ground(c, m, 21, (YELLOW, ORANGE, ORANGE, RED, RED, MAROON, MAROON)[k])
+    blaze_flames(c, m, k, (1.0, 0.8, 0.6, 0.42, 0.26, 0.0, 0.0)[k])
+    if k >= 2:
+        for i, x in enumerate((-9, 4, 13)):  # smoke
+            y = BLAZE_FLOOR_Y - 8 - (k - 2) * 4 - i * 3
+            r = 3 if k < 6 else 2
+            c.flat(E((m + x - r, y - r, m + x + r, y + r)), SHADOW if k < 5 else STEEL_D)
+    blaze_embers(c, m, k, 3 if k < 5 else 2)
+    return outline(c.img)
+
+
+def blaze_ignite_frame(k: int) -> Image.Image:
+    """Where he took off: a white-hot flash ring spreads over the floor as the fire catches and flares up, then
+    settles to the height of the trail's flames."""
+    c = Canvas(BLAZE_CELL)
+    m = BLAZE_CELL // 2
+    if k < 5:  # the flash
+        rx = 5 + 4 * k
+        ry = max(1, round(rx * BLAZE_SQUASH))
+        c.flat(lambda d, f: d.ellipse((m - rx, BLAZE_FLOOR_Y - ry, m + rx, BLAZE_FLOOR_Y + ry), outline=f, width=1),
+               (WHITE, YELLOW, YELLOW, ORANGE, RED)[k])
+    blaze_ground(c, m, min(21, 8 + 5 * k), YELLOW if k < 5 else ORANGE)
+    blaze_flames(c, m, k, (0.3, 0.6, 1.0, 1.15, 1.1, 1.05, 1.0, 1.0)[k], wide=5.5)
+    blaze_embers(c, m, k, 5, 7, 8)
+    return outline(c.img)
+
+
+def blaze_streak_frame(k: int) -> Image.Image:
+    """Flame streaming off a runner dashing to the right: three long tongues sweeping straight back from his
+    shoulders and hips (the sprite's centre is the cell's centre), tapering, waves rolling down them."""
+    c = Canvas(BLAZE_STREAK_CELL)
+    m = BLAZE_STREAK_CELL // 2
+    for i, (dy, length, wide) in enumerate(((-12, 24, 5.0), (12, 28, 5.0), (0, 34, 6.5))):
+        sw = SWAY[(k + i) % 4] * 2
+        y = m + dy
+        flame_tongue(c, (m - 10, y), (m - 10 - length * 0.55, y + sw * 0.5), (m - 10 - length, y + sw), math.pi / 2 * k + i * 2,
+                     1, wide, m)
+    for i in range(5):  # sparks flung off behind
+        ph = (k + i) % 4
+        c.dot(m - 8 - ph * 5 - i * 2, m - 18 + i * 9 + SWAY[(k + i) % 4], (YELLOW, ORANGE, RED, MAROON)[ph])
+    return outline(c.img)
+
+
+FX.update({
+    "blaze_run_trail": lambda: strip([blaze_trail_frame(k) for k in range(4)]),
+    "blaze_run_die": lambda: strip([blaze_die_frame(k) for k in range(BLAZE_DIE_FRAMES)]),
+    "blaze_run_ignite": lambda: strip([blaze_ignite_frame(k) for k in range(BLAZE_IGNITE_FRAMES)]),
+    "blaze_run_streak": lambda: strip([blaze_streak_frame(k) for k in range(4)]),
+})
 
 
 def check(sheet: Image.Image, frame_w: int = SIZE, edges: bool = True) -> None:

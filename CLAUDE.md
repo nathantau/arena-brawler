@@ -336,6 +336,18 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `icon_staff_whirl`): 8-frame spin pose (staff a blur with ghosts, body twisting, circlet tails flying), 8-frame loop
   ring of motion arcs and dust puffs, 5-frame sparks off the rim on each tick; `SpecialFx` hides his sprite + held staff
   meanwhile and draws them from synced state.
+- **Blaze Run** (2026-10-31, Flint special, `blaze_run`, kind TRAIL = 12): dashes 300 px (`trail_distance`) along the aim in
+  0.3 s (`trail_dash_time`) and leaves a trail of fire from the takeoff point to where he ended up. Both ends are
+  fixed at activation (`Player._activate` measures the run with a test-only `move_and_collide`, so walls stop it) and
+  live in the synced skill state like Vine Swing: `anchor` = takeoff, `direction` = the whole takeoff->end vector;
+  the dash is `anchor + direction * trail_progress()` (no move_and_slide meanwhile). The trail burns for `duration` 3 s
+  (cooldown 8 s): every `trail_tick` 0.3 s (derived from the skill's elapsed time, `Player._burn_trail`)
+  `ProjectilePool.burn_segment` hits every other player within `trail_radius` 22 px of the segment for `trail_damage` 6
+  (authoritative only, replay does nothing, no self-damage, no i-frames, no knockback; keyed `seq + TRAIL_SEQ_OFFSET`).
+  Art (generate.py `blaze_*`, `icon_blaze_run`): 4-frame loop of burning ground (flames from scorched cracks, embers) that
+  `SpecialFx` stamps every `BLAZE_STEP` along the path as he runs it, an 8-frame ignition at takeoff, an 8-frame die-out
+  (flames shrink, cracks cool, smoke, scorch) played stamp by stamp over the last second, and a flame streak behind him
+  while he dashes.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

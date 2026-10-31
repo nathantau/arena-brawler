@@ -19,8 +19,9 @@ extends Resource
 ## SNARE: fires `volley_weapon` once (a single projectile); whoever it hits is slowed (WeaponData.snare_*).
 ## WHIRL: spins a staff round you for `duration`: enemies within `whirl_radius` take damage every `whirl_interval`,
 ## enemy projectiles touching the spin are sent back, you move slower and can't fire.
+## TRAIL: dash along the aim (stopped by walls) leaving a burning trail on the floor for the rest of `duration`.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, SNARE = 13 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -95,6 +96,15 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var eruption_wall_margin: float = 8.0
 ## The pillar of fire: a `blast` weapon (damage, splash radius + falloff, knockback).
 @export var eruption_blast: WeaponData
+
+@export_group("Trail")
+## The dash covers up to trail_distance in trail_dash_time; the trail (takeoff -> where he stopped) burns until `duration` ends.
+@export var trail_distance: float = 300.0
+@export var trail_dash_time: float = 0.3
+## Enemies within trail_radius of the trail take trail_damage every trail_tick seconds.
+@export var trail_radius: float = 22.0
+@export var trail_damage: int = 6
+@export var trail_tick: float = 0.3
 
 @export_group("Transform")
 ## Sheet laid out like a character's (idle, hit, walk); drawn `form_scale` x the usual size.

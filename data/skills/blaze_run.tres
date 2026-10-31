@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_blaze_run.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"blaze_run"
+display_name = "Blaze Run"
+kind = 12
+special = true
+blurb = "Dash on, leaving a trail of fire"
+tags = Array[StringName]([&"flint"])
+cooldown = 8.0
+duration = 3.0
+trail_distance = 300.0
+trail_dash_time = 0.3
+trail_radius = 22.0
+trail_damage = 6
+trail_tick = 0.3

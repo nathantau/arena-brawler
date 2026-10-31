@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -978,3 +978,135 @@ func test_staff_whirl_replay_matches_and_hurts_nobody() -> void:
 	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
 	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
 	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
+
+
+# --- Flint's Blaze Run --------------------------------------------------------------
+
+func _blaze_runner(world: Node2D, pool: ProjectilePool, id: int = 1) -> Player:
+	var p: Player = _flint_erupter(world, pool, id)
+	p.set_skill(1, skills.get_skill(&"blaze_run"))
+	return p
+
+
+func _blaze_setup(walls: bool = false) -> Array:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	if walls:
+		_wall(world, Vector2(250, 300), Vector2(20, 400))
+	var p: Player = _blaze_runner(world, pool, 1)
+	p.global_position = Vector2(100, 300)
+	var foe: Player = _blaze_runner(world, pool, 2)
+	foe.global_position = Vector2(200, 700)
+	pool.targets.append(p)
+	pool.targets.append(foe)
+	return [world, pool, p, foe]
+
+
+func test_blaze_run_is_flints_own_trail() -> void:
+	var d: SkillData = skills.get_skill(&"blaze_run")
+	assert_eq(d.kind, SkillData.Kind.TRAIL)
+	assert_eq(int(d.kind), 12)
+	assert_gt(d.duration, d.trail_dash_time, "the trail outlives the dash")
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"flint", String(c.id))
+
+
+func test_blaze_run_dashes_and_trail_follows_the_path() -> void:
+	var s: Array = _blaze_setup()
+	var p: Player = s[2]
+	var d: SkillData = skills.get_skill(&"blaze_run")
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	var slot: CharacterSkill = p.skills[1]
+	assert_eq(slot.anchor, Vector2(100, 300))
+	assert_almost_eq(slot.direction, Vector2(d.trail_distance, 0), Vector2(0.1, 0.1))
+	_idle(p, floori(d.trail_dash_time / DT) + 2)
+	assert_almost_eq(p.global_position, Vector2(100 + d.trail_distance, 300), Vector2(0.5, 0.5))
+	assert_true(slot.is_active(), "the trail is still burning")
+
+
+func test_blaze_run_stops_at_walls_and_trail_ends_there() -> void:
+	var s: Array = _blaze_setup(true)
+	var p: Player = s[2]
+	await wait_physics_frames(2)
+	_press_special(p, Vector2.RIGHT)
+	var slot: CharacterSkill = p.skills[1]
+	var end: Vector2 = slot.anchor + slot.direction
+	assert_lt(end.x, 250.0, "short of the wall")
+	assert_lt(slot.direction.length(), 300.0)
+	_idle(p, 30)
+	assert_almost_eq(p.global_position, end, Vector2(0.5, 0.5), "he stops where the trail stops")
+
+
+func test_blaze_run_burns_enemies_in_the_trail_on_ticks_not_outside_or_the_caster() -> void:
+	var s: Array = _blaze_setup()
+	var pool: ProjectilePool = s[1]
+	var p: Player = s[2]
+	var foe: Player = s[3]
+	var d: SkillData = skills.get_skill(&"blaze_run")
+	foe.global_position = Vector2(220, 300 + d.trail_radius - 2.0)  # on the edge of the line
+	var safe: Player = _blaze_runner(s[0], pool, 3)
+	safe.global_position = Vector2(220, 300 + d.trail_radius + 6.0)  # just outside
+	pool.targets.append(safe)
+	await wait_physics_frames(2)
+	var hits: Array = _hits(pool)
+	_press_special(p, Vector2.RIGHT)
+	var hp0: int = foe.stats.hp + foe.stats.armor
+	_idle(p, floori(d.trail_tick / DT) - 3)
+	assert_eq(hits.size(), 0, "no damage before the first tick")
+	_idle(p, 6)
+	assert_eq(hits.size(), 1, "one tick")
+	assert_eq(hits[0], [2, d.trail_damage])
+	_idle(p, floori(d.trail_tick / DT))
+	assert_eq(hits.size(), 2, "and another")
+	assert_eq(hp0 - (foe.stats.hp + foe.stats.armor), 2 * d.trail_damage)
+	assert_eq(p.stats.hp, p.stats.max_hp, "no self-damage")
+	assert_eq(safe.stats.hp, safe.stats.max_hp, "outside the trail")
+
+
+func test_blaze_run_trail_expires() -> void:
+	var s: Array = _blaze_setup()
+	var p: Player = s[2]
+	var foe: Player = s[3]
+	var d: SkillData = skills.get_skill(&"blaze_run")
+	foe.global_position = Vector2(200, 300)
+	await wait_physics_frames(2)
+	var hits: Array = _hits(s[1])
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, floori(d.duration / DT) + 5)
+	assert_false(p.skills[1].is_active())
+	var n: int = hits.size()
+	assert_between(n, int(d.duration / d.trail_tick) - 1, int(d.duration / d.trail_tick) + 1, "about one hit per tick")
+	_idle(p, 60)
+	assert_eq(hits.size(), n, "nothing once it is out")
+
+
+func test_blaze_run_replay_matches_and_damages_nothing() -> void:
+	var s: Array = _blaze_setup(true)
+	var pool: ProjectilePool = s[1]
+	var a: Player = s[2]
+	var foe: Player = s[3]
+	foe.global_position = Vector2(150, 300)
+	var b: Player = _blaze_runner(s[0], pool, 5)
+	b.global_position = Vector2(100, 300)
+	await wait_physics_frames(2)
+	var snapshot: Array = a.capture_state()
+	var hits: Array = _hits(pool)
+	_press_special(a, Vector2.RIGHT)
+	_idle(a, 60)
+	var served: int = hits.size()
+	assert_gt(served, 0)
+	assert_true(b.apply_state(snapshot, WeaponCatalog.load_all(), characters))
+	var f := InputFrame.new()
+	f.seq = 10
+	f.aim_vec = Vector2.RIGHT
+	f.special = true
+	b.simulate(f, DT, true)
+	assert_eq(b.skills[1].anchor, a.skills[1].anchor)
+	assert_eq(b.skills[1].direction, a.skills[1].direction, "same trail")
+	_idle(b, 60, true)
+	assert_eq(hits.size(), served, "replay damages nothing")
+	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
+	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)

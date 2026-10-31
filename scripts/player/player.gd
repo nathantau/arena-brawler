@@ -41,6 +41,8 @@ const VOLLEY_SEQ_OFFSET: int = 1 << 24
 const ERUPTION_SEQ_OFFSET: int = 1 << 25
 ## Key of a Staff Whirl damage tick (no bullet to match, only the hit event's identity).
 const WHIRL_SEQ_OFFSET: int = 1 << 26
+## Trail burn ticks are keyed too (several can land in one input).
+const TRAIL_SEQ_OFFSET: int = 1 << 27
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
@@ -257,8 +259,12 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	# Caught before the tick so the frame it runs out still puts him exactly on the landing spot.
 	var swing: CharacterSkill = active_skill(SkillData.Kind.SWING)
 	var erupting: CharacterSkill = active_skill(SkillData.Kind.ERUPTION)
+	var burning: CharacterSkill = active_skill(SkillData.Kind.TRAIL)
+	var burn_before: float = burning.elapsed() if burning != null else 0.0
 	for slot: CharacterSkill in skills:
 		slot.tick(delta)
+	if burning != null and not replay:
+		_burn_trail(burning, burn_before, input.seq)
 	weapon.tick(delta)
 	var pressed: Array[bool] = [input.skill, input.special]
 	if frozen:
@@ -284,6 +290,10 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		velocity = Vector2.ZERO
 	elif grapple != null:
 		_pull(grapple, delta)
+	elif _trail_dash(delta) != null:  # runs the burning line, walls were measured at takeoff
+		var run: CharacterSkill = _trail_dash(delta)
+		global_position = run.anchor + run.direction * run.trail_progress()
+		velocity = Vector2.ZERO
 	else:
 		var mover: CharacterSkill = active_skill(SkillData.Kind.DASH)
 		var tf: CharacterSkill = form()
@@ -325,6 +335,9 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 	match slot.data.kind:
 		SkillData.Kind.SWING:
 			slot.direction = landing - global_position
+		SkillData.Kind.TRAIL:  # how far he gets before a wall (measured, not moved: the dash does that)
+			var hit: KinematicCollision2D = move_and_collide(slot.direction * slot.data.trail_distance, true)
+			slot.direction = hit.get_travel() if hit != null else slot.direction * slot.data.trail_distance
 		SkillData.Kind.GRAPPLE:
 			_throw_grapple(slot)
 		SkillData.Kind.ERUPTION:
@@ -345,6 +358,22 @@ func _whirl(slot: CharacterSkill, seq: int, delta: float, replay: bool) -> void:
 	var d: SkillData = slot.data
 	projectiles.whirl(player_id, seq + WHIRL_SEQ_OFFSET, global_position, d.whirl_radius,
 		d.whirl_damage if slot.whirl_tick_due(delta) else 0, d.whirl_knockback)
+
+
+## The Blaze Run trail burns whoever stands within `trail_radius` of its line on every `trail_tick` (no self-damage).
+func _burn_trail(slot: CharacterSkill, before: float, seq: int) -> void:
+	var d: SkillData = slot.data
+	var tick_now: int = floori(slot.elapsed() / d.trail_tick + 0.0001)
+	if tick_now > floori(before / d.trail_tick + 0.0001):
+		projectiles.burn_segment(player_id, seq + TRAIL_SEQ_OFFSET, slot.anchor, slot.anchor + slot.direction,
+			d.trail_radius, d.trail_damage)
+
+
+func _trail_dash(delta: float) -> CharacterSkill:
+	for slot: CharacterSkill in skills:
+		if slot.trail_dashing(delta):
+			return slot
+	return null
 
 
 ## The telegraph ran out: the pillar of fire goes off at the marked spot.
