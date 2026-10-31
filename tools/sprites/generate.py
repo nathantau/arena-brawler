@@ -4348,11 +4348,12 @@ def storm_lumps(phase: float, grow: float, lift: float) -> list:
 
 
 def storm_cloud_art(k: int, grow: float = 1.0, rain: float = 1.0, lift: float = 0.0, fade: float = 0.0,
-                    flash: int = 0, loop: int = STORM_LOOP) -> Image.Image:
+                    flash: int = 0, loop: int = STORM_LOOP, floor_layer: bool = False) -> Image.Image:
     """One frame of the cloud (loop frame `k` of `loop`): `grow` scales it, `rain` is the share of rain columns
     falling, `lift` raises it, `fade` dithers it away. One merged mass (no balloon outlines): lit crescents on the upper
     left of every billow, shadowed lower right, a flat dark underside, small puffs drifting off its edges, and gold light
-    that flares inside it in the loop's flash frames (`flash`: 2 = bright, 1 = dim)."""
+    that flares inside it in the loop's flash frames (`flash`: 2 = bright, 1 = dim). `floor_layer` draws just the part
+    on the floor (shadow, rain splashes), which the game puts under the players; otherwise the cloud and falling rain."""
     n = STORM_SIZE
     m = n // 2
     phase = k / loop
@@ -4437,6 +4438,7 @@ def storm_cloud_art(k: int, grow: float = 1.0, rain: float = 1.0, lift: float = 
                     sh.dot(x, y, SHADOW)
         out.alpha_composite(outline(sh.img))
     rn = Canvas(n)
+    fl = Canvas(n)
     cols = STORM_RAIN_COLS[:round(len(STORM_RAIN_COLS) * rain)]
     for j, dx in enumerate(cols):
         for rep, (speed, col, head, length) in enumerate(((5, STEEL, WHITE, 6), (5, STEEL_D, STEEL, 4))):
@@ -4447,9 +4449,13 @@ def storm_cloud_art(k: int, grow: float = 1.0, rain: float = 1.0, lift: float = 
                 rn.dot(x - 2 * length // 6 - 1, y + length, head)
             elif y < floor + 2 and rep == 0:  # lands: a little splash on the floor
                 for sx, sy in ((-2, -1), (2, -1), (-3, 0), (3, 0)):
-                    rn.dot(x + sx, floor - 2 + sy + (y > floor - 2), WHITE if abs(sx) < 3 else STEEL)
-    out.alpha_composite(rn.img)
-    out.alpha_composite(cloud)
+                    fl.dot(x + sx, floor - 2 + sy + (y > floor - 2), WHITE if abs(sx) < 3 else STEEL)
+    if floor_layer:
+        out.alpha_composite(fl.img)
+    else:
+        out = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+        out.alpha_composite(rn.img)
+        out.alpha_composite(cloud)
     px = out.load()
     for y in range(n):
         for x in range(n):
@@ -4461,15 +4467,16 @@ def storm_cloud_art(k: int, grow: float = 1.0, rain: float = 1.0, lift: float = 
 STORM_FLASH = {3: 2, 4: 1, 9: 2, 10: 1}  # loop frame -> flash strength
 
 
-def storm_loop_frame(k: int) -> Image.Image:
-    return storm_cloud_art(k, flash=STORM_FLASH.get(k, 0))
+def storm_loop_frame(k: int, floor_layer: bool = False) -> Image.Image:
+    return storm_cloud_art(k, flash=STORM_FLASH.get(k, 0), floor_layer=floor_layer)
 
 
-def storm_form_frame(j: int) -> Image.Image:
+def storm_form_frame(j: int, floor_layer: bool = False) -> Image.Image:
     t = (j + 1) / STORM_FRAMES
     e = 1 - (1 - t) ** 2
-    img = storm_cloud_art(j * STORM_LOOP // STORM_FRAMES, 0.2 + 0.8 * e, max(0.0, (j - 3) / 4), 14 * (1 - e))
-    if j < 4:  # white vapour streaming in as it gathers, then a spark of gold as it takes hold
+    img = storm_cloud_art(j * STORM_LOOP // STORM_FRAMES, 0.2 + 0.8 * e, max(0.0, (j - 3) / 4), 14 * (1 - e),
+                          floor_layer=floor_layer)
+    if j < 4 and not floor_layer:  # white vapour streaming in as it gathers, then a spark of gold as it takes hold
         c = Canvas(STORM_SIZE)
         m = STORM_SIZE // 2
         for a in range(8):
@@ -4480,10 +4487,11 @@ def storm_form_frame(j: int) -> Image.Image:
     return img
 
 
-def storm_end_frame(j: int) -> Image.Image:
+def storm_end_frame(j: int, floor_layer: bool = False) -> Image.Image:
     t = (j + 1) / STORM_FRAMES
-    img = storm_cloud_art(j * STORM_LOOP // STORM_FRAMES, 1 - 0.45 * t, max(0.0, 1 - j / 3), -10 * t, t * 0.95)
-    if j < 5:  # a last rumble of gold light as it breaks up
+    img = storm_cloud_art(j * STORM_LOOP // STORM_FRAMES, 1 - 0.45 * t, max(0.0, 1 - j / 3), -10 * t, t * 0.95,
+                          floor_layer=floor_layer)
+    if j < 5 and not floor_layer:  # a last rumble of gold light as it breaks up
         px = img.load()
         rng = random.Random(7 + j)
         for _ in range(4):
@@ -4547,7 +4555,7 @@ def storm_bolt_frame(k: int) -> Image.Image:
     return outline(img)
 
 
-def storm_spark_frame(k: int) -> Image.Image:
+def storm_spark_frame(k: int, floor_layer: bool = False) -> Image.Image:
     """Where a bolt struck (8 frames): a white flash and ring, chips flying out and falling under gravity, a puff of
     smoke rising off, over a dithered scorch mark that shrinks away."""
     n = STORM_SPARK
@@ -4555,6 +4563,9 @@ def storm_spark_frame(k: int) -> Image.Image:
     c = Canvas(n)
     sc = 1 - 0.09 * k  # the scorch shrinks away: a solid pool with a dithered rim
     c.flat(E((m - 10 * sc, m - 3.5 * sc, m + 10 * sc, m + 3.5 * sc)), SHADOW)
+    if floor_layer:  # the scorch alone, drawn under the players
+        return outline(c.img)
+    c = Canvas(n)
     if k < 3:  # flash and shock ring
         c.flat(E((m - 5 + k, m - 4 + k, m + 5 - k, m + 3 - k)), WHITE if k < 2 else YELLOW)
         rr = 5 + 3 * k
@@ -4579,6 +4590,10 @@ FX.update({
     "storm_cloud_form": lambda: strip([storm_form_frame(j) for j in range(STORM_FRAMES)]),
     "storm_cloud_end": lambda: strip([storm_end_frame(j) for j in range(STORM_FRAMES)]),
     "storm_spark": lambda: strip([storm_spark_frame(k) for k in range(STORM_SPARK_FRAMES)]),
+    "storm_floor": lambda: strip([storm_loop_frame(k, True) for k in range(STORM_LOOP)]),
+    "storm_floor_form": lambda: strip([storm_form_frame(j, True) for j in range(STORM_FRAMES)]),
+    "storm_floor_end": lambda: strip([storm_end_frame(j, True) for j in range(STORM_FRAMES)]),
+    "storm_scorch": lambda: strip([storm_spark_frame(k, True) for k in range(STORM_SPARK_FRAMES)]),
 })
 FX_IMAGES["storm_bolt"] = lambda: strip([storm_bolt_frame(k) for k in range(BOLT_FRAMES)])
 ICONS["storm_cloud"] = lambda c: (c.flat(E((0, 2, 7, 7)), NAVY), c.flat(E((4, 0, 12, 6)), NAVY),
