@@ -38,29 +38,6 @@ func test_free_weapon_fires_at_zero_energy() -> void:
 	assert_true(ws.try_fire(stats))
 
 
-func test_loadout_holds_two_and_swaps() -> void:
-	var a := _weapon(0, 0.1)
-	var b := _weapon(1, 0.1)
-	var c := _weapon(2, 0.1)
-	var lo := Loadout.new([a, b, c] as Array[WeaponData])
-	assert_eq(lo.slots.size(), Constants.LOADOUT_SLOTS)
-	assert_eq(lo.active().data, a)
-	lo.swap()
-	assert_eq(lo.active().data, b)
-	lo.swap()
-	assert_eq(lo.active().data, a)
-
-
-func test_loadout_cooldowns_tick_while_holstered() -> void:
-	var stats := PlayerStats.new()
-	var lo := Loadout.new([_weapon(0, 1.0), _weapon(0, 1.0)] as Array[WeaponData])
-	assert_true(lo.active().try_fire(stats))
-	lo.swap()
-	lo.tick(1.0)
-	lo.swap()
-	assert_true(lo.active().is_ready())
-
-
 func test_all_weapon_resources_valid() -> void:
 	var dir := DirAccess.open(WEAPON_DIR)
 	assert_not_null(dir)
@@ -80,6 +57,9 @@ func test_all_weapon_resources_valid() -> void:
 	assert_true(count >= 3, "M1 needs at least 3 weapons")
 
 
-func test_pistol_is_free() -> void:
-	var pistol := load(WEAPON_DIR + "pistol.tres") as WeaponData
-	assert_eq(pistol.energy_cost, 0)
+## Energy is the only limit on a fighter's one weapon: every carried weapon costs some (form and volley weapons don't).
+func test_carried_weapons_cost_energy() -> void:
+	var catalog := WeaponCatalog.load_all()
+	for c: CharacterData in CharacterCatalog.load_all().ordered:
+		for id: StringName in catalog.pickup_ids() + [c.signature_weapon.id]:
+			assert_gt(catalog.get_weapon(id).energy_cost, 0, String(id))

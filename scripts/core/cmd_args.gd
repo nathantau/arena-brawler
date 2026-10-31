@@ -13,7 +13,7 @@ extends RefCounted
 ##   --arena N                        (server / offline) starting arena index (ArenaLayouts.NAMES)
 ##   --character ID                   (client / offline) pick a character, e.g. warden
 ##   --weapon ID                      (client / offline) pick a starting weapon, e.g. sword
-##   --special ID                     (client / offline) pick a special skill, e.g. great_ape
+##   --special ID                     (client / offline) pick the special-button skill, e.g. great_ape
 
 var server: bool = false
 var port: int = Constants.DEFAULT_PORT

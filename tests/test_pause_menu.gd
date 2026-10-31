@@ -6,7 +6,7 @@ func test_pause_freezes_offline_and_restart_signals_arena() -> void:
 	var arena := Arena.new(Arena.Mode.OFFLINE)
 	add_child_autofree(arena)
 	var input := LocalInput.new()
-	arena.attach_local_view(arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, input), input)
+	arena.attach_local_view(arena.add_player(1, 0, input), input)
 	var pause: PauseMenu = arena.get_node("UI").get_children().filter(func(n: Node) -> bool: return n is PauseMenu)[0]
 	watch_signals(arena)
 	pause.open()

@@ -69,28 +69,24 @@ func _draw_vitals() -> void:
 	pos.y += ROW_H + ROW_GAP
 	_bar(pos, "icon_energy", s.energy, s.max_energy, UiStyle.C_TEAL_L, UiStyle.C_TEAL)
 
-	var slot_pos := Vector2(0.0, panel.end.y + SECTION_GAP)
-	for i: int in player.loadout.slots.size():
-		var w: WeaponData = player.loadout.slots[i].data
-		var active: bool = i == player.loadout.active_index
-		var r := Rect2(slot_pos, SLOT_SIZE)
-		draw_style_box(_slot_active if active else _slot, r)
-		var art_tint := Color(1, 1, 1, 1.0 if active else 0.6)
-		UiStyle.draw_icon(self, w.sprite, r.get_center() - Vector2(0, 6), SLOT_ART_SCALE, art_tint)
-		var cost: String = "free" if w.energy_cost == 0 else str(w.energy_cost)
-		var badge := Vector2(r.end.x - 10.0, r.end.y - 10.0)
-		UiStyle.draw_text(self, badge, cost, UiStyle.SIZE_TINY, UiStyle.C_TEAL_L if w.energy_cost > 0 else UiStyle.C_DIM,
-			HORIZONTAL_ALIGNMENT_RIGHT, -1.0)
-		if w.energy_cost > 0:
-			var tw: float = UiStyle.text_width(cost, UiStyle.SIZE_TINY)
-			UiStyle.draw_icon(self, UiStyle.tex("icon_energy"), badge + Vector2(-tw - 10.0, -6.0), 1.0)
-		slot_pos.x += SLOT_SIZE.x + SLOT_GAP
-	var active_w: WeaponData = player.loadout.active().data
+	# The one weapon (or the form's), with its energy cost per shot.
+	var w: WeaponData = player.held_weapon().data
+	var r := Rect2(Vector2(0.0, panel.end.y + SECTION_GAP), SLOT_SIZE)
+	draw_style_box(_slot_active, r)
+	UiStyle.draw_icon(self, w.sprite, r.get_center() - Vector2(0, 6), SLOT_ART_SCALE)
+	var cost: String = "free" if w.energy_cost == 0 else str(w.energy_cost)
+	var badge := Vector2(r.end.x - 10.0, r.end.y - 10.0)
+	UiStyle.draw_text(self, badge, cost, UiStyle.SIZE_TINY, UiStyle.C_TEAL_L if w.energy_cost > 0 else UiStyle.C_DIM,
+		HORIZONTAL_ALIGNMENT_RIGHT, -1.0)
+	if w.energy_cost > 0:
+		var tw: float = UiStyle.text_width(cost, UiStyle.SIZE_TINY)
+		UiStyle.draw_icon(self, UiStyle.tex("icon_energy"), badge + Vector2(-tw - 10.0, -6.0), 1.0)
+	var active_w: WeaponData = w
 	var name_y: float = panel.end.y + SECTION_GAP + SLOT_SIZE.y + UiStyle.SIZE_SMALL + 4.0
 	UiStyle.draw_text(self, Vector2(2.0, name_y), active_w.display_name, UiStyle.SIZE_SMALL, UiStyle.C_YELLOW)
 	if show_skill:
 		var y: float = name_y
-		for pair: Array in [[player.dash, "Space"], [player.special, "E"]]:
+		for pair: Array in [[player.skills[0], "Space"], [player.skills[1], "E"]]:
 			var sk: CharacterSkill = pair[0]
 			var text: String = "%s [%s]" % [sk.data.display_name, pair[1]]
 			if sk.is_active():

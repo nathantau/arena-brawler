@@ -204,3 +204,25 @@ func test_ready_ignored_outside_lobby() -> void:
 	mc.state.phase = MatchState.Phase.PLAYING
 	mc.set_ready(1, true)
 	assert_true(mc.state.ready.is_empty())
+
+
+## The server only accepts a weapon / special the fighter may use, in a real slot.
+func test_lobby_picks_are_validated() -> void:
+	var arena := Arena.new(Arena.Mode.OFFLINE)
+	add_child_autofree(arena)
+	var p: Player = arena.add_player(1, 0, null)
+	arena.select_character(p, &"flicker")
+	assert_eq(p.weapon.data, p.character.signature_weapon, "signature by default")
+	arena.select_weapon(p, &"smg")
+	assert_eq(p.weapon.data.id, &"smg", "Flicker is light")
+	arena.select_weapon(p, &"rocket")
+	arena.select_weapon(p, &"sakura_fan")
+	arena.select_weapon(p, &"ape_fists")
+	assert_eq(p.weapon.data.id, &"smg", "heavy, other fighters' and form weapons refused")
+	arena.select_special(p, 0, &"blink")
+	assert_eq(p.skills[0].data.id, &"blink")
+	arena.select_special(p, 1, &"great_ape")
+	arena.select_special(p, 2, &"barrier")
+	arena.select_special(p, 0, &"inferno")
+	assert_eq(p.skills[0].data.id, &"blink")
+	assert_eq(p.skills[1].data.id, &"shadow_clones", "others' specials and bad slots refused")

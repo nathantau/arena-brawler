@@ -22,11 +22,11 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 **Arenas:** 2 small hand-built tilemap arenas with cover walls, a few destructible crates, weapon/energy pickups on respawn timers.
 **Player:**
 - HP + Armor (armor regenerates after 3 s of not taking damage, HP does not).
-- Energy pool consumed by weapons; restored by pickups.
-- Carry 2 weapons, tap to swap.
-- 1 character skill on cooldown (MVP characters: Dash-dodge with i-frames; Deployable shield).
+- Energy pool consumed by weapon shots; refills over time.
+- One weapon, picked before the match (signature or a shared weapon the fighter can use).
+- 2 specials on cooldown, picked from the fighter's own plus generic ones (Dash, Barrier).
 **Weapons (MVP set of ~8, plus one signature weapon per character):** pistol (free, 0 energy), SMG, shotgun, sniper, rocket (splash), laser beam, melee sword (reflects bullets on swing), bouncing grenade launcher. All data-driven via `Resource` files (`WeaponData.tres`): damage, fire rate, spread, projectile speed, energy cost, crit chance, knockback.
-**Controls (mobile):** left virtual joystick = move; right side = attack button with **auto-aim to nearest visible enemy**, optional drag-to-aim on the attack button; skill button; weapon swap button. Haptics on hit.
+**Controls (mobile):** left virtual joystick = move; right side = attack button with **auto-aim to nearest visible enemy**, optional drag-to-aim on the attack button; two special buttons. Haptics on hit.
 
 ## Project structure
 ```
@@ -47,7 +47,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 ```
 
 ## Rules for Claude Code
-1. **Server-authoritative always.** Never trust client damage, position, ammo or cooldowns. Clients send `{seq, move_vec, aim_vec, fire, skill, swap}` only.
+1. **Server-authoritative always.** Never trust client damage, position, ammo or cooldowns. Clients send `{seq, move_vec, aim_vec, fire, skill, special}` only.
 2. Keep simulation logic (movement, projectiles, damage) in plain deterministic-ish functions that both client prediction and server can call. No `randf()` in shared sim without a seeded RNG.
 3. Static types in all GDScript. No magic numbers — put tunables in `scripts/core/constants.gd` or weapon/character `.tres` resources.
 4. Edit `.tscn` files as text carefully; prefer building nodes in code for anything dynamic.
@@ -231,7 +231,9 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   feet stop at a wall's top, the head can overlap the wall above and one-tile gaps fit (bullets ignore it).
   Pause menu (`PauseMenu`, II button top-right in a match, Esc on desktop): Resume / Restart (offline, keeps the
   character) / Leave match; offline it pauses the tree, online the match keeps running (`Arena.leave_requested`).
-  iOS Simulator: Godot's simulator lib is x86_64 only, so build with `ARCHS=x86_64` (runs under Rosetta).
+  iOS Simulator: Godot's simulator lib is x86_64 only, so build with `ARCHS=x86_64` (runs under Rosetta). iOS 27 simulators
+  refuse x86_64 apps: use an iOS 18 one (e.g. iPhone 16 Pro): `xcodebuild ... -sdk iphonesimulator -destination id=<SIM>
+  -derivedDataPath build/ios-sim ARCHS=x86_64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build`, then `xcrun simctl install/launch`.
 - **Skills as data: Dash + 1 special** (2026-10-30): `SkillData` resources in `data/skills/` (kind DASH / SHIELD /
   TRANSFORM / ..., cooldown, duration, icon, blurb, tags like weapons; `special = false` for Dash).
   `SkillCatalog.shared()`; `CharacterData.signature_skill` + `can_use_skill()` (same tag list as weapons).
@@ -267,6 +269,17 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   and morphs back when it ends. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
   (generate.py `FX`: poof / poof_small 20 frames (swell with a swirl, shadow layer, then burst into wisps and sparkles), wukong_ape_morph, smoke 12-frame loop (edge highlights, inner billows, swirls, rising wisps; swells in and fades out in `SpecialFx`); `Canvas(size)`
   now takes any size). `Effects` is pixel art too: explosions play `blast` (fireball → smoke + embers), melee slams `slam` (dust ring + floor cracks; `exploded(..., slam)`), sword swings `slash` (crescent smear tinted to the weapon), all sized to the radius / reach; beams and particles are hard-edged, snapped to art pixels and shrink instead of fading. Preview all effects: `tools/fx_preview.gd`. Bullets are per-weapon pixel art (`WeaponData.projectile_sprite`, generate.py `PROJECTILES` → `assets/sprites/projectiles/`: energy bolts, lead pellets, sniper tracer, rocket with flickering exhaust, rolling grenade, kunai, brass round, plasma), rotated to the flight direction with a 2-frame flicker and a pixel trail; crits are drawn x1.35, flash and leave gold sparkles; wall hits pop as four pixel sparks. Not done: bots don't prefer usable pickups; the HUD doesn't say why a pickup was refused.
+- **One weapon + 2 specials** (2026-10-31): replaces the 2-slot loadout, swap button, and weapon/energy pickups
+  (`Loadout`, `PickupField` deleted; map `W`/`E` chars are ignored). Each fighter fights with ONE weapon picked in the
+  loading room from `Arena.weapons_for(c)` (signature first, then tag-usable shared weapons; `select_weapon` validates).
+  Every carried weapon costs energy per shot (~100 × fire_interval: kunai 42, SMG 8, sniper 110...; form/volley
+  weapons free) and energy refills at `ENERGY_REGEN_PER_SEC` 60 (`PlayerStats.energy_accum`, in snapshots).
+  `Player.skills` holds `SKILL_SLOTS` = 2 specials: slot 0 on the skill button (Space, InputFrame `skill`), slot 1 on
+  the special button (E, `special`). Defaults: Dash + the signature special. Dash and Barrier are generic specials
+  (`special = true`, no tags). `select_special(p, slot, id)` / `rpc_select_special(slot, id)`; `set_skill` swaps if the
+  other slot already has it; `active_skill(kind)` finds the running TRANSFORM / CLONES / SMOKE / DASH. Loading room:
+  pick 2 specials (badges 1/2, a new pick replaces the least recently set slot). Bots fight with their signature.
+  `--special ID` sets slot 1. Energy numbers are a first guess, untested in real matches.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

@@ -3,7 +3,7 @@ extends Control
 ## Multi-touch mobile controls inside the safe area, drawn with the pixel UI kit:
 ## - joystick anywhere on the left part of the screen (base fixed where you touch until release)
 ## - attack button (hold = fire with auto-aim; drag off-centre = manual aim)
-## - dash and special buttons (skill icon, cooldown sweep + seconds), swap button (shows the other weapon)
+## - two skill buttons, one per equipped special (skill icon, cooldown sweep + seconds)
 ## Touches that start on a visible `blockers` control (e.g. lobby buttons) are left to the GUI.
 
 const JOYSTICK_ZONE_FRACTION: float = 0.45
@@ -17,13 +17,10 @@ const ATTACK_MARGIN: Vector2 = Vector2(96, 92)
 const SKILL_RADIUS: float = 50.0
 const SKILL_SCALE: float = 3.0
 const SKILL_OFFSET: Vector2 = Vector2(-152, 24)
-## The special sits above the dash, left of the swap button.
+## Slot 1's button sits above slot 0's.
 const SPECIAL_RADIUS: float = 50.0
 const SPECIAL_SCALE: float = 3.0
 const SPECIAL_OFFSET: Vector2 = Vector2(-140, -104)
-const SWAP_RADIUS: float = 33.0
-const SWAP_SCALE: float = 2.0
-const SWAP_OFFSET: Vector2 = Vector2(-14, -128)
 const HIT_SLOP: float = 1.25
 const PRESS_DROP: float = 4.0
 const AIM_LINE_WIDTH: float = 4.0
@@ -43,7 +40,6 @@ var attack_held: bool = false
 var attack_aim: Vector2 = Vector2.ZERO
 var skill_held: bool = false
 var special_held: bool = false
-var swap_held: bool = false
 
 var _joy_finger: int = NO_FINGER
 var _joy_origin: Vector2 = Vector2.ZERO
@@ -53,7 +49,6 @@ var _attack_finger: int = NO_FINGER
 var _attack_origin: Vector2 = Vector2.ZERO
 var _skill_finger: int = NO_FINGER
 var _special_finger: int = NO_FINGER
-var _swap_finger: int = NO_FINGER
 
 
 func _ready() -> void:
@@ -81,10 +76,6 @@ func _skill_center() -> Vector2:
 
 func _special_center() -> Vector2:
 	return _attack_center() + SPECIAL_OFFSET
-
-
-func _swap_center() -> Vector2:
-	return _attack_center() + SWAP_OFFSET
 
 
 func _input(event: InputEvent) -> void:
@@ -127,9 +118,6 @@ func _on_press(finger: int, p: Vector2) -> void:
 	elif _special_finger == NO_FINGER and _hits(p, _special_center(), SPECIAL_RADIUS):
 		_special_finger = finger
 		special_held = true
-	elif _swap_finger == NO_FINGER and _hits(p, _swap_center(), SWAP_RADIUS):
-		_swap_finger = finger
-		swap_held = true
 	elif _joy_finger == NO_FINGER and p.x < size.x * JOYSTICK_ZONE_FRACTION:
 		_joy_finger = finger
 		_joy_origin = p
@@ -164,14 +152,11 @@ func _on_release(finger: int) -> void:
 	elif finger == _special_finger:
 		_special_finger = NO_FINGER
 		special_held = false
-	elif finger == _swap_finger:
-		_swap_finger = NO_FINGER
-		swap_held = false
 	queue_redraw()
 
 
 func _process(_delta: float) -> void:
-	# Cooldown sweep and the swap preview change without input events.
+	# Cooldown sweeps change without input events.
 	if visible:
 		queue_redraw()
 
@@ -192,19 +177,10 @@ func _draw() -> void:
 	_round(ac, "round_fire", ATTACK_SCALE, attack_held)
 	UiStyle.draw_icon(self, UiStyle.tex("icon_fire"), ac + _drop(attack_held), ATTACK_SCALE)
 
-	# Dash and special, with cooldown sweeps
+	# The two specials, with cooldown sweeps
 	if player != null:
-		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.dash, skill_held)
-		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.special, special_held)
-
-	# Swap: the weapon you'd switch to
-	var wc: Vector2 = _swap_center()
-	_round(wc, "round", SWAP_SCALE, swap_held)
-	if player != null and player.loadout.slots.size() > 1:
-		var lo: Loadout = player.loadout
-		var next: WeaponData = lo.slots[(lo.active_index + 1) % lo.slots.size()].data
-		UiStyle.draw_icon(self, next.sprite, wc + _drop(swap_held), 1.0)
-	UiStyle.draw_icon(self, UiStyle.tex("icon_swap"), wc + Vector2(SWAP_RADIUS * 0.6, SWAP_RADIUS * 0.6), 1.0)
+		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.skills[0], skill_held)
+		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.skills[1], special_held)
 
 
 func _skill_button(c: Vector2, radius: float, scale_px: float, sk: CharacterSkill, held: bool) -> void:

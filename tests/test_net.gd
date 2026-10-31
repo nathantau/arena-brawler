@@ -23,7 +23,6 @@ func test_input_roundtrip() -> void:
 	assert_true(g.fire)
 	assert_true(g.skill)
 	assert_true(g.special)
-	assert_false(g.swap)
 
 
 func test_input_rejects_malformed() -> void:

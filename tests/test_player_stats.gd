@@ -121,3 +121,14 @@ func test_regen_counts_only_time_past_delay_within_one_tick() -> void:
 	stats.apply_damage(40)
 	stats.tick(Constants.ARMOR_REGEN_DELAY + 0.5)
 	assert_eq(stats.armor, 10 + int(Constants.ARMOR_REGEN_PER_SEC * 0.5))
+
+
+func test_energy_refills_over_time_up_to_max() -> void:
+	var s := PlayerStats.new(100, 50, 200)
+	s.energy = 0
+	s.tick(0.5)
+	assert_eq(s.energy, int(Constants.ENERGY_REGEN_PER_SEC * 0.5))
+	for i: int in 600:
+		s.tick(Constants.PHYSICS_DT)
+	assert_eq(s.energy, 200)
+	assert_eq(s.energy_accum, 0.0)

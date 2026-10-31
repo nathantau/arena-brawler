@@ -36,7 +36,7 @@ func _player(id: int, character: StringName = &"flicker") -> Player:
 	return p
 
 
-## Varied input: run into the wall, dash, swap, fire.
+## Varied input: run into the wall, dash, special, fire.
 func _inputs(n: int) -> Array[InputFrame]:
 	var out: Array[InputFrame] = []
 	for i: int in n:
@@ -46,7 +46,6 @@ func _inputs(n: int) -> Array[InputFrame]:
 		f.aim_vec = Vector2.UP.rotated(i * 0.05)
 		f.skill = i % 40 < 3
 		f.special = i % 50 > 45
-		f.swap = i == 25
 		f.fire = i % 3 != 0
 		out.append(f)
 	return out
@@ -74,13 +73,14 @@ func _check_replay(character: StringName) -> void:
 	assert_almost_eq(b.global_position.x, a.global_position.x, 0.01)
 	assert_almost_eq(b.global_position.y, a.global_position.y, 0.01)
 	assert_eq(b.stats.energy, a.stats.energy)
-	assert_eq(b.loadout.active_index, a.loadout.active_index)
-	assert_almost_eq(b.dash.cooldown_remaining, a.dash.cooldown_remaining, 0.0001)
-	assert_almost_eq(b.special.cooldown_remaining, a.special.cooldown_remaining, 0.0001)
-	assert_almost_eq(b.special.active_remaining, a.special.active_remaining, 0.0001)
+	assert_eq(b.stats.energy_accum, a.stats.energy_accum)
+	assert_eq(b.weapon.data, a.weapon.data)
+	for i: int in Constants.SKILL_SLOTS:
+		assert_almost_eq(b.skills[i].cooldown_remaining, a.skills[i].cooldown_remaining, 0.0001)
+		assert_almost_eq(b.skills[i].active_remaining, a.skills[i].active_remaining, 0.0001)
 	assert_eq(b.last_input_seq, a.last_input_seq)
 	assert_true(a.global_position.x < WALL_X, "walls stopped the player")
-	assert_eq(b.special.anchor, a.special.anchor, String(character))
+	assert_eq(b.skills[1].anchor, a.skills[1].anchor, String(character))
 	a.queue_free()
 	b.queue_free()
 	await wait_physics_frames(1)
@@ -92,9 +92,9 @@ func test_state_roundtrip() -> void:
 	a.velocity = Vector2(5, 6)
 	a.stats.apply_damage(70)
 	a.stats.energy = 33
-	a.dash.try_activate(Vector2.LEFT, a.global_position, a.stats)
-	a.special.try_activate(Vector2.LEFT, a.global_position, a.stats)
-	a.loadout.swap()
+	a.skills[0].try_activate(Vector2.LEFT, a.global_position, a.stats)
+	a.skills[1].try_activate(Vector2.LEFT, a.global_position, a.stats)
+	a.set_weapon(catalog.get_weapon(&"smg"))
 	a.last_input_seq = 77
 	var b: Player = _player(2)
 	b.apply_state(a.capture_state(), catalog, characters)
@@ -110,7 +110,7 @@ func test_replay_does_not_spawn_projectiles() -> void:
 	f.aim_vec = Vector2.LEFT
 	a.simulate(f, Constants.PHYSICS_DT, true)
 	assert_eq(pool.active_count(), 0)
-	assert_false(a.loadout.active().is_ready(), "but cooldown is still predicted")
+	assert_false(a.weapon.is_ready(), "but cooldown is still predicted")
 
 
 func test_fire_shot_is_reproducible_by_observers() -> void:

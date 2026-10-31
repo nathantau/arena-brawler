@@ -5,7 +5,7 @@ extends Node
 ## every RPC; logic is delegated to NetServer / NetClient.
 ##
 ## Channels: snapshots and shots/hits are unreliable_ordered on their own channels so one
-## lost packet never stalls another stream; join/leave/kill, match state, pickups and lobby
+## lost packet never stalls another stream; join/leave/kill, match state and lobby
 ## requests are reliable.
 
 signal client_disconnected(reason: String)
@@ -94,9 +94,9 @@ func rpc_select_character(id: StringName) -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable", CH_EVENTS)
-func rpc_select_special(id: StringName) -> void:
+func rpc_select_special(slot: int, id: StringName) -> void:
 	if server != null:
-		server.on_select_special(multiplayer.get_remote_sender_id(), id)
+		server.on_select_special(multiplayer.get_remote_sender_id(), slot, id)
 
 
 @rpc("any_peer", "call_remote", "reliable", CH_EVENTS)
@@ -123,12 +123,6 @@ func rpc_player_joined(id: int, color_index: int, is_bot: bool) -> void:
 func rpc_match_state(state: Array) -> void:
 	if client != null:
 		client.on_match_state(state)
-
-
-@rpc("authority", "call_remote", "reliable", CH_EVENTS)
-func rpc_pickups(states: Array) -> void:
-	if client != null:
-		client.on_pickups(states)
 
 
 @rpc("authority", "call_remote", "reliable", CH_EVENTS)

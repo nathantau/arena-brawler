@@ -45,12 +45,12 @@ func test_catalog_and_skills() -> void:
 		assert_true(kinds.has(kind), "no skill of kind %d" % kind)
 
 
-func test_dash_is_everyones_and_not_a_special() -> void:
-	var dash: SkillData = skills.dash()
-	assert_false(dash.special)
-	for c: CharacterData in characters.ordered:
-		assert_true(c.can_use_skill(dash), String(c.id))
-		assert_false(skills.specials_for(c).has(dash), String(c.id))
+func test_dash_and_barrier_are_generic_specials() -> void:
+	for id: StringName in [&"dash", &"barrier"]:
+		var sk: SkillData = skills.get_skill(id)
+		assert_true(sk.special, String(id))
+		for c: CharacterData in characters.ordered:
+			assert_true(skills.specials_for(c).has(sk), "%s for %s" % [id, c.id])
 
 
 func test_signature_special_comes_first_and_is_exclusive() -> void:
@@ -163,7 +163,7 @@ func test_character_sets_stat_maxes() -> void:
 	assert_eq(p.stats.max_energy, warden.max_energy)
 	p.set_character(twinshot)
 	assert_eq(p.stats.max_hp, twinshot.max_hp)
-	assert_eq(p.special.data.id, &"barrier", "Warden's Barrier is kept: Twinshot can use it")
+	assert_eq(p.skills[1].data.id, &"barrier", "Warden's Barrier is kept")
 
 
 # --- specials on a player ------------------------------------------------------
@@ -178,27 +178,35 @@ func _player(c: CharacterData) -> Player:
 func test_great_ape_halves_damage_and_swaps_to_fists() -> void:
 	var p: Player = _player(characters.get_character(&"wukong"))
 	var ape: SkillData = skills.get_skill(&"great_ape")
-	assert_eq(p.special.data, ape, "Wukong's signature special")
+	assert_eq(p.skills[1].data, ape, "Wukong's signature special")
 	assert_ne(p.held_weapon().data.id, &"ape_fists")
-	assert_true(p.special.try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
+	assert_true(p.skills[1].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
 	assert_eq(p.held_weapon().data.id, &"ape_fists")
 	assert_eq(ape.form_frames().get_frame_count(&"attack"), Constants.SPRITE_ATTACK_FRAMES, "fists swing")
 	assert_false(p.character.sprite_frames().has_animation(&"attack"), "no attack strip on plain sheets")
 	var before: int = p.stats.hp + p.stats.armor
 	p.take_hit(40, false, Vector2.ZERO, 2)
 	assert_eq(before - (p.stats.hp + p.stats.armor), roundi(40 * ape.form_damage_scale))
-	p.special.tick(ape.duration + 0.01)
-	assert_false(p.special.is_transformed())
+	p.skills[1].tick(ape.duration + 0.01)
+	assert_false(p.skills[1].is_transformed())
 	assert_ne(p.held_weapon().data.id, &"ape_fists", "back to the loadout")
 
 
-func test_switching_character_keeps_a_usable_special() -> void:
-	var p: Player = _player(twinshot)
-	p.set_special(skills.get_skill(&"barrier"))
-	p.set_character(warden)
-	assert_eq(p.special.data.id, &"barrier", "Warden can use Barrier too")
-	p.set_character(flicker)
-	assert_eq(p.special.data, skills.specials_for(flicker)[0], "Flicker can't: falls back to a default")
+func test_switching_character_keeps_usable_specials() -> void:
+	var p: Player = _player(flicker)
+	assert_eq(p.skills[0].data, skills.dash(), "Dash on the skill button by default")
+	assert_eq(p.skills[1].data.id, &"shadow_clones", "signature on the special button")
+	p.set_skill(0, skills.get_skill(&"barrier"))
+	p.set_character(characters.get_character(&"wukong"))
+	assert_eq(p.skills[0].data.id, &"barrier", "generic: kept")
+	assert_eq(p.skills[1].data.id, &"great_ape", "Flicker-only: replaced by the default")
+
+
+func test_set_skill_swaps_instead_of_doubling() -> void:
+	var p: Player = _player(flicker)
+	p.set_skill(0, p.skills[1].data)
+	assert_eq(p.skills[0].data.id, &"shadow_clones")
+	assert_eq(p.skills[1].data, skills.dash())
 
 
 
@@ -222,7 +230,7 @@ func _flicker_in(world: Node2D, special: StringName, pool: ProjectilePool = null
 	var p := Player.new()
 	p.setup(1, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3, flicker)
 	world.add_child(p)
-	p.set_special(skills.get_skill(special))
+	p.set_skill(1, skills.get_skill(special))
 	return p
 
 
@@ -256,7 +264,7 @@ func test_blink_hops_and_walls_stop_it() -> void:
 	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
 	assert_gt(p.global_position.x, 100.0 + skills.get_skill(&"blink").blink_distance * 0.9, "hopped forward")
 	assert_true(p.stats.is_invulnerable())
-	p.special.reset()
+	p.skills[1].reset()
 	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
 	assert_lt(p.global_position.x, 400.0 - 10.0, "stopped at the wall")
 
@@ -282,7 +290,7 @@ func test_shadow_clones_run_out_and_stop_at_walls() -> void:
 	await wait_physics_frames(2)
 	assert_eq(p.clone_points().size(), 0)
 	_press_special(p, Vector2.RIGHT)
-	p.special.active_remaining -= 2.0  # two seconds in
+	p.skills[1].active_remaining -= 2.0  # two seconds in
 	var points: PackedVector2Array = p.clone_points()
 	assert_eq(points.size(), skills.get_skill(&"shadow_clones").clone_count)
 	for c: Vector2 in points:
@@ -303,7 +311,7 @@ func test_shadow_clones_stay_in_when_cast_from_under_a_wall() -> void:
 		p.move_and_slide()
 	assert_lt(p.global_position.y, 24.0, "feet-based collision lets the centre into the wall")
 	_press_special(p, Vector2.UP)
-	p.special.active_remaining -= 2.0
+	p.skills[1].active_remaining -= 2.0
 	for c: Vector2 in p.clone_points():
 		assert_gt(c.y, p.global_position.y - 1.0, "clones don't run up through the wall: %s" % c)
 
@@ -329,7 +337,7 @@ func test_ape_slam_lands_after_its_windup() -> void:
 	var p: Player = _player(characters.get_character(&"wukong"))
 	p.projectiles = ProjectilePool.new()
 	add_child_autofree(p.projectiles)
-	assert_true(p.special.try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
+	assert_true(p.skills[1].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
 	watch_signals(p)
 	var fire := InputFrame.new()
 	fire.fire = true

@@ -3,7 +3,7 @@ extends RefCounted
 ## All SkillData resources in res://data/skills/, keyed by id (ids go over the wire).
 
 const SKILL_DIR: String = "res://data/skills/"
-## The skill everyone has on the dash button.
+## The generic Dash (default slot-1 pick).
 const DASH_ID: StringName = &"dash"
 
 var _by_id: Dictionary[StringName, SkillData] = {}
@@ -11,7 +11,7 @@ var _by_id: Dictionary[StringName, SkillData] = {}
 static var _shared: SkillCatalog
 
 
-## One catalog for everyone (players resolve their dash / special by id from it).
+## One catalog for everyone (players resolve their skills by id from it).
 static func shared() -> SkillCatalog:
 	if _shared == null:
 		_shared = load_all()

@@ -38,7 +38,10 @@ const ARMOR_REGEN_DELAY: float = 3.0
 const ARMOR_REGEN_PER_SEC: float = 25.0
 const RESPAWN_DELAY: float = 2.0
 const RESPAWN_IFRAME_TIME: float = 1.0
-const LOADOUT_SLOTS: int = 2
+## Weapon shots spend energy; it refills at this rate.
+const ENERGY_REGEN_PER_SEC: float = 60.0
+## Special slots each fighter equips (slot 0 = skill button, slot 1 = special button).
+const SKILL_SLOTS: int = 2
 
 # --- Skills (per-character tunables are in data/characters/*.tres) ---
 const SHIELD_THICKNESS: float = 10.0
@@ -111,14 +114,6 @@ const FFA_KILL_TARGET: int = 10
 const MATCH_TIME_LIMIT: float = 180.0
 const MATCH_COUNTDOWN: float = 3.0
 const MATCH_RESULTS_TIME: float = 10.0
-
-# --- Pickups ---
-const PICKUP_RADIUS: float = 16.0
-const ENERGY_PICKUP_AMOUNT: int = 80
-const ENERGY_PICKUP_RESPAWN: float = 12.0
-const WEAPON_PICKUP_RESPAWN: float = 18.0
-## Loadout slot 0 is the free sidearm; weapon pickups never replace it.
-const SIDEARM_SLOT: int = 0
 
 # --- Simulation timing ---
 ## Fixed sim step on both client and server; every InputFrame advances the sim by exactly this.

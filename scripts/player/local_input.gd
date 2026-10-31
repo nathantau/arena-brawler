@@ -35,7 +35,6 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 	_frame.fire = fire_mouse or fire_auto
 	_frame.skill = Input.is_action_pressed(&"skill") or (touch_on and touch.skill_held)
 	_frame.special = Input.is_action_pressed(&"special") or (touch_on and touch.special_held)
-	_frame.swap = Input.is_action_pressed(&"swap") or (touch_on and touch.swap_held)
 	_update_auto_target(player)
 	if autopilot:
 		_drive_autopilot(player)

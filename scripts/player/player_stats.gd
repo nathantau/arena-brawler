@@ -1,7 +1,7 @@
 class_name PlayerStats
 extends RefCounted
 ## HP / armor / energy / i-frames. Armor absorbs damage first and regenerates after
-## Constants.ARMOR_REGEN_DELAY seconds without damage. HP never regenerates.
+## Constants.ARMOR_REGEN_DELAY seconds without damage. Energy refills constantly. HP never regenerates.
 
 var max_hp: int
 var max_armor: int
@@ -13,6 +13,8 @@ var time_since_damage: float = 0.0
 var invulnerable_time: float = 0.0
 ## Fractional armor regen carried between ticks.
 var regen_accum: float = 0.0
+## Fractional energy regen carried between ticks.
+var energy_accum: float = 0.0
 
 
 func _init(
@@ -33,6 +35,7 @@ func reset() -> void:
 	time_since_damage = Constants.ARMOR_REGEN_DELAY
 	invulnerable_time = 0.0
 	regen_accum = 0.0
+	energy_accum = 0.0
 
 
 func is_dead() -> bool:
@@ -60,6 +63,13 @@ func tick(delta: float) -> void:
 	invulnerable_time = maxf(0.0, invulnerable_time - delta)
 	if is_dead():
 		return
+	if energy < max_energy:
+		energy_accum += Constants.ENERGY_REGEN_PER_SEC * delta
+		var gained: int = int(energy_accum)
+		energy = mini(max_energy, energy + gained)
+		energy_accum -= gained
+	else:
+		energy_accum = 0.0
 	var before: float = time_since_damage
 	time_since_damage += delta
 	if time_since_damage <= Constants.ARMOR_REGEN_DELAY or armor >= max_armor:

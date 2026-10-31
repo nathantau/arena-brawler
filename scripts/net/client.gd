@@ -94,8 +94,8 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 		session.rpc_select_character.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, id))
 	arena.weapon_requested.connect(func(id: StringName) -> void:
 		session.rpc_select_weapon.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, id))
-	arena.special_requested.connect(func(id: StringName) -> void:
-		session.rpc_select_special.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, id))
+	arena.special_requested.connect(func(slot: int, id: StringName) -> void:
+		session.rpc_select_special.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, slot, id))
 	for entry: Array in roster:
 		_add_player(entry[0], entry[1], entry[2])
 		arena.scores.kills[entry[0]] = entry[3]
@@ -106,7 +106,7 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 	if wanted_weapon != &"":
 		arena.weapon_requested.emit(wanted_weapon)
 	if wanted_special != &"":
-		arena.special_requested.emit(wanted_special)
+		arena.special_requested.emit(1, wanted_special)
 	if autopilot:
 		arena.ready_requested.emit(true)
 
@@ -126,11 +126,6 @@ func on_match_state(state: Array) -> void:
 	# Autopilot re-readies after every match so soak tests loop forever.
 	if autopilot and arena.match_state.phase == MatchState.Phase.LOBBY and not arena.match_state.ready.has(local_id):
 		arena.ready_requested.emit(true)
-
-
-func on_pickups(states: Array) -> void:
-	if arena != null:
-		arena.pickups.apply_array(states)
 
 
 func on_crates(hp: PackedInt32Array) -> void:
@@ -257,10 +252,10 @@ func _add_player(id: int, color_index: int, is_bot: bool) -> void:
 		var input := LocalInput.new()
 		input.autopilot = autopilot
 		var recorder := ClientInputRecorder.new(input, _history, _send_cb)
-		local_player = arena.add_player(id, color_index, Arena.DEFAULT_LOADOUT, recorder)
+		local_player = arena.add_player(id, color_index, recorder)
 		arena.attach_local_view(local_player, input)
 	else:
-		arena.add_player(id, color_index, Arena.BOT_LOADOUT if is_bot else Arena.DEFAULT_LOADOUT, null, is_bot)
+		arena.add_player(id, color_index, null, is_bot)
 		_buffers[id] = SnapshotBuffer.new()
 
 

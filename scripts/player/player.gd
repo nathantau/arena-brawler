@@ -12,11 +12,9 @@ signal skill_used(user: Player, skill: SkillData)
 ## Layout of capture_state() / apply_state() arrays sent in snapshots.
 enum StateField {
 	ID, POSITION, VELOCITY, FACING,
-	HP, ARMOR, ENERGY, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
-	CHARACTER, DASH_COOLDOWN, DASH_ACTIVE, DASH_DIRECTION,
-	SPECIAL_ID, SPECIAL_COOLDOWN, SPECIAL_ACTIVE, SPECIAL_DIRECTION, SPECIAL_ANCHOR, SPECIAL_WEAPON_COOLDOWN,
-	ACTIVE_SLOT, WEAPON_IDS, WEAPON_COOLDOWNS,
-	PREV_DASH, PREV_SPECIAL, PREV_SWAP, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ,
+	HP, ARMOR, ENERGY, ENERGY_ACCUM, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
+	CHARACTER, SKILL_IDS, SKILL_COOLDOWNS, SKILL_ACTIVE, SKILL_DIRECTIONS, SKILL_ANCHORS, SKILL_WEAPON_COOLDOWNS,
+	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ,
 	COUNT,
 }
 
@@ -67,14 +65,15 @@ var is_bot: bool = false
 var frozen: bool = false
 var character: CharacterData
 var stats := PlayerStats.new()
-var loadout: Loadout
-## Loadout restored on every respawn (pickups are lost on death).
-var default_weapons: Array[WeaponData] = []
-## Picked in the loading room: carried next to the signature weapon from every spawn.
-var starting_weapon: WeaponData
-## The shared Dash and the special picked in the loading room.
-var dash: CharacterSkill
-var special: CharacterSkill
+## The one weapon carried (picked in the loading room from the character's options, the signature by default).
+## It costs energy per shot; energy refills over time.
+var weapon: WeaponState
+var chosen_weapon: WeaponData
+## Used when the character has no signature weapon (setup's list, e.g. tests and bots).
+var fallback_weapon: WeaponData
+## The two specials picked in the loading room (the character's own or generic ones, Dash among them): the first
+## special button (InputFrame.skill) fires slot 0, the second (InputFrame.special) slot 1.
+var skills: Array[CharacterSkill] = []
 var facing: Vector2 = Vector2.RIGHT
 ## Null for client-side remote players (they are positioned by interpolation).
 var controller: PlayerController
@@ -88,9 +87,7 @@ var visual_offset: Vector2 = Vector2.ZERO
 
 var _shape: CollisionShape2D
 var _shield := ShieldWall.new()
-var _prev_dash: bool = false
-var _prev_special: bool = false
-var _prev_swap: bool = false
+var _prev_skills: Array[bool] = [false, false]
 var _hit_flash: float = 0.0
 ## Attack animation time left, and its full length (depends on the weapon used).
 var _recoil: float = 0.0
@@ -114,8 +111,7 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	player_id = id
 	color_index = p_color_index
 	display_color = color
-	default_weapons = weapons
-	loadout = Loadout.new(weapons)
+	fallback_weapon = weapons[0] if not weapons.is_empty() else null
 	controller = ctrl
 	projectiles = pool
 	match_seed = p_match_seed
@@ -142,39 +138,56 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	set_character(p_character)
 
 
-## Switch character (lobby pick or a snapshot saying so): new stat maxes, fresh skills. Keeps
-## the picked special and starting weapon if the new character can use them.
+## Switch character (lobby pick or a snapshot saying so): new stat maxes, fresh skills. Keeps the picked specials
+## and weapon if the new character can use them.
 func set_character(data: CharacterData) -> void:
 	character = data
 	stats = PlayerStats.new(data.max_hp, data.max_armor, data.max_energy)
-	dash = CharacterSkill.new(SkillCatalog.shared().dash())
-	var keep: SkillData = special.data if special != null and data.can_use_skill(special.data) else null
-	set_special(keep if keep != null else SkillCatalog.shared().specials_for(data)[0])
+	var defaults: Array[SkillData] = default_skills(data)
+	var kept: Array[SkillData] = []
+	for i: int in Constants.SKILL_SLOTS:
+		var old: SkillData = skills[i].data if i < skills.size() else null
+		kept.append(old if old != null and data.can_use_skill(old) else defaults[i])
+	if kept[0] == kept[1]:
+		kept[1] = defaults[1] if defaults[1] != kept[0] else defaults[0]
+	skills.clear()
+	for sd: SkillData in kept:
+		skills.append(CharacterSkill.new(sd))
+	_shield.sync(_shield_slot(), dead)
 	_sprite.sprite_frames = data.sprite_frames()
 	_sprite.play(&"idle")
-	if starting_weapon != null and not data.can_use(starting_weapon):
-		starting_weapon = null
-	_reset_loadout()
+	if chosen_weapon != null and not data.can_use(chosen_weapon) and chosen_weapon != data.signature_weapon:
+		chosen_weapon = null
+	_reset_weapon()
 
 
-func set_special(data: SkillData) -> void:
-	special = CharacterSkill.new(data)
-	_shield.sync(special, dead)
+## A fresh pick: Dash on the skill button, the character's signature special (or its next one) on the special button.
+static func default_skills(data: CharacterData) -> Array[SkillData]:
+	var pool: Array[SkillData] = SkillCatalog.shared().specials_for(data)
+	var dash: SkillData = SkillCatalog.shared().dash()
+	return [dash, pool[0] if pool[0] != dash else pool[1]]
 
 
-func set_starting_weapon(weapon: WeaponData) -> void:
-	starting_weapon = weapon
-	_reset_loadout()
+## Put `data` in skill slot `slot`; if the other slot already has it, the two swap.
+func set_skill(slot: int, data: SkillData) -> void:
+	var other: int = 1 - slot
+	var old: SkillData = skills[slot].data
+	if skills[other].data == data:
+		skills[other] = CharacterSkill.new(old)
+	skills[slot] = CharacterSkill.new(data)
+	_shield.sync(_shield_slot(), dead)
 
 
-## Bots keep the loadout they were set up with.
-func _reset_loadout() -> void:
-	if is_bot or character.signature_weapon == null:
-		return
-	default_weapons = [character.signature_weapon]
-	if starting_weapon != null:
-		default_weapons.append(starting_weapon)
-	loadout = Loadout.new(default_weapons)
+func set_weapon(w: WeaponData) -> void:
+	chosen_weapon = w
+	_reset_weapon()
+
+
+func _reset_weapon() -> void:
+	var w: WeaponData = chosen_weapon
+	if w == null:
+		w = character.signature_weapon if character.signature_weapon != null else fallback_weapon
+	weapon = WeaponState.new(w)
 
 
 func _physics_process(delta: float) -> void:
@@ -198,10 +211,11 @@ func _process(delta: float) -> void:
 		anim = &"hit"
 	elif velocity.length() > Constants.SPRITE_WALK_MIN_SPEED:
 		anim = &"walk"
-	var frames: SpriteFrames = special.data.form_frames() if special.is_transformed() else character.sprite_frames()
+	var tf: CharacterSkill = form()
+	var frames: SpriteFrames = tf.data.form_frames() if tf != null else character.sprite_frames()
 	if _sprite.sprite_frames != frames:
 		_sprite.sprite_frames = frames
-		_sprite.scale = Vector2.ONE * Constants.SPRITE_SCALE * (special.data.form_scale if special.is_transformed() else 1.0)
+		_sprite.scale = Vector2.ONE * Constants.SPRITE_SCALE * (tf.data.form_scale if tf != null else 1.0)
 		_sprite.play(anim)
 	if _sprite.animation != anim:
 		_sprite.play(anim)
@@ -221,33 +235,28 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if dead:
 		return
 	stats.tick(delta)
-	dash.tick(delta)
-	special.tick(delta)
-	loadout.tick(delta)
+	for slot: CharacterSkill in skills:
+		slot.tick(delta)
+	weapon.tick(delta)
+	var pressed: Array[bool] = [input.skill, input.special]
 	if frozen:
 		# Keep edge state current so a button held through the countdown doesn't fire on release.
-		_prev_swap = input.swap
-		_prev_dash = input.skill
-		_prev_special = input.special
+		_prev_skills = pressed
 		velocity = Vector2.ZERO
-		_shield.sync(special, dead)
+		_shield.sync(_shield_slot(), dead)
 		return
 
-	if input.swap and not _prev_swap:
-		loadout.swap()
-	if input.skill and not _prev_dash:
-		_activate(dash, input, replay)
-	if input.special and not _prev_special:
-		_activate(special, input, replay)
-	_prev_swap = input.swap
-	_prev_dash = input.skill
-	_prev_special = input.special
+	for i: int in Constants.SKILL_SLOTS:
+		if pressed[i] and not _prev_skills[i]:
+			_activate(skills[i], input, replay)
+	_prev_skills = pressed
 
-	var mover: CharacterSkill = special if special.is_dashing() else dash
-	var speed: float = character.move_speed * (special.data.form_speed_scale if special.is_transformed() else 1.0)
-	velocity = MovementSim.step_velocity(velocity, input.move_vec, mover, speed, delta)
+	var mover: CharacterSkill = active_skill(SkillData.Kind.DASH)
+	var tf: CharacterSkill = form()
+	var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0)
+	velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed, delta)
 	move_and_slide()
-	_shield.sync(special, dead)
+	_shield.sync(_shield_slot(), dead)
 
 	if input.aim_vec.length_squared() > 0.0:
 		facing = input.aim_vec.normalized()
@@ -278,26 +287,53 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 		skill_used.emit(self, slot.data)
 
 
+## The first skill slot of `kind` that is active right now, or null.
+func active_skill(kind: SkillData.Kind) -> CharacterSkill:
+	for slot: CharacterSkill in skills:
+		if slot.data.kind == kind and slot.is_active():
+			return slot
+	return null
+
+
+## The transformation in progress, or null.
+func form() -> CharacterSkill:
+	return active_skill(SkillData.Kind.TRANSFORM)
+
+
+func is_transformed() -> bool:
+	return form() != null
+
+
+## The barrier slot (it owns the ShieldWall); slot 0 when neither special is a barrier.
+func _shield_slot() -> CharacterSkill:
+	for slot: CharacterSkill in skills:
+		if slot.data.kind == SkillData.Kind.SHIELD:
+			return slot
+	return skills[0]
+
+
 ## Inside your own smoke: enemy auto-aim and bots can't lock on.
 func is_hidden() -> bool:
-	return special.is_smoking() and global_position.distance_to(special.anchor) <= special.data.smoke_radius
+	var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
+	return smoke != null and global_position.distance_to(smoke.anchor) <= smoke.data.smoke_radius
 
 
 ## Where this player's shadow clones are right now (empty unless cloning). A pure function of the
 ## synced special state and the walls, so every peer (and the server's bots) sees the same clones.
 func clone_points() -> PackedVector2Array:
 	var out := PackedVector2Array()
-	if dead or not special.is_cloning():
+	var clones: CharacterSkill = active_skill(SkillData.Kind.CLONES)
+	if dead or clones == null:
 		return out
-	var d: SkillData = special.data
-	var t: float = maxf(0.0, special.elapsed() - CLONE_EMERGE_TIME)
+	var d: SkillData = clones.data
+	var t: float = maxf(0.0, clones.elapsed() - CLONE_EMERGE_TIME)
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	for k: int in d.clone_count:
-		var angle: float = special.direction.angle() + deg_to_rad(d.clone_spread_deg) * (k - (d.clone_count - 1) * 0.5)
+		var angle: float = clones.direction.angle() + deg_to_rad(d.clone_spread_deg) * (k - (d.clone_count - 1) * 0.5)
 		var run: Vector2 = Vector2.RIGHT.rotated(angle)
-		var target: Vector2 = special.anchor + run * minf(CLONE_START_DISTANCE + t * d.clone_speed, d.clone_reach) \
+		var target: Vector2 = clones.anchor + run * minf(CLONE_START_DISTANCE + t * d.clone_speed, d.clone_reach) \
 			+ run.orthogonal() * sin(t * CLONE_WOBBLE_SPEED) * CLONE_WOBBLE_PX
-		_clone_query.from = special.anchor
+		_clone_query.from = clones.anchor
 		_clone_query.to = target
 		var hit: Dictionary = space.intersect_ray(_clone_query)
 		if not hit.is_empty():
@@ -307,12 +343,13 @@ func clone_points() -> PackedVector2Array:
 
 
 func is_dashing() -> bool:
-	return dash.is_dashing() or special.is_dashing()
+	return active_skill(SkillData.Kind.DASH) != null
 
 
-## The weapon FIRE uses: the transformed form's own weapon, else the loadout's active one.
+## The weapon FIRE uses: the transformed form's own weapon, else the one carried.
 func held_weapon() -> WeaponState:
-	return special.form_weapon if special.is_transformed() else loadout.active()
+	var tf: CharacterSkill = form()
+	return tf.form_weapon if tf != null else weapon
 
 
 ## Dash goes where you're moving (else where you face); the barrier goes where you aim.
@@ -411,8 +448,9 @@ func can_be_hit() -> bool:
 
 ## Authoritative damage entry point (offline / server only). Returns damage dealt.
 func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int) -> int:
-	if special.is_transformed():
-		damage = maxi(1, roundi(damage * special.data.form_damage_scale))
+	var tf: CharacterSkill = form()
+	if tf != null:
+		damage = maxi(1, roundi(damage * tf.data.form_damage_scale))
 	var dealt: int = stats.apply_damage(damage)
 	if dealt <= 0:
 		return 0
@@ -435,9 +473,9 @@ func respawn(at: Vector2) -> void:
 	velocity = Vector2.ZERO
 	stats.reset()
 	stats.invulnerable_time = Constants.RESPAWN_IFRAME_TIME
-	dash.reset()
-	special.reset()
-	loadout = Loadout.new(default_weapons)
+	for slot: CharacterSkill in skills:
+		slot.reset()
+	_reset_weapon()
 	_set_dead(false)
 
 
@@ -459,7 +497,7 @@ func _set_dead(value: bool) -> void:
 		_spawn_corpse()
 	visible = not value
 	_shape.set_deferred("disabled", value)
-	_shield.sync(special, dead)
+	_shield.sync(_shield_slot(), dead)
 
 
 ## Plays the current sheet's (form's, if transformed) "die" animation where we fell, then frees itself.
@@ -485,25 +523,33 @@ func capture_state() -> Array:
 	s[StateField.HP] = stats.hp
 	s[StateField.ARMOR] = stats.armor
 	s[StateField.ENERGY] = stats.energy
+	s[StateField.ENERGY_ACCUM] = stats.energy_accum
 	s[StateField.TIME_SINCE_DAMAGE] = stats.time_since_damage
 	s[StateField.REGEN_ACCUM] = stats.regen_accum
 	s[StateField.INVULNERABLE] = stats.invulnerable_time
 	s[StateField.CHARACTER] = character.id
-	s[StateField.DASH_COOLDOWN] = dash.cooldown_remaining
-	s[StateField.DASH_ACTIVE] = dash.active_remaining
-	s[StateField.DASH_DIRECTION] = dash.direction
-	s[StateField.SPECIAL_ID] = special.data.id
-	s[StateField.SPECIAL_COOLDOWN] = special.cooldown_remaining
-	s[StateField.SPECIAL_ACTIVE] = special.active_remaining
-	s[StateField.SPECIAL_DIRECTION] = special.direction
-	s[StateField.SPECIAL_ANCHOR] = special.anchor
-	s[StateField.SPECIAL_WEAPON_COOLDOWN] = special.form_weapon.cooldown if special.form_weapon != null else 0.0
-	s[StateField.ACTIVE_SLOT] = loadout.active_index
-	s[StateField.WEAPON_IDS] = loadout.weapon_ids()
-	s[StateField.WEAPON_COOLDOWNS] = loadout.cooldowns()
-	s[StateField.PREV_DASH] = _prev_dash
-	s[StateField.PREV_SPECIAL] = _prev_special
-	s[StateField.PREV_SWAP] = _prev_swap
+	var ids: Array[StringName] = []
+	var cds: Array[float] = []
+	var act: Array[float] = []
+	var dirs: Array[Vector2] = []
+	var anchors: Array[Vector2] = []
+	var form_cds: Array[float] = []
+	for slot: CharacterSkill in skills:
+		ids.append(slot.data.id)
+		cds.append(slot.cooldown_remaining)
+		act.append(slot.active_remaining)
+		dirs.append(slot.direction)
+		anchors.append(slot.anchor)
+		form_cds.append(slot.form_weapon.cooldown if slot.form_weapon != null else 0.0)
+	s[StateField.SKILL_IDS] = ids
+	s[StateField.SKILL_COOLDOWNS] = cds
+	s[StateField.SKILL_ACTIVE] = act
+	s[StateField.SKILL_DIRECTIONS] = dirs
+	s[StateField.SKILL_ANCHORS] = anchors
+	s[StateField.SKILL_WEAPON_COOLDOWNS] = form_cds
+	s[StateField.WEAPON_ID] = weapon.data.id
+	s[StateField.WEAPON_COOLDOWN] = weapon.cooldown
+	s[StateField.PREV_SKILLS] = _prev_skills.duplicate()
 	s[StateField.DEAD] = dead
 	s[StateField.RESPAWN_TIMER] = respawn_timer
 	s[StateField.LAST_INPUT_SEQ] = last_input_seq
@@ -525,30 +571,36 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	stats.hp = s[StateField.HP]
 	stats.armor = s[StateField.ARMOR]
 	stats.energy = s[StateField.ENERGY]
+	stats.energy_accum = s[StateField.ENERGY_ACCUM]
 	stats.time_since_damage = s[StateField.TIME_SINCE_DAMAGE]
 	stats.regen_accum = s[StateField.REGEN_ACCUM]
 	stats.invulnerable_time = s[StateField.INVULNERABLE]
-	if s[StateField.SPECIAL_ID] != special.data.id:
-		var sd: SkillData = SkillCatalog.shared().get_skill(s[StateField.SPECIAL_ID])
-		if sd != null:
-			set_special(sd)
-	dash.cooldown_remaining = s[StateField.DASH_COOLDOWN]
-	dash.active_remaining = s[StateField.DASH_ACTIVE]
-	dash.direction = s[StateField.DASH_DIRECTION]
-	special.cooldown_remaining = s[StateField.SPECIAL_COOLDOWN]
-	special.active_remaining = s[StateField.SPECIAL_ACTIVE]
-	special.direction = s[StateField.SPECIAL_DIRECTION]
-	special.anchor = s[StateField.SPECIAL_ANCHOR]
-	if special.form_weapon != null:
-		special.form_weapon.cooldown = s[StateField.SPECIAL_WEAPON_COOLDOWN]
-	loadout.sync(s[StateField.WEAPON_IDS], s[StateField.WEAPON_COOLDOWNS], s[StateField.ACTIVE_SLOT], catalog)
-	_prev_dash = s[StateField.PREV_DASH]
-	_prev_special = s[StateField.PREV_SPECIAL]
-	_prev_swap = s[StateField.PREV_SWAP]
+	var ids: Array = s[StateField.SKILL_IDS]
+	for i: int in mini(ids.size(), skills.size()):
+		if ids[i] != skills[i].data.id:
+			var sd: SkillData = SkillCatalog.shared().get_skill(ids[i])
+			if sd != null:
+				skills[i] = CharacterSkill.new(sd)
+		var slot: CharacterSkill = skills[i]
+		slot.cooldown_remaining = s[StateField.SKILL_COOLDOWNS][i]
+		slot.active_remaining = s[StateField.SKILL_ACTIVE][i]
+		slot.direction = s[StateField.SKILL_DIRECTIONS][i]
+		slot.anchor = s[StateField.SKILL_ANCHORS][i]
+		if slot.form_weapon != null:
+			slot.form_weapon.cooldown = s[StateField.SKILL_WEAPON_COOLDOWNS][i]
+	if s[StateField.WEAPON_ID] != weapon.data.id:
+		var w: WeaponData = catalog.get_weapon(s[StateField.WEAPON_ID])
+		if w != null:
+			chosen_weapon = w
+			weapon = WeaponState.new(w)
+	weapon.cooldown = s[StateField.WEAPON_COOLDOWN]
+	var prev: Array = s[StateField.PREV_SKILLS]
+	for i: int in mini(prev.size(), _prev_skills.size()):
+		_prev_skills[i] = prev[i]
 	respawn_timer = s[StateField.RESPAWN_TIMER]
 	last_input_seq = s[StateField.LAST_INPUT_SEQ]
 	_set_dead(s[StateField.DEAD])
-	_shield.sync(special, dead)
+	_shield.sync(_shield_slot(), dead)
 	return true
 
 

@@ -12,9 +12,9 @@ extends Resource
 ## Weapon and special classes this character can use (see WeaponData.tags / SkillData.tags);
 ## include the character's own id.
 @export var weapon_tags: Array[StringName] = []
-## Starting sidearm, never dropped (slot 0). Null = the shared default loadout.
+## Default weapon (and the first one offered). Null = Arena.FALLBACK_WEAPON.
 @export var signature_weapon: WeaponData
-## Default special. Null = the first special the character can use.
+## Default slot-0 special. Null = the first special the character can use.
 @export var signature_skill: SkillData
 ## false = benched: not offered in menus, the loading room or to bots (still loadable by id, e.g. --character).
 @export var in_rotation: bool = true

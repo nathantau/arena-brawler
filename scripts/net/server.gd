@@ -33,7 +33,6 @@ func start(port: int, bot_count: int) -> Error:
 	arena.shot_fired.connect(_on_shot)
 	arena.player_hit.connect(_on_hit)
 	arena.match_updated.connect(_on_match_updated)
-	arena.pickups.changed.connect(_on_pickups_changed)
 	arena.crates.changed.connect(_on_crates_changed)
 	for i: int in bot_count:
 		arena.add_bot(Constants.BOT_ID_BASE + i, arena.free_color_index())
@@ -91,10 +90,10 @@ func on_select_character(peer_id: int, id: StringName) -> void:
 		arena.select_character(p, id)
 
 
-func on_select_special(peer_id: int, id: StringName) -> void:
+func on_select_special(peer_id: int, slot: int, id: StringName) -> void:
 	var p: Player = arena.get_player(peer_id)
 	if p != null:
-		arena.select_special(p, id)
+		arena.select_special(p, slot, id)
 
 
 func on_select_weapon(peer_id: int, id: StringName) -> void:
@@ -107,10 +106,9 @@ func _on_peer_connected(id: int) -> void:
 	NetSession.disable_throttle((session.multiplayer.multiplayer_peer as ENetMultiplayerPeer).get_peer(id))
 	var queue := NetInputQueue.new()
 	_queues[id] = queue
-	var p: Player = arena.add_player(id, arena.free_color_index(), Arena.DEFAULT_LOADOUT, queue)
+	var p: Player = arena.add_player(id, arena.free_color_index(), queue)
 	session.rpc_welcome.rpc_id(id, id, arena.match_seed, tick, _roster())
 	session.rpc_match_state.rpc_id(id, arena.match_state.to_array())
-	session.rpc_pickups.rpc_id(id, arena.pickups.to_array())
 	session.rpc_crates.rpc_id(id, arena.crates.to_array())
 	for peer: int in session.multiplayer.get_peers():
 		if peer != id:
@@ -152,17 +150,6 @@ func _on_match_updated() -> void:
 		var st: MatchState = arena.match_state
 		print("[server] match %s %s t=%.1f participants=%s ready=%s %s" % [MatchState.Phase.keys()[st.phase],
 			MatchRules.MODE_NAMES[st.mode], st.time_left, st.participants, st.ready, st.blocker])
-
-
-func _on_pickups_changed() -> void:
-	if not session.multiplayer.get_peers().is_empty():
-		session.rpc_pickups.rpc(arena.pickups.to_array())
-	if debug:
-		var available: int = 0
-		for s: PickupField.Spot in arena.pickups.spots:
-			if s.available:
-				available += 1
-		print("[server] pickups %d/%d available" % [available, arena.pickups.spots.size()])
 
 
 func _on_crates_changed() -> void:

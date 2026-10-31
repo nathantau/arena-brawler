@@ -20,7 +20,7 @@ func test_spawns_clear_of_feet_strips() -> void:
 func test_player_stops_with_feet_at_wall_top() -> void:
 	var arena := Arena.new(Arena.Mode.OFFLINE)
 	add_child_autofree(arena)
-	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	var p: Player = arena.add_player(1, 0, null)
 	var wall: Rect2 = arena.map.walls[arena.map.walls.size() - 1]  # bottom border
 	p.global_position = Vector2(wall.get_center().x, wall.position.y - 100.0)
 	await wait_physics_frames(2)
@@ -34,7 +34,7 @@ func test_player_stops_with_feet_at_wall_top() -> void:
 func test_fits_through_one_tile_gap() -> void:
 	var arena := Arena.new(Arena.Mode.OFFLINE)
 	add_child_autofree(arena)
-	var p: Player = arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, null)
+	var p: Player = arena.add_player(1, 0, null)
 	var t: float = Constants.TILE_SIZE
 	# a one-tile corridor running sideways: a wall above, a wall below, one floor row between
 	var corridor_y: float = -2000.0

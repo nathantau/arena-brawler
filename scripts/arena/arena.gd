@@ -1,8 +1,8 @@
 class_name Arena
 extends Node2D
-## The game world: map, players, projectiles, pickups, crates, scoring, respawns and the
+## The game world: map, players, projectiles, crates, scoring, respawns and the
 ## match loop. Same class in every mode: OFFLINE (local vs bots), SERVER (authoritative,
-## headless) and CLIENT (predicted view; match state, pickups and crates mirrored from the
+## headless) and CLIENT (predicted view; match state and crates mirrored from the
 ## server). Effects, sound and camera shake exist only where there's a local view.
 
 signal kill_registered(killer_id: int, victim_id: int)
@@ -15,7 +15,7 @@ signal mode_requested(mode: MatchRules.Mode)
 signal arena_requested(index: int)
 signal character_requested(id: StringName)
 signal weapon_requested(id: StringName)
-signal special_requested(id: StringName)
+signal special_requested(slot: int, id: StringName)
 ## The local player chose Leave (or Restart, offline) in the pause menu.
 signal leave_requested(restart: bool)
 signal shot_fired(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName)
@@ -26,9 +26,8 @@ signal hit_landed(victim_id: int, damage: int, crit: bool, at: Vector2)
 
 enum Mode { OFFLINE, SERVER, CLIENT }
 
-## Everyone starts with just the free sidearm; better guns come from pickups.
-const DEFAULT_LOADOUT: Array[StringName] = [&"pistol"]
-const BOT_LOADOUT: Array[StringName] = [&"bot_blaster"]
+## Only used by characters without a signature weapon.
+const FALLBACK_WEAPON: StringName = &"pistol"
 const PLAYER_COLORS: Array[Color] = [
 	Color(0.35, 0.75, 1.0), Color(0.95, 0.45, 0.4), Color(0.75, 0.5, 0.95),
 	Color(0.5, 0.9, 0.45), Color(1.0, 0.8, 0.3), Color(0.3, 0.9, 0.85),
@@ -52,7 +51,6 @@ const BURST_DEATH_COUNT: int = 28
 const BURST_DEATH_SPEED: float = 320.0
 const BURST_EXPLOSION_COUNT: int = 30
 const BURST_CRATE_COUNT: int = 16
-const BURST_PICKUP_COUNT: int = 12
 const BURST_SKILL_COUNT: int = 10
 const BURST_MUZZLE_COUNT: int = 4
 const BURST_MUZZLE_SPEED: float = 260.0
@@ -69,7 +67,6 @@ var map: ArenaMap
 var players: Array[Player] = []
 var local_player: Player
 var projectiles: ProjectilePool
-var pickups: PickupField
 var crates: CrateField
 var layout_index: int = -1
 ## Runs the match (null on clients, where the server does); match_state is always set.
@@ -105,9 +102,6 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 	projectiles.authoritative = mode != Mode.CLIENT
 	projectiles.targets = players
 	projectiles.z_index = PROJECTILE_Z
-	pickups = PickupField.new()
-	pickups.name = "Pickups"
-	pickups.authoritative = mode != Mode.CLIENT
 	crates = CrateField.new()
 	crates.name = "Crates"
 	if mode == Mode.CLIENT:
@@ -130,9 +124,9 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 		weapon_requested.connect(func(id: StringName) -> void:
 			if local_player != null:
 				select_weapon(local_player, id))
-		special_requested.connect(func(id: StringName) -> void:
+		special_requested.connect(func(slot: int, id: StringName) -> void:
 			if local_player != null:
-				select_special(local_player, id))
+				select_special(local_player, slot, id))
 
 
 func _ready() -> void:
@@ -140,13 +134,12 @@ func _ready() -> void:
 	_floor.z_index = FLOOR_Z
 	add_child(_floor)
 	add_child(crates)
-	add_child(pickups)
 	add_child(projectiles)
 	projectiles.player_hit.connect(_on_projectile_hit)
 	_load_layout(match_state.arena_index)
 
 
-## Build walls, crates and pickups for a layout. Authoritative callers then respawn players.
+## Build walls and crates for a layout. Authoritative callers then respawn players.
 func _load_layout(index: int) -> void:
 	layout_index = index
 	map = ArenaMap.parse(ArenaLayouts.get_layout(index), Constants.TILE_SIZE)
@@ -156,11 +149,10 @@ func _load_layout(index: int) -> void:
 	_build_walls()
 	_floor.setup(map, ArenaLayouts.THEMES[index])
 	crates.setup(map, _floor.tiles)
-	pickups.setup(map, catalog, catalog.pickup_ids(), match_seed)
 	projectiles.clear()
 
 
-func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl: PlayerController,
+func add_player(id: int, color_index: int, ctrl: PlayerController,
 		is_bot: bool = false) -> Player:
 	var p := Player.new()
 	p.name = "Player%d" % id
@@ -169,7 +161,7 @@ func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl:
 	var character: CharacterData = characters.default_character()
 	if is_bot:
 		character = characters.ordered[id % characters.ordered.size()]
-	p.setup(id, color_index, color, catalog.resolve(loadout_ids), ctrl, projectiles, match_seed, character)
+	p.setup(id, color_index, color, catalog.resolve([FALLBACK_WEAPON]), ctrl, projectiles, match_seed, character)
 	add_child(p)
 	p.global_position = _pick_spawn_for(p)
 	p.frozen = match_state.inputs_locked()
@@ -189,7 +181,7 @@ func add_player(id: int, color_index: int, loadout_ids: Array[StringName], ctrl:
 
 
 func add_bot(id: int, color_index: int) -> Player:
-	return add_player(id, color_index, BOT_LOADOUT, BotBrain.new(self, match_seed + id), true)
+	return add_player(id, color_index, BotBrain.new(self, match_seed + id), true)
 
 
 func remove_player(id: int) -> void:
@@ -234,29 +226,30 @@ func select_character(p: Player, id: StringName) -> void:
 	match_updated.emit()
 
 
-## Lobby only (authoritative): the weapon a player starts with besides their signature one.
-## Must be a pickup weapon their character can use.
+## Lobby only (authoritative): the one weapon a player fights with. Must be one of weapons_for(character).
 func select_weapon(p: Player, id: StringName) -> void:
 	var w: WeaponData = catalog.get_weapon(id)
-	if w == null or not w.pickup or not p.character.can_use(w) or match_state.phase != MatchState.Phase.LOBBY:
+	if w == null or not weapons_for(p.character).has(w) or match_state.phase != MatchState.Phase.LOBBY:
 		return
-	p.set_starting_weapon(w)
+	p.set_weapon(w)
 	match_updated.emit()
 
 
-## Lobby only (authoritative): the special a player brings (next to everyone's Dash).
-## Must be a special their character can use.
-func select_special(p: Player, id: StringName) -> void:
+## Lobby only (authoritative): the special in skill slot `slot`. Must be a special their character can use.
+func select_special(p: Player, slot: int, id: StringName) -> void:
 	var s: SkillData = SkillCatalog.shared().get_skill(id)
-	if s == null or not s.special or not p.character.can_use_skill(s) or match_state.phase != MatchState.Phase.LOBBY:
+	if s == null or not s.special or not p.character.can_use_skill(s) or slot < 0 or slot >= Constants.SKILL_SLOTS \
+			or match_state.phase != MatchState.Phase.LOBBY:
 		return
-	p.set_special(s)
+	p.set_skill(slot, s)
 	match_updated.emit()
 
 
-## Weapons `c` may start with, in catalog order (what the loading room offers).
-func starting_weapons_for(c: CharacterData) -> Array[WeaponData]:
+## Weapons `c` may fight with: its signature, then the shared weapons it can use in catalog order.
+func weapons_for(c: CharacterData) -> Array[WeaponData]:
 	var out: Array[WeaponData] = []
+	if c.signature_weapon != null:
+		out.append(c.signature_weapon)
 	for id: StringName in catalog.pickup_ids():
 		if c.can_use(catalog.get_weapon(id)):
 			out.append(catalog.get_weapon(id))
@@ -301,7 +294,6 @@ func free_color_index() -> int:
 func attach_local_view(p: Player, input: LocalInput) -> void:
 	local_player = p
 	p.is_local = true
-	pickups.viewer = p
 
 	camera = Camera2D.new()
 	camera.zoom = Vector2.ONE * Constants.CAMERA_ZOOM
@@ -371,9 +363,6 @@ func _attach_effects() -> void:
 	projectiles.exploded.connect(_fx_explosion)
 	hit_landed.connect(_fx_hit)
 	kill_registered.connect(_fx_kill)
-	pickups.collected.connect(func(at: Vector2, _kind: PickupField.Kind) -> void:
-		effects.burst(at, Color.WHITE, BURST_PICKUP_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE, PARTICLE_LIFE)
-		sfx.play(&"pickup", at))
 	crates.destroyed.connect(func(at: Vector2) -> void:
 		effects.burst(at, CRATE_DEBRIS_COLOR, BURST_CRATE_COUNT, BURST_DEATH_SPEED, PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 1.5)
 		sfx.play(&"crate", at))
@@ -450,7 +439,6 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if mode != Mode.CLIENT:
 		referee.tick(delta, _human_ids, _bot_ids, scores)
-		pickups.tick(delta, players)
 		_tick_respawns(delta)
 	elif match_state.phase != MatchState.Phase.LOBBY:
 		# Display only; the server sends the real value on every phase change.
@@ -476,7 +464,6 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 			scores.reset()
 			projectiles.clear()
 			if mode != Mode.CLIENT:
-				pickups.reset()
 				crates.reset()
 				_place_participants()
 		MatchState.Phase.RESULTS:

@@ -39,6 +39,7 @@ var _clones: Array[AnimatedSprite2D] = []
 var _points := PackedVector2Array()
 var _owner: Player
 var _smoke_t: float = -1.0
+var _smoke: CharacterSkill
 var _poofs: Array[Poof] = []
 var _was_cloning: bool = false
 var _was_transformed: bool = false
@@ -61,7 +62,10 @@ func _init() -> void:
 func sync(p: Player) -> void:
 	_owner = p
 	_points = p.clone_points()
-	var cloning: bool = p.special.is_cloning()
+	var clones: CharacterSkill = _slot(p, SkillData.Kind.CLONES)
+	var smoke: CharacterSkill = _slot(p, SkillData.Kind.SMOKE)
+	_smoke = smoke
+	var cloning: bool = clones != null and clones.is_cloning()
 	if cloning and not _was_cloning:
 		for at: Vector2 in _points:
 			_poof(at, POOF_BIG, CLONE_POOF_TIME)
@@ -71,7 +75,7 @@ func sync(p: Player) -> void:
 	_was_cloning = cloning
 	if cloning:
 		_last_points = _points
-	var transformed: bool = p.special.is_transformed()
+	var transformed: bool = p.is_transformed()
 	if transformed and not _was_transformed:
 		_start_morph(p, false)
 		if _morph_t < 0.0:
@@ -90,8 +94,10 @@ func sync(p: Player) -> void:
 		c.show_behind_parent = true
 		add_child(c)
 		_clones.append(c)
-	var alpha: float = minf(clampf(p.special.active_remaining / FADE_TIME, 0.0, 1.0),
-		clampf((p.special.elapsed() - APPEAR_DELAY) / APPEAR_TIME, 0.0, 1.0))
+	var alpha: float = 0.0
+	if cloning:
+		alpha = minf(clampf(clones.active_remaining / FADE_TIME, 0.0, 1.0),
+			clampf((clones.elapsed() - APPEAR_DELAY) / APPEAR_TIME, 0.0, 1.0))
 	for i: int in _clones.size():
 		var c: AnimatedSprite2D = _clones[i]
 		c.visible = i < _points.size()
@@ -102,9 +108,9 @@ func sync(p: Player) -> void:
 		if c.animation != &"walk" or not c.is_playing():
 			c.play(&"walk")
 		c.position = _points[i]
-		c.flip_h = _points[i].x < p.special.anchor.x
+		c.flip_h = _points[i].x < clones.anchor.x
 		c.modulate.a = alpha
-	_smoke_t = p.special.elapsed() if p.special.is_smoking() else -1.0
+	_smoke_t = smoke.elapsed() if smoke != null and smoke.is_smoking() else -1.0
 	queue_redraw()
 
 
@@ -118,13 +124,22 @@ func _process(delta: float) -> void:
 			_morph_t = -1.0
 
 
+## The owner's first skill slot of `kind` (active or not), or null.
+static func _slot(p: Player, kind: SkillData.Kind) -> CharacterSkill:
+	for slot: CharacterSkill in p.skills:
+		if slot.data.kind == kind:
+			return slot
+	return null
+
+
 ## The owner's sprite is hidden while this plays (Player).
 func is_morphing() -> bool:
 	return _morph_t >= 0.0
 
 
 func _start_morph(p: Player, back: bool) -> void:
-	_morph_art = p.special.data.form_morph
+	var form: CharacterSkill = _slot(p, SkillData.Kind.TRANSFORM)
+	_morph_art = form.data.form_morph if form != null else null
 	if _morph_art == null:
 		return
 	_morph_back = back
@@ -157,9 +172,9 @@ func _draw() -> void:
 	if _smoke_t >= 0.0:
 		var frame: int = int(_smoke_t * SMOKE_FPS) % (SMOKE_ART.get_width() / SMOKE_ART.get_height())
 		var swell: float = lerpf(SMOKE_SWELL_FROM, 1.0, clampf(_smoke_t / SMOKE_SWELL_TIME, 0.0, 1.0))
-		var k: float = _owner.special.data.smoke_radius / SMOKE_ART_RADIUS * swell
-		var fade: float = clampf(_owner.special.active_remaining / FADE_TIME, 0.0, 1.0)
-		_draw_frame(SMOKE_ART, frame, SMOKE_ART.get_height(), _owner.special.anchor, Constants.SPRITE_SCALE * k,
+		var k: float = _smoke.data.smoke_radius / SMOKE_ART_RADIUS * swell
+		var fade: float = clampf(_smoke.active_remaining / FADE_TIME, 0.0, 1.0)
+		_draw_frame(SMOKE_ART, frame, SMOKE_ART.get_height(), _smoke.anchor, Constants.SPRITE_SCALE * k,
 			SMOKE_ALPHA * fade)
 
 ## The clone holds the owner's current weapon (and hand), pointing the way it runs.

@@ -75,7 +75,6 @@ func test_catalog_has_the_mvp_eight() -> void:
 	assert_true(_w(&"sword").reflects)
 	assert_true(_w(&"rocket").splash_radius > 0.0)
 	assert_true(_w(&"grenade").bounces > 0 and _w(&"grenade").splash_radius > 0.0)
-	assert_eq(_w(&"pistol").energy_cost, 0, "the sidearm is free")
 	var pickups: Array[StringName] = catalog.pickup_ids()
 	assert_false(pickups.has(&"pistol"), "sidearm isn't a pickup")
 	assert_false(pickups.has(&"bot_blaster"))
@@ -195,8 +194,8 @@ func test_sword_ignores_own_projectiles() -> void:
 func test_shield_blocks_enemy_shots_not_own() -> void:
 	var warden: Player = _player(SHOOTER, Vector2(100, 300), &"warden")
 	var target: Player = _player(TARGET, Vector2(400, 300))
-	warden.special.try_activate(Vector2.RIGHT, warden.global_position, warden.stats)
-	warden._shield.sync(warden.special, false)
+	warden.skills[1].try_activate(Vector2.RIGHT, warden.global_position, warden.stats)
+	warden._shield.sync(warden.skills[1], false)
 	await wait_physics_frames(2)
 	# Enemy fires at the warden: stopped by the barrier.
 	pool.fire_shot(TARGET, 1, target.global_position, Vector2.LEFT, _w(&"pistol"), SEED)
@@ -250,7 +249,6 @@ func test_signature_weapons_belong_to_their_character_only() -> void:
 		var sig: WeaponData = c.signature_weapon
 		assert_not_null(sig, String(c.id))
 		assert_false(sig.pickup, "signatures never drop")
-		assert_eq(sig.energy_cost, 0, "signatures are free sidearms")
 		for other: CharacterData in characters.ordered:
 			assert_eq(other.can_use(sig), other == c, "%s using %s" % [other.id, sig.id])
 

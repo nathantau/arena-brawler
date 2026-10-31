@@ -1,7 +1,7 @@
 class_name LobbyPanel
 extends PanelContainer
-## The loading room, shown full screen during the lobby phase: pick a character, a starting
-## weapon (next to its signature weapon) and a special (next to everyone's Dash), then Ready.
+## The loading room, shown full screen during the lobby phase: pick a character, the one weapon it fights
+## with (its signature by default) and two specials (its own or generic ones like Dash), then Ready.
 ## Header and footer stay put; the three steps scroll between them on short screens.
 ## Also shows mode + arena, the roster with ready state and why the match can't start yet.
 ## Cards are rebuilt when the local character changes; highlights follow the synced state.
@@ -33,11 +33,15 @@ var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
 var _special_row: VBoxContainer
 var _special_cards: Dictionary[StringName, Button] = {}
+## The "1" / "2" slot badge on each special row.
+var _special_badges: Dictionary[StringName, Label] = {}
+## The slot a newly tapped special replaces: the one set least recently.
+var _older_slot: int = 1
 var _rows: HFlowContainer
 var _blocker: Label
 var _ready_button: Button
-## Last highlighted (character, weapon, special), so _process only restyles on change.
-var _shown_pick: Array[StringName] = [&"", &"", &""]
+## Last highlighted (character, weapon, slot 0 special, slot 1 special), so _process only restyles on change.
+var _shown_pick: Array[StringName] = [&"", &"", &"", &""]
 
 
 func _ready() -> void:
@@ -103,7 +107,7 @@ func _ready() -> void:
 	var specials := VBoxContainer.new()
 	specials.add_theme_constant_override("separation", SPACING)
 	top.add_child(specials)
-	_label(specials, &"HeaderLabel").text = "3 · Choose your special"
+	_label(specials, &"HeaderLabel").text = "3 · Choose 2 specials"
 	_special_row = VBoxContainer.new()
 	_special_row.add_theme_constant_override("separation", SPACING)
 	specials.add_child(_special_row)
@@ -157,7 +161,10 @@ func _refresh() -> void:
 	for id: StringName in _weapon_cards:
 		_weapon_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[1] else &"Card"
 	for id: StringName in _special_cards:
-		_special_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[2] else &"Card"
+		var slot: int = _shown_pick.slice(2).find(id)
+		_special_cards[id].theme_type_variation = &"CardSelected" if slot >= 0 else &"Card"
+		_special_badges[id].visible = slot >= 0
+		_special_badges[id].text = str(slot + 1)
 
 	for child: Node in _rows.get_children():
 		child.queue_free()
@@ -177,9 +184,7 @@ func _refresh() -> void:
 		row.add_theme_color_override("font_color", p.display_color)
 		row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
 
-	var picked: bool = _shown_pick[1] != &""
-	_blocker.text = st.blocker if picked or _is_ready() else "Pick a weapon to get ready."
-	_ready_button.disabled = not picked and not _is_ready()
+	_blocker.text = st.blocker
 	_ready_button.text = "UNREADY" if _is_ready() else "READY!"
 	_ready_button.theme_type_variation = &"Button" if _is_ready() else &"PrimaryButton"
 
@@ -189,13 +194,7 @@ func _build_weapon_cards(c: CharacterData) -> void:
 	_weapon_cards.clear()
 	for child: Node in _weapon_row.get_children():
 		child.queue_free()
-	var sig: WeaponData = c.signature_weapon
-	if sig != null:
-		var sig_card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, _art(sig.sprite, WEAPON_ART_SCALE),
-			[sig.display_name, "Signature · always"])
-		sig_card.disabled = true
-		sig_card.theme_type_variation = &"CardGold"
-	for w: WeaponData in arena.starting_weapons_for(c):
+	for w: WeaponData in arena.weapons_for(c):
 		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, _art(w.sprite, WEAPON_ART_SCALE),
 			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
 				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost]])
@@ -204,17 +203,28 @@ func _build_weapon_cards(c: CharacterData) -> void:
 		_weapon_cards[id] = card
 
 	_special_cards.clear()
+	_special_badges.clear()
+	_older_slot = 1
 	for child: Node in _special_row.get_children():
 		child.queue_free()
-	var dash: SkillData = SkillCatalog.shared().dash()
-	var dash_card: Button = _skill_row(dash, "Everyone has it")
-	dash_card.disabled = true
-	dash_card.theme_type_variation = &"CardGold"
 	for sk: SkillData in SkillCatalog.shared().specials_for(c):
 		var card: Button = _skill_row(sk, "%s · %ds" % [sk.blurb, roundi(sk.cooldown)])
 		var sid: StringName = sk.id
-		card.pressed.connect(func() -> void: arena.special_requested.emit(sid))
+		card.pressed.connect(func() -> void: _on_special_pressed(sid))
 		_special_cards[sid] = card
+		var badge: Label = _label(card, &"HeaderLabel")
+		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING * 2)
+		badge.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_special_badges[sid] = badge
+
+
+## An equipped special stays put; any other one replaces the slot set least recently.
+func _on_special_pressed(id: StringName) -> void:
+	if _pick().slice(2).has(id):
+		return
+	arena.special_requested.emit(_older_slot, id)
+	_older_slot = 1 - _older_slot
 
 
 ## A compact special row: icon on the left, bold name over a dim blurb.
@@ -248,13 +258,12 @@ func _skill_row(sk: SkillData, blurb: String) -> Button:
 	return b
 
 
-## The local player's (character id, starting weapon id, special id); the weapon is loadout slot 1.
+## The local player's (character id, weapon id, slot 0 special id, slot 1 special id).
 func _pick() -> Array[StringName]:
 	var me: Player = arena.local_player
 	if me == null:
-		return [&"", &"", &""]
-	var slots: Array[WeaponState] = me.loadout.slots
-	return [me.character.id, slots[1].data.id if slots.size() > 1 else &"", me.special.data.id]
+		return [&"", &"", &"", &""]
+	return [me.character.id, me.weapon.data.id, me.skills[0].data.id, me.skills[1].data.id]
 
 
 func _is_ready() -> bool:

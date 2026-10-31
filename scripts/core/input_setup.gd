@@ -11,7 +11,6 @@ static func ensure_actions() -> void:
 	_add_keys(&"fire_auto", [KEY_J, KEY_K])
 	_add_keys(&"skill", [KEY_SPACE, KEY_SHIFT])
 	_add_keys(&"special", [KEY_E, KEY_R])
-	_add_keys(&"swap", [KEY_Q, KEY_TAB])
 	_add_mouse(&"fire_mouse", MOUSE_BUTTON_LEFT)
 
 

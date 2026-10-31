@@ -53,7 +53,7 @@ func _start_offline() -> void:
 	_offline_arena.leave_requested.connect(_on_offline_leave, CONNECT_DEFERRED)
 	var input := LocalInput.new()
 	input.autopilot = args.autopilot
-	var me: Player = _offline_arena.add_player(1, 0, Arena.DEFAULT_LOADOUT, input)
+	var me: Player = _offline_arena.add_player(1, 0, input)
 	_offline_arena.attach_local_view(me, input)
 	for i: int in Constants.BOT_COUNT:
 		_offline_arena.add_bot(Constants.BOT_ID_BASE + i, _offline_arena.free_color_index())
@@ -62,7 +62,7 @@ func _start_offline() -> void:
 	if args.weapon != &"":
 		_offline_arena.select_weapon(me, args.weapon)
 	if args.special != &"":
-		_offline_arena.select_special(me, args.special)
+		_offline_arena.select_special(me, 1, args.special)
 	if args.autopilot:
 		_offline_arena.referee.set_ready(me.player_id, true)
 

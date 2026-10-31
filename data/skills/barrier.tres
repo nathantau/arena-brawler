@@ -11,7 +11,6 @@ display_name = "Barrier"
 kind = 1
 special = true
 blurb = "Blocks enemy shots"
-tags = Array[StringName]([&"heavy"])
 cooldown = 7.0
 duration = 3.0
 shield_width = 110.0
