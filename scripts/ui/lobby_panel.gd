@@ -16,7 +16,7 @@ const SKILL_ICON_SIZE: Vector2 = Vector2(45, 45)
 const WEAPON_CARD_SIZE: Vector2 = Vector2(182, 128)
 const CHARACTER_ART_SCALE: float = 2.0
 const WEAPON_ART_SCALE: float = 2.0
-const COLOR_BG: Color = Color(0.07, 0.07, 0.13, 0.96)
+const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 
 var arena: Arena
 
