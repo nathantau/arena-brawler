@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_blossom_snare.png" id="2_icon"]
+[ext_resource type="Resource" path="res://data/weapons/blossom_snare.tres" id="3_blossom"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"blossom_snare"
+display_name = "Blossom Snare"
+kind = 13
+special = true
+blurb = "A blossom that ties its target's feet in vines"
+tags = Array[StringName]([&"sakura"])
+cooldown = 9.0
+duration = 0.1
+volley_weapon = ExtResource("3_blossom")

@@ -15,6 +15,8 @@ extends Node2D
 ## from a vine whose pivot is above the arc's midpoint; leaves burst at takeoff, dust puffs on landing, then the
 ## vine swings on and pulls up. Progress comes from where the body is drawn along the takeoff -> landing line, so
 ## interpolated remote players (whose skill state runs ahead of their drawn position) stay in step.
+## Blossom Snare: whoever it hits gets pink vines coiled round their feet for as long as their synced slow lasts, and
+## a burst of petals when it lands (from the slow time jumping up, so every peer sees both).
 
 const FX_DIR: String = "res://assets/fx/"
 const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
@@ -30,6 +32,14 @@ const WARD_FPS: float = 10.0
 const WARD_OPEN_TIME: float = 0.3
 const WARD_CLOSE_TIME: float = 0.5
 const PETAL_POP_TIME: float = 0.3
+const SNARE_ART: Texture2D = preload(FX_DIR + "snare_vines.png")
+const SNARE_BURST_ART: Texture2D = preload(FX_DIR + "snare_burst.png")
+## A jump in the synced snare time bigger than this is a new hit (the time only ticks down between snapshots).
+const SNARE_NEW_MARGIN: float = 0.2
+const SNARE_FPS: float = 8.0
+const SNARE_BURST_TIME: float = 0.5
+## Row of snare_vines.png the ground ring is centred on (generate.py SNARE_BASE_Y), put on the owner's feet.
+const SNARE_BASE_Y: float = 26.0
 const CRACK_ART: Texture2D = preload(FX_DIR + "eruption_crack.png")
 const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
 const CRACK_FPS: float = 8.0
@@ -136,6 +146,9 @@ var _grapple_cd: float = 0.0
 var _miss_t: float = -1.0
 var _miss_dir: Vector2 = Vector2.RIGHT
 var _time: float = 0.0
+## Seconds of snare left as last synced (the vines show while > 0), where they are drawn.
+var _snare_left: float = 0.0
+var _snare_at: Vector2 = Vector2.ZERO
 var _was_swinging: bool = false
 ## Drawing a swing from _swing_from to _swing_to, _swing_u of the way along; _vine_t >= 0: the vine pulling up after.
 var _swing_on: bool = false
@@ -190,6 +203,11 @@ func sync(p: Player) -> void:
 		_morph_t = -1.0
 	_morph_at = p.global_position + p.visual_offset
 	_sync_swing(p)
+	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
+	if slow > _snare_left + SNARE_NEW_MARGIN:  # a snare landed (or was refreshed): petals burst
+		_poof(p.global_position + p.visual_offset, SNARE_BURST_ART, SNARE_BURST_TIME)
+	_snare_left = slow
+	_snare_at = p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y)
 	_morph_flip = p.facing.x < 0.0
 	var frames: SpriteFrames = p.character.sprite_frames()
 	while _clones.size() < _points.size():
@@ -348,6 +366,7 @@ func _draw() -> void:
 	_draw_morph()
 	_draw_ward()
 	_draw_swing()
+	_draw_snare()
 	_draw_flourishes()
 	if _owner == null:
 		return
@@ -407,6 +426,16 @@ func _draw_ward() -> void:
 		return
 	var frame: int = int((_ward_t - WARD_OPEN_TIME) * WARD_FPS) % (WARD_ART.get_width() / WARD_ART.get_height())
 	_draw_frame(WARD_ART, frame, WARD_ART.get_height(), _ward_at, px)
+
+
+## Vines coiled round the snared player's feet, looping while the slow lasts.
+func _draw_snare() -> void:
+	if _snare_left <= 0.0:
+		return
+	var n: int = SNARE_ART.get_width() / SNARE_ART.get_height()
+	var px: float = Constants.SPRITE_SCALE
+	var up: float = (SNARE_ART.get_height() * 0.5 - SNARE_BASE_Y) * px
+	_draw_frame(SNARE_ART, int(_time * SNARE_FPS) % n, SNARE_ART.get_height(), _snare_at + Vector2(0.0, up), px)
 
 
 ## Poofs play their strip once.

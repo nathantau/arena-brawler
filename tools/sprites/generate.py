@@ -1304,6 +1304,11 @@ ICONS = {
                           c.flat(P([(6, 3), (9, 7), (8, 10), (4, 10), (3, 7)]), ORANGE), c.flat(E((5, 7, 7, 10)), YELLOW)),
     "inferno": lambda c: (c.flat(P([(6, 0), (9, 4), (11, 2), (11, 8), (9, 11), (3, 11), (1, 8), (1, 3), (3, 5)]), RED),
                           c.flat(P([(6, 3), (9, 7), (8, 10), (4, 10), (3, 7)]), ORANGE), c.flat(E((5, 7, 7, 10)), YELLOW)),
+    # Blossom Snare: a blossom above a loop of vine.
+    "blossom_snare": lambda c: [c.flat(lambda d, f: d.ellipse((1, 7, 11, 12), outline=f, width=2), PINK)]
+                               + [c.flat(E((x - 2, y - 2, x + 2, y + 2)), PINK_L if i % 2 else WHITE)
+                                  for i, (x, y) in enumerate(((6, 2), (9, 4), (8, 7), (4, 7), (3, 4)))]
+                               + [c.flat(E((5, 3, 7, 5)), PINK), c.dot(6, 4, YELLOW)],
     "blossom_ward": lambda c: [c.flat(lambda d, f: d.ellipse((1, 1, 11, 11), outline=f, width=1), PINK)]
                               + [c.flat(P([(6 + round(5 * dx), 6 + round(5 * dy)), (6 + round(5 * dx - 2 * dy), 6 + round(5 * dy + 2 * dx)),
                                            (6 + round(5 * dx + 2 * dy), 6 + round(5 * dy - 2 * dx))]),
@@ -1922,6 +1927,75 @@ def petal_pop_frame(k: int) -> Image.Image:
     return outline(c.img)
 
 
+SNARE_FRAMES = 4  # vines loop (period 4)
+SNARE_W = 40
+SNARE_BASE_Y = 26  # row of the ground ring's centre (SpecialFx.SNARE_BASE_Y)
+SNARE_BURST_SIZE = 64
+SNARE_BURST_FRAMES = 8
+SNARE_STRANDS = 2
+
+
+def snare_vines_frame(k: int) -> Image.Image:
+    """Snare loop (period 4): three pink vine ribbons spiral up round the ankles (the near side only; the sprite
+    hides the far side), a ring of blossoms at the base. Three strands repeat every third of a turn, so 4 frames of a
+    twelfth each loop seamlessly."""
+    c = Canvas(SNARE_W)
+    cx, rx, ry = SNARE_W / 2, 12.0, 5.0
+    base = SNARE_BASE_Y
+    turn = math.tau / SNARE_STRANDS
+    for sidx in range(SNARE_STRANDS):
+        pts = []
+        for i in range(0, 41):
+            u = i / 40
+            a = sidx * turn + k * turn / SNARE_FRAMES + u * math.tau * 1.5
+            near = math.sin(a)
+            r = rx * (1 - 0.22 * u)
+            pts.append((cx + math.cos(a) * r, base - 3 - u * 17 + near * ry, near))
+        seg = []
+        for x, y, near in pts + [(0, 0, -1)]:
+            if near > -0.15:
+                seg.append((x, y))
+            elif seg:
+                if len(seg) > 1:
+                    c.flat(L(seg, 2), PINK)
+                    c.flat(L([(x_, y_ - 1) for x_, y_ in seg], 1), PINK_L)
+                seg = []
+    for sidx in range(SNARE_STRANDS):
+        a = sidx * turn + k * turn / SNARE_FRAMES + math.tau * 1.5
+        if math.sin(a) > 0:
+            ward_petal(c, cx + math.cos(a) * rx * 0.78, base - 20 + math.sin(a) * ry, a, 5, 1.0, WHITE)
+    for i in range(6):  # petals lying on the ground ring, turning over as the loop runs
+        a = math.tau * i / 6 + k * math.tau / 6 / SNARE_FRAMES
+        ward_petal(c, cx + math.cos(a) * (rx + 2), base + math.sin(a) * (ry + 1) + 1, a + math.pi / 2, 5,
+                   math.cos(a * 2 + k * 0.4), PINK_L if i % 2 else WHITE)
+    return outline(c.img)
+
+
+def snare_burst_frame(k: int) -> Image.Image:
+    """A blossom bursts where the snare lands: a white flash, then petals of both colours fly out spinning and
+    flutter down, a few vine curls whipping round the centre."""
+    c = Canvas(SNARE_BURST_SIZE)
+    m = SNARE_BURST_SIZE / 2
+    t = k / (SNARE_BURST_FRAMES - 1)
+    if k <= 2:
+        r = (6, 10, 5)[k]
+        blossom_bloom(c, m, r, 0.4 * k)
+    for i in range(9):
+        a = 0.4 + math.tau * i / 9
+        if t > 0.8 + 0.02 * i or k == 0:
+            continue
+        d = 4 + (16 + 3 * (i % 3)) * t ** 0.55
+        ward_petal(c, m + math.cos(a) * d, m + math.sin(a) * d + 8 * t * t, a + 3 * t, max(3.0, 7 - 3 * t),
+                   math.cos(5 * t + i), PINK_L if i % 2 else WHITE)
+    if 2 <= k <= 6:  # vine curls whip out and round
+        for j in range(3):
+            a0 = 1.0 + math.tau * j / 3
+            pts = [(m + math.cos(a0 + 0.9 * u * (1 + t)) * (4 + 14 * u * min(1, 1.6 * t)),
+                    m + math.sin(a0 + 0.9 * u * (1 + t)) * (4 + 14 * u * min(1, 1.6 * t))) for u in (0, .25, .5, .75, 1)]
+            c.flat(L(pts, 1), PINK)
+    return outline(c.img)
+
+
 BLAST_FRAMES = 10
 BLAST_SIZE = 128  # art px; the fireball reaches ~BLAST_R, drawn scaled to the weapon's splash radius
 BLAST_R = 56
@@ -2281,6 +2355,16 @@ def petal(c, f):  # Sakura: a cherry blossom petal, notched at the tip, tumbling
     c.flat(L([(m - 4, m), (m + 2, m)], 1), PINK)
 
 
+def blossom_shot(c, f):  # Blossom Snare: a big cherry blossom spinning as it flies (4 frames = a fifth of a turn)
+    m = PROJ // 2
+    spin = 0.31 * f
+    for i in range(5):
+        a = spin + math.tau * i / 5
+        ward_petal(c, m + math.cos(a) * 4.0, m + math.sin(a) * 4.0, a, 7, 1.0, WHITE if i % 2 else PINK_L)
+    c.flat(E((m - 2, m - 2, m + 2, m + 2)), PINK)
+    c.dot(m, m, YELLOW)
+
+
 def plasma(c, f):  # bot blaster: a wobbling pink-red plasma blob
     m = PROJ // 2
     r = 5 if f else 4
@@ -2303,12 +2387,15 @@ PROJECTILES = {
     "flare_ring": fireball,
     "sakura_fan": petal,
     "petal_storm": petal,
+    "blossom_snare": blossom_shot,
 }
+## Strips with more than the usual 2 frames.
+PROJECTILE_FRAMES = {"blossom_snare": 4}
 
 
-def projectile_strip(draw) -> Image.Image:
+def projectile_strip(draw, n: int = 2) -> Image.Image:
     frames_ = []
-    for f in range(2):
+    for f in range(n):
         c = Canvas(PROJ)
         draw(c, f)
         frames_.append(outline(c.img))
@@ -2340,6 +2427,8 @@ FX = {
     "blossom_ward": lambda: strip([blossom_ward_frame(k) for k in range(WARD_FRAMES)]),
     "blossom_ward_open": lambda: strip([blossom_ward_open_frame(k) for k in range(WARD_OPEN_FRAMES)]),
     "blossom_ward_close": lambda: strip([blossom_ward_close_frame(k) for k in range(WARD_CLOSE_FRAMES)]),
+    "snare_vines": lambda: strip([snare_vines_frame(k) for k in range(SNARE_FRAMES)]),
+    "snare_burst": lambda: strip([snare_burst_frame(k) for k in range(SNARE_BURST_FRAMES)]),
     "petal_pop": lambda: strip([petal_pop_frame(k) for k in range(POP_FRAMES)]),
     # Grapple Kunai (SpecialFx): the zip pose loop, the bite spark, chain links.
     "flicker_zip": lambda: strip([flicker_zip(i) for i in range(4)]),
@@ -2533,7 +2622,7 @@ def main() -> None:
     print(f"wrote {len(WEAPONS)} weapons to {WEAPON_OUT}")
     PROJ_OUT.mkdir(exist_ok=True)
     for name, draw in PROJECTILES.items():
-        img = projectile_strip(draw)
+        img = projectile_strip(draw, PROJECTILE_FRAMES.get(name, 2))
         check(img, PROJ)
         img.save(PROJ_OUT / f"{name}.png")
     print(f"wrote {len(PROJECTILES)} projectiles to {PROJ_OUT}")

@@ -42,6 +42,7 @@ const RESPAWN_DELAY: float = 2.0
 const RESPAWN_IFRAME_TIME: float = 1.0
 ## Weapon shots spend energy; it refills at this rate.
 const ENERGY_REGEN_PER_SEC: float = 60.0
+## A snare slows move speed to a fraction for a while (PlayerStats.slow_*): one at a time, a new one refreshes it.
 ## Special slots each fighter equips (slot 0 = skill button, slot 1 = special button).
 const SKILL_SLOTS: int = 2
 

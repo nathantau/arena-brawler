@@ -35,7 +35,7 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"blink", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -773,3 +773,94 @@ func test_eruption_replay_matches_and_spawns_nothing() -> void:
 	assert_eq(booms.size(), 1, "replay spawns nothing")
 	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
 	assert_lt(booms[0].x, 250.0, "erupted short of the wall")
+
+
+# --- Sakura's Blossom Snare --------------------------------------------------------
+
+func _sakura(world: Node2D, pool: ProjectilePool, id: int, at: Vector2) -> Player:
+	var p := Player.new()
+	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
+		characters.get_character(&"sakura"))
+	world.add_child(p)
+	p.set_skill(1, skills.get_skill(&"blossom_snare"))
+	p.global_position = at
+	return p
+
+
+func _run(p: Player, frames: int, move: Vector2) -> float:
+	var x0: float = p.global_position.x
+	for i: int in frames:
+		var f := InputFrame.new()
+		f.seq = 200 + i
+		f.move_vec = move
+		p.simulate(f, DT)
+	return p.global_position.x - x0
+
+
+func test_blossom_snare_is_sakuras_own() -> void:
+	var d: SkillData = skills.get_skill(&"blossom_snare")
+	assert_eq(d.kind, SkillData.Kind.SNARE)
+	assert_eq(int(d.kind), 13)
+	assert_gt(d.volley_weapon.snare_time, 0.0)
+	for c: CharacterData in characters.ordered:
+		assert_eq(c.can_use_skill(d), c.id == &"sakura", String(c.id))
+
+
+func test_blossom_snare_hit_damages_and_slows() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var a: Player = _sakura(world, pool, 1, Vector2(100, 300))
+	var b: Player = _sakura(world, pool, 2, Vector2(400, 300))
+	await wait_physics_frames(2)
+	var base: float = _run(b, 30, Vector2.RIGHT)
+	b.global_position = Vector2(400, 300)
+	b.velocity = Vector2.ZERO
+	b.skills[1].reset()
+	var hp: int = b.stats.hp + b.stats.armor
+	_press_special(a, Vector2.RIGHT)
+	var w: WeaponData = skills.get_skill(&"blossom_snare").volley_weapon
+	for i: int in 90:
+		await wait_physics_frames(1)
+		if b.stats.slow_remaining > 0.0:
+			break
+	assert_gt(b.stats.slow_remaining, 0.0, "the blossom landed")
+	assert_eq(hp - (b.stats.hp + b.stats.armor), w.damage)
+	assert_eq(b.stats.slow_factor, w.snare_factor)
+	b.global_position = Vector2(400, 300)
+	b.velocity = Vector2.ZERO
+	var slowed: float = _run(b, 30, Vector2.RIGHT)
+	assert_lt(slowed, base * 0.75, "slowed %.1f vs %.1f" % [slowed, base])
+	assert_eq(a.stats.slow_remaining, 0.0, "not herself")
+
+
+func test_snare_expires_refreshes_and_clears_on_respawn() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var p: Player = _sakura(world, null, 1, Vector2(100, 300))
+	await wait_physics_frames(2)
+	p.stats.apply_slow(0.5, 0.45)
+	assert_almost_eq(p.stats.speed_scale(), 0.45, 0.0001)
+	_idle(p, 20)
+	p.stats.apply_slow(0.5, 0.45)
+	assert_almost_eq(p.stats.slow_remaining, 0.5, 0.0001, "refreshed, not stacked")
+	_idle(p, 31)
+	assert_eq(p.stats.slow_remaining, 0.0)
+	assert_eq(p.stats.speed_scale(), 1.0, "expired")
+	p.stats.apply_slow(5.0, 0.45)
+	p.respawn(Vector2(100, 300))
+	assert_eq(p.stats.speed_scale(), 1.0, "respawn clears it")
+
+
+func test_own_snare_shot_does_not_snare_the_caster() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var a: Player = _sakura(world, pool, 1, Vector2(100, 300))
+	await wait_physics_frames(2)
+	pool.fire_shot(1, 5, a.global_position, Vector2.RIGHT, skills.get_skill(&"blossom_snare").volley_weapon, 3)
+	await wait_physics_frames(10)
+	assert_eq(a.stats.slow_remaining, 0.0)
+	assert_eq(a.stats.hp, a.stats.max_hp)

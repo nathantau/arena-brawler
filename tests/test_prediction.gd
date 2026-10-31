@@ -188,3 +188,25 @@ func _active_velocities() -> Array:
 		if s.active:
 			out.append(s.vel)
 	return out
+
+
+func test_slow_roundtrips_and_replays() -> void:
+	await wait_physics_frames(2)
+	var a: Player = _player(1, &"sakura")
+	var b: Player = _player(2, &"sakura")
+	var inputs: Array[InputFrame] = _inputs(90)
+	var snapshot: Array = []
+	for i: int in inputs.size():
+		if i == 20:
+			a.stats.apply_slow(2.0, 0.45)  # as the authority does when the hit lands
+		a.simulate(inputs[i], Constants.PHYSICS_DT)
+		if i == 39:
+			snapshot = a.capture_state()
+	assert_gt(a.stats.slow_remaining, 0.0)
+	assert_true(b.apply_state(snapshot, catalog, characters))
+	assert_eq(b.capture_state().slice(1), snapshot.slice(1), "roundtrip")
+	for i: int in range(40, inputs.size()):
+		b.simulate(inputs[i], Constants.PHYSICS_DT, true)
+	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
+	assert_almost_eq(b.stats.slow_remaining, a.stats.slow_remaining, 0.0001)
+	assert_eq(b.stats.slow_factor, a.stats.slow_factor)
