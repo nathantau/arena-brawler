@@ -170,7 +170,7 @@ const BLAZE_FLAMES_ART: Texture2D = preload(FX_DIR + "blaze_run_flames.png")
 const BLAZE_IGNITE_ART: Texture2D = preload(FX_DIR + "blaze_run_ignite.png")
 const BLAZE_STREAK_ART: Texture2D = preload(FX_DIR + "blaze_run_streak.png")
 const BLAZE_FPS: float = 10.0
-const BLAZE_STREAK_FPS: float = 12.0
+const BLAZE_STREAK_FPS: float = 24.0
 ## Flame spacing along the run: close on horizontal runs so the trail reads continuous, wider on vertical ones (flames
 ## are tall, so they'd stack into a column), each jittered by up to BLAZE_JITTER of a step and pushed off the line by up
 ## to the sideways reach.
@@ -187,9 +187,11 @@ const BLAZE_LINE_RED := Color("d9474b")
 const BLAZE_LINE_MAROON := Color("7a2e38")
 const BLAZE_LINE_CHAR := Color("3a3a5c")
 const BLAZE_LINE_COOL: Array[Color] = [BLAZE_LINE_ORANGE, BLAZE_LINE_RED, BLAZE_LINE_MAROON, BLAZE_LINE_MAROON]
-## Strip layout (generate.py BLAZE_FLAME_*): flame frames are 4 loop frames per variant, then BLAZE_FLAME_DIES per variant.
+## Strip layout (generate.py BLAZE_FLAME_*): flame frames are BLAZE_FLAME_LOOP loop frames per variant, then BLAZE_FLAME_DIES per variant.
 const BLAZE_FLAME_VARIANTS: int = 4
-const BLAZE_FLAME_DIES: int = 4
+const BLAZE_FLAME_LOOP: int = 8
+const BLAZE_FLAME_FPS: float = 20.0
+const BLAZE_FLAME_DIES: int = 6
 ## Row of a stamp cell the floor spot sits on (generate.py BLAZE_FLOOR_Y); the cell's centre column is the spot's x.
 const BLAZE_FLOOR_Y: float = 36.0
 ## From the body's centre to the feet (where the fire burns), in px.
@@ -944,6 +946,7 @@ func _draw_blaze() -> void:
 	var dying: float = BLAZE_DIE_TIME - _blaze.active_remaining
 	var spread: float = BLAZE_DIE_TIME - BLAZE_DIE_FRAME_TIME
 	var loop: int = int(_blaze.elapsed() * BLAZE_FPS)
+	var flame_loop: int = int(_blaze.elapsed() * BLAZE_FLAME_FPS)
 	var seed: int = _blaze_hash(int(_blaze.anchor.x) * 73856093 ^ int(_blaze.anchor.y) * 19349663)
 	var vertical: float = absf(dir.y)
 	var step: float = lerpf(BLAZE_FLAME_STEP_H, BLAZE_FLAME_STEP_V, vertical)
@@ -960,12 +963,12 @@ func _draw_blaze() -> void:
 		nodes.append({"along": along, "at": at + _blaze_ground_off(px)})
 		var v: int = r % BLAZE_FLAME_VARIANTS
 		var local: float = dying - along / maxf(length, 1.0) * spread
-		var frame: int = v * 4 + (loop + (r >> 4)) % 4
+		var frame: int = v * BLAZE_FLAME_LOOP + (flame_loop + (r >> 4)) % BLAZE_FLAME_LOOP
 		if local >= 0.0:
 			var die: int = int(local / BLAZE_DIE_FRAME_TIME * (BLAZE_FLAME_DIES + 1))
 			if die >= BLAZE_FLAME_DIES:
 				continue
-			frame = BLAZE_FLAME_VARIANTS * 4 + v * BLAZE_FLAME_DIES + die
+			frame = BLAZE_FLAME_VARIANTS * BLAZE_FLAME_LOOP + v * BLAZE_FLAME_DIES + die
 		flames.append({"at": at, "frame": frame})
 	nodes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.along < b.along)
 	nodes.append({"along": run, "at": _blaze_floor(_blaze.anchor + dir * run) + _blaze_ground_off(px)})
@@ -978,7 +981,7 @@ func _draw_blaze() -> void:
 	if dashing > -BLAZE_STREAK_FADE:  # flame streaming off him, fading once he's stopped
 		var cell: float = BLAZE_STREAK_ART.get_height()
 		draw_set_transform(_blaze_at, dir.angle(), Vector2.ONE)
-		_draw_frame(BLAZE_STREAK_ART, int(_time * BLAZE_STREAK_FPS) % 4, cell, Vector2.ZERO, px,
+		_draw_frame(BLAZE_STREAK_ART, int(_time * BLAZE_STREAK_FPS) % BLAZE_FLAME_LOOP, cell, Vector2.ZERO, px,
 			clampf((dashing + BLAZE_STREAK_FADE) / BLAZE_STREAK_FADE, 0.0, 1.0) if dashing < 0.0 else 1.0)
 		draw_set_transform(Vector2.ZERO)
 
