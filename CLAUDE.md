@@ -415,3 +415,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   - Still needed: Apple Team ID (+ signing) → archive + TestFlight upload; a cloud host with a public UDP port;
     a default server address in the client (currently join-by-IP in the menu); test on a real device over the internet.
 - [ ] M6 not started
+- **Sakura FX polish** (2026-10-31): Blossom Ward / Snare / Petal Drift / Cherry Sapling strips doubled in frames at the
+  same durations (ward loop 8 + open/close 12, snare vines 8 + burst 12, drift dissolve/reform/swirl 16, sapling grow/wilt
+  16 + idle/fire 8; `SpecialFx` *_FPS constants doubled to match). `ward_petal` now has a crease and a sheen (also in the
+  snare projectile and drift icon); Petal Drift dissolves along a spiral into the swirl's own petal slots.

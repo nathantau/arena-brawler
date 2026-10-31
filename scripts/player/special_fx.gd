@@ -28,7 +28,7 @@ const WARD_CLOSE_ART: Texture2D = preload(FX_DIR + "blossom_ward_close.png")
 const PETAL_POP_ART: Texture2D = preload(FX_DIR + "petal_pop.png")
 ## The ward strips are drawn for this radius (generate.py WARD_R art px x SPRITE_SCALE); other radii scale them.
 const WARD_ART_RADIUS: float = 69.0
-const WARD_FPS: float = 10.0
+const WARD_FPS: float = 20.0
 const WARD_OPEN_TIME: float = 0.3
 const WARD_CLOSE_TIME: float = 0.5
 const PETAL_POP_TIME: float = 0.3
@@ -36,7 +36,7 @@ const SNARE_ART: Texture2D = preload(FX_DIR + "snare_vines.png")
 const SNARE_BURST_ART: Texture2D = preload(FX_DIR + "snare_burst.png")
 ## A jump in the synced snare time bigger than this is a new hit (the time only ticks down between snapshots).
 const SNARE_NEW_MARGIN: float = 0.2
-const SNARE_FPS: float = 8.0
+const SNARE_FPS: float = 16.0
 const SNARE_BURST_TIME: float = 0.5
 ## Row of snare_vines.png the ground ring is centred on (generate.py SNARE_BASE_Y), put on the owner's feet.
 const SNARE_BASE_Y: float = 26.0
@@ -46,9 +46,9 @@ const SAPLING_FIRE_ART: Texture2D = preload(FX_DIR + "sapling_fire.png")
 const SAPLING_WILT_ART: Texture2D = preload(FX_DIR + "sapling_wilt.png")
 ## Row of the sapling strips the trunk stands on (generate.py SAPLING_BASE): it sits on the planting spot.
 const SAPLING_BASE_Y: float = 56.0
-const SAPLING_FPS: float = 12.0
-const SAPLING_IDLE_FPS: float = 5.0
-const SAPLING_FIRE_FPS: float = 16.0
+const SAPLING_FPS: float = 24.0
+const SAPLING_IDLE_FPS: float = 10.0
+const SAPLING_FIRE_FPS: float = 32.0
 const CRACK_ART: Texture2D = preload(FX_DIR + "eruption_crack.png")
 const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
 const CRACK_FPS: float = 12.0
@@ -199,12 +199,12 @@ const BLAZE_DIE_FRAME_TIME: float = 0.6
 const BLAZE_IGNITE_TIME: float = 0.5
 const BLAZE_STREAK_FADE: float = 0.1
 ## Petal Drift: her sprite breaks into petals (dissolve strip), the swirl loop is drawn instead while she glides, and
-## the reform strip gathers her back (the dissolve backwards). All 96 px cells like her sheet, 8 frames at DRIFT_FPS.
+## the reform strip gathers her back (the dissolve backwards). All 96 px cells like her sheet, 16 frames at DRIFT_FPS.
 const DRIFT_ART: Texture2D = preload(FX_DIR + "sakura_drift.png")
 const DISSOLVE_ART: Texture2D = preload(FX_DIR + "sakura_dissolve.png")
 const REFORM_ART: Texture2D = preload(FX_DIR + "sakura_reform.png")
-const DRIFT_FPS: float = 24.0
-const DRIFT_STRIP_FRAMES: int = 8
+const DRIFT_FPS: float = 48.0
+const DRIFT_STRIP_FRAMES: int = 16
 const DISSOLVE_TIME: float = DRIFT_STRIP_FRAMES / DRIFT_FPS
 ## How much of her motion's slope (radians) the swirl leans with.
 const DRIFT_LEAN: float = 0.4

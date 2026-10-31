@@ -2050,18 +2050,42 @@ def smoke_frame(k: int, size: int = 136) -> Image.Image:
 WARD_R = 46  # art px ring radius (x SPRITE_SCALE = SpecialFx.WARD_ART_RADIUS)
 WARD_SIZE = 128
 WARD_CLOSE_SIZE = 156
-WARD_FRAMES = 4  # loop
-WARD_OPEN_FRAMES = 8
-WARD_CLOSE_FRAMES = 8
+WARD_FRAMES = 8  # loop (SpecialFx.WARD_FPS keeps the old speed)
+WARD_OPEN_FRAMES = 12
+WARD_CLOSE_FRAMES = 12
 WARD_OUTER = 16  # petals orbiting on the ring
 WARD_INNER = 7  # smaller petals turning the other way just inside it
 POP_SIZE = 28
-POP_FRAMES = 8
+POP_FRAMES = 10
+
+
+def ramp(vals, t: float) -> float:
+    """Piecewise-linear lookup: `vals` are evenly spaced keys over t = 0..1."""
+    t = min(1.0, max(0.0, t)) * (len(vals) - 1)
+    i = min(int(t), len(vals) - 2)
+    return vals[i] + (vals[i + 1] - vals[i]) * (t - i)
+
+
+def smooth(t: float) -> float:
+    t = min(1.0, max(0.0, t))
+    return t * t * (3 - 2 * t)
+
+
+def twinkle(c: Canvas, x: float, y: float, arm: int):
+    """A white four-point glint (arm 1 = a plus, 2+ = longer arms with a pale core)."""
+    if arm <= 0:
+        return
+    x, y = round(x), round(y)
+    c.flat(R((x - arm, y, x + arm, y)), WHITE)
+    c.flat(R((x, y - arm, x, y + arm)), WHITE)
+    if arm >= 2:
+        c.dot(x, y, PINK_L)
 
 
 def ward_petal(c: Canvas, x: float, y: float, ang: float, length: float, flutter: float, color, base=PINK):
-    """One cherry petal centred at (x, y), its tip along `ang`: a teardrop notched at the tip, a darker base. `flutter`
-    (-1..1) is how much of its face shows as it turns over: near 0 it's edge-on, below 0 its paler back shows."""
+    """One cherry petal centred at (x, y), its tip along `ang`: a teardrop notched at the tip, a darker crease from the
+    base and a bright fleck near the tip. `flutter` (-1..1) is how much of its face shows as it turns over: near 0 it's
+    edge-on, below 0 its paler back shows."""
     ux, uy = math.cos(ang), math.sin(ang)
     w = max(0.5, length * 0.42 * abs(flutter))
     q = lambda a, b: (x + ux * a - uy * b, y + uy * a + ux * b)
@@ -2069,13 +2093,17 @@ def ward_petal(c: Canvas, x: float, y: float, ang: float, length: float, flutter
     c.flat(P([q(-h, 0), q(-h * 0.4, w), q(h * 0.5, w), q(h, w * 0.45), q(h * 0.6, 0), q(h, -w * 0.45),
               q(h * 0.5, -w), q(-h * 0.4, -w)]), color)
     if length >= 5 and abs(flutter) > 0.3:
-        c.flat(L([q(-h, 0), q(-h * 0.2, 0)], 1), base)
+        c.flat(L([q(-h, 0), q(-h * 0.2, 0)], 1), MAROON if color == PINK else base)
+        if length >= 6:  # the sheen near the tip, on the lit edge
+            px_, py_ = q(h * 0.45, -w * 0.45)
+            c.dot(round(px_), round(py_), WHITE if color != WHITE else PINK_L)
 
 
 def ward_ring(n_outer: int, k: int):
     """Ring petals for loop frame `k` as (x, y, ang, length,
-    flutter, colour) relative to the centre. Petal i's look is a function of n = 4 i + k, so after a loop petal i
-    stands exactly where petal i + 1 started: the loop is seamless while each petal wobbles, tilts and turns over."""
+    flutter, colour) relative to the centre. Petal i's look is a function of n = F i + k (F = WARD_FRAMES), so after a
+    loop petal i stands exactly where petal i + 1 started: the loop is seamless while each petal wobbles, tilts and
+    turns over."""
     out = []
     span = WARD_FRAMES * n_outer
     for i in range(n_outer):
@@ -2099,61 +2127,85 @@ def ward_ring(n_outer: int, k: int):
 
 
 def blossom_ward_frame(k: int) -> Image.Image:
-    """Blossom Ward loop (period 4): petals orbit the ring, wobbling in and out, tilting and turning over (pink face,
-    white back); a smaller band inside turns the other way; a few petals drift off outward and sink, shrinking."""
+    """Blossom Ward loop (period 8): petals orbit the ring, wobbling in and out, tilting and turning over (pink face,
+    white back, a crease and sheen on each); a smaller band inside turns the other way; five petals peel off the ring,
+    drift outward and sink, shrinking; glints twinkle round the ring and pollen motes float in from it."""
     c = Canvas(WARD_SIZE)
     m = WARD_SIZE / 2
-    for j, a0 in enumerate((0.6, 2.7, 4.6)):  # drifters peel off the ring, one after another
-        w = (k / WARD_FRAMES + j / 3) % 1.0
+    f = k / WARD_FRAMES
+    for j in range(8):  # pollen motes drifting inwards off the ring and fading out
+        u = (f + j / 8) % 1.0
+        a = 0.3 + math.tau * j * 3 / 8 + 0.4 * u
+        r = WARD_R - 3 - 15 * u
+        if u < 0.85:
+            c.dot(round(m + math.cos(a) * r), round(m + math.sin(a) * r + 2 * math.sin(math.tau * u)),
+                  YELLOW if j % 4 == 0 else PINK_L)
+    for j, a0 in enumerate((0.6, 1.9, 3.1, 4.4, 5.5)):  # drifters peel off the ring, one after another
+        w = (f + j / 5) % 1.0
         ang = a0 + 0.35 * w
         r = WARD_R + 2 + 9 * w
-        ward_petal(c, m + math.cos(ang) * r, m + math.sin(ang) * r + 4 * w, ang + 2.0 * w, 6 - 3 * w,
-                   math.cos(math.pi * 2 * w + j), PINK_L)
+        ward_petal(c, m + math.cos(ang) * r, m + math.sin(ang) * r + 5 * w * w + 2 * w, ang + 2.4 * w, 6.5 - 3.5 * w,
+                   math.cos(math.pi * 2 * w + j), PINK_L if j % 2 else WHITE)
     for x, y, ang, length, flutter, col in ward_ring(WARD_OUTER, k):
         ward_petal(c, m + x, m + y, ang, length, flutter, col)
+    for j in range(4):  # glints winking on the ring, out of step
+        ph = (f * 2 + j / 4) % 1.0
+        a = 0.8 + math.tau * j / 4
+        if ph < 0.5:
+            twinkle(c, m + math.cos(a) * (WARD_R + 1), m + math.sin(a) * (WARD_R + 1), (1, 2, 2, 1)[min(3, int(ph * 8))])
     return outline(c.img)
 
 
 def blossom_bloom(c: Canvas, m: float, r: float, spin: float):
-    """A five-petal cherry blossom at the centre, `r` art px across its petals."""
+    """A five-petal cherry blossom at the centre, `r` art px across its petals, yellow stamens in its eye."""
     for i in range(5):
         a = spin + math.tau * i / 5
         ward_petal(c, m + math.cos(a) * r * 0.55, m + math.sin(a) * r * 0.55, a, r, 1.0, WHITE if i % 2 else PINK_L)
     c.flat(E((m - r * 0.25, m - r * 0.25, m + r * 0.25, m + r * 0.25)), PINK)
     c.dot(round(m), round(m), YELLOW)
+    if r >= 9:
+        for i in range(5):
+            a = spin * 1.5 + math.tau * i / 5
+            c.dot(round(m + math.cos(a) * r * 0.2), round(m + math.sin(a) * r * 0.2), YELLOW)
 
 
 def blossom_ward_open_frame(k: int) -> Image.Image:
-    """Opening bloom (8 frames): a blossom opens over her and bursts; its petals spiral out into the ring,
-    overshooting a little, sparkles winking on the ring. The last frame is the loop's first."""
+    """Opening bloom (12 frames): a blossom opens over her and bursts; its petals spiral out into the ring,
+    overshooting a little, loose petals flung past it, glints winking on the ring. The last frame is the loop's first."""
+    rng = random.Random(17)
     c = Canvas(WARD_SIZE)
     m = WARD_SIZE / 2
-    t = k / (WARD_OPEN_FRAMES - 1)
-    if k <= 3:  # the bloom: opens, holds, bursts
-        r = (4, 9, 12, 8)[k]
-        blossom_bloom(c, m, r, 0.3 * k)
-    e = min(1.0, max(0.0, (k - 1) / (WARD_OPEN_FRAMES - 2)))
+    n = WARD_OPEN_FRAMES
+    if k <= 5:  # the bloom: opens, holds, bursts
+        blossom_bloom(c, m, (3, 6, 9, 12, 13, 8)[k], 0.25 * k)
+    e = min(1.0, max(0.0, (k - 1) / (n - 2)))
     e = 1 + 2.2 * (e - 1) ** 3 + 1.2 * (e - 1) ** 2 if e < 1 else 1.0  # ease out with a small overshoot
     if k >= 1:
         for x, y, ang, length, flutter, col in ward_ring(WARD_OUTER, 0):
             d = math.hypot(x, y)
-            a = math.atan2(y, x) - 1.3 * (1 - e)
+            a = math.atan2(y, x) - 1.8 * (1 - e)
             rr = d * e
-            ward_petal(c, m + math.cos(a) * rr, m + math.sin(a) * rr, ang - 1.3 * (1 - e), length * min(1.0, 0.5 + e),
-                       flutter if e >= 1 else 1.0, col)
-    if 2 <= k <= 5:  # sparkles winking on as the ring forms
-        for j in range(3):
-            a = 0.9 + math.tau * j / 3 + 0.5 * k
-            x, y = m + math.cos(a) * WARD_R * 0.8 * e, m + math.sin(a) * WARD_R * 0.8 * e
-            arm = 2 if k in (3, 4) else 1
-            c.flat(R((x - arm, y, x + arm, y)), WHITE)
-            c.flat(R((x, y - arm, x, y + arm)), WHITE)
+            ward_petal(c, m + math.cos(a) * rr, m + math.sin(a) * rr, ang - 1.8 * (1 - e), length * min(1.0, 0.5 + e),
+                       flutter if e >= 1 else math.cos(k * 1.1 + a), col)
+    for j in range(9):  # loose petals thrown out past the ring, then sinking away
+        a0, spin, delay = rng.uniform(0, math.tau), rng.uniform(-1, 1), rng.uniform(2, 5)
+        u = (k - delay) / 6
+        if 0 <= u < 1:
+            a = a0 + 0.5 * u
+            rr = WARD_R * 0.5 + (WARD_R * 0.6) * math.sqrt(u)
+            ward_petal(c, m + math.cos(a) * rr, m + math.sin(a) * rr + 6 * u * u, a + 3 * u * spin, 6 - 3 * u,
+                       math.cos(6 * u + j), PINK_L if j % 2 else WHITE)
+    if 3 <= k <= 9:  # sparkles winking on as the ring forms
+        arm = (1, 2, 2, 2, 1, 1, 1)[k - 3]
+        for j in range(5):
+            a = 0.9 + math.tau * j / 5 + 0.35 * k
+            twinkle(c, m + math.cos(a) * WARD_R * 0.85 * e, m + math.sin(a) * WARD_R * 0.85 * e, arm)
     return outline(c.img)
 
 
 def blossom_ward_close_frame(k: int) -> Image.Image:
-    """Closing scatter (8 frames): the ring loosens, petals fly outward with a twist and sink as they flutter,
-    shrinking and dropping out one by one."""
+    """Closing scatter (12 frames): glints wink out, the ring loosens, petals fly outward with a twist and sink as they
+    flutter, shrinking and dropping out one by one, a few small ones falling in the wake."""
     rng = random.Random(11)
     c = Canvas(WARD_CLOSE_SIZE)
     m = WARD_CLOSE_SIZE / 2
@@ -2167,125 +2219,197 @@ def blossom_ward_close_frame(k: int) -> Image.Image:
         f = math.cos(math.atan2(flutter, 1) + 3.0 * t + spin * 2)
         ward_petal(c, m + math.cos(a) * rr, m + math.sin(a) * rr + 9 * t * t, ang + spin * 3 * t,
                    max(2.0, length * (1 - 0.6 * t)), f, col if f >= 0 else WHITE)
+    for j in range(10):  # the wake: small petals shaken loose, falling
+        a0, born, spin = rng.uniform(0, math.tau), rng.uniform(0.0, 0.45), rng.uniform(-1, 1)
+        u = (t - born) / 0.5
+        if 0 <= u < 1:
+            rr = WARD_R + 4 + 10 * u
+            ward_petal(c, m + math.cos(a0) * rr + 3 * math.sin(7 * u + j), m + math.sin(a0) * rr + 12 * u * u,
+                       a0 + 4 * u * spin, 5 - 2 * u, math.cos(8 * u + j), PINK_L if j % 2 else WHITE)
+    if k <= 4:
+        for j in range(4):
+            a = 0.8 + math.tau * j / 4
+            twinkle(c, m + math.cos(a) * (WARD_R + 2), m + math.sin(a) * (WARD_R + 2), (2, 2, 1, 1, 0)[k] if k < 4 else 0)
     return outline(c.img)
 
 
 def petal_pop_frame(k: int) -> Image.Image:
-    """A shot caught on the ward: a white wink, and four tiny petals burst out and flutter down."""
+    """A shot caught on the ward: a white wink with a pink ring, and five tiny petals burst out and flutter down."""
     c = Canvas(POP_SIZE)
     m = POP_SIZE / 2
     t = k / (POP_FRAMES - 1)
-    if k <= 2:
-        arm = (2, 3, 1)[k]
+    if k <= 3:
+        arm = (2, 3, 3, 1)[k]
         c.flat(R((m - arm, m, m + arm, m)), WHITE)
         c.flat(R((m, m - arm, m, m + arm)), WHITE)
-    for i, a in enumerate((0.5, 2.0, 3.6, 5.1)):
-        if t > 0.75 + 0.06 * i:
+        c.dot(round(m), round(m), PINK_L)
+    if 1 <= k <= 3:  # the shot's shock ring
+        r = 2 + 2.5 * k
+        c.flat(lambda d, f: d.ellipse((m - r, m - r, m + r, m + r), outline=f, width=1), PINK_L)
+    for i, a in enumerate((0.5, 1.7, 2.9, 4.1, 5.3)):
+        if t > 0.78 + 0.05 * i or k == 0:
             continue
-        d = 2 + 8 * t ** 0.6
-        ward_petal(c, m + math.cos(a) * d, m + math.sin(a) * d + 4 * t * t, a + 2.5 * t, max(2.0, 5 - 3 * t),
+        d = 2 + 6.5 * t ** 0.6
+        ward_petal(c, m + math.cos(a) * d, m + math.sin(a) * d + 5 * t * t, a + 2.5 * t, max(2.0, 5.5 - 3 * t),
                    math.cos(4 * t + i), PINK_L if i % 2 else WHITE)
     return outline(c.img)
 
 
-# --- Petal Drift (Sakura): she dissolves into a swirl of petals, glides, and gathers back ---
-DRIFT_FRAMES = 8  # dissolve, reform and the swirl loop
-DRIFT_SEEDS = 16  # chunks of her that break off as petals
-DRIFT_PETALS = 12  # petals in the swirl
-DRIFT_TRAIL = 5  # petals streaming behind
+# --- Petal Drift (Sakura): she dissolves into a tight spiral of petals, glides, and gathers back ---
+DRIFT_FRAMES = 16  # dissolve, reform and the swirl loop (SpecialFx.DRIFT_FPS keeps the old speed)
+DRIFT_SEEDS = 28  # chunks of her that break off: the first DRIFT_PETALS become the swirl's petals, the rest motes
+DRIFT_PETALS = 16  # petals in the swirl
+DRIFT_TRAIL = 7  # petals streaming behind
 
 
 def drift_body() -> Image.Image:
     return cell(frames(sakura)[0])
 
 
+def swirl_items(k: int):
+    """The swirl's petals at loop frame k: (depth, x, y, ang, length, flutter, slot colour); a tornado wider at the top,
+    leaning back, turning twice per loop."""
+    m = CELL / 2
+    items = []
+    for i in range(DRIFT_PETALS):
+        h = -28 + 54 * ((i * 5) % DRIFT_PETALS) / DRIFT_PETALS
+        r = 5 + 16 * (h + 28) / 54
+        a = math.tau * (i / DRIFT_PETALS + 2 * k / DRIFT_FRAMES)
+        x = m + r * math.cos(a) - 0.22 * (24 - h)
+        y = m + h + 0.35 * r * math.sin(a)
+        flutter = math.cos(math.tau * (3 * k / DRIFT_FRAMES + i / 4))
+        items.append((math.sin(a), x, y, a + math.pi / 2 + 0.5, 9 - 2 * (h < -10), flutter, i))
+    return items
+
+
+def swirl_color(depth: float, flutter: float):
+    return (PINK_L if flutter >= 0 else WHITE) if depth > 0 else PINK
+
+
+def swirl_extras(c: Canvas, k: int, grow: float = 1.0, shed: bool = True):
+    """The knot of petals at the foot, the stragglers streaming behind, a glint at the heart (`grow` 0..1 = how far
+    they've formed) and petals shed off the tornado, falling."""
+    m = CELL / 2
+    f = k / DRIFT_FRAMES
+    if grow > 0.2:
+        r = 4 * grow
+        c.flat(E((m - r - 1, m + 15 - r * 0.6, m + r - 1, m + 15 + r * 0.7)), PINK)
+        c.flat(E((m - r * 0.5 - 1, m + 14 - r * 0.4, m + r * 0.4, m + 14 + r * 0.3)), PINK_L)
+    for j in range(DRIFT_TRAIL):
+        u = (f + j / DRIFT_TRAIL) % 1.0
+        x = m - 17 - u * 21
+        y = m + 4 + 12 * math.sin(math.tau * (u + j / DRIFT_TRAIL)) - 8 * u
+        ln = (7 - 4 * u) * grow
+        if ln >= 2:
+            ward_petal(c, x, y, math.pi + 0.7 * math.sin(math.tau * u * 2 + j), ln,
+                       math.cos(math.tau * (u * 2 + j / 3)), PINK_L if j % 2 else WHITE)
+    if shed:
+        for j in range(3):  # petals peeling off the tornado's top, spinning away and down
+            u = (f + j / 3) % 1.0
+            a = math.tau * j / 3 + 0.8
+            ward_petal(c, m - 6 + math.cos(a) * (18 + 6 * u) - 6 * u, m - 22 + 26 * u * u + math.sin(a) * 4,
+                       a + 5 * u, 6 - 3 * u, math.cos(7 * u + j), PINK_L if j % 2 else WHITE)
+    ph = (f * 2) % 1.0  # the glint at the heart, twice per loop
+    if ph < 0.5 and grow >= 1.0:
+        twinkle(c, m - 4, m - 4, (1, 2, 2, 1)[min(3, int(ph * 8))])
+
+
+def drift_swirl_frame(k: int) -> Image.Image:
+    """The drift form (period 16, moving right): a tornado of petals wider at the top and leaning back, spinning two
+    turns per loop (back petals pink, front ones pale and white, each with its crease and sheen), a knot at the foot,
+    stragglers streaming behind and a few petals shed. SpecialFx mirrors it and tilts it with her motion."""
+    c = Canvas(CELL)
+    for depth, x, y, ang, length, flutter, _ in sorted(swirl_items(k)):
+        ward_petal(c, x, y, ang, length, flutter, swirl_color(depth, flutter))
+    swirl_extras(c, k)
+    return outline(c.img)
+
+
 def drift_dissolve_frame(k: int) -> Image.Image:
-    """Dissolve (8 frames; the reform strip plays it backwards): her idle frame breaks into chunks that each turn into
-    a petal and blow away to the left, the last of her gone by the final frame. Chunks go from the back (left) first."""
+    """Dissolve (16 frames; the reform strip plays it backwards): her idle frame squeezes in towards the column, flashes
+    pale and breaks into chunks, back (left) first. Each chunk turns into a petal and spirals in to its place in the
+    swirl, tightening as it goes; the last frame is the swirl's first. Small motes scatter off and vanish."""
     rng = random.Random(5)
     body = drift_body()
     px = body.load()
     t = k / (DRIFT_FRAMES - 1)
     pts = [(x, y) for y in range(CELL) for x in range(CELL) if px[x, y][3]]
-    seeds = [(*rng.choice(pts), 0.0, rng.uniform(-1, 1), rng.uniform(0.7, 1.3)) for _ in range(DRIFT_SEEDS)]
+    seeds = [rng.choice(pts) for _ in range(DRIFT_SEEDS)]
+    slots = sorted(swirl_items(0), key=lambda it: it[2])  # top to bottom
+    heads = sorted(seeds[:DRIFT_PETALS], key=lambda p: p[1])
+    seeds = heads + seeds[DRIFT_PETALS:]
     # a seed breaks off earlier the further back (left) it sits, so she peels away from the trailing side
-    seeds = [(x, y, 0.05 + 0.6 * ((x - 28) / 40) * 0.7 + rng.uniform(0, 0.3), s, r) for x, y, _, s, r in seeds]
-    seeds = [(x, y, min(max(a, 0.05), 0.85), s, r) for x, y, a, s, r in seeds]
+    start = [min(max(0.06 + 0.42 * ((x - 28) / 40) + rng.uniform(0, 0.2), 0.06), 0.66) for x, y in seeds]
+    sq = 1 - 0.4 * smooth(t / 0.7)  # she squeezes in towards the column as she dissolves
     out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
     o = out.load()
+    m = CELL // 2
     for x, y in pts:
-        near = min(seeds, key=lambda sd: (sd[0] - x) ** 2 + (sd[1] - y) ** 2)
-        if t <= near[2] + rng.uniform(-0.04, 0.04):
-            o[x, y] = px[x, y]
-    out = outline(Image.composite(out, Image.new("RGBA", out.size), out.split()[3]))
-    pc = Canvas(CELL)
-    for x, y, a, spin, reach in seeds:
+        i = min(range(DRIFT_SEEDS), key=lambda s: (seeds[s][0] - x) ** 2 + (seeds[s][1] - y) ** 2)
+        a = start[i] + rng.uniform(-0.04, 0.04)
         if t <= a:
+            col = px[x, y][:3]
+            if t > a - 0.09 and (x + y) % 2 == 0:  # about to go: flashes pale
+                col = LIGHTER[col] if col in LIGHTER else col
+            nx = round(m + (x - m) * sq)
+            if 0 <= nx < CELL:
+                o[nx, y] = col + (255,)
+    out = outline(out)
+    pc = Canvas(CELL)
+    order = sorted(range(DRIFT_PETALS), key=lambda i: slots[i][0])  # back petals first
+    for i in order:
+        x0, y0 = seeds[i]
+        depth, sx, sy, sang, slen, sflut, _ = slots[i]
+        u = smooth((t - start[i]) / (1 - start[i] + 1e-6)) if t > start[i] else 0.0
+        if t <= start[i] and u == 0.0:
             continue
-        u = (t - a) / (1 - a + 1e-6) if a < 1 else 0
-        u = min(1.0, (t - a) * 2.2)
-        px_ = max(10.0, x - 22 * reach * u ** 0.8)
-        py_ = y - 10 * u + 9 * math.sin(u * 3 + spin) * u
-        length = 8 - 3 * u
-        ward_petal(pc, px_, py_, math.pi + 0.5 * spin * u * 3 + 0.4, length, math.cos(2.5 * u * 3 + spin * 2),
-                   PINK_L if spin > 0 else WHITE)
+        ox, oy = (x0 - sx) * (1 - u), (y0 - sy) * (1 - u)
+        rot = -3.4 * (1 - u)  # spirals in: the offset turns round the slot as it closes
+        px_ = sx + ox * math.cos(rot) - oy * math.sin(rot)
+        py_ = sy + ox * math.sin(rot) + oy * math.cos(rot) - 5 * math.sin(math.pi * u)
+        px_, py_ = min(max(px_, 7), CELL - 8), min(max(py_, 7), CELL - 8)
+        fl = math.cos(math.acos(max(-1.0, min(1.0, sflut))) + 7 * (1 - u))
+        length = 3 + (slen - 3) * u
+        ward_petal(pc, px_, py_, sang + 4 * (1 - u), length, fl, swirl_color(depth, fl) if u > 0.5 else (PINK_L if i % 2 else WHITE))
+    for j in range(DRIFT_PETALS, DRIFT_SEEDS):  # motes: scattered off, spinning away and vanishing
+        x0, y0 = seeds[j]
+        u = (t - start[j]) / 0.5
+        if 0 <= u < 1:
+            a = j * 2.4
+            d = 6 + 20 * u
+            ward_petal(pc, x0 - 5 * u + math.cos(a) * d * 0.4, y0 - 10 * u + math.sin(a) * d * 0.5 + 4 * u * u,
+                       a + 5 * u, max(2.0, 5 - 4 * u), math.cos(6 * u + j), PINK_L if j % 2 else WHITE)
+    if t > 0.55:  # the swirl's knot and stragglers form as the petals arrive
+        swirl_extras(pc, 0, grow=smooth((t - 0.55) / 0.45), shed=False)
     out.alpha_composite(outline(pc.img))
     return out
 
 
 def drift_reform_frame(k: int) -> Image.Image:
-    """Reform (8 frames): the dissolve backwards, then a wink of white sparkles as she's whole again."""
+    """Reform (16 frames): the dissolve backwards, then a wink of white sparkles as she's whole again."""
     img = drift_dissolve_frame(DRIFT_FRAMES - 1 - k)
-    if k >= DRIFT_FRAMES - 3:
+    n = DRIFT_FRAMES - 5  # the last five frames glint
+    if k >= n:
         c = Canvas(CELL)
-        for i, (x, y) in enumerate(((34, 30), (62, 38), (44, 66), (66, 62))):
-            arm = (1, 2)[k - (DRIFT_FRAMES - 3) > 0 and i % 2 == 0]
-            c.flat(R((x - arm, y, x + arm, y)), WHITE)
-            c.flat(R((x, y - arm, x, y + arm)), WHITE)
+        for i, (x, y) in enumerate(((34, 30), (62, 38), (44, 66), (66, 62), (30, 52), (60, 24))):
+            arm = (1, 2, 2, 1, 0)[k - n] if (i + k) % 2 == 0 else (0, 1, 1, 0, 0)[k - n]
+            twinkle(c, x, y, arm)
         img.alpha_composite(outline(c.img))
     return img
 
 
-def drift_swirl_frame(k: int) -> Image.Image:
-    """The drift form (period 8, moving right): a tornado of petals wider at the top and leaning back, spinning two
-    turns per loop (back petals pink, front ones pale and white), a few stragglers streaming behind. SpecialFx
-    mirrors it and tilts it with her motion."""
-    c = Canvas(CELL)
-    m = CELL / 2
-    items = []
-    for i in range(DRIFT_PETALS):
-        h = -26 + 50 * ((i * 5) % DRIFT_PETALS) / DRIFT_PETALS
-        r = 6 + 15 * (h + 26) / 50
-        a = math.tau * (i / DRIFT_PETALS + 2 * k / DRIFT_FRAMES)
-        x = m + r * math.cos(a) - 0.22 * (24 - h)
-        y = m + h + 0.35 * r * math.sin(a)
-        flutter = math.cos(math.tau * (3 * k / DRIFT_FRAMES + i / 4))
-        items.append((math.sin(a), x, y, a + math.pi / 2, 9 - 2 * (h < -10), flutter))
-    for depth, x, y, ang, length, flutter in sorted(items):
-        front = depth > 0
-        ward_petal(c, x, y, ang + 0.5, length, flutter, (PINK_L if flutter >= 0 else WHITE) if front else PINK)
-    c.flat(E((m - 5, m + 14, m + 3, m + 19)), PINK)  # a tight knot of petals at the foot
-    for j in range(DRIFT_TRAIL):
-        u = (k / DRIFT_FRAMES + j / DRIFT_TRAIL) % 1.0
-        x = m - 18 - u * 24
-        y = m + 4 + 12 * math.sin(math.tau * (u + j / DRIFT_TRAIL)) - 8 * u
-        ward_petal(c, x, y, math.pi + 0.7 * math.sin(math.tau * u * 2 + j), 7 - 4 * u,
-                   math.cos(math.tau * (u * 2 + j / 3)), PINK_L if j % 2 else WHITE)
-    return outline(c.img)
-
-
-SNARE_FRAMES = 4  # vines loop (period 4)
+SNARE_FRAMES = 8  # vines loop (period 8; SpecialFx.SNARE_FPS keeps the old speed)
 SNARE_W = 40
 SNARE_BASE_Y = 26  # row of the ground ring's centre (SpecialFx.SNARE_BASE_Y)
 SNARE_BURST_SIZE = 64
-SNARE_BURST_FRAMES = 8
+SNARE_BURST_FRAMES = 12
 SNARE_STRANDS = 2
 
 
 def snare_vines_frame(k: int) -> Image.Image:
-    """Snare loop (period 4): three pink vine ribbons spiral up round the ankles (the near side only; the sprite
-    hides the far side), a ring of blossoms at the base. Three strands repeat every third of a turn, so 4 frames of a
-    twelfth each loop seamlessly."""
+    """Snare loop (period 8): two pink vine ribbons spiral up round the ankles (the near side only; the sprite hides
+    the far side), thorns and little leaves along them, a blossom at each tip, a ring of petals turning over on the
+    ground and a few petals lifting off it. The strands swap places after a loop, so it loops seamlessly."""
     c = Canvas(SNARE_W)
     cx, rx, ry = SNARE_W / 2, 12.0, 5.0
     base = SNARE_BASE_Y
@@ -2297,49 +2421,70 @@ def snare_vines_frame(k: int) -> Image.Image:
             a = sidx * turn + k * turn / SNARE_FRAMES + u * math.tau * 1.5
             near = math.sin(a)
             r = rx * (1 - 0.22 * u)
-            pts.append((cx + math.cos(a) * r, base - 3 - u * 17 + near * ry, near))
+            pts.append((cx + math.cos(a) * r, base - 3 - u * 17 + near * ry, near, u))
         seg = []
-        for x, y, near in pts + [(0, 0, -1)]:
+        for x, y, near, u in pts + [(0, 0, -1, 1)]:
             if near > -0.15:
                 seg.append((x, y))
             elif seg:
                 if len(seg) > 1:
                     c.flat(L(seg, 2), PINK)
                     c.flat(L([(x_, y_ - 1) for x_, y_ in seg], 1), PINK_L)
+                    c.flat(L([(x_ + 1, y_ + 1) for x_, y_ in seg[1:]], 1), MAROON)  # shaded underside
                 seg = []
+        for i in range(6, 40, 7):  # a thorn / leaf on the near side of each turn
+            x, y, near, u = pts[i]
+            if near > 0.3:
+                ward_petal(c, x + 2, y - 2, -0.9, 4, 1.0, PINK_L if (i // 7) % 2 else WHITE)
     for sidx in range(SNARE_STRANDS):
         a = sidx * turn + k * turn / SNARE_FRAMES + math.tau * 1.5
         if math.sin(a) > 0:
             ward_petal(c, cx + math.cos(a) * rx * 0.78, base - 20 + math.sin(a) * ry, a, 5, 1.0, WHITE)
+            c.dot(round(cx + math.cos(a) * rx * 0.78), round(base - 20 + math.sin(a) * ry), YELLOW)
     for i in range(6):  # petals lying on the ground ring, turning over as the loop runs
         a = math.tau * i / 6 + k * math.tau / 6 / SNARE_FRAMES
         ward_petal(c, cx + math.cos(a) * (rx + 2), base + math.sin(a) * (ry + 1) + 1, a + math.pi / 2, 5,
                    math.cos(a * 2 + k * 0.4), PINK_L if i % 2 else WHITE)
+    for j in range(3):  # petals lifting off the ring, turning, and fading out at the top
+        u = (k / SNARE_FRAMES + j / 3) % 1.0
+        a = math.tau * j / 3 + 0.6
+        if u < 0.8:
+            ward_petal(c, cx + math.cos(a) * (rx + 3 + 2 * u) + 2 * math.sin(math.tau * u), base - 2 - 20 * u,
+                       a + 3 * u, 4.5 - 2 * u, math.cos(math.tau * u * 1.5 + j), PINK_L if j % 2 else WHITE)
     return outline(c.img)
 
 
 def snare_burst_frame(k: int) -> Image.Image:
-    """A blossom bursts where the snare lands: a white flash, then petals of both colours fly out spinning and
-    flutter down, a few vine curls whipping round the centre."""
+    """A blossom bursts where the snare lands: a white flash and ring, then petals of both colours fly out spinning
+    and flutter down, a few vine curls whipping round the centre and glints winking."""
     c = Canvas(SNARE_BURST_SIZE)
     m = SNARE_BURST_SIZE / 2
-    t = k / (SNARE_BURST_FRAMES - 1)
-    if k <= 2:
-        r = (6, 10, 5)[k]
-        blossom_bloom(c, m, r, 0.4 * k)
-    for i in range(9):
-        a = 0.4 + math.tau * i / 9
-        if t > 0.8 + 0.02 * i or k == 0:
+    n = SNARE_BURST_FRAMES
+    t = k / (n - 1)
+    if k <= 3:
+        blossom_bloom(c, m, (6, 10, 12, 6)[k], 0.4 * k)
+    if 1 <= k <= 4:  # shock ring
+        r = 5 + 6 * k
+        c.flat(lambda d, f: d.ellipse((m - r, m - r, m + r, m + r), outline=f, width=1), PINK_L if k > 2 else WHITE)
+    for i in range(12):
+        a = 0.4 + math.tau * i / 12
+        if t > 0.8 + 0.015 * i or k == 0:
             continue
-        d = 4 + (16 + 3 * (i % 3)) * t ** 0.55
-        ward_petal(c, m + math.cos(a) * d, m + math.sin(a) * d + 8 * t * t, a + 3 * t, max(3.0, 7 - 3 * t),
+        d = 4 + (13 + 3 * (i % 3)) * t ** 0.55
+        ward_petal(c, m + math.cos(a) * d, m + math.sin(a) * d + 6 * t * t, a + 3 * t, max(3.0, 7.5 - 3.5 * t),
                    math.cos(5 * t + i), PINK_L if i % 2 else WHITE)
-    if 2 <= k <= 6:  # vine curls whip out and round
+    if 2 <= k <= 8:  # vine curls whip out and round, thinning at the end
         for j in range(3):
             a0 = 1.0 + math.tau * j / 3
-            pts = [(m + math.cos(a0 + 0.9 * u * (1 + t)) * (4 + 14 * u * min(1, 1.6 * t)),
-                    m + math.sin(a0 + 0.9 * u * (1 + t)) * (4 + 14 * u * min(1, 1.6 * t))) for u in (0, .25, .5, .75, 1)]
-            c.flat(L(pts, 1), PINK)
+            reach = 4 + 14 * min(1, 1.6 * t)
+            pts = [(m + math.cos(a0 + 0.9 * u * (1 + t)) * (4 + (reach - 4) * u),
+                    m + math.sin(a0 + 0.9 * u * (1 + t)) * (4 + (reach - 4) * u)) for u in (0, .2, .4, .6, .8, 1)]
+            c.flat(L(pts, 2 if k <= 5 else 1), PINK)
+            c.flat(L([(x, y - 1) for x, y in pts[1:-1]], 1), PINK_L)
+    if 3 <= k <= 8:
+        for j in range(3):
+            a = 0.2 + math.tau * j / 3 + 0.3 * k
+            twinkle(c, m + math.cos(a) * 20 * t ** 0.5, m + math.sin(a) * 20 * t ** 0.5, 1 + (k in (4, 5)))
     return outline(c.img)
 
 
@@ -3304,93 +3449,155 @@ FX.update({
 SAPLING_W = 64  # square frames
 SAPLING_BASE = 56  # row the trunk stands on (SpecialFx.SAPLING_BASE_Y)
 SAPLING_TRUNK = 22
-SAPLING_GROW_FRAMES = 8
-SAPLING_WILT_FRAMES = 8
-SAPLING_FIRE_FRAMES = 4
-# canopy blobs (dx, dy from the canopy centre, radius, colour); small white blossoms on top
-SAPLING_BLOBS = [(-9, 3, 7, PINK), (9, 3, 7, PINK), (0, 5, 8, PINK), (-5, -5, 7, PINK), (6, -5, 7, PINK),
-                 (0, -9, 6, PINK_L), (-8, -2, 4, PINK_L), (4, -3, 4, PINK_L)]
+SAPLING_GROW_FRAMES = 16  # SpecialFx's SAPLING_*_FPS keep the old durations
+SAPLING_WILT_FRAMES = 16
+SAPLING_FIRE_FRAMES = 8
+SAPLING_IDLE_FRAMES = 8
+# canopy blobs (dx, dy from the canopy centre, radius); the lit lumps on top and the small white blossoms
+SAPLING_BLOBS = [(-9, 3, 7), (9, 3, 7), (0, 5, 8), (-5, -5, 7), (6, -5, 7), (0, -9, 6)]
+SAPLING_LUMPS = [(0, -9, 5), (-8, -2, 4), (4, -3, 4), (-3, -6, 3)]
 SAPLING_BLOSSOMS = [(-9, 1), (-3, -8), (5, -6), (9, 3), (1, 4), (-5, 6), (8, -1)]
 
 
-def sapling_frame(trunk: float = 1.0, canopy: float = 1.0, sway: int = 0, petals: float = 0.0, burst: float = 0.0,
-                  falling: float = 0.0, bud: bool = False) -> Image.Image:
-    """One frame. trunk/canopy 0..1 = how grown; sway = canopy offset in px; petals 0..1 = one petal drifting off the
-    canopy; burst 0..1 = a flick of petals flung out; falling 0..1 = petals dropping to the ground (wilt)."""
+def sapling_frame(trunk: float = 1.0, canopy: float = 1.0, sway: float = 0.0, petals=(), burst: float = 0.0,
+                  falling: float = 0.0, bud: float = 0.0, squash: float = 0.0, sparks=(), ground: float = 0.0,
+                  twinkle_i: int = -1) -> Image.Image:
+    """One frame. trunk/canopy 0..1 = how grown (canopy may overshoot); sway = how far the canopy leans in px (the top
+    of the trunk follows half as far, so the tree bends); squash > 0 squeezes the canopy down and out (< 0 stretches
+    it); petals = progress 0..1 of each petal drifting off the canopy; burst 0..1 = a flick of petals flung out;
+    falling 0..1 = petals dropping to the ground (wilt); bud = size of the bud on the tip; sparks = (dx, dy, arm)
+    glints round the canopy; ground = how many of the fallen petals still lie around the foot (0..1)."""
     c = Canvas(SAPLING_W)
     m = SAPLING_W // 2
     base = SAPLING_BASE
     h = round(SAPLING_TRUNK * trunk)
-    c.flat(E((m - 9, base - 2, m + 9, base + 3)), SHADOW)  # shadow on the ground
+    c.flat(E((m - 9 * max(trunk, 0.3), base - 2, m + 9 * max(trunk, 0.3), base + 3)), SHADOW)  # shadow on the ground
+    if ground > 0:  # fallen petals round the foot
+        for i, dx in enumerate((-13, -8, 9, 13, 4)):
+            if i / 5 < ground:
+                ward_petal(c, m + dx, base + (i % 2) - 1, 0.3 * i, 4.5, 0.9, PINK_L if i % 2 else WHITE)
+    lean = sway * 0.5
     if h >= 1:
         w = 2 if h < 8 else 3
-        c.part(P([(m - w, base), (m - w + 1, base - h), (m + w - 1, base - h), (m + w, base)]), BROWN)
-        if h >= 12 and canopy > 0:  # a side branch to a blossom clump
-            c.flat(L([(m, base - h * 0.55), (m + 7 * canopy, base - h * 0.85)], 1), BROWN)
+        top_dx = lean * (h / SAPLING_TRUNK) ** 1.5
+        c.part(P([(m - w - 1, base + 1), (m - w, base - 1), (m - w + 1 + top_dx, base - h), (m + w - 1 + top_dx, base - h),
+                  (m + w, base - 1), (m + w + 1, base + 1)]), BROWN)
+        if h >= 10:  # bark flecks
+            c.dot(round(m - 1 + top_dx * 0.4), base - round(h * 0.35), MAROON)
+            c.dot(round(m + top_dx * 0.7), base - round(h * 0.7), MAROON)
+        if h >= 12 and canopy > 0:  # side branches up to the blossom clumps
+            c.flat(L([(m + top_dx * 0.5, base - h * 0.5), (m + 7 * canopy + top_dx, base - h * 0.85)], 1), BROWN)
+            c.flat(L([(m + top_dx * 0.6, base - h * 0.62), (m - 6 * canopy + top_dx, base - h * 0.9)], 1), BROWN)
     top = base - h
-    if bud:
-        c.flat(E((m - 2, top - 4, m + 2, top)), PINK_L)
+    top_x = m + lean * (h / SAPLING_TRUNK) ** 1.5
+    if bud > 0:
+        r = 1 + 2 * bud
+        c.part(E((top_x - r, top - 2 * r - 1, top_x + r, top - 1)), PINK_L)
     if canopy > 0:
-        cx, cy = m + sway, top - 6 * canopy
-        for dx, dy, r, col in SAPLING_BLOBS:
-            rr = r * canopy
-            if rr >= 1:
-                c.flat(E((cx + dx * canopy - rr, cy + dy * canopy - rr, cx + dx * canopy + rr, cy + dy * canopy + rr)), col)
-        for i, (dx, dy) in enumerate(SAPLING_BLOSSOMS):
-            if canopy >= 0.6:
-                c.dot(round(cx + dx * canopy), round(cy + dy * canopy), WHITE)
-                if canopy >= 0.9 and i % 2 == 0:
-                    c.dot(round(cx + dx * canopy), round(cy + dy * canopy) + 1, WHITE)
-        if canopy >= 0.9:
-            c.dot(round(cx - 2), round(cy - 2), YELLOW)
-        if petals > 0:  # a petal peels off the right side and drifts down and away
-            ward_petal(c, cx + 10 + 8 * petals, cy + 2 + 12 * petals * petals + 4 * petals, 0.6 + 2.5 * petals, 5,
-                       math.cos(petals * 6), PINK_L)
-        if burst > 0:  # the flick: petals fly out and up
-            for i, a in enumerate((-2.6, -1.9, -1.2, -0.5)):
-                d = 6 + 16 * burst
-                ward_petal(c, cx + math.cos(a) * (10 + d), cy + math.sin(a) * (8 + d) + 5 * burst * burst, a + 3 * burst,
-                           max(3.0, 6 - 3 * burst), math.cos(4 * burst + i), WHITE if i % 2 else PINK_L)
+        cx, cy = top_x + lean, top - 6 * canopy
+        wide, tall = 1 + 0.12 * squash, 1 - 0.18 * squash
+        place = lambda dx, dy, r: (cx + dx * canopy * wide + sway * 0.25 * (-dy / 9 + 0.4) * 0.5,
+                                   cy + dy * canopy * tall + (1 - tall) * 6, r * canopy)
+        blobs = [place(*b) for b in SAPLING_BLOBS]
+        c.part(lambda d, f: [d.ellipse((x - r * wide, y - r * tall, x + r * wide, y + r * tall), f) for x, y, r in blobs if r >= 1],
+               PINK)
+        lumps = [place(*b) for b in SAPLING_LUMPS]
+        c.part(lambda d, f: [d.ellipse((x - r, y - r * 0.9, x + r, y + r * 0.9), f) for x, y, r in lumps if r >= 1],
+               PINK_L)
+        if canopy >= 0.6:
+            for i, (dx, dy) in enumerate(SAPLING_BLOSSOMS):
+                x, y, _ = place(dx, dy, 0)
+                x, y = round(x), round(y)
+                if canopy >= 0.9 and i % 3 == 0:  # an open blossom: white petals round a yellow eye
+                    for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                        c.dot(x + ox, y + oy, WHITE)
+                    c.dot(x, y, YELLOW)
+                else:
+                    c.dot(x, y, WHITE)
+                    if canopy >= 0.9 and i % 2 == 0:
+                        c.dot(x, y + 1, WHITE)
+        if twinkle_i >= 0:
+            x, y, _ = place(*SAPLING_BLOSSOMS[twinkle_i], 0)
+            twinkle(c, x, y, 1)
+        for dx, dy, arm in sparks:
+            twinkle(c, cx + dx * canopy, cy + dy * canopy, arm)
+        for i, u in enumerate(petals):  # petals peel off the right side and drift down and away, tumbling
+            if 0 < u < 1:
+                ward_petal(c, cx + 10 + 8 * u + 2 * math.sin(7 * u + i), cy + 2 + 14 * u * u + 4 * u, 0.6 + 3 * u,
+                           5.5 - 1.5 * u, math.cos(u * 7 + i), PINK_L if i % 2 else WHITE)
+        if 0 < burst < 0.97:  # the flick: petals fly out and up in a fan, tumbling, then thin out
+            for i, a in enumerate((-2.9, -2.5, -2.1, -1.7, -1.3, -0.9, -0.5, -0.1)):
+                d = (4 + 11 * burst) * (0.85 + 0.15 * (i % 3))
+                ward_petal(c, cx + math.cos(a) * (10 + d), cy + math.sin(a) * (8 + d) + 7 * burst * burst, a + 3 * burst,
+                           max(2.5, 6.5 - 4 * burst), math.cos(4 * burst + i), WHITE if i % 2 else PINK_L)
         if falling > 0:
-            for i in range(6):
-                x0 = cx + (-14 + 5.6 * i) * canopy
-                y0 = cy + 2
-                fall = min(1.0, falling * 1.4 - 0.1 * i)
+            for i in range(10):
+                x0 = cx + (-15 + 3.3 * i) * canopy
+                y0 = cy + 2 + (i % 3)
+                fall = min(1.0, falling * 1.5 - 0.07 * i)
                 if fall <= 0 or fall >= 1:
                     continue
-                ward_petal(c, x0 + 3 * math.sin(fall * 7 + i), y0 + (base - y0 - 1) * fall, 1.5 + fall * 5, 5,
+                ward_petal(c, x0 + 4 * math.sin(fall * 7 + i), y0 + (base - y0 - 1) * fall, 1.5 + fall * 5, 5,
+                           math.cos(fall * 9 + i), PINK_L if i % 2 else WHITE)
+    elif falling > 0:  # the canopy's gone: the last petals are still on their way down
+        for i in range(10):
+            x0, y0 = m + (-15 + 3.3 * i) * 0.4, top - 4 + (i % 3)
+            fall = min(1.0, falling * 1.5 - 0.07 * i)
+            if 0 < fall < 1:
+                ward_petal(c, x0 + 4 * math.sin(fall * 7 + i), y0 + (base - y0 - 1) * fall, 1.5 + fall * 5, 5,
                            math.cos(fall * 9 + i), PINK_L if i % 2 else WHITE)
     return outline(c.img)
 
 
 def sapling_grow_frame(k: int) -> Image.Image:
-    """Grow-in (8 frames): a sprout pushes up with a bud, the trunk thickens, the canopy swells and blooms."""
-    trunk = (0.12, 0.3, 0.55, 0.8, 1.0, 1.0, 1.0, 1.0)[k]
-    canopy = (0.0, 0.0, 0.0, 0.3, 0.55, 0.8, 1.0, 1.0)[k]
-    return sapling_frame(trunk, canopy, bud=k in (1, 2))
+    """Grow-in (16 frames): a sprout pushes up with a bud, the trunk thickens and bends, the canopy swells with a
+    bounce, blooms, and a ring of glints and petals puffs off it."""
+    trunk = (0.1, 0.2, 0.32, 0.46, 0.6, 0.74, 0.86, 0.95, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0)[k]
+    canopy = (0, 0, 0, 0, 0, 0.18, 0.38, 0.6, 0.82, 1.0, 1.1, 1.1, 1.03, 0.97, 1.0, 1.0)[k]
+    squash = (0, 0, 0, 0, 0, 0, 0, 0, 0, -0.5, -0.9, 0, 0.5, 0.3, 0, 0)[k]
+    sway = (0, 0.5, 0, -0.5, 0, 0.5, 0, 0, 0, 0, 1, 1.5, 0.5, -0.5, 0, 0)[k]
+    bud = (0, 0.5, 1.0, 1.0, 0.8, 0.4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)[k]
+    sparks = ()
+    if 9 <= k <= 13:
+        arm = (1, 2, 2, 1, 1)[k - 9]
+        sparks = tuple((14 * math.cos(a + 0.3 * k), 12 * math.sin(a + 0.3 * k) - 3, arm)
+                       for a in (0.4, 2.5, 4.4))
+    puff = [(k - 9 - 1.5 * i) / 5 for i in range(5)] if k >= 10 else []
+    img = sapling_frame(trunk, canopy, sway, petals=puff, bud=bud, squash=squash, sparks=sparks)
+    return img
 
 
 def sapling_idle_frame(k: int) -> Image.Image:
-    """Idle loop (4 frames): the blossoms sway, one petal drifts off and the next starts as the loop closes."""
-    return sapling_frame(sway=(0, 1, 0, -1)[k], petals=(0.0, 0.35, 0.7, 1.0)[k] if k else 0.0)
+    """Idle loop (8 frames): the canopy sways, the top of the trunk bending after it, two petals drift off in turn
+    and a blossom twinkles; everything is periodic so the loop closes."""
+    f = k / SAPLING_IDLE_FRAMES
+    return sapling_frame(sway=1.6 * math.sin(math.tau * f), petals=[(f * 1.0) % 1.0 * 1.0, ((f + 0.5) % 1.0)],
+                         twinkle_i=(1, 3)[k // 4] if k % 4 in (1, 2) else -1)
 
 
 def sapling_fire_frame(k: int) -> Image.Image:
-    """Firing flourish (4 frames): the canopy snaps to the side and a burst of petals is flicked out."""
-    return sapling_frame(sway=(-2, 2, 1, 0)[k], burst=(0.1, 0.45, 0.8, 1.0)[k])
+    """Firing flourish (8 frames): the canopy winds back and squashes, snaps forward and flicks a fan of petals out,
+    then rocks back to rest with fading wobbles."""
+    sway = (-1.5, -3.0, 3.0, 2.0, -1.2, 0.8, -0.3, 0.0)[k]
+    squash = (0.6, 1.0, -0.8, -0.3, 0.3, 0.1, 0, 0)[k]
+    burst = (0.0, 0.0, 0.3, 0.5, 0.68, 0.82, 0.92, 1.0)[k]
+    return sapling_frame(sway=sway, squash=squash, burst=burst)
 
 
 def sapling_wilt_frame(k: int) -> Image.Image:
-    """Wilt (8 frames): petals drop, the canopy thins out and the tree shrinks into the ground."""
+    """Wilt (16 frames): the tree shivers, petals drop in waves and pile up on the ground, the canopy thins and
+    droops, then the trunk shrinks into the ground; the last petals fade."""
     t = k / (SAPLING_WILT_FRAMES - 1)
     canopy = max(0.0, 1.0 - t / 0.55)
     trunk = 1.0 if t < 0.5 else max(0.0, 1.0 - (t - 0.5) / 0.5)
-    return sapling_frame(trunk, canopy, sway=(0, 1, 0, 1, 0, 0, 0, 0)[k], falling=min(1.0, t / 0.7))
+    sway = 1.5 * math.sin(k * 1.7) * (1 - t) + 2 * t * (1 if canopy else 0)
+    fallen = min(1.0, t / 0.6) * max(0.0, 1 - (t - 0.8) / 0.2)
+    return sapling_frame(trunk, canopy, sway, falling=min(1.0, t / 0.7), squash=0.5 * t, ground=fallen)
 
 
 FX.update({
     "sapling_grow": lambda: strip([sapling_grow_frame(k) for k in range(SAPLING_GROW_FRAMES)]),
-    "sapling_idle": lambda: strip([sapling_idle_frame(k) for k in range(4)]),
+    "sapling_idle": lambda: strip([sapling_idle_frame(k) for k in range(SAPLING_IDLE_FRAMES)]),
     "sapling_fire": lambda: strip([sapling_fire_frame(k) for k in range(SAPLING_FIRE_FRAMES)]),
     "sapling_wilt": lambda: strip([sapling_wilt_frame(k) for k in range(SAPLING_WILT_FRAMES)]),
 })
