@@ -84,6 +84,8 @@ var respawn_timer: float = 0.0
 var last_input_seq: int = 0
 ## Render-only offset that hides small reconciliation corrections; decays to zero.
 var visual_offset: Vector2 = Vector2.ZERO
+## Floor inside the arena's border walls (set by the Arena): Vine Swing never lands outside it. Empty = no limit.
+var arena_bounds: Rect2 = Rect2()
 
 var _shape: CollisionShape2D
 var _shield := ShieldWall.new()
@@ -104,6 +106,7 @@ var _overlay := Node2D.new()
 ## Smoke clouds and shadow clones (cosmetic, from the synced special state).
 var _special_fx := SpecialFx.new()
 var _clone_query := PhysicsRayQueryParameters2D.new()
+var _swing_query := PhysicsShapeQueryParameters2D.new()
 
 
 func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData], ctrl: PlayerController,
@@ -135,6 +138,8 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	# The walls players move against (shifted to the feet): standing under a wall puts the centre inside the wall
 	# itself, and a ray starting inside a wall misses it, so clones ran out through it (even past the border).
 	_clone_query.collision_mask = Constants.LAYER_WALL_FEET
+	_swing_query.collision_mask = Constants.LAYER_WALL_FEET  # where a player can stand
+	_swing_query.shape = circle
 	set_character(p_character)
 
 
@@ -225,7 +230,7 @@ func _process(delta: float) -> void:
 	_sprite.position = visual_offset
 	_sprite.flip_h = facing.x < 0.0
 	_special_fx.sync(self)
-	_sprite.modulate.a = 0.0 if _special_fx.is_morphing() else \
+	_sprite.modulate.a = 0.0 if _special_fx.is_morphing() or _special_fx.is_swinging() else \
 		INVULN_ALPHA if stats.is_invulnerable() or is_hidden() else 1.0
 	queue_redraw()
 	_overlay.queue_redraw()
@@ -238,6 +243,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if dead:
 		return
 	stats.tick(delta)
+	# Caught before the tick so the frame it runs out still puts him exactly on the landing spot.
+	var swing: CharacterSkill = active_skill(SkillData.Kind.SWING)
 	for slot: CharacterSkill in skills:
 		slot.tick(delta)
 	weapon.tick(delta)
@@ -250,15 +257,22 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		return
 
 	for i: int in Constants.SKILL_SLOTS:
-		if pressed[i] and not _prev_skills[i]:
+		if pressed[i] and not _prev_skills[i] and swing == null:  # no other special mid-swing
 			_activate(skills[i], input, replay)
 	_prev_skills = pressed
 
-	var mover: CharacterSkill = active_skill(SkillData.Kind.DASH)
-	var tf: CharacterSkill = form()
-	var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0)
-	velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed, delta)
-	move_and_slide()
+	if swing == null:
+		swing = active_skill(SkillData.Kind.SWING)  # just pressed
+	if swing != null:  # in the air: placed along the arc, over whatever is in between
+		global_position = swing.anchor + swing.direction * swing.swing_progress()
+		velocity = Vector2.ZERO
+	else:
+		var mover: CharacterSkill = active_skill(SkillData.Kind.DASH)
+		var tf: CharacterSkill = form()
+		var speed: float = character.move_speed * (tf.data.form_speed_scale if tf != null else 1.0)
+		velocity = MovementSim.step_velocity(velocity, input.move_vec, mover if mover != null else skills[0], speed,
+			delta)
+		move_and_slide()
 	_shield.sync(_shield_slot(), dead)
 
 	if input.aim_vec.length_squared() > 0.0:
@@ -276,9 +290,19 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 
 
 func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
-	if not slot.try_activate(_skill_direction(slot.data, input), global_position, stats):
+	var dir: Vector2 = _skill_direction(slot.data, input)
+	var landing := Vector2.INF
+	if slot.data.kind == SkillData.Kind.SWING:
+		if not slot.is_ready():
+			return
+		landing = swing_landing(dir, slot.data)
+		if landing == Vector2.INF:
+			return  # nowhere to land: no swing, no cooldown
+	if not slot.try_activate(dir, global_position, stats):
 		return
 	match slot.data.kind:
+		SkillData.Kind.SWING:
+			slot.direction = landing - global_position
 		SkillData.Kind.BLINK:
 			move_and_collide(slot.direction * slot.data.blink_distance)  # walls stop the hop
 		SkillData.Kind.VOLLEY:
@@ -343,6 +367,24 @@ func clone_points() -> PackedVector2Array:
 			target = hit.position + hit.normal * Constants.PLAYER_RADIUS  # as close as a player can stand
 		out.append(target)
 	return out
+
+
+## Vine Swing's landing: the farthest spot along `dir` (up to swing_range, not nearer than swing_min_range) where a
+## player fits on the floor inside the arena, whatever is in between. Vector2.INF if there is none.
+func swing_landing(dir: Vector2, d: SkillData) -> Vector2:
+	if dir == Vector2.ZERO:
+		return Vector2.INF
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var inside: Rect2 = arena_bounds.grow(-Constants.PLAYER_RADIUS)
+	var dist: float = d.swing_range
+	while dist >= d.swing_min_range:
+		var at: Vector2 = global_position + dir.normalized() * dist
+		if not arena_bounds.has_area() or inside.has_point(at):
+			_swing_query.transform = Transform2D(0.0, at)
+			if space.intersect_shape(_swing_query, 1).is_empty():
+				return at
+		dist -= Constants.SWING_SAMPLE_STEP
+	return Vector2.INF
 
 
 func is_dashing() -> bool:

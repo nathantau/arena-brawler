@@ -11,7 +11,8 @@ extends Resource
 ## BLINK: instant hop (stopped by walls) with i-frames. SMOKE: a cloud where you stand; inside it
 ## enemy auto-aim and bots can't lock on. VOLLEY: fires `volley_weapon` once (e.g. a ring of
 ## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
-enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
+## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
+enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES, SWING = 7 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -38,6 +39,13 @@ enum Kind { DASH, SHIELD, TRANSFORM, BLINK, SMOKE, VOLLEY, CLONES }
 
 @export_group("Blink")
 @export var blink_distance: float = 200.0
+
+@export_group("Swing")
+## Lands on the farthest free floor along the aim up to swing_range; nothing past swing_min_range = no swing
+## (and no cooldown). Takes `duration` in the air; i-frames only at takeoff.
+@export var swing_range: float = 360.0
+@export var swing_min_range: float = 80.0
+@export var swing_iframes: float = 0.15
 
 @export_group("Smoke")
 @export var smoke_radius: float = 90.0
