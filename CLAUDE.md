@@ -313,9 +313,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   there: `eruption_blast` (`WeaponData.blast`: a splash "shot" that goes off where it's fired, 40 dmg, 80 px, falloff to
   0.4, needs sight, no self-damage, 300 knockback away from the spot, so up-ish) through `fire_shot` / `shot_fired` with
   seq + `ERUPTION_SEQ_OFFSET`; replay fires nothing; cooldown 8 s. `exploded(..., art)` is false for blasts (the pillar is
-  the art; sound, sparks, shake stay). Art (generate.py `eruption_crack` period-4 telegraph with a ring of embers at the
-  blast's reach, 12-frame `eruption` strip started `ERUPTION_LEAD` before the blast so the floor bulges into the burst,
-  `icon_eruption`; `flame_tongue()` is Flint's tongue helper, now module level), played by `SpecialFx` from synced state.
+  the art; sound, sparks, shake stay). Art (volcano, reworked 2026-10-31; generate.py `eruption_crack` = 8-frame telegraph loop at 12 fps: cracked scorched floor, a rocky mound with lava pulsing in its cracks, hopping rocks, dust, ring of embers at the blast's reach; `eruption` = 26-frame 256 px strip at 15 fps (`ERUPTION_FPS`, 1.73 s) started `ERUPTION_LEAD` (4 frames) before the blast: the mound heaves and splits, then a volcanic cone bursts into a ~125 px fountain of lava and fire (`fire_column`, Flint's flowing bonfire tongues), dust ring, lava bombs arcing out and splatting, a dark ash plume, a magma pool; then it cools: cone crumbles, lava darkens to crust, embers fade, smoke drifts off. Heights/timings are the `FIRE_H`/`ERUPT_*` constants; `icon_eruption`; `flame_tongue()` is Flint's tongue helper), played by `SpecialFx` from synced state.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).
