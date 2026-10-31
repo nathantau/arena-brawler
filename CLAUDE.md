@@ -406,6 +406,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   5-frame bolt strip (36x144 art px, bottom-anchored and cropped to length), `storm_spark` 6-frame flash + scorch. `SpecialFx._sync_storm`
   draws all of it from the synced active time on every peer: a bolt per tick at each enemy within the radius on the local view
   (else at the cloud's spot).
+- **Apex FX polish** (2026-10-31, art only): Vine Swing pose 12 frames (vine wrap + leaf on the fist, streaming tails, wind streaks), `leaf_burst` 14 / `swing_dust` 12, lit knotted `vine` with berries; Staff Whirl pose + `whirl_ring` 12-frame loops (`WHIRL_FPS` 24), shaded staff with dithered motion-blur wedge, `whirl_spark` 7; Sky Pillar `wukong_pillar` 9 poses, `sky_pillar` 18 frames (slam on frame 6 = u 1/3), shock ring, glowing cracks, flying chips; Storm Cloud merged lit/shaded cloud mass, 12-frame loop (`STORM_LOOP`, `STORM_FPS` 15), gold flashes inside, 8-frame bolt with forks, 8-frame spark. `SpecialFx._strike` only draws a bolt on enemies in line of sight of the cloud (same rule as the damage), so bolts no longer fall on players a wall shields.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).

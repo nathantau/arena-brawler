@@ -94,7 +94,7 @@ const LAND_FEET_Y: float = 26.0
 const WHIRL_ART: Texture2D = preload(FX_DIR + "wukong_whirl.png")
 const WHIRL_RING_ART: Texture2D = preload(FX_DIR + "whirl_ring.png")
 const WHIRL_SPARK_ART: Texture2D = preload(FX_DIR + "whirl_spark.png")
-const WHIRL_FPS: float = 16.0
+const WHIRL_FPS: float = 24.0  # 12-frame loops (generate.py WHIRL_FRAMES): same spin speed as 8 frames at 16
 const WHIRL_ART_RADIUS: float = 69.0
 const WHIRL_SPARK_TIME: float = 0.25
 ## The start / end dust is a small poof at his feet, shrunk so it does not hide him.
@@ -125,8 +125,9 @@ const STORM_BOLT_ART: Texture2D = preload(FX_DIR + "storm_bolt.png")
 const STORM_SIZE: float = 136.0
 const STORM_FLOOR_Y: float = 112.0
 const STORM_BASE_Y: float = 62.0
-const STORM_FPS: float = 10.0
+const STORM_FPS: float = 15.0  # the 12-frame raining loop (generate.py STORM_LOOP): same period as 8 frames at 10
 const STORM_FRAME_COUNT: int = 8
+const STORM_LOOP_COUNT: int = 12
 const STORM_FORM_TIME: float = STORM_FRAME_COUNT / 12.0
 const STORM_END_TIME: float = 0.6
 const BOLT_W: float = 36.0
@@ -443,10 +444,14 @@ func _storm_art_centre(spot: Vector2) -> Vector2:
 
 func _strike(p: Player, slot: CharacterSkill) -> void:
 	var hit: bool = false
+	# Same sight rule as the damage (ProjectilePool.strike): no bolt falls on someone the wall shields.
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var query := PhysicsRayQueryParameters2D.new()
 	for node: Node in p.get_parent().get_children():
 		var target := node as Player
 		if target != null and target != p and not target.dead \
-				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius:
+				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius \
+				and AutoAim.has_line_of_sight(space, query, slot.anchor, target.global_position):
 			_bolt(target.global_position + target.visual_offset, target.global_position + target.visual_offset
 				+ Vector2(0.0, Player.FOOT_RING_Y))
 			hit = true
@@ -780,7 +785,7 @@ func _draw_storm() -> void:
 			_draw_frame(STORM_FORM_ART, mini(int(t / STORM_FORM_TIME * STORM_FRAME_COUNT), STORM_FRAME_COUNT - 1),
 				STORM_SIZE, centre, px)
 		else:
-			_draw_frame(STORM_ART, int(t * STORM_FPS) % STORM_FRAME_COUNT, STORM_SIZE, centre, px)
+			_draw_frame(STORM_ART, int(t * STORM_FPS) % STORM_LOOP_COUNT, STORM_SIZE, centre, px)
 	var h: float = STORM_BOLT_ART.get_height()
 	var frames: int = int(STORM_BOLT_ART.get_width() / BOLT_W)
 	for b: Poof in _bolts:
