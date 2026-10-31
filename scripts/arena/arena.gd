@@ -36,6 +36,8 @@ const PLAYER_COLORS: Array[Color] = [
 ## Placeholder player names until accounts (M6).
 const PLAYER_COLOR_NAMES: Array[String] = ["Blue", "Red", "Purple", "Green", "Yellow", "Teal"]
 const PROJECTILE_Z: int = 1
+## Floor and walls sit under everything, below ground effects (Effects.GROUND_Z).
+const FLOOR_Z: int = -2
 const EFFECTS_Z: int = 2
 ## Camera shake: offset = SHAKE_MAX_OFFSET * trauma², trauma decays per second.
 const SHAKE_MAX_OFFSET: float = 14.0
@@ -134,6 +136,7 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 
 func _ready() -> void:
 	_floor.name = "Floor"
+	_floor.z_index = FLOOR_Z
 	add_child(_floor)
 	add_child(crates)
 	add_child(pickups)

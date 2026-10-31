@@ -32,6 +32,9 @@ const SLASH_ART: Texture2D = preload("res://assets/fx/slash.png")
 ## Art px the fireball / slam reaches and the slash arc's radius (generate.py BLAST_R, SLASH_R).
 const BLAST_ART_RADIUS: float = 56.0
 const SLASH_ART_RADIUS: float = 46.0
+## Melee slams (floor cracks, dust) are drawn on this absolute z: above the floor (Arena.FLOOR_Z), under players
+## and their weapons.
+const GROUND_Z: int = -1
 
 
 class Particle:
@@ -88,8 +91,15 @@ var _rc: int = 0
 var _rng := RandomNumberGenerator.new()
 
 
+var _ground := Node2D.new()
+
+
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_ground.z_as_relative = false
+	_ground.z_index = GROUND_Z
+	_ground.draw.connect(_draw_slams)
+	add_child(_ground)
 	for i: int in PARTICLE_POOL:
 		_particles.append(Particle.new())
 	for i: int in NUMBER_POOL:
@@ -177,18 +187,18 @@ func _process(delta: float) -> void:
 	for r: Ring in _rings:
 		r.life -= delta
 	queue_redraw()
+	_ground.queue_redraw()
 
 
 func _draw() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for r: Ring in _rings:
-		if r.life <= 0.0:
-			continue
-		_draw_strip(r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / BLAST_ART_RADIUS, Color.WHITE)
+		if r.life > 0.0 and r.art != SLAM_ART:
+			_draw_strip(self, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / BLAST_ART_RADIUS, Color.WHITE)
 	for s: Swing in _swings:
 		if s.life <= 0.0:
 			continue
-		_draw_strip(SLASH_ART, 1.0 - s.life / SWING_TIME, s.origin, s.angle, s.radius / SLASH_ART_RADIUS,
+		_draw_strip(self, SLASH_ART, 1.0 - s.life / SWING_TIME, s.origin, s.angle, s.radius / SLASH_ART_RADIUS,
 			s.color.lightened(0.3))
 	for b: Beam in _beams:
 		if b.life <= 0.0:
@@ -213,11 +223,18 @@ func _draw() -> void:
 		UiStyle.draw_text(self, n.pos - Vector2(w * 0.5, 0.0), n.text, font_size, nc, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
 
 
-## Frame `t` (0..1) of a strip of square frames, centred on `at`, rotated and scaled.
-func _draw_strip(art: Texture2D, t: float, at: Vector2, angle: float, scale_px: float, tint: Color) -> void:
+func _draw_slams() -> void:
+	for r: Ring in _rings:
+		if r.life > 0.0 and r.art == SLAM_ART:
+			_draw_strip(_ground, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / BLAST_ART_RADIUS, Color.WHITE)
+
+
+## Frame `t` (0..1) of a strip of square frames, centred on `at`, rotated and scaled, drawn on `ci`.
+func _draw_strip(ci: CanvasItem, art: Texture2D, t: float, at: Vector2, angle: float, scale_px: float,
+		tint: Color) -> void:
 	var h: float = art.get_height()
 	var n: int = int(art.get_width() / h)
 	var k: int = mini(int(t * n), n - 1)
-	draw_set_transform(at, angle, Vector2(scale_px, scale_px))
-	draw_texture_rect_region(art, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2(k * h, 0, h, h), tint)
-	draw_set_transform(Vector2.ZERO)
+	ci.draw_set_transform(at, angle, Vector2(scale_px, scale_px))
+	ci.draw_texture_rect_region(art, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2(k * h, 0, h, h), tint)
+	ci.draw_set_transform(Vector2.ZERO)
