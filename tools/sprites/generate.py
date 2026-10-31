@@ -169,46 +169,52 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
 def flicker(step=None, t=0):
-    """Shade, a kunoichi: long dark hair in a high ponytail that sways behind her, side-swept bangs, a steel
-    forehead plate, big lashed eyes over a fitted mask; fitted black shroud, red sash and scarf, ninjato on
-    her back."""
+    """Shade, a kunoichi: a choppy jagged bob with a short spiky topknot that swings in the wind, red ribbon tails fluttering from its tie, a steel forehead
+    plate, big lashed teal eyes over a mask that peaks at the bridge of her nose; fitted navy shroud, a metal
+    breastplate and a red sash."""
     low = Canvas()
-    for x, dy in legs(low, SHADOW, NAVY, step):
-        low.flat(R((x, 49 + dy, x + 5, 49 + dy)), NAVY)  # leg wraps
-        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), NAVY)
+    for x, dy in legs(low, NAVY, SHADOW, step):
+        low.flat(R((x, 49 + dy, x + 5, 49 + dy)), SHADOW)  # leg wraps
+        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), SHADOW)
     up = Canvas()
-    s = SWAY[t % 4]
-    # long ponytail from the crown, flowing down behind her back; the tip swings
-    up.part(P([(20, 6), (13, 9), (7, 18), (5 + s, 30), (4 + s, 42), (8 + s, 47), (11, 38), (14, 26), (19, 16)]), NAVY)
-    up.flat(L([(15, 12), (10, 22), (8 + s, 34)], 1), BLUE)  # hair sheen
-    up.part(L([(13, 25), (25, 45)], 4), OUTLINE)  # ninjato on the back
-    up.part(RR((9, 21, 15, 27), 1), STEEL)  # its guard and pommel
-    arm(up, ARM_X[0], SHADOW, NAVY)  # gloved
-    up.part(RR(BODY, 3), SHADOW)  # fitted shroud
-    up.part(P([(23, 34), (32, 40), (41, 34), (41, 37), (32, 43), (23, 37)]), NAVY, shade=False, line=False)  # wrap
-    up.part(R((22, 43, 42, 45)), RED, line=False)  # sash
-    arm(up, ARM_X[1], SHADOW, NAVY)
-    up.part(E((16, 5, 50, 38)), NAVY)  # hair around the head
-    up.part(P([(16, 18), (21, 18), (23, 40), (17, 37)]), NAVY)  # long lock down the back of her neck
+    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
+    arm(up, ARM_X[0], NAVY, SKIN)
+    up.part(RR(BODY, 3), NAVY)  # fitted shroud
+    up.part(P([(24, 36), (41, 36), (42, 40), (38, 44), (27, 44), (23, 40)]), STEEL)  # metal breastplate
+    up.flat(L([(33, 37), (33, 43)], 1), STEEL_D)  # its centre ridge
+    up.part(R((20, 45, 44, 46)), RED, shade=False, line=False)  # thin sash
+    arm(up, ARM_X[1], NAVY, SKIN)
+    # ribbon tails: two thin red streamers hanging from the topknot's tie, fluttering behind her head
+    for x0, lag in ((18, 1), (21, 2)):
+        up.part(L([(x0, 10), (x0 - 7 - wave(lag, 1), 20), (x0 - 12 - wave(lag + 1, 2), 30),
+                   (x0 - 13 - wave(lag + 2, 2), 37)], 2), RED, shade=False)
+    # short spiky topknot: three tufts fanning back from the crown; the whole tuft swings, the tips furthest
+    up.part(P([(28, 9), (24 - wave(0, 1), 1), (21 - wave(0, 1), 6), (13 - wave(1, 1.5), 1), (16 - wave(1, 1), 8),
+               (5 - wave(2, 2), 8), (14 - wave(1, 1), 12), (6 - wave(3, 2), 17), (19, 15)]), NAVY)
+    up.flat(L([(22, 8), (15 - wave(1, 1.5), 3)], 1), BLUE)  # its sheen
+    up.flat(L([(17, 11), (9 - wave(2, 2), 9)], 1), BLUE)
+    # choppy bob: the head's hair ends in jagged points round the back of her neck
+    up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
+        [(16, 20), (14, 31), (17, 29), (17, 37), (20, 33), (22, 39), (24, 32), (24, 20)], f)), NAVY)
+    up.flat(L([(22, 8), (32, 6)], 1), BLUE)  # crown sheen
+    up.flat(L([(16, 22), (16, 28)], 1), BLUE)  # sheen down the back
     up.part(RR(FACE, FACE_R), SKIN)  # face
-    up.part(P([(19, 11), (49, 11), (49, 16), (45, 14), (41, 18), (37, 13), (31, 18), (27, 14), (22, 18), (19, 17)]),
-            NAVY, shade=False)  # side-swept bangs
-    up.part(P([(FACE[2], 15), (51, 17), (51, 33), (FACE[2] + 1, 30)]), NAVY, shade=False)  # lock framing her face
-    up.flat(L([(23, 9), (33, 8)], 1), BLUE)  # crown sheen
+    up.part(P([(FACE[2] - 1, 14), (51, 16), (52 + wave(2, 0.5), 27), (49, 25), (49 + wave(1, 0.5), 32),
+               (FACE[2], 28)]), NAVY, shade=False)  # jagged lock framing her face
+    up.part(P([(19, 11), (49, 11), (49, 16), (46, 13), (43, 19), (39, 13), (35, 18), (31, 13), (27, 18), (24, 13),
+               (19, 17)]), NAVY, shade=False)  # choppy fringe, over the side lock
     up.part(R((29, 9, 40, 11)), STEEL)  # small forehead plate
     up.flat(R((34, 10, 35, 10)), STEEL_D)  # its engraving
-    up.part(RR((17, 7, 22, 12), 2), RED)  # ribbon tying the ponytail
-    big_eyes(up, EYES_Y - 1, EYES_X, TEAL, h=6)
+    up.part(RR((18, 6, 23, 11), 2), RED)  # ribbon tying the topknot
+    big_eyes(up, EYES_Y - 1, EYES_X, TEAL_L, h=6)
     if not KO:
         for x in EYES_X:  # lashes flick up and out at the top outer corner
             up.flat(R((x + 3, 19, x + 4, 19)), OUTLINE)
             up.dot(x + 5, 18, OUTLINE)
-    up.part(P([(23, 29), (47, 29), (47, 33), (42, 36), (29, 36), (23, 33)]), SHADOW)  # fitted mask over nose and mouth
-    up.flat(L([(32, 32), (41, 32)], 1), NAVY)  # its fold
-    up.flat(R((BLUSH[0], 28, BLUSH[0] + 1, 28)), RED)  # blush peeking above it
-    up.flat(R((BLUSH[1], 28, BLUSH[1] + 1, 28)), RED)
-    up.part(RR((24, 38, 41, 41), 2), RED)  # scarf, under the chin
-    up.part(RR((20, 38, 26, 44), 2), MAROON)  # scarf knot
+    # mask: rises from her cheek to a peak at the bridge of her nose, then drops again
+    up.part(P([(23, 34), (38, 28), (48, 33), (47, 34), (42, 36), (29, 36), (23, 36)]), SHADOW)
+    up.dot(38, 30, NAVY)  # seam under the peak
+    up.flat(R((BLUSH[0], 30, BLUSH[0] + 2, 30)), PINK)  # blush above it
     return low, up
 
 def warden(step=None, t=0):
