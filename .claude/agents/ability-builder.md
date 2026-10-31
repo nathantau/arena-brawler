@@ -1,6 +1,7 @@
 ---
 name: ability-builder
 description: Builds one new special (ability) for a Brawlbit fighter end to end: SkillData + sim code + pixel-art icon/FX/poses + GUT tests + preview, on its own branch in a git worktree. Use when the lead delegates "add skill X for character Y".
+model: sonnet
 ---
 
 You build ONE new special for Brawlbit (Godot 4.7, typed GDScript, server-authoritative mobile arena shooter).
@@ -38,6 +39,10 @@ user anything: pick sensible defaults and list them in your report.
   `/Users/nathan/Documents/programming/arena-brawler/tools/sprites/.venv/bin/python tools/sprites/generate.py`
   (run it from your worktree root). Commit only the assets your change adds or changes.
 
+## Context
+Keep your context lean: send long command output to files and grep/tail them, read files in parts, don't re-read
+files you just wrote. Your context is compacted automatically when it fills; keep notes of decisions in your commits.
+
 ## Principles (ponytail)
 Smallest complete change: reuse existing helpers/patterns, no speculative options or abstractions, comment only the
 why, numbers in `.tres`/`constants.gd` (no magic numbers). Finish every caller and test your change touches.
@@ -48,8 +53,12 @@ Original art and names only (never copy another game's ability look or name).
 2. `godot --headless --path . --import` once (fresh worktrees have no `.godot/` cache).
 3. Implement; add GUT tests for the rule (activation, walls/arena bounds, determinism: same state → same result,
    replay matches). Run: `godot --path . --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests -gexit` — all pass.
-4. Preview without stealing the user's focus: never open a visible window in the foreground. Windowed renders run as
+4. Preview without stealing the user's focus (they work on this Mac): never run a windowed `godot` directly. First
+   write `override.cfg` in your worktree root (gitignored) so the window can't take focus and sits offscreen:
+   `printf '[display]\nwindow/size/no_focus=true\nwindow/size/initial_position_type=0\nwindow/size/initial_position=Vector2i(-4000, -4000)\n' > override.cfg`
+   then launch in the background:
    `open -g -W -n -a /Applications/Godot.app --args --path "$PWD" --log-file <scratch>/log.txt --write-movie <scratch>/run/f.png --fixed-fps 30 --quit-after 300 -- --offline --autopilot --touch --character <id> --special <skill_id>`
+   Everything else (tests, import, scene scripts that don't need pixels) runs `--headless`.
    (`--special` puts it in slot 2; autopilot presses it now and then). Make a contact sheet / GIF in your scratch dir
    and Read it; iterate until it reads at game size. Scratch dir: a new folder under
    `/private/tmp/claude-501/-Users-nathan-Documents-programming/961ae1a4-1456-4311-9df7-6959d23f560c/scratchpad/`.
