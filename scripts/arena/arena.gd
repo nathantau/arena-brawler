@@ -306,6 +306,8 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	camera.zoom = Vector2.ONE * Constants.CAMERA_ZOOM
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = Constants.CAMERA_SMOOTHING
+	# Follow in step with the sim (the target moves in _physics_process), so the player doesn't shake on screen.
+	camera.process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	add_child(camera)
 	camera.global_position = p.global_position
 	camera.reset_smoothing()

@@ -20,6 +20,8 @@ func _ready() -> void:
 	session.client_disconnected.connect(_on_client_disconnected)
 
 	args = CmdArgs.parse(OS.get_cmdline_user_args())
+	# Render at the sim rate: on 120 Hz phones, frames between sim ticks made moving sprites judder.
+	Engine.max_fps = Constants.PHYSICS_FPS
 	if args.server:
 		_start_server()
 	elif args.connect_host != "":

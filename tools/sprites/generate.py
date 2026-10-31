@@ -147,7 +147,7 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 
 def flicker(step=None, t=0):
     """Shade, a kunoichi: long dark hair in a high ponytail that sways behind her, side-swept bangs, a steel
-    forehead plate, big lashed eyes and a little smile; fitted black shroud, red sash and scarf, ninjato on
+    forehead plate, big lashed eyes over a fitted mask; fitted black shroud, red sash and scarf, ninjato on
     her back."""
     low = Canvas()
     for x, dy in legs(low, SHADOW, NAVY, step):
@@ -166,20 +166,22 @@ def flicker(step=None, t=0):
     up.part(E((16, 5, 50, 38)), NAVY)  # hair around the head
     up.part(P([(16, 18), (21, 18), (23, 40), (17, 37)]), NAVY)  # long lock down the back of her neck
     up.part(E((21, 12, 47, 38)), SKIN)  # face
-    up.part(P([(19, 11), (49, 11), (49, 18), (45, 16), (41, 20), (37, 15), (31, 21), (27, 16), (22, 21), (19, 19)]),
+    up.part(P([(19, 11), (49, 11), (49, 16), (45, 14), (41, 18), (37, 13), (31, 18), (27, 14), (22, 18), (19, 17)]),
             NAVY, shade=False)  # side-swept bangs
     up.part(P([(45, 14), (50, 16), (50, 33), (46, 29)]), NAVY, shade=False)  # lock framing her face
     up.flat(L([(23, 9), (33, 8)], 1), BLUE)  # crown sheen
     up.part(R((29, 9, 40, 11)), STEEL)  # small forehead plate
     up.flat(R((34, 10, 35, 10)), STEEL_D)  # its engraving
     up.part(RR((17, 7, 22, 12), 2), RED)  # ribbon tying the ponytail
-    big_eyes(up, 21, (28, 39), TEAL, h=7)
+    big_eyes(up, 20, (28, 39), TEAL, h=7)
     if not KO:
         for x in (28, 39):  # lashes flick up and out at the top outer corner
-            up.flat(R((x + 3, 20, x + 4, 20)), OUTLINE)
-            up.dot(x + 5, 19, OUTLINE)
-    face(up, (24, 45, 30))
-    up.flat(L([(33, 32), (34, 33), (36, 33), (37, 32)], 1), MAROON)  # little smile
+            up.flat(R((x + 3, 19, x + 4, 19)), OUTLINE)
+            up.dot(x + 5, 18, OUTLINE)
+    up.part(P([(22, 30), (47, 30), (46, 35), (40, 38), (29, 38), (23, 35)]), SHADOW)  # fitted mask over nose and mouth
+    up.flat(L([(31, 33), (38, 33)], 1), NAVY)  # its fold
+    up.flat(R((24, 28, 25, 28)), RED)  # blush peeking above it
+    up.flat(R((44, 28, 45, 28)), RED)
     up.part(RR((24, 38, 41, 41), 2), RED)  # scarf, under the chin
     up.part(RR((20, 38, 26, 44), 2), MAROON)  # scarf knot
     return low, up
