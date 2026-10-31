@@ -539,7 +539,7 @@ func _draw() -> void:
 
 
 func _draw_overlay() -> void:
-	if facing.y >= 0.0 and held_weapon().data.sprite != null:
+	if facing.y >= 0.0 and held_weapon().data.sprite != null and held_weapon().data.held_art:
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)
@@ -568,7 +568,7 @@ func _draw_guns(ci: CanvasItem) -> void:
 
 func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 	var w: WeaponData = held_weapon().data
-	if w.sprite == null:
+	if w.sprite == null or not w.held_art:
 		return  # e.g. a transformed form's fists
 	# Mirror vertically when aiming left so the grip stays below the barrel.
 	var flip_v: float = -1.0 if facing.x < 0.0 else 1.0

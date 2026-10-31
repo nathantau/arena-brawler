@@ -47,8 +47,9 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
 - Death frames are generated automatically from the standing pose. Eyes must come from `big_eyes()`; custom
   eyes need an `if KO: x_eye(...)` branch (see Warden / Great Ape) so the knocked-out frames get X eyes.
 - Leg details must use the `(x, dy)` list `legs()` returns, so they follow the walk cycle.
-- No hands or arms holding things: weapons float at the chest (the game draws them). Sleeves that hang from the
-  shoulders (kimono, cape) are fine on the sheet.
+- Small arms and hands are part of the art: `arm(up, ARM_X[0], sleeve, hand)` before the body, `ARM_X[1]` after it
+  (or the character's own take: small sleeves, fire fists). Weapons float at the chest and never hold or cover
+  them; a character whose hands are the weapon sets `held_art = false` on it.
 
 ## Steps
 

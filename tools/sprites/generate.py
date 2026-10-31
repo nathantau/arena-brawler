@@ -135,6 +135,15 @@ def big_eyes(c: Canvas, y: int, xs: tuple[int, int], iris, h: int = 6):
         c.dot(x + 3, y + h - 2, WHITE)
 
 
+ARM_X = (16, 43)  # back and front arm: small, hanging at the body's sides (weapons float in front, never held)
+
+
+def arm(c: Canvas, x: int, sleeve, hand):
+    """A small arm at the body's side, its hand at the end; the back one goes before the body, the front one after."""
+    c.part(lambda d, f: d.rounded_rectangle((x, 36, x + 5, 44), 2, f), sleeve)
+    c.part(E((x, 42, x + 5, 47)), hand)
+
+
 def face(c: Canvas, blush: tuple[int, int, int], mouth: tuple[int, int] | None = None):
     """Blush marks at (left x, right x, y) and an optional tiny mouth at (x, y)."""
     lx, rx, y = blush
@@ -174,9 +183,11 @@ def flicker(step=None, t=0):
     up.flat(L([(15, 12), (10, 22), (8 + s, 34)], 1), BLUE)  # hair sheen
     up.part(L([(13, 25), (25, 45)], 4), OUTLINE)  # ninjato on the back
     up.part(RR((9, 21, 15, 27), 1), STEEL)  # its guard and pommel
+    arm(up, ARM_X[0], SHADOW, NAVY)  # gloved
     up.part(RR(BODY, 3), SHADOW)  # fitted shroud
     up.part(P([(23, 34), (32, 40), (41, 34), (41, 37), (32, 43), (23, 37)]), NAVY, shade=False, line=False)  # wrap
     up.part(R((22, 43, 42, 45)), RED, line=False)  # sash
+    arm(up, ARM_X[1], SHADOW, NAVY)
     up.part(E((16, 5, 50, 38)), NAVY)  # hair around the head
     up.part(P([(16, 18), (21, 18), (23, 40), (17, 37)]), NAVY)  # long lock down the back of her neck
     up.part(RR(FACE, FACE_R), SKIN)  # face
@@ -317,10 +328,11 @@ def sakura(step=None, t=0):
     # wider); loops every 4 ticks for idle and walk.
     wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
     up.part(P([(22, 39), (10 - wave(1, 1), 34 + s), (9 - wave(2, 1), 41 + s), (15, 44 + s), (22, 43)]), RED)  # obi bow
-    sleeve = lambda x0, x1: P([(x0 + 1, 34), (x1 - 1, 34), (x1, 40), (x1 - wave(2, 1), 48), (x0 - wave(3, 1.5), 48),
-                               (x0 - wave(2, 1), 40)])  # wide sleeve, its hem swinging back
-    up.part(sleeve(13, 23), WHITE)  # back sleeve
-    up.flat(L([(14 - wave(3, 1.5), 47), (22 - wave(2, 1), 47)], 1), PINK_L)  # its hem
+    sleeve = lambda x0, x1: P([(x0 + 1, 34), (x1 - 1, 34), (x1, 39), (x1 - wave(2, 1), 45), (x0 - wave(3, 1), 45),
+                               (x0 - wave(2, 1), 39)])  # small kimono sleeve, its hem swinging back
+    up.part(E((ARM_X[0] + 1, 43, ARM_X[0] + 5, 47)), SKIN)  # back hand, peeking out of the sleeve
+    up.part(sleeve(ARM_X[0] - 1, ARM_X[0] + 6), WHITE)  # back sleeve
+    up.flat(L([(ARM_X[0] - wave(3, 1), 44), (ARM_X[0] + 5 - wave(2, 1), 44)], 1), PINK_L)  # its hem
     up.part(RR(BODY, 3), WHITE)  # kimono
     for x in range(BODY[0] + 2, BODY[2] - 1, 4):  # hem ripples, the folds rolling back
         up.dot(x + (t % 4), BODY[3] - 1, STEEL)
@@ -330,8 +342,9 @@ def sakura(step=None, t=0):
         up.flat(R((x, y, x + 1, y + 1)), PINK_L)
     up.part(R((20, 40, 44, 44)), RED, line=False)  # obi
     up.flat(R((20, 42, 44, 42)), PINK)  # obi cord
-    up.part(sleeve(41, 51), WHITE)  # front sleeve
-    up.flat(L([(42 - wave(3, 1.5), 47), (50 - wave(2, 1), 47)], 1), PINK_L)
+    up.part(E((ARM_X[1] + 1, 43, ARM_X[1] + 5, 47)), SKIN)  # front hand
+    up.part(sleeve(ARM_X[1] - 1, ARM_X[1] + 6), WHITE)  # front sleeve
+    up.flat(L([(ARM_X[1] - wave(3, 1), 44), (ARM_X[1] + 5 - wave(2, 1), 44)], 1), PINK_L)
     # long ponytail from a high tie at the back of her head, flowing in the wind
     up.part(P([(19, 9), (12, 12), (8 - wave(0, 0.5), 20), (6 - wave(1, 1), 30), (6 - wave(2, 1.5), 40),
                (9 - wave(3, 2), 46), (12 - wave(2, 1.5), 38), (15 - wave(1, 1), 28), (19, 17)]), PINK)
@@ -474,10 +487,12 @@ def wukong(step=None, t=0):
     up = Canvas()
     s = SWAY[t % 4]
     up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11 + s, 31)], 3), BROWN)  # curly tail, tip wags
+    arm(up, ARM_X[0], YELLOW, SKIN)
     up.part(RR(BODY, 3), YELLOW)  # golden armour
     up.flat(R((31, 36, 33, 44)), ORANGE)
     up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
     up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
+    arm(up, ARM_X[1], YELLOW, SKIN)
     up.part(L([(25, 10), (16, 4), (6, 6 + s)], 2), RED, shade=False)  # pheasant feathers sway
     up.part(L([(29, 9), (24, 3), (14 + s, 2)], 2), RED, shade=False)
     up.part(E((11, 17, 21, 28)), BROWN)  # ear

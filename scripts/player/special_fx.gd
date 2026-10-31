@@ -161,7 +161,7 @@ func _draw() -> void:
 ## The clone holds the owner's current weapon (and hand), pointing the way it runs.
 func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 	var w: WeaponData = _owner.held_weapon().data
-	if w.sprite == null:
+	if w.sprite == null or not w.held_art:
 		return
 	var flip_v: float = -1.0 if dir.x < 0.0 else 1.0
 	var s: float = Constants.SPRITE_SCALE

@@ -83,7 +83,7 @@ func test_catalog_has_the_mvp_eight() -> void:
 	for w: WeaponData in catalog._by_id.values():
 		if w.kind == WeaponData.Kind.PROJECTILE:
 			assert_not_null(w.projectile_sprite, "%s has bullet art" % w.id)
-		if w.kind != WeaponData.Kind.MELEE and w.sprite != null:
+		if w.kind != WeaponData.Kind.MELEE and w.sprite != null and w.held_art:
 			# Shots leave the barrel tip, past the hand.
 			assert_gt(w.muzzle_x, Player.WEAPON_GRIP.x, "%s has its barrel tip set" % w.id)
 			assert_lt(w.muzzle_x, float(w.sprite.get_width()), w.id)

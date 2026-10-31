@@ -42,6 +42,9 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Barrel tip, sprite px along the barrel (x): shots spawn there. 0 = no gun art (skill volleys): just outside
 ## the body.
 @export var muzzle_x: float = 0.0
+## Drawn floating in front of the wielder; false = the character's own art is the weapon (Flint's fiery fists),
+## the sprite only shows in the HUD and loading room.
+@export var held_art: bool = true
 ## Who may carry it: any character sharing a tag (CharacterData.weapon_tags). Empty = everyone.
 ## A character's own id as the only tag makes a signature weapon.
 @export var tags: Array[StringName] = []
