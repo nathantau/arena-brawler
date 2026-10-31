@@ -400,6 +400,12 @@ def flint(step=None, t=0, heat=0.0):
     hot = heat >= 0.5
     crack = (ORANGE, YELLOW)[t % 2] if not hot else (YELLOW, WHITE)[t % 2]  # cracks pulse every tick
     low = Canvas()
+    if heat > 0:  # a bonfire roaring up behind him (on the legs' canvas, so behind everything): jagged tongues all
+        # licking upwards, flickering every tick, rising out of a rounded mass of fire; grows with heat
+        rx, ry = 25 * heat, 9 * heat
+        low.part(E((32 - rx, 49 - ry, 32 + rx, 49 + ry)), RED, shade=False, line=False)
+        flame(low, 7, 57, 50, round(34 * heat), t, tongues=7, line=False)
+        flame(low, 14, 50, 50, round(46 * heat), t + 1, tongues=5, line=False)
     for k, (x, dy) in enumerate(legs(low, ORANGE if hot else RED, RED, step)):  # molten legs and feet, on fire too
         low.flat(R((x + 2, 46 + dy, x + 3, 52 + dy)), YELLOW if hot else ORANGE)  # glowing inside
         low.flat(R((x + 2, 47 + dy, x + 2, 51 + dy)), crack)  # a vein of fire down each
@@ -439,12 +445,6 @@ def flint(step=None, t=0, heat=0.0):
             up.part(P(edge_a + edge_b[::-1]), col, shade=False, line=col == RED)
 
     grow = lambda root, p: [r + (q - r) * heat for r, q in zip(root, p)]
-    if heat > 0:  # flames flowing out of him: wide tongues rooted inside the body (drawn behind it, so no base
-        # shows) that sweep out and curl up
-        for k, (root, ctrl, tip) in enumerate((((24, 47), (6, 46), (7, 28)), ((24, 41), (7, 37), (10, 15)),
-                                               ((26, 36), (13, 29), (16, 5)))):
-            for side in (1, -1):  # out of step on each side
-                tongue(root, grow(root, ctrl), grow(root, tip), (t + k + (side < 0) * 2) * math.pi / 2, side)
     fist(17, 1)  # back hand, behind the body
     # glowing molten body under his suit: a hotter core inside, veins of fire pulsing every tick
     up.part(RR(BODY, 3), ORANGE if hot else RED)

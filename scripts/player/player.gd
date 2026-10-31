@@ -48,18 +48,13 @@ const BAR_WIDTH: float = 40.0
 const BAR_HEIGHT: float = 4.0
 const BAR_GAP: float = 2.0
 const BAR_OFFSET_Y: float = 28.0
-const RING_WIDTH: float = 2.0
-const TARGET_RING_PAD: float = 8.0
-const DUAL_GLOW_PAD: float = 3.0
-## Coloured ellipse under the feet: the player's colour, squashed for a top-down look.
+## Shadow ellipse under the feet, squashed for a top-down look.
 const FOOT_RING_SQUASH: float = 0.45
 const FOOT_RING_Y: float = 40.0
 const SHADOW_COLOR: Color = Color(0, 0, 0, 0.3)
-const CIRCLE_SEGMENTS: int = 24
 const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
 const COLOR_ARMOR: Color = Color(0.7, 0.75, 0.85)
 const COLOR_BAR_BG: Color = Color(0, 0, 0, 0.5)
-const COLOR_TARGET: Color = Color(1, 0.3, 0.3, 0.9)
 
 var player_id: int = 0
 var color_index: int = 0
@@ -86,8 +81,6 @@ var match_seed: int = 0
 var dead: bool = false
 var respawn_timer: float = 0.0
 var last_input_seq: int = 0
-## Set by the local player's input when this player is the current auto-aim target.
-var targeted: bool = false
 ## Render-only offset that hides small reconciliation corrections; decays to zero.
 var visual_offset: Vector2 = Vector2.ZERO
 
@@ -527,17 +520,10 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	return true
 
 
-## Ground layer (under the sprite child): shadow, player-colour foot ring, rings.
+## Ground layer (under the sprite child): the shadow under the feet.
 func _draw() -> void:
-	var r: float = Constants.PLAYER_RADIUS
-	var gun_color: Color = loadout.active().data.color
 	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
-	draw_circle(Vector2.ZERO, r, SHADOW_COLOR)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, CIRCLE_SEGMENTS, display_color, RING_WIDTH)
-	if is_dual_wielding():
-		draw_arc(Vector2.ZERO, r + DUAL_GLOW_PAD, 0.0, TAU, CIRCLE_SEGMENTS, gun_color, RING_WIDTH)
-	if targeted:
-		draw_arc(Vector2.ZERO, r + TARGET_RING_PAD, 0.0, TAU, CIRCLE_SEGMENTS, COLOR_TARGET, RING_WIDTH)
+	draw_circle(Vector2.ZERO, Constants.PLAYER_RADIUS, SHADOW_COLOR)
 
 
 func _draw_overlay() -> void:

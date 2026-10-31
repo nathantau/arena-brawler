@@ -15,7 +15,6 @@ var _frame := InputFrame.new()
 var _query := PhysicsRayQueryParameters2D.new()
 var _candidates: Array[Player] = []
 var _positions := PackedVector2Array()
-var _is_clone: Array[bool] = []
 var _space: PhysicsDirectSpaceState2D
 var _origin: Vector2 = Vector2.ZERO
 var _is_visible_cb: Callable = _is_visible
@@ -55,29 +54,22 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 func _update_auto_target(player: Player) -> void:
 	_candidates.clear()
 	_positions.clear()
-	_is_clone.clear()
 	for p: Player in arena.players:
 		if p == player or p.dead:
 			continue
 		if not p.is_hidden():
 			_candidates.append(p)
 			_positions.append(p.global_position)
-			_is_clone.append(false)
 		for c: Vector2 in p.clone_points():
 			_candidates.append(p)
 			_positions.append(c)
-			_is_clone.append(true)
 	_space = player.get_world_2d().direct_space_state
 	_origin = player.global_position
 	var idx: int = AutoAim.pick_nearest(_origin, _positions, Constants.AUTO_AIM_RANGE, _is_visible_cb)
 	var new_target: Player = _candidates[idx] if idx >= 0 else null
-	if auto_target != null:
-		auto_target.targeted = false
 	auto_target = new_target
 	if auto_target != null:
 		auto_aim_point = _positions[idx]
-		# The red ring would give away which one is real.
-		auto_target.targeted = not _is_clone[idx]
 
 
 func _is_visible(i: int) -> bool:
