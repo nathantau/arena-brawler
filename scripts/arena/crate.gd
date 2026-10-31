@@ -18,6 +18,7 @@ var size: float = 0.0
 var art: Texture2D
 
 var _cs := CollisionShape2D.new()
+var _feet: StaticBody2D
 
 
 func setup(p_index: int, center: Vector2, tile: float) -> void:
@@ -31,6 +32,8 @@ func setup(p_index: int, center: Vector2, tile: float) -> void:
 	shape.size = Vector2(size, size)
 	_cs.shape = shape
 	add_child(_cs)
+	_feet = Arena.feet_strip([Rect2(-size * 0.5, -size * 0.5, size, size)] as Array[Rect2])
+	add_child(_feet)
 
 
 func is_intact() -> bool:
@@ -52,6 +55,7 @@ func set_hp(value: int) -> void:
 	if was_intact != is_intact():
 		visible = is_intact()
 		_cs.set_deferred("disabled", not is_intact())
+		_feet.get_child(0).set_deferred("disabled", not is_intact())
 	queue_redraw()
 
 

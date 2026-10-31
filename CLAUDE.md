@@ -222,6 +222,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   iPhone insets on desktop). Redone: HUD (icon bars, weapon slots with sprites + cost, kills/deaths pill, clock),
   touch controls (pixel buttons, skill icon + cooldown, swap shows the other weapon), title screen (tiled court,
   logo, idling roster), loading room, results (trophy, portraits). Damage numbers / pickup labels outlined.
+  Walls and crates have a players-only strip on top (`LAYER_WALL_FEET`, `WALL_FEET_STRIP`, `Arena.feet_strip`) so
+  feet, drawn below the collision circle, stop at a wall's top edge instead of walking onto it (bullets ignore it).
   Pause menu (`PauseMenu`, II button top-right in a match, Esc on desktop): Resume / Restart (offline, keeps the
   character) / Leave match; offline it pauses the tree, online the match keeps running (`Arena.leave_requested`).
   iOS Simulator: Godot's simulator lib is x86_64 only, so build with `ARCHS=x86_64` (runs under Rosetta).

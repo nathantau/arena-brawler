@@ -10,6 +10,9 @@ const LAYER_SHIELDS: int = 4
 ## Destructible crates. They also sit on LAYER_WALLS so movement and line of sight treat
 ## them as walls; this extra bit lets projectiles tell them apart.
 const LAYER_CRATES: int = 8
+## A strip along the top of every wall / crate that only players collide with: their feet are drawn
+## WALL_FEET_STRIP below the collision circle's edge, so without it they walk onto the wall's top (3/4 view).
+const LAYER_WALL_FEET: int = 16
 
 # --- Arena ---
 const TILE_SIZE: float = 48.0
@@ -18,6 +21,8 @@ const CRATE_HP: int = 60
 # --- Player movement ---
 ## Per-character move speed, HP etc. live in data/characters/*.tres.
 const PLAYER_RADIUS: float = 18.0
+## Feet (Player.FOOT_RING_Y = 40) minus PLAYER_RADIUS.
+const WALL_FEET_STRIP: float = 22.0
 const PLAYER_ACCEL: float = 2600.0
 const PLAYER_DECEL: float = 2200.0
 ## Used when above normal max speed (after dash / knockback) so overspeed bleeds off fast.
