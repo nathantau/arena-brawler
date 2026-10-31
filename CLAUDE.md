@@ -422,3 +422,14 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   same durations (ward loop 8 + open/close 12, snare vines 8 + burst 12, drift dissolve/reform/swirl 16, sapling grow/wilt
   16 + idle/fire 8; `SpecialFx` *_FPS constants doubled to match). `ward_petal` now has a crease and a sheen (also in the
   snare projectile and drift icon); Petal Drift dissolves along a spiral into the swirl's own petal slots.
+- **Flint FX polish** (2026-10-31, art + `SpecialFx` constants only, no gameplay numbers): shared fire-spark helpers in generate.py
+  (`ember_spark` / `spark_cloud`: 1-2 px white/yellow heads cooling to orange/red with trails, drawn on a canvas AFTER `outline()`
+  via `finish()`, so they stay bright and clear of the frame-edge check). Flare Burst: `flint_flare` 10 frames (halo + embers streaming
+  into the white-hot heart), `flare_ring` 30 frames (uneven wall: `flare_tongues()` varies spacing, height, width, lean, when each
+  catches/burns out, plus a low flame bed and tip embers; spark spray); Blaze Run: flame loops 16 (`BLAZE_FLAME_LOOP`, FPS 40, dies 10),
+  streak 16 (FPS 48), ignite 20, small licks leaning on the tall tongues, sparks; Eruption: telegraph `eruption_crack` 16 frames
+  (`CRACK_FPS` 24, firelight halo, sparks off the cracks), `eruption` 39 frames at `ERUPTION_FPS` 22.5 (burst on frame 6), a fine
+  spark spray off the fountain, glowing embers with trails, lava glow on the floor; Supernova (VOLLEY, no charge since its duration is
+  0.1 s) gets `supernova_burst` (16 frames: embers rush in, white core, ring of 16 flame spokes + sparks) played by `SpecialFx` as a
+  poof on the rising edge of the slot (`_slot_id`); Inferno: `flint_inferno_aura` (flames licking up beside him + sparks, period 4) on
+  the form sheet, morph 24 frames (flames build, spark burst at the end).

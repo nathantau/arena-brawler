@@ -51,15 +51,15 @@ const SAPLING_IDLE_FPS: float = 10.0
 const SAPLING_FIRE_FPS: float = 32.0
 const CRACK_ART: Texture2D = preload(FX_DIR + "eruption_crack.png")
 const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
-const CRACK_FPS: float = 12.0
+const CRACK_FPS: float = 24.0  # 16-frame loop (was 8 at 12)
 ## The crack's ring of embers is drawn for this blast radius (generate.py ERUPT_R); other radii scale it.
 const ERUPTION_ART_RADIUS: float = 80.0
 ## Row of eruption.png the pillar rises from (generate.py ERUPT_BASE): it sits on the marked spot.
 const ERUPTION_BASE_Y: float = 204.0
 ## The eruption strip: ERUPTION_FRAMES (generate.py ERUPT_FRAMES) at ERUPTION_FPS, the burst landing on frame ERUPTION_BLAST_FRAME.
-const ERUPTION_FRAMES: float = 26.0
-const ERUPTION_FPS: float = 15.0
-const ERUPTION_BLAST_FRAME: float = 4.0
+const ERUPTION_FRAMES: float = 39.0
+const ERUPTION_FPS: float = 22.5  # 39 frames (was 26 at 15): same 1.73 s
+const ERUPTION_BLAST_FRAME: float = 6.0
 const ERUPTION_TIME: float = ERUPTION_FRAMES / ERUPTION_FPS
 ## The strip starts this long before the blast lands, so its first frames (the floor bulging) lead into the burst.
 const ERUPTION_LEAD: float = ERUPTION_BLAST_FRAME / ERUPTION_FPS
@@ -114,6 +114,9 @@ const FLARE_CHARGE_ART: Texture2D = preload(FX_DIR + "flint_flare.png")
 const FLARE_RING_ART: Texture2D = preload(FX_DIR + "flare_ring.png")
 const FLARE_RING_TIME: float = 0.7
 const FLARE_ART_RADIUS: float = 80.0
+## Supernova (VOLLEY of 16 fireballs, generate.py SUPERNOVA_*): a burst of fire and sparks centred on him the step it goes off.
+const SUPERNOVA_ART: Texture2D = preload(FX_DIR + "supernova_burst.png")
+const SUPERNOVA_TIME: float = 0.55
 ## Storm Cloud (generate.py STORM_*): the cloud forms (STORM_FRAMES at STORM_FPS), loops while it rains, disperses; its
 ## art is STORM_SIZE px square with the spot on the floor at row STORM_FLOOR_Y and the cloud's underside at row
 ## STORM_BASE_Y. Bolts (BOLT_W x BOLT_H art px per frame, ending BOLT_END_Y rows down) are cropped to length, never stretched.
@@ -178,7 +181,7 @@ const BLAZE_FLAMES_ART: Texture2D = preload(FX_DIR + "blaze_run_flames.png")
 const BLAZE_IGNITE_ART: Texture2D = preload(FX_DIR + "blaze_run_ignite.png")
 const BLAZE_STREAK_ART: Texture2D = preload(FX_DIR + "blaze_run_streak.png")
 const BLAZE_FPS: float = 10.0
-const BLAZE_STREAK_FPS: float = 24.0
+const BLAZE_STREAK_FPS: float = 48.0  # 16-frame loop (was 8 at 24): same cycle time
 ## Flame spacing along the run: close on horizontal runs so the trail reads continuous, wider on vertical ones (flames
 ## are tall, so they'd stack into a column), each jittered by up to BLAZE_JITTER of a step and pushed off the line by up
 ## to the sideways reach.
@@ -197,9 +200,9 @@ const BLAZE_LINE_CHAR := Color("3a3a5c")
 const BLAZE_LINE_COOL: Array[Color] = [BLAZE_LINE_ORANGE, BLAZE_LINE_RED, BLAZE_LINE_MAROON, BLAZE_LINE_MAROON]
 ## Strip layout (generate.py BLAZE_FLAME_*): flame frames are BLAZE_FLAME_LOOP loop frames per variant, then BLAZE_FLAME_DIES per variant.
 const BLAZE_FLAME_VARIANTS: int = 4
-const BLAZE_FLAME_LOOP: int = 8
-const BLAZE_FLAME_FPS: float = 20.0
-const BLAZE_FLAME_DIES: int = 6
+const BLAZE_FLAME_LOOP: int = 16
+const BLAZE_FLAME_FPS: float = 40.0  # 16-frame loops (was 8 at 20)
+const BLAZE_FLAME_DIES: int = 10
 ## Row of a stamp cell the floor spot sits on (generate.py BLAZE_FLOOR_Y); the cell's centre column is the spot's x.
 const BLAZE_FLOOR_Y: float = 36.0
 ## From the body's centre to the feet (where the fire burns), in px.
@@ -271,6 +274,8 @@ var _pillar_at: Vector2 = Vector2.ZERO
 var _flare: CharacterSkill
 var _flare_at: Vector2 = Vector2.ZERO
 var _flare_flip: bool = false
+## Whether his Supernova was going off at the last sync (the burst plays on the rising edge).
+var _supernova_was: bool = false
 var _grapple_at: Vector2 = Vector2.ZERO
 var _grapple_bit: bool = false
 var _grapple_cd: float = 0.0
@@ -359,6 +364,11 @@ func sync(p: Player) -> void:
 		var k: float = nova.data.nova_blast.splash_radius / (FLARE_ART_RADIUS * Constants.SPRITE_SCALE)
 		_poof(p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y), FLARE_RING_ART, FLARE_RING_TIME, k)
 	_flare = nova if charging else null
+	var supernova: CharacterSkill = _slot_id(p, &"supernova")
+	var bursting: bool = supernova != null and supernova.is_active() and not p.dead
+	if bursting and not _supernova_was:
+		_poof(p.global_position + p.visual_offset, SUPERNOVA_ART, SUPERNOVA_TIME)
+	_supernova_was = bursting
 	_flare_at = p.global_position + p.visual_offset
 	_flare_flip = p.facing.x < 0.0
 	_sync_swing(p)
@@ -566,6 +576,13 @@ func _process(delta: float) -> void:
 
 
 ## The owner's first skill slot of `kind` (active or not), or null.
+static func _slot_id(p: Player, id: StringName) -> CharacterSkill:
+	for slot: CharacterSkill in p.skills:
+		if slot.data.id == id:
+			return slot
+	return null
+
+
 static func _slot(p: Player, kind: SkillData.Kind) -> CharacterSkill:
 	for slot: CharacterSkill in p.skills:
 		if slot.data.kind == kind:
