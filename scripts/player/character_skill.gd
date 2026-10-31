@@ -6,6 +6,7 @@ extends RefCounted
 ## - TRANSFORM: a stronger form; fires `form_weapon` (its cooldown is snapshotted).
 ## - BLINK: like a dash's i-frames; the Player does the hop. VOLLEY: the Player fires it.
 ## - SMOKE / CLONES: centred on `anchor` (where you stood), aimed along `direction`.
+## - ERUPTION: `anchor` = the marked spot (the Player places it against the walls); it goes off as it ends.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 var data: SkillData

@@ -327,6 +327,27 @@ def flame(c: Canvas, x0: int, x1: int, base: int, height: int, t: int, tongues: 
     c.part(P(shape(t, 6)), YELLOW, shade=False, line=False)
 
 
+def flame_tongue(c: Canvas, root, ctrl, tip, phase, side=1, wide=6.0, mid=32):
+    """A flowing tongue of flame (Flint's style) along a curve root -> ctrl -> tip (a quadratic bezier), mirrored about
+    x = `mid` for side -1; a wave rolls up it with `phase`, and it tapers to a flicking tip. Red rim, orange, yellow core."""
+    for col, reach, w in ((RED, 1.0, wide), (ORANGE, 0.78, wide * 0.6), (YELLOW, 0.5, wide / 3)):
+        edge_a, edge_b = [], []
+        for i in range(9):
+            v = i / 8 * reach
+            cx = (1 - v) ** 2 * root[0] + 2 * (1 - v) * v * ctrl[0] + v * v * tip[0]
+            cy = (1 - v) ** 2 * root[1] + 2 * (1 - v) * v * ctrl[1] + v * v * tip[1]
+            gx = 2 * (1 - v) * (ctrl[0] - root[0]) + 2 * v * (tip[0] - ctrl[0])
+            gy = 2 * (1 - v) * (ctrl[1] - root[1]) + 2 * v * (tip[1] - ctrl[1])
+            g = math.hypot(gx, gy) or 1.0
+            nx, ny = -gy / g, gx / g  # across the tongue
+            bend = math.sin(v * math.pi * 2 - phase) * wide * 0.37 * v  # the sway grows towards the tip
+            cx, cy = cx + nx * bend, cy + ny * bend
+            half = w * (1 - i / 8) ** 0.6 + 0.3
+            edge_a.append((mid + side * (cx + nx * half - mid), cy + ny * half))
+            edge_b.append((mid + side * (cx - nx * half - mid), cy - ny * half))
+        c.part(P(edge_a + edge_b[::-1]), col, shade=False, line=col == RED)
+
+
 HAIR_FLOW = [0, 1, 2, 1]  # px a lock blows back per tick (period 4, so idle and walk loop)
 
 
@@ -424,26 +445,6 @@ def flint(step=None, t=0, heat=0.0):
         up.part(E((cx - 3, 41, cx + 3, 47)), ORANGE)
         up.flat(E((cx - 1, 43, cx + 1, 45)), YELLOW if not hot else WHITE)
 
-    def tongue(root, ctrl, tip, phase, side=1, wide=6.0):
-        """A flowing tongue of flame along a curve root -> ctrl -> tip (a quadratic bezier), mirrored about the
-        body's centre for side -1; a wave rolls up it with `phase`, and it tapers to a flicking tip."""
-        for col, reach, w in ((RED, 1.0, wide), (ORANGE, 0.78, wide * 0.6), (YELLOW, 0.5, wide / 3)):
-            edge_a, edge_b = [], []
-            for i in range(9):
-                v = i / 8 * reach
-                cx = (1 - v) ** 2 * root[0] + 2 * (1 - v) * v * ctrl[0] + v * v * tip[0]
-                cy = (1 - v) ** 2 * root[1] + 2 * (1 - v) * v * ctrl[1] + v * v * tip[1]
-                gx = 2 * (1 - v) * (ctrl[0] - root[0]) + 2 * v * (tip[0] - ctrl[0])
-                gy = 2 * (1 - v) * (ctrl[1] - root[1]) + 2 * v * (tip[1] - ctrl[1])
-                g = math.hypot(gx, gy) or 1.0
-                nx, ny = -gy / g, gx / g  # across the tongue
-                bend = math.sin(v * math.pi * 2 - phase) * wide * 0.37 * v  # the sway grows towards the tip
-                cx, cy = cx + nx * bend, cy + ny * bend
-                half = w * (1 - i / 8) ** 0.6 + 0.3
-                edge_a.append((32 + side * (cx + nx * half - 32), cy + ny * half))
-                edge_b.append((32 + side * (cx - nx * half - 32), cy - ny * half))
-            up.part(P(edge_a + edge_b[::-1]), col, shade=False, line=col == RED)
-
     grow = lambda root, p: [r + (q - r) * heat for r, q in zip(root, p)]
     fist(17, 1)  # back hand, behind the body
     # glowing molten body under his suit: a hotter core inside, veins of fire pulsing every tick
@@ -481,7 +482,7 @@ def flint(step=None, t=0, heat=0.0):
     up.img.alpha_composite(suit.img)
     reach = 0.3 + 0.7 * heat  # flames curling up over the front of him as the suit burns, taller when hot
     for k, (root, ctrl, tip) in enumerate((((25, 48), (20, 42), (26, 33)), ((39, 48), (44, 43), (38, 35))) if heat else ()):
-        tongue(root, [r + (q - r) * reach for r, q in zip(root, ctrl)], [r + (q - r) * reach for r, q in zip(root, tip)],
+        flame_tongue(up, root, [r + (q - r) * reach for r, q in zip(root, ctrl)], [r + (q - r) * reach for r, q in zip(root, tip)],
                (t + k * 2) * math.pi / 2, wide=2.5 + heat)
     fist(47, 3)  # front hand
     # wisps of flame breaking off him: each rises and shrinks away over 4 ticks, out of step (more when hot)
@@ -1229,6 +1230,12 @@ ICONS = {
                           c.flat(P([(6, 3), (9, 7), (8, 10), (4, 10), (3, 7)]), ORANGE), c.flat(E((5, 7, 7, 10)), YELLOW)),
     "inferno": lambda c: (c.flat(P([(6, 0), (9, 4), (11, 2), (11, 8), (9, 11), (3, 11), (1, 8), (1, 3), (3, 5)]), RED),
                           c.flat(P([(6, 3), (9, 7), (8, 10), (4, 10), (3, 7)]), ORANGE), c.flat(E((5, 7, 7, 10)), YELLOW)),
+    "eruption": lambda c: (c.flat(P([(0, 11), (4, 9), (8, 9), (12, 11)]), MAROON),
+                           c.flat(P([(3, 10), (4, 3), (5, 5), (6, 0), (7, 4), (8, 2), (9, 10)]), RED),
+                           c.flat(P([(4, 10), (5, 6), (6, 3), (7, 6), (8, 10)]), ORANGE),
+                           c.flat(P([(5, 10), (6, 6), (7, 10)]), YELLOW),
+                           c.flat(L([(1, 11), (3, 12)], 1), ORANGE), c.flat(L([(9, 12), (11, 11)], 1), ORANGE),
+                           c.dot(2, 6, YELLOW), c.dot(10, 4, ORANGE), c.dot(11, 8, YELLOW)),
     "trophy": lambda c: (c.flat(P([(2, 1), (10, 1), (9, 6), (3, 6)]), YELLOW), c.flat(R((5, 6, 7, 9)), YELLOW),
                          c.flat(R((3, 9, 9, 11)), ORANGE)),
 }
@@ -1648,6 +1655,173 @@ def slam_frame(k: int) -> Image.Image:
     return outline(c.img)
 
 
+ERUPT_SIZE = 128  # art px, square frames
+ERUPT_R = 53  # blast radius in art px (eruption_blast.tres splash 80 / SPRITE_SCALE 1.5): SpecialFx.ERUPTION_ART_RADIUS
+ERUPT_BASE = 102  # eruption strip: the floor spot's y (the pillar rises from here); SpecialFx.ERUPTION_BASE_Y
+ERUPT_SQUASH = 0.6  # the floor seen in 3/4 view
+ERUPT_FRAMES = 12
+CRACK_FRAMES = 4
+
+
+def erupt_cracks(c: Canvas, cx: float, cy: float, reach: float, glow, rng_seed: int = 9, width: int = 2):
+    """Jagged fissures in the floor running out from (cx, cy), lit from below: dark rim, `glow` inside (None = cold)."""
+    rng = random.Random(rng_seed)
+    for i in range(6):
+        a = math.tau * i / 6 + rng.uniform(-0.35, 0.35)
+        length = reach * rng.uniform(0.6, 1.0)
+        pts = [(cx, cy)]
+        for j in range(1, 5):
+            rr = length * j / 4
+            aa = a + rng.uniform(-0.3, 0.3)
+            pts.append((cx + math.cos(aa) * rr, cy + math.sin(aa) * rr * ERUPT_SQUASH))
+        c.flat(L(pts, width + 1), OUTLINE)
+        if glow:
+            c.flat(L(pts[:-1], 1), glow)
+
+
+def erupt_wisp(c: Canvas, x: float, y: float, r: float, lean: float, phase: float):
+    """A lick of flame broken off and rising, its tip curling over towards `lean` (-1 / 1); small ones are teardrops."""
+    if r >= 3:
+        flame_tongue(c, (x, y), (x - lean * r * 0.6, y - r * 1.6), (x + lean * r * 0.9, y - r * 2.8), phase,
+                     wide=r, mid=x)
+    elif r >= 1:
+        c.part(P([(x - r, y), (x + lean, y - 2.2 * r - 1), (x + r, y), (x, y + r)]), ORANGE if r >= 2 else RED,
+               shade=False, line=False)
+
+
+def erupt_smoke(c: Canvas, puffs):
+    """Lingering smoke: lumps over a darker shadow layer, light catching their tops."""
+    pts = [(x, y, r) for x, y, r in puffs if r >= 1]
+    if not pts:
+        return
+    c.part(blobs([(x + 2, y + 2, r) for x, y, r in pts]), OUTLINE, shade=False)
+    c.part(blobs(pts), SHADOW)
+    for x, y, r in pts:
+        if r >= 4:
+            c.flat(E((x - r * 0.55, y - r * 0.7, x - r * 0.1, y - r * 0.4)), STEEL_D)
+
+
+def fire_column(c: Canvas, cx: float, base: float, height: float, hw: float, t: int, hot: bool = False):
+    """A pillar of fire rising `height` from `base`: wavy sides swaying (a wave rolls up them each tick), narrowing a
+    little, crowned with wide licking tongues like his bonfire; red rim, orange, yellow core (a white-hot heart when
+    `hot`)."""
+    def shape(inset):
+        w0 = hw - inset
+        left, right = [], []
+        for i in range(9):
+            v = i / 8
+            y = base - v * height * 0.72
+            w = w0 * (1 - 0.3 * v)
+            wave = math.sin(v * math.pi * 2.4 - t * math.pi / 2) * hw * 0.2 * v
+            left.append((cx - w + wave, y))
+            right.append((cx + w + wave, y))
+        (lx, ly), (rx, _) = left[-1], right[-1]
+        span = (rx - lx) / 3
+        crown = []
+        for j in range(3):
+            hx = lx + span * (j + 0.5)
+            tall = max(1.0, height * 0.3 - inset * 1.5) * (0.75 + 0.35 * (((j * 7 + t) % 4) in (1, 2))) \
+                * (1.25 if j == 1 else 1)
+            crown += [(hx - span * 0.48, ly - tall * 0.35), (hx + SWAY[(t + j) % 4] * 2, ly - tall),
+                      (hx + span * 0.48, ly - tall * 0.35)]
+        return left + crown + right[::-1]
+    layers = [(RED, 0.0), (ORANGE, hw * 0.3), (YELLOW, hw * 0.58)] + ([(WHITE, hw * 0.8)] if hot else [])
+    for col, inset in layers:
+        if hw - inset >= 1:
+            c.part(P(shape(inset)), col, shade=False, line=col == RED)
+
+
+def eruption_crack_frame(k: int) -> Image.Image:
+    """Eruption telegraph (period-4 loop at the marked spot): the floor split open in a star of glowing fissures over a
+    scorch, the heat inside pulsing, smoke curling up off the cracks, sparks popping, and a ring of glowing embers
+    marking where the blast will reach (squashed for the 3/4 view)."""
+    c = Canvas(ERUPT_SIZE)
+    m = ERUPT_SIZE // 2
+    rx, ry = ERUPT_R, ERUPT_R * ERUPT_SQUASH
+    for i in range(28):  # the reach: embers round the ring, marching every tick
+        a = math.tau * i / 28
+        x, y = round(m + math.cos(a) * rx), round(m + math.sin(a) * ry)
+        if (i + k) % 4 != 3:
+            c.flat(R((x - 1, y, x + 1, y)), (RED, ORANGE, YELLOW)[(i + k) % 4])
+    c.part(E((m - 22, m - 13, m + 22, m + 13)), MAROON, shade=False)  # scorched floor
+    c.part(E((m - 12, m - 7, m + 12, m + 7)), (RED, ORANGE, RED, MAROON)[k], shade=False)  # glowing up from below
+    erupt_cracks(c, m, m, ERUPT_R * 0.75, (ORANGE, YELLOW, YELLOW, ORANGE)[k])
+    c.flat(E((m - 5, m - 3, m + 5, m + 3)), (YELLOW, WHITE, YELLOW, ORANGE)[k])  # the hot heart of it
+    rng = random.Random(4)
+    for i in range(4):  # smoke curling up off the cracks, each its own phase
+        x0 = m + rng.uniform(-28, 28)
+        ph = (k + i) % 4
+        r = (4, 4, 3, 2)[ph]
+        x, y = x0 + SWAY[(k + i) % 4] * 2, m - 6 - ph * 7 - i * 3
+        c.part(E((x - r, y - r, x + r, y + r)), SHADOW if ph < 2 else STEEL_D)
+    for i in range(3):  # sparks popping up
+        ph = (k + i * 2) % 4
+        x, y = m - 14 + 14 * i + SWAY[(k + i) % 4], m - 4 - ph * 5
+        if ph < 3:
+            c.dot(round(x), round(y), (WHITE, YELLOW, ORANGE)[ph])
+    return outline(c.img)
+
+
+def eruption_frame(k: int) -> Image.Image:
+    """Eruption, a one-shot rising from the floor spot (ERUPT_BASE): the ground bulges and glows, cracks splitting,
+    then a pillar of fire bursts up out of a bonfire of wide licking tongues, flames curling off its sides; it peaks,
+    its crown peels away as wisps that curl up and out, the column sinks back into the ground while embers rain down,
+    and smoke lingers over the glowing cracks."""
+    c = Canvas(ERUPT_SIZE)
+    m, b = ERUPT_SIZE // 2, ERUPT_BASE
+    rng = random.Random(11)
+    embers = [(rng.uniform(-1, 1), rng.uniform(0.4, 1.0)) for _ in range(10)]
+    puffs = [(rng.uniform(-0.7, 0.7), i / 7, rng.uniform(0.8, 1.2)) for i in range(8)]
+    height = (0, 0, 42, 76, 82, 78, 60, 40, 22, 10, 0, 0)[k]  # the column per frame: bulge, burst, peak, sink
+    hw = (0, 0, 24, 21, 20, 18, 16, 13, 10, 8, 0, 0)[k]
+    glow = (ORANGE, YELLOW, WHITE, YELLOW, YELLOW, YELLOW, ORANGE, ORANGE, ORANGE, RED, RED, None)[k]
+    erupt_cracks(c, m, b, ERUPT_R * (0.5 + 0.03 * min(k, 5)), glow)
+    if k >= 7:  # smoke billowing up off the last of it and lingering, behind the fire
+        f = (k - 7) / 4
+        grow = min(1.0, 0.6 + (k - 7) * 0.3)
+        erupt_smoke(c, [(m + dx * 30 * (0.7 + 0.6 * f) + SWAY[(k + i) % 4], b - 14 - 56 * dy * (0.6 + 0.4 * f) - 10 * f,
+                         round(12 * rr * (1 - 0.45 * f) * grow)) for i, (dx, dy, rr) in enumerate(puffs)])
+    if k <= 1:  # the floor bulges up, glowing, as the fire pushes through
+        r = 14 + 6 * k
+        c.part(E((m - r, b - r * 0.7 - 2 * k, m + r, b + r * 0.45)), BROWN)
+        c.part(E((m - r * 0.6, b - r * 0.5 - 2 * k, m + r * 0.6, b + r * 0.2)), (RED, ORANGE)[k], shade=False)
+        erupt_cracks(c, m, b - 2 * k, r * 0.9, YELLOW, rng_seed=5, width=1)
+        if k == 1:  # first spurts licking out of the split
+            flame(c, m - 14, m + 14, b, 14, k, tongues=5)
+    if 2 <= k <= 9:  # the bonfire at its foot: a rounded mass of fire with tongues licking up
+        g = min(1.0, (11 - k) / 4)
+        c.part(E((m - 30 * g, b - 8 * g, m + 30 * g, b + 8 * g)), RED, shade=False, line=False)
+        flame(c, round(m - 34 * g), round(m + 34 * g), b + 2, max(4, round(26 * g)), k, tongues=7, line=False)
+    if height:
+        if 3 <= k <= 6:  # a wide tongue sweeping out and up off each side, out of step
+            for side in (1, -1):
+                lift = 0.1 * (side < 0)
+                out = 0.2 * (k - 3)  # flung further out as it goes
+                flame_tongue(c, (m + hw * 0.6, b - height * (0.16 + lift)), (m + hw * (1.5 + out), b - height * (0.3 + lift)),
+                             (m + hw * (1.9 + out * 1.5), b - height * (0.58 + lift)),
+                             (k + (side < 0) * 2) * math.pi / 2, side, wide=9 - (k - 3), mid=m)
+        fire_column(c, m, b, height, hw, k, k in (2, 3, 4))
+    if k == 2:  # the burst: a flash at the foot
+        c.part(blobs([(m - 9, b - 1, 6), (m + 8, b, 6), (m, b - 3, 8)]), WHITE, shade=False)
+    if 6 <= k <= 10:  # the crown peeling off: licks of flame curling up and away, shrinking, smaller ones behind
+        f = (k - 6) / 4
+        for i, (dx, dy) in enumerate(((-1, 0), (1, 0.15), (-0.45, 0.45), (0.55, 0.55), (0.05, 0.25))):
+            top = b - 78 + dy * 20
+            x = m + dx * (6 + 30 * f) + math.sin(f * 4 + i) * 3
+            y = top - 10 * f + dy * 10
+            r = (7 - 2 * (i > 2)) * (1 - 0.8 * f)
+            erupt_wisp(c, x, y, r, 1 if dx >= 0 else -1, (k + i) * math.pi / 2)
+    if 4 <= k <= 10:  # embers thrown up and raining back down
+        f = (k - 3) / 7
+        for i, (vx, vy) in enumerate(embers):
+            x = m + vx * 50 * f
+            y = b - 80 * vy * f * (2 - f) * 1.4 + 40 * f * f
+            if y < b + 14:
+                col = (WHITE, YELLOW, ORANGE, RED)[min(3, int(f * 4 + (i % 2) * 0.5))]
+                c.flat(R((round(x), round(y), round(x) + (1 if f < 0.6 else 0), round(y) + 1)), col)
+    return outline(c.img)
+
+
 SLASH_FRAMES = 6
 SLASH_SIZE = 112
 SLASH_R = 46  # outer radius of the arc in art px (drawn scaled to the weapon's reach)
@@ -1815,6 +1989,8 @@ FX = {
     "blast": lambda: strip([blast_frame(k) for k in range(BLAST_FRAMES)]),
     "slam": lambda: strip([slam_frame(k) for k in range(SLAM_FRAMES)]),
     "slash": lambda: strip([slash_frame(k) for k in range(SLASH_FRAMES)]),
+    "eruption_crack": lambda: strip([eruption_crack_frame(k) for k in range(CRACK_FRAMES)]),
+    "eruption": lambda: strip([eruption_frame(k) for k in range(ERUPT_FRAMES)]),
     # Transformation strips (SkillData.form_morph): the character's first idle frame into the form's.
     # 1.35 = great_ape.tres form_scale (keep in sync).
     "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],

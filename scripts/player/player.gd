@@ -37,6 +37,8 @@ const THRUST_REACH: float = 0.35
 const INVULN_ALPHA: float = 0.45
 ## Volley shots get their own key space so they never collide with the same frame's normal shot.
 const VOLLEY_SEQ_OFFSET: int = 1 << 24
+## Eruptions go off frames after the press, so they get theirs too (a volley can be fired the frame one goes off).
+const ERUPTION_SEQ_OFFSET: int = 1 << 25
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
@@ -104,6 +106,7 @@ var _overlay := Node2D.new()
 ## Smoke clouds and shadow clones (cosmetic, from the synced special state).
 var _special_fx := SpecialFx.new()
 var _clone_query := PhysicsRayQueryParameters2D.new()
+var _sight_query := PhysicsRayQueryParameters2D.new()
 
 
 func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData], ctrl: PlayerController,
@@ -135,6 +138,7 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	# The walls players move against (shifted to the feet): standing under a wall puts the centre inside the wall
 	# itself, and a ray starting inside a wall misses it, so clones ran out through it (even past the border).
 	_clone_query.collision_mask = Constants.LAYER_WALL_FEET
+	_sight_query.collision_mask = Constants.LAYER_WALLS
 	set_character(p_character)
 
 
@@ -238,6 +242,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if dead:
 		return
 	stats.tick(delta)
+	var erupting: CharacterSkill = active_skill(SkillData.Kind.ERUPTION)
 	for slot: CharacterSkill in skills:
 		slot.tick(delta)
 	weapon.tick(delta)
@@ -249,6 +254,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		_shield.sync(_shield_slot(), dead)
 		return
 
+	if erupting != null and not erupting.is_active() and not replay:
+		_erupt(erupting, input.seq)
 	for i: int in Constants.SKILL_SLOTS:
 		if pressed[i] and not _prev_skills[i]:
 			_activate(skills[i], input, replay)
@@ -281,6 +288,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 	match slot.data.kind:
 		SkillData.Kind.BLINK:
 			move_and_collide(slot.direction * slot.data.blink_distance)  # walls stop the hop
+		SkillData.Kind.ERUPTION:
+			slot.anchor = eruption_spot(slot.direction, slot.data)
 		SkillData.Kind.VOLLEY:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
@@ -288,6 +297,26 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 				shot_fired.emit(self, seq, global_position, slot.direction, slot.data.volley_weapon.id)
 	if not replay:
 		skill_used.emit(self, slot.data)
+
+
+## The telegraph ran out: the pillar of fire goes off at the marked spot.
+func _erupt(slot: CharacterSkill, seq: int) -> void:
+	var key: int = seq + ERUPTION_SEQ_OFFSET
+	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.eruption_blast, match_seed)
+	shot_fired.emit(self, key, slot.anchor, slot.direction, slot.data.eruption_blast.id)
+
+
+## Where an eruption aimed along `dir` is marked: on the floor `eruption_distance` ahead, pulled back off the first
+## wall in the way. Measured from the feet, not the centre: standing under a wall puts the centre inside it (a ray
+## from inside misses it, so the spot would land beyond), but the feet are always in the open (Constants.WALL_FEET_STRIP).
+func eruption_spot(dir: Vector2, d: SkillData) -> Vector2:
+	var from: Vector2 = global_position + Vector2(0.0, Constants.WALL_FEET_STRIP)
+	_sight_query.from = from
+	_sight_query.to = from + dir * d.eruption_distance
+	var hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(_sight_query)
+	if hit.is_empty():
+		return _sight_query.to
+	return hit.position - dir * minf(d.eruption_wall_margin, from.distance_to(hit.position))
 
 
 ## The first skill slot of `kind` that is active right now, or null.

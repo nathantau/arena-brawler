@@ -80,7 +80,7 @@ func test_catalog_has_the_mvp_eight() -> void:
 	assert_false(pickups.has(&"bot_blaster"))
 	assert_eq(pickups.size(), 7, "signature weapons are not pickups")
 	for w: WeaponData in catalog._by_id.values():
-		if w.kind == WeaponData.Kind.PROJECTILE:
+		if w.kind == WeaponData.Kind.PROJECTILE and not w.blast:
 			assert_not_null(w.projectile_sprite, "%s has bullet art" % w.id)
 		if w.kind != WeaponData.Kind.MELEE and w.sprite != null and w.held_art:
 			# Shots leave the barrel tip, past the hand.
@@ -294,7 +294,7 @@ func test_hammer_slams_at_the_tip_hitting_everyone_near_it() -> void:
 	var swinger: Player = _player(SHOOTER, Vector2(100, 300))
 	await wait_physics_frames(2)
 	var blasts: Array = []
-	pool.exploded.connect(func(at: Vector2, _r: float, _c: Color, _slam: bool) -> void: blasts.append(at))
+	pool.exploded.connect(func(at: Vector2, _r: float, _c: Color, _slam: bool, _art: bool) -> void: blasts.append(at))
 	pool.fire_shot(SHOOTER, 1, Vector2(100, 300), Vector2.RIGHT, _w(&"warden_hammer"), SEED)
 	assert_eq(blasts.size(), 1)
 	assert_almost_eq(blasts[0].x, 100.0 + _w(&"warden_hammer").melee_range, 0.1)

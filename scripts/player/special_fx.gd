@@ -1,17 +1,28 @@
 class_name SpecialFx
 extends Node2D
-## Cosmetic, on every peer: the smoke cloud and shadow clones of a player's special, rebuilt each
+## Cosmetic, on every peer: the smoke cloud, shadow clones and eruption crack of a player's special, rebuilt each
 ## frame from the synced skill state (Player calls sync()). Clones copy the owner's sprite,
 ## walk animation, weapon and hand so they're hard to tell apart.
 ## Start / end flourishes are detected from state changes (so remote players get them too):
 ## each clone appears from its own cloud poof around the player and vanishes in one; a transformation morphs into
-## the form (SkillData.form_morph) and morphs back when it ends (no cloud drawn over the ape). All pixel-art strips from
+## the form (SkillData.form_morph) and morphs back when it ends (no cloud drawn over the ape); an eruption's crack
+## gives way to its pillar of fire. All pixel-art strips from
 ## tools/sprites/generate.py (assets/fx), drawn at the characters' pixel scale.
 
 const FX_DIR: String = "res://assets/fx/"
 const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
 const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
 const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
+const CRACK_ART: Texture2D = preload(FX_DIR + "eruption_crack.png")
+const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
+const CRACK_FPS: float = 8.0
+## The crack's ring of embers is drawn for this blast radius (generate.py ERUPT_R); other radii scale it.
+const ERUPTION_ART_RADIUS: float = 80.0
+## Row of eruption.png the pillar rises from (generate.py ERUPT_BASE): it sits on the marked spot.
+const ERUPTION_BASE_Y: float = 102.0
+const ERUPTION_TIME: float = 0.9
+## The strip starts this long before the blast lands, so its first frames (the floor bulging) lead into the burst.
+const ERUPTION_LEAD: float = ERUPTION_TIME * 2.0 / 12.0
 const POOF_TIME: float = 0.5
 const SMOKE_FPS: float = 10.0
 ## The cloud swells in when thrown and fades out at the end instead of popping.
@@ -43,6 +54,9 @@ var _smoke: CharacterSkill
 var _poofs: Array[Poof] = []
 var _was_cloning: bool = false
 var _was_transformed: bool = false
+var _erupt_started: bool = false
+## The eruption slot while its crack shows (else null).
+var _crack: CharacterSkill
 var _last_points := PackedVector2Array()
 var _rng := RandomNumberGenerator.new()
 ## Seconds into the transformation morph (-1 = none); `_morph_back` plays it in reverse.
@@ -111,6 +125,13 @@ func sync(p: Player) -> void:
 		c.flip_h = _points[i].x < clones.anchor.x
 		c.modulate.a = alpha
 	_smoke_t = smoke.elapsed() if smoke != null and smoke.is_smoking() else -1.0
+	var eruption: CharacterSkill = _slot(p, SkillData.Kind.ERUPTION)
+	var erupting: bool = eruption != null and eruption.is_active() and not p.dead
+	if erupting and not _erupt_started and eruption.active_remaining <= ERUPTION_LEAD:  # the pillar comes up
+		var lift: float = (ERUPTION_ART.get_height() * 0.5 - ERUPTION_BASE_Y) * Constants.SPRITE_SCALE
+		_poof(eruption.anchor + Vector2(0.0, lift), ERUPTION_ART, ERUPTION_TIME)
+	_erupt_started = erupting and (_erupt_started or eruption.active_remaining <= ERUPTION_LEAD)
+	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD * 0.5 else null
 	queue_redraw()
 
 
@@ -169,6 +190,11 @@ func _draw() -> void:
 		return
 	for i: int in _points.size():
 		_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
+	if _crack != null:
+		var n: int = CRACK_ART.get_width() / CRACK_ART.get_height()
+		var k: float = _crack.data.eruption_blast.splash_radius / ERUPTION_ART_RADIUS
+		_draw_frame(CRACK_ART, int(_crack.elapsed() * CRACK_FPS) % n, CRACK_ART.get_height(), _crack.anchor,
+			Constants.SPRITE_SCALE * k)
 	if _smoke_t >= 0.0:
 		var frame: int = int(_smoke_t * SMOKE_FPS) % (SMOKE_ART.get_width() / SMOKE_ART.get_height())
 		var swell: float = lerpf(SMOKE_SWELL_FROM, 1.0, clampf(_smoke_t / SMOKE_SWELL_TIME, 0.0, 1.0))

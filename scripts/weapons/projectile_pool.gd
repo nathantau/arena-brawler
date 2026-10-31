@@ -18,7 +18,8 @@ signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, dam
 signal shot_spawned(owner_id: int, origin: Vector2, facing: Vector2, weapon: WeaponData)
 signal beam_drawn(owner_id: int, from: Vector2, to: Vector2, weapon: WeaponData)
 signal swung(origin: Vector2, facing: Vector2, weapon: WeaponData)
-signal exploded(at: Vector2, radius: float, color: Color, slam: bool)
+## `art` false: a skill draws its own (Eruption's pillar of fire); keep just the sound, sparks and shake.
+signal exploded(at: Vector2, radius: float, color: Color, slam: bool, art: bool)
 
 const TRAIL_TIME: float = 0.025
 const TRAIL_WIDTH_SCALE: float = 1.2
@@ -107,6 +108,10 @@ func _ready() -> void:
 ## Fires one shot. Fully determined by its arguments, so any peer that receives
 ## (owner_id, seq, origin, facing, weapon) reproduces the identical volley.
 func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int) -> void:
+	if weapon.blast:
+		_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
+		_blast(owner_id, seq, origin, weapon)
+		return
 	shot_spawned.emit(owner_id, origin, facing, weapon)
 	if weapon.kind == WeaponData.Kind.MELEE:
 		_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
@@ -260,6 +265,11 @@ func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: We
 	var at: Vector2 = origin + facing * weapon.melee_range
 	if not AutoAim.has_line_of_sight(get_world_2d().direct_space_state, _los_query, origin, at):
 		at = origin
+	_blast(owner_id, seq, at, weapon, true)
+
+
+## One splash blast at `at` (keyed (owner, seq, 0) like any pellet); `_shot_rng` is already seeded for the shot.
+func _blast(owner_id: int, seq: int, at: Vector2, weapon: WeaponData, slam: bool = false) -> void:
 	var blast := Slot.new()
 	blast.owner_id = owner_id
 	blast.attacker_id = owner_id
@@ -270,7 +280,7 @@ func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: We
 	blast.color = weapon.color
 	blast.splash_radius = weapon.splash_radius
 	blast.splash_edge = weapon.splash_edge_scale
-	_explode(blast, at, true)
+	_explode(blast, at, slam, not weapon.blast)
 
 
 func _next_free_slot() -> Slot:
@@ -404,9 +414,9 @@ func _finish(s: Slot, at: Vector2) -> void:
 	_add_impact(at, s.radius, s.color)
 
 
-func _explode(s: Slot, at: Vector2, slam: bool = false) -> void:
+func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> void:
 	s.active = false
-	exploded.emit(at, s.splash_radius, s.color, slam)
+	exploded.emit(at, s.splash_radius, s.color, slam, art)
 	if not authoritative:
 		return
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state

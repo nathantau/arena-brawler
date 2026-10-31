@@ -171,7 +171,8 @@ func on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_i
 	if weapon == null or shooter == null:
 		return
 	arena.projectiles.fire_shot(owner_id, seq, origin, facing, weapon, arena.match_seed)
-	shooter.play_recoil(weapon.windup)
+	if not weapon.blast:  # a skill's blast somewhere else: the shooter's hands don't move
+		shooter.play_recoil(weapon.windup)
 
 
 func on_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
