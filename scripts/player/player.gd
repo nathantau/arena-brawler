@@ -25,6 +25,9 @@ const WEAPON_GRIP: Vector2 = Vector2(6, 12)
 const WEAPON_HOLD_DISTANCE: float = 8.0
 ## Hands sit below the sprite's centre.
 const WEAPON_HAND_Y: float = 6.0
+## Sheet cell rows from the top down to the chin (generate.py PAD + FACE bottom + UPPER_DY, + outline and bob): redrawn over a
+## front weapon so it sits in front of the body but behind the head.
+const SPRITE_HEAD_ROWS: int = 56
 const GUN_RECOIL_PX: float = 4.0
 const GUN_KICK_DEG: float = 14.0
 const RECOIL_TIME: float = 0.06
@@ -536,11 +539,22 @@ func _draw() -> void:
 
 
 func _draw_overlay() -> void:
-	if facing.y >= 0.0:
+	if facing.y >= 0.0 and held_weapon().data.sprite != null:
 		_draw_guns(_overlay)
+		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)
 	if not is_local:
 		_draw_bars(Constants.PLAYER_RADIUS)
+
+
+func _draw_head_over_weapon() -> void:
+	var tex: Texture2D = _sprite.sprite_frames.get_frame_texture(_sprite.animation, _sprite.frame)
+	if tex == null or not _sprite.visible:
+		return
+	var cell: Vector2 = tex.get_size()
+	_overlay.draw_set_transform(_sprite.position, 0.0, _sprite.scale * Vector2(-1.0 if _sprite.flip_h else 1.0, 1.0))
+	_overlay.draw_texture_rect_region(tex, Rect2(-cell * 0.5, Vector2(cell.x, SPRITE_HEAD_ROWS)),
+		Rect2(0, 0, cell.x, SPRITE_HEAD_ROWS), _sprite.modulate)
 
 
 func _draw_guns(ci: CanvasItem) -> void:

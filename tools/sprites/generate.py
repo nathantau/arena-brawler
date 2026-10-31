@@ -1516,7 +1516,6 @@ def strip(frames_: list[Image.Image]) -> Image.Image:
 FX = {
     "poof": lambda: strip([poof_frame(80, k, WHITE) for k in range(POOF_FRAMES)]),
     "poof_small": lambda: strip([poof_frame(48, k, WHITE) for k in range(POOF_FRAMES)]),
-    "poof_dark": lambda: strip([poof_frame(64, k, SHADOW) for k in range(POOF_FRAMES)]),
     "smoke": lambda: strip([smoke_frame(k) for k in range(SMOKE_FRAMES)]),
     "blast": lambda: strip([blast_frame(k) for k in range(BLAST_FRAMES)]),
     "slam": lambda: strip([slam_frame(k) for k in range(SLAM_FRAMES)]),

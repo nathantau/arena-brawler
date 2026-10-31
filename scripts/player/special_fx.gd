@@ -5,13 +5,12 @@ extends Node2D
 ## walk animation, weapon and hand so they're hard to tell apart.
 ## Start / end flourishes are detected from state changes (so remote players get them too):
 ## each clone appears from its own cloud poof around the player and vanishes in one; a transformation morphs into
-## the form (SkillData.form_morph) and bursts out of a cloud; it ends in a dark puff, morphing back. All pixel-art strips from
+## the form (SkillData.form_morph) and morphs back when it ends (no cloud drawn over the ape). All pixel-art strips from
 ## tools/sprites/generate.py (assets/fx), drawn at the characters' pixel scale.
 
 const FX_DIR: String = "res://assets/fx/"
 const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
 const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
-const POOF_DARK: Texture2D = preload(FX_DIR + "poof_dark.png")
 const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
 const POOF_TIME: float = 0.5
 const SMOKE_FRAMES: int = 4
@@ -25,8 +24,6 @@ const APPEAR_DELAY: float = 0.08
 const APPEAR_TIME: float = 0.2
 const CLONE_POOF_TIME: float = 0.7
 const MORPH_TIME: float = 1.0
-## The transformation's (dark, stormy) cloud bursts this far into the morph, as it finishes.
-const MORPH_POOF_AT: float = 0.8
 
 
 class Poof:
@@ -78,7 +75,6 @@ func sync(p: Player) -> void:
 		if _morph_t < 0.0:
 			_poof(p.global_position, POOF_BIG)
 	elif _was_transformed and not transformed and not p.dead:
-		_poof(p.global_position, POOF_DARK)
 		_start_morph(p, true)
 	_was_transformed = transformed
 	if p.dead:
@@ -115,8 +111,6 @@ func _process(delta: float) -> void:
 		pf.t += delta
 	_poofs = _poofs.filter(func(pf: Poof) -> bool: return pf.t < pf.duration)
 	if _morph_t >= 0.0:
-		if not _morph_back and _morph_t < MORPH_POOF_AT and _morph_t + delta >= MORPH_POOF_AT:
-			_poof(_morph_at, POOF_DARK)
 		_morph_t += delta
 		if _morph_t > MORPH_TIME:
 			_morph_t = -1.0

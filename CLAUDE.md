@@ -185,7 +185,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   body box (`CROWNS`) fit; all animations use whole cells, menus use `CharacterData.portrait()` (`SPRITE_PORTRAIT_RECT`). On a real death `Player._spawn_corpse()` plays "die" on every peer; scarves/feathers/plumes sway and Warden's gem glints via the `t` tick. Flicker (hooded scout, scarf), Warden (knight, plume,
   tower shield), Twinshot (wide-brim gunslinger, two holsters), Wukong (monkey king, cloud puffs via `AURAS`, Dash). Flint (soot-black fire elemental, head on fire: an upright flickering flame drawn above the body box via generate.py `CROWNS`; Ember Palm: short-range piercing fire stream with drag; Supernova: VOLLEY of 16 fireballs). All characters share one base modelled on Apex's face (generate.py `FACE`, `FACE_R`, `BODY`, `EYES_X/Y`, `BLUSH`, `MOUTH`). Sakura (pink-haired girl in a white kimono, red obi bow, middle-parted hair with mirrored curtains and a long ponytail tied with a cherry blossom; Blossom Fan: 5 bouncing petals with drag; Petal Storm: VOLLEY of 40 homing petals (`WeaponData.homing`: turn rate toward the nearest hittable enemy) that sweep round in a wave; uses the palette's PINK / PINK_L). New characters: `.claude/skills/new-character`. `CharacterData.sprite_sheet` → `sprite_frames()`
   builds a shared SpriteFrames ("idle", "hit", "walk"); the Player has an `AnimatedSprite2D` (Nearest, x1.5) plus an overlay
-  node for the front gun and bars. Player colour = foot ring only (sheets aren't recoloured).
+  node for the front weapon and bars. Player colour = foot ring only (sheets aren't recoloured).
   The script also writes `assets/icon.png` and one 48x24 image per weapon (`assets/sprites/weapons/<id>.png`).
 - **Character weapons** (2026-10-30): many-to-many via tags. `WeaponData.tags` (e.g. `blade`, `light`, `heavy`,
   `precision`, `explosive`, `arcane`; empty = anyone) vs `CharacterData.weapon_tags`; `can_use()` = any shared tag.
@@ -194,7 +194,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   slot-0 sidearm (bots keep the Dummy Blaster): Flicker's Ripple Kunai (3-knife fan, `pierce` = passes through
   1 player), Warden's Oath Hammer (melee slam: one blast at the tip of the reach, not behind walls), Twinshot's
   Ricochet Six (bullets bounce off walls twice and still hit), Wukong's Cloud Staff (`thrust`: long narrow stab).
-  No hands or arms: weapons float at chest height in front of the body (`Player.WEAPON_HAND_Y`,
+  No hands or arms: weapons float at chest height, in front of the body but behind the head (the frame's head rows, `Player.SPRITE_HEAD_ROWS`, are redrawn over them; aiming up they go behind) (`Player.WEAPON_HAND_Y`,
   `WEAPON_HOLD_DISTANCE`) and follow the aim; shots start from there (`shot_origin`, `muzzle_distance`).
   Weapons are drawn from their sprite at the character's pixel scale, pivoting on the grip: guns
   kick back and up, melee sweeps the arc from a raised guard, thrusts stab out and back (`Player._draw_gun`).
@@ -252,9 +252,9 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   (`SkillData.form_morph`: 8-frame 96 px strip, full colour: Wukong, six in-between creatures
   drawn by generate.py `ape_morph(t, scale)` (every body part's shape interpolated, arms/fists sprout, feathers and
   collar retract, colours switch in stages, growing), the ape; drawn at the normal sprite scale while the real
-  sprite is hidden) and bursts out of a cloud; it ends in a dark puff,
-  morphing back. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
-  (generate.py `FX`: poof / poof_small / poof_dark 10 frames (swell, then burst into wisps), wukong_ape_morph, smoke 4-frame loop; `Canvas(size)`
+  sprite is hidden; his storm clouds live in the sheets, no cloud is drawn over him),
+  and morphs back when it ends. These and the Smoke Bomb cloud are pixel-art strips generated into `assets/fx/`
+  (generate.py `FX`: poof / poof_small 10 frames (swell, then burst into wisps), wukong_ape_morph, smoke 4-frame loop; `Canvas(size)`
   now takes any size). `Effects` is pixel art too: explosions play `blast` (fireball → smoke + embers), melee slams `slam` (dust ring + floor cracks; `exploded(..., slam)`), sword swings `slash` (crescent smear tinted to the weapon), all sized to the radius / reach; beams and particles are hard-edged, snapped to art pixels and shrink instead of fading. Preview all effects: `tools/fx_preview.gd`. Bullets are per-weapon pixel art (`WeaponData.projectile_sprite`, generate.py `PROJECTILES` → `assets/sprites/projectiles/`: energy bolts, lead pellets, sniper tracer, rocket with flickering exhaust, rolling grenade, kunai, brass round, plasma), rotated to the flight direction with a 2-frame flicker and a pixel trail; crits are drawn x1.35, flash and leave gold sparkles; wall hits pop as four pixel sparks. Not done: bots don't prefer usable pickups; the HUD doesn't say why a pickup was refused.
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
