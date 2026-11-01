@@ -3,6 +3,7 @@ and 1 px dim teeth between them, plus a dark-gold cuirass: straight top edge und
 ridge, a flat hem; the right pec is split by a jagged crack (fur showing) with its bottom-right corner snapped off, the left is
 dented. Run: tools/sprites/.venv/bin/python tools/sprites/ape_concepts5.py [out_png]
 """
+import math
 import sys
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from PIL import Image, ImageDraw
 import generate as g
 import ape_concepts3 as c3
 from generate import E, L, P, R
-from ape_concepts import dent, font, idle, mask_of, scratch, show, BOX, GOLD_D, GOLD_X
+from ape_concepts import dent, font, idle, mask_of, scratch, seam, show, BOX, GOLD_D, GOLD_X
 from palette import BROWN, MAROON, ORANGE, OUTLINE, RED, STEEL, WALNUT_D, WHITE
 
 
@@ -44,37 +45,46 @@ def tweak(up):
         up.dot(x, y, OUTLINE)
     up.dot(38, 26, STEEL)
     up.dot(40, 26, STEEL)
-    # ---- cuirass
-    top, hem = 31, 44
-    left = [(21, top), (32, top), (32, hem), (26, hem), (24, 41), (22, 36)]
-    right = [(33, top), (45, top), (44, 36), (43, 38), (41, 40), (42, 42), (39, hem), (33, hem)]
-    dark_plate(up, P(left))
-    dark_plate(up, P(right))
-    for x in list(range(22, 32)) + list(range(34, 45)):
-        up.dot(x, top, GOLD_X)  # dark rim along the top edge
-        if (x + top) % 2 == 0 or x < 28:
-            up.dot(x, top + 1, ORANGE)  # lit lip below it
-    for y in range(top + 1, hem):
-        up.dot(32, y, ORANGE)  # centre ridge: lit, then shaded
-        up.dot(33, y, GOLD_X)
-    for pts in ([(23, 35), (25, 33)], [(34, 35), (36, 33)]):  # pec curves: a lit arc on each upper-left
-        for x, y in pts:
-            up.dot(x, y, ORANGE)
-    for x in list(range(24, 32)) + list(range(34, 41)):
-        up.dot(x, 39, GOLD_X)  # the pecs sit over a lower tier
-        if x < 31:
-            up.dot(x, 40, ORANGE) if x % 2 == 0 else None
-    # right pec: jagged crack, dark gap with fur showing
-    path = [(39, 32), (38, 34), (40, 36), (38, 38), (39, 40), (37, 42), (38, 44)]
-    up.flat(L(path, 1), WALNUT_D)
-    for x, y in path:
-        up.dot(x + 1, y, WALNUT_D)
-    for x, y in ((39, 35), (38, 37), (39, 41), (38, 43)):
+    # ---- cuirass: the left half still sits on his chest; the right half has torn away along a jagged break and hangs off
+    # his right side on the last of its strap, tilted ~25 degrees, down past the belly toward the hip
+    top = 31
+    brk = [(33, 31), (31, 34), (33, 36), (30, 39), (32, 41), (29, 44)]  # jagged break edge, top to bottom
+    gap = [(x + 2, y) for x, y in brk]
+    up.part(P(brk + gap[::-1]), WALNUT_D, shade=False, line=False)  # dark gap, fur where the plate was
+    for x, y in ((34, 33), (35, 35), (34, 37), (33, 40), (35, 42), (31, 43)):
         up.dot(x, y, MAROON)
-    up.dot(39, 39, RED)
-    # left pec: one dent; right pec: one scratch with the glint
+    for x, y in ((35, 34), (34, 38), (33, 42)):
+        up.dot(x, y, RED)
+    dark_plate(up, P([(21, top)] + brk + [(26, 44), (24, 41), (22, 36)]))
+    for x in range(22, 32):
+        up.dot(x, top, GOLD_X)  # dark rim along the straight top edge
+        up.dot(x, top + 1, ORANGE)  # lit lip below it
+    for x in range(24, 30):
+        up.dot(x, 39, GOLD_X)  # lower tier seam
+    for x, y in ((23, 35), (24, 34), (25, 33)):
+        up.dot(x, y, ORANGE)  # pec curve, lit
+    up.dot(23, 32, WHITE)  # the one glint
     dent(up, 26, 37)
-    scratch(up, 42, 34, 2)
+    # the torn-off half: a plate tilted 25 degrees, jagged inner edge, hanging from the shoulder strap
+    local = [(-5, 0), (5, 0), (6, 5), (5, 11), (2, 14), (-3, 13), (-5, 10), (-3, 8), (-6, 5), (-3, 3)]
+    a = math.radians(-25)
+    pivot = (45, 32)
+    hang = [(round(pivot[0] + x * math.cos(a) - y * math.sin(a)), round(pivot[1] + x * math.sin(a) + y * math.cos(a))) for x, y in local]
+    dark_plate(up, P(hang))
+    for (x0, y0), (x1, y1) in ((hang[9], hang[0]), (hang[0], hang[1])):  # lit upper edges
+        for i in range(5):
+            up.dot(x0 + (x1 - x0) * i // 4, y0 + (y1 - y0) * i // 4 + 1, ORANGE)
+    up.dot(hang[1][0] - 1, hang[1][1] + 2, WHITE)
+    p0, p1 = hang[0], hang[1]
+    for i in range(5):  # its top rim
+        up.dot(p0[0] + (p1[0] - p0[0]) * i // 4, p0[1] + (p1[1] - p0[1]) * i // 4, GOLD_X)
+    seam(up, [hang[2], (hang[2][0] - 2, hang[2][1] + 3), (hang[2][0] - 1, hang[2][1] + 6)], GOLD_X)  # a crack in it
+    # the strap: what is left of it holds the half to his shoulder; the other end snapped and frays from the left plate
+    seam(up, [(45, 31), (48, 28), (49, 27)], BROWN)
+    seam(up, [(46, 31), (49, 28)], BROWN)
+    seam(up, [(33, 31), (35, 30)], BROWN)
+    up.dot(36, 31, BROWN)
+    up.dot(35, 32, OUTLINE)
 
 
 def build(v):
