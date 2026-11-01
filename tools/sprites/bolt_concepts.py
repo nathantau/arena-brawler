@@ -45,39 +45,72 @@ VARIANTS = {
 }
 
 
+def stripe_v(c, x, y0, y1, stripe):
+    """A stripe that follows the form: lit head, base, shaded tail."""
+    c.flat(L([(x, y0), (x, y1)], 1), stripe)
+    c.dot(x, y0, LIGHTER[stripe])
+    c.dot(x, y1, DARKER[stripe])
+
+
 def build_legs(v):
     low = Canvas()
-    suit, stripe = v["suit"], v["stripe"]
+    suit, stripe, acc = v["suit"], v["stripe"], v["accent"]
+    lit, dark = LIGHTER[suit], DARKER[suit]
     for x, dy in legs(low, suit, WHITE, None):
-        low.flat(L([(x + 4, 46 + dy), (x + 4, 51 + dy)], 1), stripe)  # side stripe
-        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), DARKER[suit])  # elastic cuff
-        low.flat(L([(x + 1, 47 + dy), (x + 1, 49 + dy)], 1), LIGHTER[suit])  # lit fold
-        low.flat(R((x + 4, 55 + dy, x + 6, 56 + dy)), v["accent"])  # sneaker toe accent
-        low.dot(x + 2, 54 + dy, STEEL)  # laces
-        low.dot(x + 3, 55 + dy, STEEL)
+        # only ~3 rows of trousers show under the jacket: keep them simple and readable
+        low.flat(R((x, 49 + dy, x + 3, 52 + dy)), suit)
+        low.flat(L([(x, 49 + dy), (x, 51 + dy)], 1), lit)  # lit edge
+        low.flat(R((x + 4, 49 + dy, x + 5, 52 + dy)), dark)  # shaded side
+        stripe_v(low, x + 3, 49 + dy, 52 + dy, stripe)  # side stripe
+        low.flat(R((x, 52 + dy, x + 2, 52 + dy)), dark)  # elastic ankle cuff, bunched
+        # sneaker: toe cap, heel tab, strap, laces, sole
+        low.flat(R((x + 5, 55 + dy, x + 7, 56 + dy)), acc)
+        low.flat(R((x - 1, 55 + dy, x - 1, 56 + dy)), acc)
+        low.flat(L([(x + 1, 55 + dy), (x + 3, 54 + dy)], 1), acc)
+        low.dot(x + 4, 54 + dy, STEEL_D)
+        low.flat(R((x - 1, 57 + dy, x + 7, 57 + dy)), STEEL_D)  # sole
     return low
 
 
 def build_body(v):
-    suit, stripe = v["suit"], v["stripe"]
+    suit, stripe, acc = v["suit"], v["stripe"], v["accent"]
+    lit, dark = LIGHTER[suit], DARKER[suit]
     a = Canvas()
+
+    def sleeve(x, sx):  # stripe x offset sx
+        stripe_v(a, x + sx, 37, 40, stripe)
+        a.flat(R((x + 1, 41, x + 4, 41)), dark)  # ribbed cuff
+        a.dot(x + 1, 41, lit)
+        a.flat(L([(x + 2, 38), (x + 3, 39)], 1), dark)  # crease at the elbow
+
     arm(a, g.ARM_X[0], suit, SKIN)
-    a.flat(L([(g.ARM_X[0] + 1, 37), (g.ARM_X[0] + 1, 41)], 1), stripe)
-    a.flat(R((g.ARM_X[0], 41, g.ARM_X[0] + 5, 41)), DARKER[suit])
+    sleeve(g.ARM_X[0], 1)
     a.part(RR(BODY, 3), suit)  # jacket
-    a.flat(R((20, 46, 44, 47)), DARKER[suit])  # ribbed hem
-    a.flat(L([(20, 37), (20, 45)], 1), stripe)  # side stripe down the back of the jacket
-    a.flat(L([(33, 38), (33, 47)], 1), STEEL)  # zip
-    a.flat(L([(34, 38), (34, 47)], 1), STEEL_D)
-    a.flat(R((32, 38, 34, 39)), WHITE)  # pull
-    a.flat(R((24, 37, 43, 37)), stripe)  # collar edge under the chin
-    a.flat(L([(25, 41), (26, 41)], 1), stripe)  # little chest logo
-    a.dot(26, 42, stripe)
-    a.dot(38, 40, LIGHTER[suit])  # sheen
-    a.dot(38, 41, LIGHTER[suit])
+    a.flat(L([(21, 38), (21, 42)], 1), lit)  # lit left edge
+    a.flat(L([(29, 42), (27, 45)], 1), dark)  # folds running down from the chest
+    a.flat(L([(38, 41), (40, 45)], 1), dark)
+    a.flat(L([(23, 44), (26, 43)], 1), dark)  # pocket slit
+    a.flat(R((20, 46, 44, 47)), dark)  # ribbed hem
+    for x in range(22, 43, 2):
+        a.dot(x, 47, OUTLINE)
+    a.flat(R((21, 46, 30, 46)), suit)  # hem lit on the left
+    # collar: gold-trimmed band under the chin, a dark lining behind it
+    a.flat(R((26, 37, 40, 37)), stripe)
+    a.flat(R((24, 37, 25, 37)), LIGHTER[stripe])
+    a.flat(R((41, 37, 43, 37)), DARKER[stripe])
+    a.flat(R((28, 38, 38, 38)), dark)
+    # zip and pull tab
+    a.flat(L([(33, 38), (33, 46)], 1), STEEL)
+    a.flat(L([(34, 39), (34, 46)], 1), STEEL_D)
+    a.flat(R((32, 40, 34, 42)), WHITE)
+    a.flat(R((32, 42, 34, 42)), STEEL)
+    # gold bolt patch on the left chest
+    a.flat(P([(29, 39), (25, 42), (27, 42), (26, 45), (31, 41), (29, 41)]), stripe)
+    a.flat(L([(29, 39), (26, 42)], 1), LIGHTER[stripe])
+    a.dot(26, 45, DARKER[stripe])
+    a.dot(30, 41, DARKER[stripe])
     arm(a, g.ARM_X[1], suit, SKIN)
-    a.flat(L([(g.ARM_X[1] + 4, 37), (g.ARM_X[1] + 4, 41)], 1), stripe)
-    a.flat(R((g.ARM_X[1], 41, g.ARM_X[1] + 5, 41)), DARKER[suit])
+    sleeve(g.ARM_X[1], 4)
     return a
 
 
@@ -324,5 +357,129 @@ def main():
     out.convert("RGB").save(OUT_DIR / "bolt_concepts.png")
 
 
+# --- round 2: variant C refined (clean normal hair options, polished godspeed) ----------------------------------------------------------
+HEAD2 = (17, 7, 48, 35)  # the one head / hair-mass shape shared by every normal option and by godspeed
+HAIR2 = {
+    "sweep": dict(label="1  side-swept quiff", bumps=[(28, 3, 46, 13)],
+                  fringe=[(21, 15), (49, 15), (49, 17), (44, 17), (36, 19), (28, 18), (23, 21), (21, 24)]),
+    "tousled": dict(label="2  tousled, soft rounded tufts", bumps=[(20, 5, 31, 13), (29, 2, 41, 11), (38, 5, 48, 14)],
+                    fringe=[(21, 15), (49, 15), (49, 18), (46, 18), (44, 20), (40, 18), (36, 20), (32, 18), (28, 20), (24, 20), (22, 22)]),
+    "crop": dict(label="3  neat short crop, side parting", bumps=[],
+                 fringe=[(21, 15), (49, 15), (49, 18), (45, 18), (40, 17), (36, 16), (33, 19), (27, 20), (23, 22)]),
+}
+# godspeed: the same head, a few big faceted spikes standing up (tips lean back for the wind) plus two flames off the back
+GOD2_TOP = [(23, 17, -2, 5), (30, 25, -12, 5.5), (37, 36, -15, 5.5), (44, 47, -5, 5)]
+GOD2_BACK = [[(22, 15), (4, 7), (25, 26)], [(19, 25), (2, 26), (22, 35)]]
+GOD2_FRINGE = [(21, 15), (49, 15), (49, 19), (45, 17), (42, 19), (38, 16), (34, 19), (30, 16), (26, 19), (22, 21)]
+
+
+def spike2(c, xc, tx, ty, hw, base=16):
+    c.part(P(pts([(xc - hw, base), (tx, ty), (xc + hw, base)])), YELLOW, shade=False)
+    c.flat(L(pts([(xc - hw + 1, base - 1), (tx - 1, ty + 5)]), 1), LIGHTER[YELLOW])  # lit edge
+    c.flat(P(pts([(tx, ty + 2), (xc + hw, base), (xc, base)])), ORANGE)  # shaded right facet
+
+
+def hair_layer2(opt, a, god):
+    h = Canvas(g.CELL)
+    h.img.paste(a.img, (O, O))
+    h.px = h.img.load()
+    col = YELLOW if god else BROWN
+    bumps = [] if god else HAIR2[opt]["bumps"]
+    ell = lambda bx: (lambda d, f: d.ellipse(tuple(v + O for v in bx), f))
+    h.part(lambda d, f: [ell(HEAD2)(d, f)] + [ell(b)(d, f) for b in bumps], col, shade=not god)
+    if god:
+        sp = Canvas(g.CELL)
+        for poly in GOD2_BACK:
+            sp.part(P(pts(poly)), YELLOW, shade=False)
+            sp.flat(P(pts([poly[1], poly[2], (poly[0][0] + 2, poly[0][1] + 6)])), ORANGE)
+        for t in GOD2_TOP:
+            spike2(sp, *t)
+        h.img.alpha_composite(sp.img)
+        h.px = h.img.load()
+        h.flat(lambda d, f: d.arc(tuple(v + O for v in HEAD2), 100, 175, f), ORANGE)
+    else:
+        h.flat(L(pts([(24, 9), (32, 6)]), 1), LIGHTER[col])
+        if opt == "crop":
+            h.flat(L(pts([(37, 8), (36, 14)]), 1), DARKER[col])  # the parting
+    return h
+
+
+def face_layer2(opt, h, god):
+    b = Canvas()
+    b.img.paste(h.img.crop((O, O, O + 64, O + 64)))
+    b.px = b.img.load()
+    col = YELLOW if god else BROWN
+    b.part(RR(FACE, FACE_R), SKIN)
+    b.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)
+    b.part(P(GOD2_FRINGE if god else HAIR2[opt]["fringe"]), col, shade=False)
+    for x in range(21, 50):  # no seam where the fringe meets the hair mass
+        if b.px[x, 14][:3] == OUTLINE and b.px[x, 13][3] and b.px[x, 13][:3] != OUTLINE:
+            b.px[x, 14] = b.px[x, 13]
+    b.part(P([(46, 16), (49, 17), (49, 23), (47, 24)]), col, shade=False)  # sideburn
+    if god:
+        for x in g.EYES_X:
+            b.flat(R((x - 1, 22, x + 4, 27)), OUTLINE)  # wide open, glowing
+            b.flat(R((x, 23, x + 3, 26)), WHITE)
+            b.flat(R((x + 1, 24, x + 2, 26)), TEAL_L)  # electric iris
+            b.dot(x + 2, 25, WHITE)
+            b.dot(x - 2, 25, TEAL_L)  # crackle at the corners
+            b.dot(x + 5, 24, TEAL_L)
+        b.flat(L([(29, 20), (35, 22)], 1), OUTLINE)  # fierce brows
+        b.flat(L([(40, 22), (46, 20)], 1), OUTLINE)
+    else:
+        big_eyes(b, g.EYES_Y, g.EYES_X, BROWN)
+    g.face(b, g.BLUSH, None)
+    if god:
+        b.flat(R((36, 29, 41, 31)), MAROON)
+        b.flat(R((36, 29, 41, 29)), WHITE)
+        b.dot(35, 28, OUTLINE)
+        b.dot(42, 28, OUTLINE)
+    else:
+        b.flat(L([(36, 30), (37, 31), (39, 31), (40, 30)], 1), MAROON)
+    return b
+
+
+def character2(opt, god):
+    v = VARIANTS["c"]
+    low = build_legs(v)
+    a = build_body(v)
+    h = hair_layer2(opt, a, god)
+    b = face_layer2(opt, h, god)
+    f = Image.new("RGBA", (g.CELL, g.CELL), (0, 0, 0, 0))
+    f.alpha_composite(low.img, (O, O))
+    up = h.img.copy()
+    up.alpha_composite(b.img, (O, O))
+    f.alpha_composite(up, (0, g.UPPER_DY))
+    return g.outline(f)
+
+
+def godspeed2(f):
+    c = Canvas(g.CELL)
+    rng = random.Random(9)
+    arcs_from(c, rng, edge_roots(f, rng, 90), (48, 52), 7, (10, 20), forks=0.6, glow=YELLOW, tip=WHITE, jit=2.8)
+    out = Image.new("RGBA", f.size, (0, 0, 0, 0))
+    out.alpha_composite(aura(f, [(1, full, YELLOW), (2, check, ORANGE)]))
+    out.alpha_composite(f)
+    out.alpha_composite(c.img)
+    return out
+
+
+def main2():
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for opt in HAIR2:
+        pn, ps = look_panel(character2(opt, False)), look_panel(godspeed2(character2(opt, True)))
+        sheet = Image.new("RGBA", (pn.width + ps.width + 24, pn.height + 16), (24, 24, 32, 255))
+        sheet.alpha_composite(pn, (8, 8))
+        sheet.alpha_composite(ps, (pn.width + 16, 8))
+        rows.append(labelled(sheet, "C refined, hair " + HAIR2[opt]["label"]))
+    out = Image.new("RGBA", (rows[0].width, sum(r.height for r in rows)), (24, 24, 32, 255))
+    y = 0
+    for r in rows:
+        out.alpha_composite(r, (0, y))
+        y += r.height
+    out.convert("RGB").save(OUT_DIR / "bolt_c2.png")
+
+
 if __name__ == "__main__":
-    main()
+    main2() if "--c2" in sys.argv else main()
