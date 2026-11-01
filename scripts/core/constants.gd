@@ -111,6 +111,7 @@ const SPRITE_WALK_MIN_SPEED: float = 40.0
 const SPRITE_SCALE: float = 1.5
 const HAPTIC_HIT_MS: int = 30
 const HAPTIC_KILL_MS: int = 60
+const HAPTIC_DEALT_MS: int = 20
 const HAPTIC_EXPLOSION_MS: int = 45
 ## World-to-screen zoom; >1 trades arena view for bigger characters on phone screens.
 const CAMERA_ZOOM: float = 1.4

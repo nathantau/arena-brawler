@@ -65,6 +65,14 @@ const RECIPES: Dictionary[StringName, Array] = {
 	&"shadow_step": [0.4, 500.0, 70.0, Wave.SAW, 0.55, 0.8, 0.01, 7.0, 0.45],
 	&"hound": [0.5, 90.0, 220.0, Wave.SAW, 0.4, 0.7, 0.04, 5.0, 0.5],
 	&"bind": [0.3, 1200.0, 160.0, Wave.SQUARE, 0.25, 0.4, 0.002, 10.0, 0.4],
+	# Feedback: ready ping, hit confirm ticks, kill ding, streak sting, low-HP thump, empty-energy click, last-seconds tick.
+	&"ready": [0.14, 900.0, 1500.0, Wave.SINE, 0.0, 0.0, 0.003, 14.0, 0.3],
+	&"marker": [0.04, 1700.0, 1300.0, Wave.SQUARE, 0.1, 0.1, 0.001, 70.0, 0.22],
+	&"marker_kill": [0.2, 700.0, 1600.0, Wave.SQUARE, 0.1, 0.1, 0.002, 14.0, 0.4],
+	&"streak": [0.35, 500.0, 1200.0, Wave.SAW, 0.15, 0.2, 0.004, 8.0, 0.4],
+	&"heartbeat": [0.18, 70.0, 45.0, Wave.SINE, 0.25, 0.9, 0.004, 16.0, 0.7],
+	&"empty": [0.07, 220.0, 150.0, Wave.SQUARE, 0.5, 0.6, 0.001, 45.0, 0.3],
+	&"tick": [0.05, 1100.0, 1100.0, Wave.SQUARE, 0.0, 0.0, 0.001, 55.0, 0.3],
 	&"results": [0.6, 520.0, 780.0, Wave.SINE, 0.0, 0.0, 0.01, 4.0, 0.4],
 }
 
