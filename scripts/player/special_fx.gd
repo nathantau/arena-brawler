@@ -58,6 +58,7 @@ const SMOKE_EASE_IN: float = 0.12
 const OD_DOUBLE_ALPHA: float = 0.6  # a second, out-of-step crackle frame: the 1 px arcs were too faint alone
 const WARD_GLOW: Color = Color(1.0, 0.72, 0.86)
 const WARD_GLOW_ALPHA: float = 0.14
+const WARD_GLOW_FADE: float = 0.3
 const WARD_RING_ALPHA: float = 0.45
 const CRACK_FPS: float = 24.0  # 16-frame loop (was 8 at 12)
 ## The crack's ring of embers is drawn for this blast radius (generate.py ERUPT_R); other radii scale it.
@@ -122,6 +123,7 @@ const FLARE_CHARGE_ART: Texture2D = preload(FX_DIR + "flint_flare.png")
 const FLARE_RING_ART: Texture2D = preload(FX_DIR + "flare_ring.png")
 const FLARE_RING_FLOOR_ART: Texture2D = preload(FX_DIR + "flare_ring_floor.png")  # its scorch and glow, under the players
 const FLARE_RING_TIME: float = 0.7
+const FLARE_FADE_OUT: float = 0.15
 const FLARE_ART_RADIUS: float = 80.0
 ## Supernova (VOLLEY of 16 fireballs, generate.py SUPERNOVA_*): a burst of fire and sparks centred on him the step it goes off.
 const SUPERNOVA_ART: Texture2D = preload(FX_DIR + "supernova_burst.png")
@@ -266,6 +268,8 @@ const HEAL_FPS: float = 12.0
 const GUST_ART: Texture2D = preload(FX_DIR + "eden_gust.png")
 const GUST_SIZE: float = 128.0
 const GUST_ORIGIN_X: float = 8.0
+## The cone fades over its last stretch instead of its last leaves cutting out.
+const GUST_FADE_OUT: float = 0.12
 ## Art px the cone reaches (generate.py GUST_R): scaled to the skill's range.
 const GUST_ART_RANGE: float = 100.0
 ## Bolt's Overdrive (from synced skill state on every peer): a crack of lightning when it starts, a crackling loop over
@@ -325,6 +329,8 @@ var _morph_flip: bool = false
 var _ward_t: float = -1.0
 var _ward_radius: float = 0.0
 var _ward_at: Vector2 = Vector2.ZERO
+## Seconds left of the floor glow fading after the ward ends (-1 = none).
+var _ward_out: float = -1.0
 ## Staff Whirl: seconds spinning (-1 = not), its radius, where he's drawn, which way he faces, damage ticks seen.
 var _whirl_t: float = -1.0
 var _whirl_radius: float = 0.0
@@ -339,6 +345,9 @@ var _pillar_at: Vector2 = Vector2.ZERO
 var _flare: CharacterSkill
 var _flare_at: Vector2 = Vector2.ZERO
 var _flare_flip: bool = false
+## Seconds left of the charge pose fading out after the ring goes off (-1 = none), and the frame it was on.
+var _flare_out: float = -1.0
+var _flare_frame: int = 0
 ## Whether his Supernova was going off at the last sync (the burst plays on the rising edge).
 var _supernova_was: bool = false
 var _grapple_at: Vector2 = Vector2.ZERO
@@ -446,6 +455,7 @@ func sync(p: Player) -> void:
 		_ward_radius = ward.data.ward_radius
 	elif _ward_t >= 0.0 and not p.dead:
 		_poof(_ward_at, WARD_CLOSE_ART, WARD_CLOSE_TIME, _ward_scale())
+		_ward_out = WARD_GLOW_FADE
 	_ward_t = ward.elapsed() if warding else -1.0
 	if p.dead:
 		_morph_t = -1.0
@@ -461,6 +471,12 @@ func sync(p: Player) -> void:
 		var at: Vector2 = p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y)
 		_poof(at, FLARE_RING_ART, FLARE_RING_TIME, k)
 		_poof(at, FLARE_RING_FLOOR_ART, FLARE_RING_TIME, k, true)
+	if _flare != null and not charging and not p.dead:  # the white-hot pose fades off over the ring's flash
+		_flare_out = FLARE_FADE_OUT
+	elif p.dead:
+		_flare_out = -1.0
+	if charging:
+		_flare_out = -1.0
 	_flare = nova if charging else null
 	var supernova: CharacterSkill = _slot_id(p, &"supernova")
 	var bursting: bool = supernova != null and supernova.is_active() and not p.dead
@@ -564,7 +580,8 @@ func _draw_gust() -> void:
 	var k: float = _gust.data.gust_range / (GUST_ART_RANGE * Constants.SPRITE_SCALE)
 	var px: float = Constants.SPRITE_SCALE * k
 	draw_set_transform(_eden_at, _gust.direction.angle(), Vector2.ONE)
-	_draw_frame(GUST_ART, frame, GUST_SIZE, Vector2((GUST_SIZE * 0.5 - GUST_ORIGIN_X) * px, 0.0), px)
+	_draw_frame(GUST_ART, frame, GUST_SIZE, Vector2((GUST_SIZE * 0.5 - GUST_ORIGIN_X) * px, 0.0), px,
+		clampf(_gust.active_remaining / GUST_FADE_OUT, 0.0, 1.0))
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -817,6 +834,10 @@ func _process(delta: float) -> void:
 		_reform_t += delta
 		if _reform_t > DISSOLVE_TIME:
 			_reform_t = -1.0
+	if _flare_out >= 0.0:
+		_flare_out -= delta
+	if _ward_out >= 0.0:
+		_ward_out -= delta
 	if hides_owner():
 		_body_a = maxf(0.0, _body_a - delta / BODY_FADE_OUT)
 	else:
@@ -999,8 +1020,8 @@ func _draw_floor() -> void:
 				STORM_SIZE, centre, px, 1.0, _floor)
 		else:
 			_draw_frame(STORM_FLOOR_ART, int(t * STORM_FPS) % STORM_LOOP_COUNT, STORM_SIZE, centre, px, 1.0, _floor)
-	if _ward_t >= 0.0:  # a soft pool of petal light on the floor so the ward's reach reads under the players
-		var glow: float = clampf(_ward_t / WARD_OPEN_TIME, 0.0, 1.0)
+	if _ward_t >= 0.0 or _ward_out >= 0.0:  # a soft pool of petal light on the floor so the ward's reach reads under the players
+		var glow: float = clampf(_ward_t / WARD_OPEN_TIME, 0.0, 1.0) if _ward_t >= 0.0 else _ward_out / WARD_GLOW_FADE
 		_floor.draw_circle(_ward_at, _ward_radius, Color(WARD_GLOW, WARD_GLOW_ALPHA * glow))
 		_floor.draw_arc(_ward_at, _ward_radius, 0.0, TAU, 48, Color(WARD_GLOW, WARD_RING_ALPHA * glow), 2.0)
 	_draw_overdrive_floor()
@@ -1245,13 +1266,20 @@ func _draw_pillar() -> void:
 
 ## His flames swell and brighten over the charge (the strip, spread over `nova_charge`), in place of his sprite.
 func _draw_flare() -> void:
-	if _flare == null:
-		return
 	var cell: float = FLARE_CHARGE_ART.get_height()
 	var n: int = int(FLARE_CHARGE_ART.get_width() / cell)
-	var frame: int = mini(int(_flare.elapsed() / _flare.data.nova_charge * n), n - 1)
+	var alpha: float = 1.0
+	var frame: int = n - 1
+	if _flare != null:
+		frame = mini(int(_flare.elapsed() / _flare.data.nova_charge * n), n - 1)
+		_flare_frame = frame
+	elif _flare_out >= 0.0:
+		frame = _flare_frame
+		alpha = _flare_out / FLARE_FADE_OUT
+	else:
+		return
 	draw_set_transform(_flare_at, 0.0, Vector2(-1.0 if _flare_flip else 1.0, 1.0))
-	_draw_frame(FLARE_CHARGE_ART, frame, cell, Vector2.ZERO, Constants.SPRITE_SCALE)
+	_draw_frame(FLARE_CHARGE_ART, frame, cell, Vector2.ZERO, Constants.SPRITE_SCALE, alpha)
 	draw_set_transform(Vector2.ZERO)
 
 

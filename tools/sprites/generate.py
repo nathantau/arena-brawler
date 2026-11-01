@@ -2821,9 +2821,9 @@ def drift_plan():
     cen = [(sum(x for x, _ in g) / len(g), sum(y for _, y in g) / len(g)) if g else seeds[i] for i, g in enumerate(groups)]
     dep = [sum(depth[p] for p in g) / len(g) if g else 0.0 for g in groups]
     dmax = max(dep) or 1.0
-    start = [0.03 + 0.42 * (dep[i] / dmax) + 0.05 * (1 - (cen[i][0] - 28) / 40) + rng.uniform(0, 0.05)
+    start = [0.02 + 0.52 * (dep[i] / dmax) + 0.05 * (1 - (cen[i][0] - 28) / 40) + rng.uniform(0, 0.05)
              for i in range(DRIFT_SEEDS)]
-    start = [min(max(v, 0.03), 0.5) for v in start]
+    start = [min(max(v, 0.02), 0.62) for v in start]
     # the 16 chunks that become the swirl's petals: spread over the body (every other by start time), matched to the
     # slots top to bottom so they don't cross over
     order = sorted(range(DRIFT_SEEDS), key=lambda i: start[i])
@@ -2876,8 +2876,8 @@ def drift_dissolve_frame(k: int) -> Image.Image:
             a = i * 2.4
             tx += math.cos(a) * 10 * u - 5 * u
             ty += -12 * u + 5 * u * u
-        shrink = 1 - 0.85 * smooth(u / 0.55)
-        keep = 1 - smooth((u - 0.12) / 0.55)  # share of the chunk's own pixels still drawn (dithered away)
+        shrink = 1 - 0.85 * smooth(u / 0.9)
+        keep = 1 - smooth((u - 0.1) / 0.9)  # share of the chunk's own pixels still drawn (dithered away)
         for x, y in g:
             nx, ny = m + (x - m) * sq, y
             qx = round(tx + (nx - sx0) * shrink)
@@ -2900,6 +2900,7 @@ def drift_dissolve_frame(k: int) -> Image.Image:
             if 0.04 < um < 0.7 + 0.3 * (i % 3) / 2:
                 a = i * 2.4
                 ward_petal(pc, min(max(tx, 8), CELL - 9), min(max(ty, 8), CELL - 9), a + 5 * um, max(2.0, 5 - 3 * um), math.cos(6 * um + i), PINK_L if i % 2 else WHITE)
+    drift_dissolve_frame.body_px = sum(1 for v in out.getchannel("A").getdata() if v)  # (for tuning the peel)
     out = outline(out)
     for _, x, y, ang, length, fl, col in sorted(parts, key=lambda q: q[0]):
         ward_petal(pc, x, y, ang, length, fl, col)

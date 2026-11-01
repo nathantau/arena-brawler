@@ -42,6 +42,7 @@ const THRUST_REACH: float = 0.35
 const INVULN_ALPHA: float = 0.45
 ## The held weapon fades out / back in over this long as a pose takes over from him and hands back.
 const GUN_FADE_TIME: float = 0.12
+const GHOST_FADE_TIME: float = 0.15
 ## Spawn protection look: flicker rate (Hz, doubled for the last SPAWN_WARN_TIME s), low alpha, shimmer rate, ground ring.
 const SPAWN_BLINK_HZ: float = 8.0
 const SPAWN_WARN_TIME: float = 0.4
@@ -133,6 +134,7 @@ var _hit_flash: float = 0.0
 ## 0..1: how much of the held weapon shows (fades while a pose replaces him, see _gun_suppressed).
 var _gun_fade: float = 1.0
 var _gun_alpha: float = 1.0
+var _ghost_a: float = 1.0
 ## Attack animation time left, and its full length (depends on the weapon used).
 var _recoil: float = 0.0
 var _recoil_len: float = RECOIL_TIME
@@ -284,7 +286,10 @@ func _process(delta: float) -> void:
 	_sprite.flip_h = facing.x < 0.0
 	_special_fx.sync(self)
 	_gun_fade = move_toward(_gun_fade, 0.0 if _gun_suppressed() else 1.0, delta / GUN_FADE_TIME)
-	_gun_alpha = INVULN_ALPHA if stats.invulnerable_time > 0.0 or is_hidden() else 1.0  # (the weapon fades on its own, not with the body)
+	# Going ghostly (i-frames, hidden in smoke) and back eases over GHOST_FADE_TIME instead of popping between 1 and INVULN_ALPHA.
+	_ghost_a = move_toward(_ghost_a, INVULN_ALPHA if stats.invulnerable_time > 0.0 or is_hidden() else 1.0,
+		(1.0 - INVULN_ALPHA) * delta / GHOST_FADE_TIME)
+	_gun_alpha = _ghost_a  # (the weapon fades on its own, not with the body)
 	_sprite.modulate.a = 0.0 if _special_fx.is_swinging() else _special_fx.owner_alpha() * _gun_alpha
 	_sprite.modulate = Color(1, 1, 1, _sprite.modulate.a)
 	if stats.spawn_protect > 0.0 and _sprite.modulate.a > 0.0:
