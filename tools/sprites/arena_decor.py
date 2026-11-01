@@ -370,7 +370,7 @@ def pit(rows: list, ref: Image.Image) -> Deco:
     hazard-striped edges, pipe runs and lamps along the walls, barrels / tyres / sandbags on the wall tops."""
     d = Deco(rows, ref, 7)
     cx, cy = d.w // 2, d.h // 2
-    d.mottle(110)
+    d.mottle(55)
     d.speckle(5500)
     d.slab_joints(192, 160)
     # painted fighting ring: dashed hazard band between two thin lines, an inner circle and a cross-hair
@@ -436,16 +436,16 @@ def foundry(rows: list, ref: Image.Image) -> Deco:
     """Steel foundry: scorched, oily plate with painted lanes, grates, scrap, steam pipes, furnace vents."""
     d = Deco(rows, ref, 11)
     cx, cy = d.w // 2, d.h // 2
-    d.mottle(110, 0.0)
-    for _ in range(18):  # soot / scorch
-        x, y = d.free_spot(20)
-        d.blob(x, y, d.rng.randint(18, 40), d.rng.randint(12, 26), lambda px, py, dd: d.shade(px, py, False), edge=0.55)
+    for lx in (6, 14, 26, 34):  # small solid soot stains under the furnace vents
+        for y in (TILE + 44, d.h - TILE - 44):
+            d.blob(lx * TILE + 16 + d.rng.randint(-10, 10), y, d.rng.randint(14, 20), d.rng.randint(8, 11),
+                   lambda px, py, dd: d.shade(px, py, False), edge=0.12)
     for _ in range(4):
         x, y = d.free_spot(24)
         d.oil(x, y, d.rng.randint(12, 24), d.rng.randint(8, 16))
-    for _ in range(10):  # rust
+    for _ in range(6):  # rust
         x, y = d.free_spot(16)
-        d.blob(x, y, d.rng.randint(8, 16), d.rng.randint(5, 10),
+        d.blob(x, y, d.rng.randint(8, 14), d.rng.randint(5, 10),
                lambda px, py, dd: d.put(px, py, BROWN) if BAYER[py % 4][px % 4] % 2 else None, edge=0.8)
     for y in (4 * TILE + 16, d.h - 4 * TILE - 17):  # dashed walkway lanes
         for x in range(3 * TILE, d.w - 3 * TILE):
