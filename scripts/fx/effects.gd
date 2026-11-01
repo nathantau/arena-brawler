@@ -32,6 +32,16 @@ const HELD_BEAM_SEGMENT: float = 10.0
 const HELD_BEAM_LAYERS: Array = [[UiStyle.C_RED, 1.0], [UiStyle.C_ORANGE, 0.72], [UiStyle.C_YELLOW, 0.45],
 	[UiStyle.C_WHITE, 0.2]]
 const HELD_BEAM_FIRE: Array[Color] = [UiStyle.C_RED, UiStyle.C_ORANGE, UiStyle.C_YELLOW]
+## Lightning beams (WeaponData.lightning): a jagged bolt re-rolled LIGHTNING_HZ times a second, kinks every LIGHTNING_STEP px,
+## orange / yellow / white layers (art-pixel widths), forks off it, a flash at the hand, sparks where it lands.
+const LIGHTNING_STEP: float = 16.0
+const LIGHTNING_JITTER: float = 9.0
+const LIGHTNING_HZ: float = 28.0
+const LIGHTNING_FORKS: int = 2
+const LIGHTNING_SPARKS: int = 3
+const LIGHTNING_SPARK_SPEED: float = 170.0
+const LIGHTNING_SPARK_SIZE: float = 4.0
+const LIGHTNING_SPARK_LIFE: float = 0.22
 ## Flame wisps peeling off a held beam's edges per frame, rising and cooling (yellow, orange, red) as they shrink.
 const WISP_POOL: int = 128
 const WISPS_PER_FRAME: int = 3
@@ -296,6 +306,10 @@ func hold_beam(shooter: Player, w: WeaponData, length: float) -> void:
 	b.weapon = w
 	b.length = length
 	b.life = w.fire_interval * 2.0
+	if w.lightning:  # sparks where it lands
+		var at: Vector2 = _held_ends(b)[1]
+		burst(at, UiStyle.C_YELLOW, LIGHTNING_SPARKS, LIGHTNING_SPARK_SPEED, LIGHTNING_SPARK_SIZE, LIGHTNING_SPARK_LIFE)
+		burst(at, UiStyle.C_WHITE, 1, LIGHTNING_SPARK_SPEED * 0.6, LIGHTNING_SPARK_SIZE, LIGHTNING_SPARK_LIFE)
 
 
 func _held_ends(b: HeldBeam) -> PackedVector2Array:
@@ -354,6 +368,8 @@ func _process(delta: float) -> void:
 		h.life -= delta
 		if h.life <= 0.0 or not is_instance_valid(h.shooter) or h.shooter.dead:
 			_held.erase(id)
+			continue
+		if h.weapon.lightning:  # lightning has its own sparks (hold_beam) and no flames
 			continue
 		var ends: PackedVector2Array = _held_ends(h)
 		var dir: Vector2 = h.shooter.facing
@@ -455,6 +471,9 @@ func _draw_held_beams(px: float) -> void:
 	var time: float = Time.get_ticks_msec() / 1000.0
 	for h: HeldBeam in _held.values():
 		var ends: PackedVector2Array = _held_ends(h)
+		if h.weapon.lightning:
+			_draw_lightning_beam(h, ends, px)
+			continue
 		var dir: Vector2 = h.shooter.facing
 		var base: float = h.weapon.projectile_radius * 2.0
 		var n: int = maxi(1, ceili(h.length / HELD_BEAM_SEGMENT))
@@ -476,6 +495,40 @@ func _draw_held_beams(px: float) -> void:
 		var at: Vector2 = (w.pos / px).floor() * px
 		draw_colored_polygon(PackedVector2Array([at + Vector2(-r, 0), at + Vector2(0, -r * 2.5), at + Vector2(r, 0),
 			at + Vector2(0, r)]), UiStyle.C_YELLOW if f > 0.66 else UiStyle.C_ORANGE if f > 0.33 else UiStyle.C_RED)
+
+
+## One jagged bolt along the beam: the same kinks for a frame at LIGHTNING_HZ, so it crackles rather than shimmers.
+func _draw_lightning_beam(h: HeldBeam, ends: PackedVector2Array, px: float) -> void:
+	var tick: int = int(Time.get_ticks_msec() / 1000.0 * LIGHTNING_HZ)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([h.shooter.player_id, tick])
+	var dir: Vector2 = h.shooter.facing
+	var side: Vector2 = dir.orthogonal()
+	var snap := Vector2(px, px)
+	var n: int = maxi(2, ceili(h.length / LIGHTNING_STEP))
+	var pts := PackedVector2Array([ends[0]])
+	for i: int in range(1, n):
+		var taper: float = sin(PI * float(i) / n)
+		pts.append((ends[0] + dir * (h.length * i / n) + side * rng.randf_range(-1.0, 1.0) * LIGHTNING_JITTER * taper).snapped(snap))
+	pts.append(ends[1].snapped(snap))
+	var layers: Array = [[UiStyle.C_ORANGE, 3.0], [UiStyle.C_YELLOW, 2.0], [UiStyle.C_WHITE, 1.0]]
+	for layer: Array in layers:
+		draw_polyline(pts, layer[0], px * layer[1])
+	for f: int in LIGHTNING_FORKS:  # short branches leaping off it
+		var root: Vector2 = pts[rng.randi_range(1, maxi(1, pts.size() - 2))]
+		var a: float = dir.angle() + rng.randf_range(0.4, 0.9) * (1.0 if rng.randf() < 0.5 else -1.0)
+		var fork := PackedVector2Array([root])
+		for k: int in 3:
+			var last: Vector2 = fork[fork.size() - 1]
+			fork.append((last + Vector2.RIGHT.rotated(a + rng.randf_range(-0.5, 0.5)) * LIGHTNING_STEP * 0.9).snapped(snap))
+		draw_polyline(fork, UiStyle.C_YELLOW, px * 1.5)
+		draw_polyline(fork, UiStyle.C_WHITE, px)
+	var flare: float = 1.0 + 0.3 * sin(Time.get_ticks_msec() / 1000.0 * 40.0)  # a flash at the hand, and where it lands
+	draw_circle(ends[0], px * 5.0 * flare, UiStyle.C_ORANGE)
+	draw_circle(ends[0], px * 3.5 * flare, UiStyle.C_YELLOW)
+	draw_circle(ends[0], px * 1.8 * flare, UiStyle.C_WHITE)
+	draw_circle(ends[1], px * 3.0 * flare, UiStyle.C_YELLOW)
+	draw_circle(ends[1], px * 1.5 * flare, UiStyle.C_WHITE)
 
 
 func _draw_markers(px: float) -> void:

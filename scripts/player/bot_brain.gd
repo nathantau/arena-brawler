@@ -262,6 +262,11 @@ func slot_wanted(player: Player, slot: int, dist: float, in_sight: bool, pressur
 			return in_sight and absf(dist - sd.eruption_distance) < r * ZONE_FIT
 		SkillData.Kind.STORM:
 			return in_sight and absf(dist - sd.storm_distance) < sd.storm_radius * ZONE_FIT
+		SkillData.Kind.LIGHTNING:
+			return in_sight and dist < (sd.beam_weapon.projectile_range if sd.beam_weapon != null else NEAR_FIGHT) * ZONE_FIT
+		SkillData.Kind.THUNDER:
+			var tr: float = sd.thunder_blast.splash_radius if sd.thunder_blast != null else 60.0
+			return in_sight and absf(dist - sd.thunder_distance) < tr * ZONE_FIT
 		SkillData.Kind.PILLAR:
 			return in_sight and dist < sd.pillar_length * ZONE_FIT
 		SkillData.Kind.NOVA:

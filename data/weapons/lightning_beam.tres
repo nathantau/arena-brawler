@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"lightning_beam"
+display_name = "Lightning Beam"
+pickup = false
+kind = 1
+held_beam = true
+lightning = true
+muzzle_x = 9.0
+damage = 6
+fire_interval = 0.1
+projectile_range = 520.0
+projectile_radius = 10.0
+energy_cost = 0
+crit_chance = 0.05
+knockback = 40.0
+color = Color(0.96, 0.82, 0.34, 1)
+screen_shake = 0.04
+sfx = &"laser"
+held_art = false
+tags = Array[StringName]([&"bolt_lightning"])

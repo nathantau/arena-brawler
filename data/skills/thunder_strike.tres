@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_thunder_strike.png" id="2_icon"]
+[ext_resource type="Resource" path="res://data/weapons/thunder_blast.tres" id="3_blast"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"thunder_strike"
+display_name = "Thunder Strike"
+kind = 41
+special = true
+blurb = "Bolt from the sky"
+tags = Array[StringName]([&"bolt"])
+cooldown = 6.5
+duration = 0.7
+thunder_distance = 280.0
+thunder_wall_margin = 8.0
+thunder_blast = ExtResource("3_blast")

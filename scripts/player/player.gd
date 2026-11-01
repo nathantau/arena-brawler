@@ -71,6 +71,9 @@ const SURFACE_RINGS: int = 12
 const SURFACE_RING_STEP: float = 12.0
 const SURFACE_DIRECTIONS: int = 16
 const HOUND_SEQ_OFFSET: int = 1 << 32
+## Lightning Beam ticks and Thunder Strike bolts are keyed too (above 32 bits, clear of the offsets above).
+const BEAM_SEQ_OFFSET: int = 1 << 33
+const THUNDER_SEQ_OFFSET: int = 1 << 34
 ## The Gloom Hound's body radius against the feet-level walls.
 const HOUND_RADIUS: float = 14.0
 ## Shadow clones weave side to side as they run.
@@ -138,6 +141,16 @@ var _windup_left: float = -1.0
 var _windup_seq: int = 0
 var _windup_weapon: WeaponData
 var _sprite := AnimatedSprite2D.new()
+## Godspeed (Bolt): true while any of his abilities is active and for GODSPEED_LINGER after; he wears the powered-up sheet.
+## Derived from the synced skill state, so every peer shows it.
+const GODSPEED_LINGER: float = 0.5
+## The power-up and power-down take this long (seconds), through the sheet's in-between looks (CharacterData.stage_frames).
+const GODSPEED_RISE: float = 0.3
+const GODSPEED_FALL: float = 0.25
+var godspeed: bool = false
+## 0 = normal .. 1 = fully powered up: eases up while godspeed is on and back down after it.
+var god_level: float = 0.0
+var _god_linger: float = 0.0
 ## Drawn after the sprite: the gun when it's in front of the body, and health bars.
 var _overlay := Node2D.new()
 ## Smoke clouds and shadow clones (cosmetic, from the synced special state).
@@ -248,12 +261,37 @@ func _physics_process(delta: float) -> void:
 		input = controller.next_extra_input()
 
 
+## Time left on the godspeed linger: refilled while an ability is active, then running down.
+static func godspeed_linger(left: float, active: bool, delta: float) -> float:
+	return GODSPEED_LINGER if active else maxf(0.0, left - delta)
+
+
+## One step of the power-up level.
+static func god_level_step(level: float, on: bool, delta: float) -> float:
+	return clampf(level + (delta / GODSPEED_RISE if on else -delta / GODSPEED_FALL), 0.0, 1.0)
+
+
+## The sheet stage for a power-up level: 0 normal .. CharacterData.POWER_STAGES (full godspeed).
+static func god_stage(level: float) -> int:
+	return mini(ceili(level * CharacterData.POWER_STAGES), CharacterData.POWER_STAGES)
+
+
+func _any_skill_active() -> bool:
+	for slot: CharacterSkill in skills:
+		if slot.is_active():
+			return true
+	return false
+
+
 func _process(delta: float) -> void:
 	if controller == null:  # a remote (interpolated) copy doesn't simulate: clear the same shots the server's gust did
 		var remote_gust: CharacterSkill = active_skill(SkillData.Kind.GUST)
 		if remote_gust != null and projectiles != null:
 			_gust(remote_gust, 0, false)
 	_hit_flash = maxf(0.0, _hit_flash - delta)
+	_god_linger = godspeed_linger(_god_linger, _any_skill_active() and not dead, delta)
+	godspeed = character.has_godspeed() and _god_linger > 0.0 and not dead
+	god_level = 0.0 if dead or not character.has_godspeed() else god_level_step(god_level, godspeed, delta)
 	_recoil = maxf(0.0, _recoil - delta)
 	visual_offset *= exp(-Constants.CORRECTION_DECAY * delta)
 	_attack_anim = maxf(0.0, _attack_anim - delta)
@@ -265,14 +303,18 @@ func _process(delta: float) -> void:
 	elif velocity.length() > Constants.SPRITE_WALK_MIN_SPEED:
 		anim = &"walk"
 	var tf: CharacterSkill = form()
-	var frames: SpriteFrames = tf.data.form_frames() if tf != null else character.sprite_frames()
+	var frames: SpriteFrames = tf.data.form_frames() if tf != null else character.stage_frames(god_stage(god_level))
 	if anim == &"attack" and not frames.has_animation(anim):  # the form ended mid-swing
 		_attack_anim = 0.0
 		anim = &"idle"
 	if _sprite.sprite_frames != frames:
 		_sprite.sprite_frames = frames
 		_sprite.scale = Vector2.ONE * Constants.SPRITE_SCALE * (tf.data.form_scale if tf != null else 1.0)
+		var kept_anim: StringName = _sprite.animation
+		var kept_frame: int = _sprite.frame
 		_sprite.play(anim)
+		if anim == kept_anim and kept_frame < frames.get_frame_count(anim):  # a godspeed swap keeps the bob going
+			_sprite.frame = kept_frame
 	if _sprite.animation != anim:
 		_sprite.play(anim)
 	_sprite.position = visual_offset
@@ -305,6 +347,9 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	# Caught before the tick so the frame it runs out still puts him exactly on the landing spot.
 	var swing: CharacterSkill = active_skill(SkillData.Kind.SWING)
 	var erupting: CharacterSkill = active_skill(SkillData.Kind.ERUPTION)
+	var thundering: CharacterSkill = active_skill(SkillData.Kind.THUNDER)
+	var beam_was: CharacterSkill = active_skill(SkillData.Kind.LIGHTNING)
+	var beam_before: float = beam_was.elapsed() if beam_was != null else 0.0
 	var burning: CharacterSkill = active_skill(SkillData.Kind.TRAIL)
 	var burn_before: float = burning.elapsed() if burning != null else 0.0
 	var pillar: CharacterSkill = active_skill(SkillData.Kind.PILLAR)
@@ -360,6 +405,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 
 	if erupting != null and not erupting.is_active() and not replay:
 		_erupt(erupting, input.seq)
+	if thundering != null and not thundering.is_active() and not replay:
+		_thunder(thundering, input.seq)
 	for i: int in Constants.SKILL_SLOTS:
 		if pressed[i] and not _prev_skills[i] and not skill_locked(i) and not stats.is_stunned():  # one ability at a time
 			_activate(skills[i], input, replay)
@@ -369,6 +416,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var whirl: CharacterSkill = active_skill(SkillData.Kind.WHIRL)
 	var drift: CharacterSkill = active_skill(SkillData.Kind.DRIFT)
 	var overdrive: CharacterSkill = active_skill(SkillData.Kind.OVERDRIVE)
+	var beaming: CharacterSkill = active_skill(SkillData.Kind.LIGHTNING)  # just pressed counts
 	var stepping: CharacterSkill = active_skill(SkillData.Kind.STEP)
 	var planting: CharacterSkill = active_skill(SkillData.Kind.PILLAR)  # just pressed counts
 	var flaring: CharacterSkill = active_skill(SkillData.Kind.NOVA)
@@ -396,6 +444,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			speed *= whirl.data.whirl_speed_scale
 		if overdrive != null:
 			speed *= overdrive.data.overdrive_speed_scale
+		if beaming != null:
+			speed *= beaming.data.beam_speed_scale
 		if stepping != null:  # a puddle gliding on its own way until the stick says otherwise
 			speed *= stepping.data.step_speed_scale
 		var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
@@ -428,12 +478,14 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	elif input.move_vec.length() > Constants.INPUT_DEADZONE:
 		facing = input.move_vec.normalized()
 
+	if beaming != null and not replay and beaming.beam_tick_due(beam_before):
+		_beam_tick(beaming, input.seq)
 	if _windup_left >= 0.0 and not replay:  # replays re-run inputs already counted: don't land it early
 		_windup_left -= delta
 		if _windup_left <= 0.0:
 			_windup_left = -1.0
 			_release_shot(_windup_seq, _windup_weapon)
-	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null and stepping == null and not rooted:  # both hands on the chain
+	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null and stepping == null and beaming == null and not rooted:  # both hands on the chain
 		_try_fire(input.seq, replay)
 
 
@@ -444,7 +496,7 @@ func _interrupt_channels() -> void:
 		if not slot.is_active():
 			continue
 		match slot.data.kind:
-			SkillData.Kind.WHIRL:
+			SkillData.Kind.WHIRL, SkillData.Kind.LIGHTNING:
 				slot.active_remaining = 0.0
 			SkillData.Kind.DRIFT:
 				slot.active_remaining = 0.0
@@ -509,6 +561,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			slot.anchor = eruption_spot(slot.direction, slot.data)
 		SkillData.Kind.STORM:
 			slot.anchor = storm_spot(slot.direction, slot.data)
+		SkillData.Kind.THUNDER:
+			slot.anchor = spot_ahead(slot.direction, slot.data.thunder_distance, slot.data.thunder_wall_margin)
 		SkillData.Kind.HOUND:
 			slot.anchor = hound_spot(slot.direction, slot.data)
 		SkillData.Kind.BIND:
@@ -702,6 +756,23 @@ func _erupt(slot: CharacterSkill, seq: int) -> void:
 	var key: int = seq + ERUPTION_SEQ_OFFSET
 	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.eruption_blast, match_seed)
 	shot_fired.emit(self, key, slot.anchor, slot.direction, slot.data.eruption_blast.id)
+
+
+## A Lightning Beam tick: the beam goes out from his hand along his aim (damage and the drawn bolt come from the same hitscan every
+## other beam uses; relayed to the other peers like any shot).
+func _beam_tick(slot: CharacterSkill, seq: int) -> void:
+	var w: WeaponData = slot.data.beam_weapon
+	var key: int = seq + BEAM_SEQ_OFFSET
+	var origin: Vector2 = shot_origin(w)
+	projectiles.fire_shot(player_id, key, origin, facing, w, match_seed)
+	shot_fired.emit(self, key, origin, facing, w.id)
+
+
+## The telegraph ran out: the bolt drops on the marked spot.
+func _thunder(slot: CharacterSkill, seq: int) -> void:
+	var key: int = seq + THUNDER_SEQ_OFFSET
+	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.thunder_blast, match_seed)
+	shot_fired.emit(self, key, slot.anchor, slot.direction, slot.data.thunder_blast.id)
 
 
 ## Where an eruption aimed along `dir` is marked: on the floor `eruption_distance` ahead, pulled back off the first
