@@ -243,4 +243,9 @@ static func fit_to_safe_area(c: Control) -> void:
 		c.offset_right = -i.z
 		c.offset_bottom = -i.w
 	apply.call()
-	c.get_viewport().size_changed.connect(apply)
+	# The lambda holds `c`: drop it with the control, or every resize after a screen is freed hits a freed instance.
+	var vp: Viewport = c.get_viewport()
+	vp.size_changed.connect(apply)
+	c.tree_exiting.connect(func() -> void:
+		if vp.size_changed.is_connected(apply):
+			vp.size_changed.disconnect(apply), CONNECT_ONE_SHOT)
