@@ -441,7 +441,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   is `signature_skill`; loading room lists all three. New `SkillData.Kind` values start at 30 (`STEP = 30, HOUND = 31, BIND = 32`) so parallel fighter work
   doesn't collide; new `Player` key offsets `STEP_SEQ_OFFSET` (1 << 31) and `HOUND_SEQ_OFFSET` (1 << 32); new `StateField.STUN_REMAINING`.
   - **Shadow Step** (`shadow_step`, STEP, cd 8 s, `duration` 1.2 s): like Petal Drift's glide but a puddle: i-frames the whole time (`try_activate`), `Player.is_hidden()`
-    (auto-aim / bots skip him), can't fire, `step_speed_scale` 1.5x, steerable, gliding along the press direction without a stick, walls still stop him. When it ends
+    (auto-aim / bots skip him), can't fire, `step_speed_scale` 1.5x, steerable, gliding along the press direction without a stick; he slides UNDER walls and crates (2026-11-01 fix: `collision_mask = 0` while stepping, clamped to the arena, `Player._surface` moves him to the nearest free spot when it ends; before, walls stopped him dead, which read as "can't travel through his shadow"). When it ends
     `Player._shadow_tick` calls `ProjectilePool.strike` on where he stands: `step_radius` 80 (needs sight), `step_damage` 24, `step_knockback` 200, authoritative,
     replay-safe, keyed `seq + STEP_SEQ_OFFSET`. Art: `shadow_sink` (10 frames of his body submerging, played backwards to rise), floor-layer `shadow_puddle_in/_out`
     (10) + `shadow_puddle` loop (8, glowing eyes, ripples, wisps), `shadow_burst` (14 frames of spikes erupting out to the strike radius) + `shadow_burst_floor`.

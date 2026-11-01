@@ -58,6 +58,10 @@ const GUST_SEQ_OFFSET: int = 1 << 21
 const STORM_SEQ_OFFSET: int = 1 << 29
 ## Shadow Step emergence strikes and Gloom Hound bites are keyed too (above 32 bits, clear of the offsets above).
 const STEP_SEQ_OFFSET: int = 1 << 31
+## Where a puddle that ends inside a wall comes up: rings of SURFACE_DIRECTIONS spots every SURFACE_RING_STEP px.
+const SURFACE_RINGS: int = 12
+const SURFACE_RING_STEP: float = 12.0
+const SURFACE_DIRECTIONS: int = 16
 const HOUND_SEQ_OFFSET: int = 1 << 32
 ## The Gloom Hound's body radius against the feet-level walls.
 const HOUND_RADIUS: float = 14.0
@@ -304,6 +308,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			if projectiles != null and bloom_before[i] >= 0.0 and skills[i].bloom_tick_due(bloom_before[i]):
 				projectiles.bloom(player_id, skills[i].anchor, skills[i].data.bloom_radius, skills[i].data.bloom_heal)
 	_shadow_tick(step_was, hound_was, hound_before, input.seq, delta, replay)
+	if step_was != null and not step_was.is_active():
+		_surface()  # rises from under whatever he slid through, onto the nearest floor
 	if storm != null and not replay and storm.storm_tick_due(storm_before):
 		var sd: SkillData = storm.data
 		projectiles.strike(player_id, input.seq + STORM_SEQ_OFFSET, storm.anchor, sd.storm_radius, sd.storm_damage,
@@ -379,7 +385,13 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		elif stepping != null and steer.length() < Constants.INPUT_DEADZONE:
 			steer = stepping.direction
 		velocity = MovementSim.step_velocity(velocity, steer, mover if mover != null else skills[0], speed, delta)
+		if stepping != null:  # a puddle slides under walls and crates; only the arena edge stops it
+			collision_mask = 0
 		move_and_slide()
+		collision_mask = Constants.LAYER_WALL_FEET
+		if stepping != null and arena_bounds.has_area():
+			global_position = global_position.clamp(arena_bounds.position + Vector2.ONE * Constants.PLAYER_RADIUS,
+				arena_bounds.end - Vector2.ONE * Constants.PLAYER_RADIUS)
 	_sync_shields()
 	if whirl != null:
 		_whirl(whirl, input.seq, delta, replay)
@@ -757,6 +769,22 @@ func swing_landing(dir: Vector2, d: SkillData) -> Vector2:
 				return at
 		dist -= Constants.SWING_SAMPLE_STEP
 	return Vector2.INF
+
+
+## Shadow Step ended: if he is inside a wall or crate, move him to the nearest free spot (rings outwards, deterministic).
+func _surface() -> void:
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var inside: Rect2 = arena_bounds.grow(-Constants.PLAYER_RADIUS)
+	for ring: int in SURFACE_RINGS + 1:
+		var dist: float = ring * SURFACE_RING_STEP
+		for k: int in (1 if ring == 0 else SURFACE_DIRECTIONS):
+			var at: Vector2 = global_position + Vector2.RIGHT.rotated(TAU * k / SURFACE_DIRECTIONS) * dist
+			if arena_bounds.has_area() and not inside.has_point(at):
+				continue
+			_swing_query.transform = Transform2D(0.0, at)
+			if space.intersect_shape(_swing_query, 1).is_empty():
+				global_position = at
+				return
 
 
 func is_dashing() -> bool:
