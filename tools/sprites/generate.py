@@ -21,9 +21,10 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 import arena_decor
-from palette import (BLUE, BROWN, DARKER, GREEN, GREEN_D, GREEN_L, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, PALETTE, PINK,
-                     PINK_L, RED, SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, VIOLET, VIOLET_D, VIOLET_L, WHITE,
-                     YELLOW)
+from palette import (BLUE, BROWN, CHESTNUT, CHESTNUT_D, CHESTNUT_L, CREAM, CREAM_D, DARKER, GREEN, GREEN_D, GREEN_L, LIGHTER,
+                     MAROON, NAVY, OCHRE, OCHRE_D, OLIVE, OLIVE_D, OLIVE_L, ORANGE, OUTLINE, PALETTE, PINK, PINK_L, RED,
+                     SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, VIOLET, VIOLET_D, VIOLET_L, WALNUT, WALNUT_D,
+                     WALNUT_L, WHITE, YELLOW)
 
 SIZE = 64
 IDLE_BOB = [0, 1, 2, 1]  # upper-body offset (px down) per idle frame; legs stay planted
@@ -4299,7 +4300,7 @@ FX.update({
 
 
 # --- Eden: earth warden (character, Seed Sling, Bark Skin / Verdant Bloom / Leaf Gust FX) ------------------------
-# Moss green, bark brown and grey stone (palette GREEN / GREEN_L / GREEN_D + BROWN + STEEL_D). Leaves are the motif:
+# Eden the wanderer (earthy olive / cream / chestnut / walnut / ochre ramps in palette.py; moss GREEN for her FX). Leaves are the motif:
 # `leaf_pts` makes one (a pointed diamond along an angle), `draw_leaf` paints it shaded.
 def leaf_pts(x, y, ang, ln, w):
     dx, dy = math.cos(ang), math.sin(ang)
@@ -4315,179 +4316,176 @@ def draw_leaf(c: Canvas, x, y, ang, ln, w, col, shade=True, rib=None) -> None:
         c.flat(L([(round(x), round(y)), (round(x + math.cos(ang) * ln * 0.8), round(y + math.sin(ang) * ln * 0.8))], 1), rib)
 
 
-def _eden_arm(c: Canvas, x: int, sleeve, hand, ay: int) -> None:
-    """Eden's small arm; `ay` swings it up/down (walk)."""
-    c.part(lambda d, f: d.rounded_rectangle((x, 36 + ay, x + 5, 44 + ay), 2, f), sleeve)
-    c.part(E((x, 42 + ay, x + 5, 47 + ay)), hand)
+EDEN_MASK = [(22, 19), (26, 15), (32, 14), (36, 16), (39, 16), (43, 14), (48, 15), (51, 19), (49, 25), (47, 27),
+             (46, 22), (45, 19), (40, 19), (39, 25), (36, 25), (35, 19), (30, 19), (27, 21), (26, 27), (24, 26), (23, 22)]
 
 
-def _eden_pouch(c: Canvas, x: int, y: int, flap=GREEN) -> None:
-    c.part(RR((x, y, x + 5, y + 5), 1), BROWN)
-    c.flat(R((x, y, x + 5, y + 1)), flap)
-    c.dot(x + 2, y + 3, YELLOW)
-
-
-def eden(step=None, t=0):
-    """Eden (redesign C, "Verdant Warden"): a leaf-shaped wooden mask over the top of her face (glowing amber eyes in
-    dark holes, a midrib and veins, pointed side tips that flick), an auburn bob, a fan of leaves above the art box
-    (CROWNS eden_crown) with a loose leaf that drifts off, a bark-plate cuirass with a stone core and an amber flaw,
-    one big leaf cape over her right shoulder, a mossy mantle at the other, stone cuff + greaves, a woven belt with a
-    pouch and a gourd that swing as she walks. Secondary motion: waves are sines over the loop (4 frames idle, 8
-    walk) with a lag per part, so the cape hem, hair ends, gourd and pouch follow through; idle breathes, the eyes
-    shimmer and blink on the last frame; walking swings the arms against the legs."""
-    n = 8 if step is not None else 4
-    wv = lambda lag=0, amp=1.0, harm=1: round(amp * math.sin(math.tau * harm * (t - lag) / n))
-    low = Canvas()
-    for x, dy in legs(low, GREEN, BROWN, step):
-        low.flat(R((x, 50 + dy, x + 5, 50 + dy)), GREEN_D)  # leg wraps: stone greave band, moss
-        low.part(R((x - 1, 51 + dy, x + 6, 52 + dy)), STEEL_D)  # stone greaves
-        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), STEEL)
-        low.dot(x + 4, 49 + dy, GREEN_L)
-        low.flat(R((x + 4, 55 + dy, x + 6, 55 + dy)), STEEL)  # stone toe cap
-    up = Canvas()
-    walking = step is not None
-    ay = wv(0, 1.0) if walking else 0  # arms swing against each other
-    breath = (0, 0, 1, 1)[t % 4] if not walking else 0  # a visible breath: chest, mantle and shoulders lift 1 px
-    # back arm: long wooden vambrace with grooves
-    _eden_arm(up, ARM_X[0], BROWN, SKIN, ay)
-    up.part(R((ARM_X[0], 39 + ay, ARM_X[0] + 5, 43 + ay)), BROWN)
-    up.flat(L([(ARM_X[0] + 1, 39 + ay), (ARM_X[0] + 1, 43 + ay)], 1), MAROON)
-    up.flat(L([(ARM_X[0] + 3, 39 + ay), (ARM_X[0] + 3, 43 + ay)], 1), MAROON)
-    up.part(RR(BODY, 3), GREEN_D)
-    # bark cuirass: overlapping plates, grain, a stone core with an amber flaw that glints
-    for i, (x0, x1, y0) in enumerate(((22, 42, 34), (23, 41, 38), (24, 40, 42))):
-        up.part(R((x0, y0, x1, y0 + 3)), BROWN)
-        up.flat(R((x0 + 1, y0, x1 - 1, y0)), SKIN_D)
-        up.flat(R((x0 + 3 + i * 3, y0 + 1, x0 + 3 + i * 3, y0 + 2)), MAROON)
-        up.flat(R((x1 - 4 - i * 2, y0 + 1, x1 - 4 - i * 2, y0 + 2)), MAROON)
-    up.part(E((30, 36 - breath, 35, 41 - breath)), STEEL_D)
-    up.dot(31, 37 - breath, STEEL)
-    up.dot(33, 40 - breath, (YELLOW, ORANGE, ORANGE, ORANGE)[t % 4])  # amber glints
-    # woven belt, buckle
-    up.part(R((20, 45, 44, 46)), BROWN, line=False)
-    for x in range(21, 44, 2):
-        up.dot(x, 45 + (x // 2) % 2, SKIN_D)
-    up.part(RR((30, 44, 35, 47), 1), YELLOW)
-    up.dot(32, 45, ORANGE)
-    # pouch + gourd swing from the belt (follow-through: the gourd lags the pouch)
-    gx = wv(1, 1.0)
-    px = -wv(2, 1.0) if walking else -gx
-    gy = 1 if gx else 0
-    up.flat(L([(23, 46), (23 + px, 48)], 1), BROWN)
-    _eden_pouch(up, 21 + px, 47 + (1 if px else 0))
-    up.flat(L([(40, 46), (39 + gx, 47 + gy)], 1), GREEN_D)
-    up.part(E((37 + gx, 47 + gy, 42 + gx, 53 + gy)), SKIN_D)  # gourd canteen
-    up.flat(R((39 + gx, 46 + gy, 40 + gx, 47 + gy)), BROWN)
-    up.dot(38 + gx, 49 + gy, YELLOW)
-    # big leaf cape over the right shoulder (asymmetry); its hem lags the body in waves
-    a, b, c_ = wv(1, 1.3), wv(2, 2.0), wv(2, 1.0)
-    sag = 1 if (not walking and t % 4 == 1) else 0
-    cape = [(36, 31), (49, 33), (53 + a, 41), (50 + b, 49 + c_ + sag), (44, 47), (40, 40)]
-    up.part(P(cape), GREEN)
-    up.flat(L([(40, 34), (50 + b, 47 + c_)], 1), GREEN_D)  # midrib
-    for y in (37, 41, 45):
-        up.flat(L([(44, y - 1), (48 + a, y - 2)], 1), GREEN_L)
-    draw_leaf(up, 47 + b, 47 + c_ + sag, math.pi / 2 + 0.5 + 0.12 * b, 5, 2.0, GREEN_D, shade=False)  # hem tip
-    # front arm + stone cuff
-    _eden_arm(up, ARM_X[1], GREEN_D, SKIN, -ay)
-    up.part(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 42 - ay)), STEEL_D)
-    up.flat(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 40 - ay)), STEEL)
-    # small mossy mantle at the other shoulder
-    up.part(E((16, 31 - breath, 28, 40 - breath)), GREEN_D)
-    for x, col, lag in ((18, GREEN, 3), (21, GREEN_L, 2), (24, GREEN, 1)):
-        draw_leaf(up, x, 35 - breath, math.pi / 2 + 0.1 + 0.12 * wv(lag, 1.0), 6, 2.5, col)
-    # hair: A's bob in warm brown (shaded by the brown ramp: lit top left, maroon underside) with strand highlights,
-    # a centre part, loose locks and bangs over the mask's brow; ends and locks bounce a beat behind the head
-    lag_y = wv(1, 1.0)
-    lag_x = wv(2, 1.0)
-    up.part(RR((15, 6, 48, 36), 9), BROWN)
-    up.part(P([(15, 26), (19, 26), (19, 36 + lag_y), (16, 37 + lag_y)]), BROWN, shade=False)  # swinging ends
-    for pts in (((34, 7), (26, 8), (19, 13), (17, 22)), ((34, 7), (42, 8), (47, 12)), ((30, 7), (23, 10), (18, 17)),
-                ((38, 7), (44, 9))):  # strands fanning from the part
-        up.flat(L(list(pts), 1), SKIN_D)
-    for pts in (((32, 8), (24, 12), (19, 20)), ((36, 8), (45, 11))):
-        up.flat(L(list(pts), 1), MAROON)
-    up.flat(L([(34, 6), (34, 10)], 1), MAROON)  # the part
-    up.flat(L([(16, 28), (16, 34 + lag_y)], 1), MAROON)
-    up.part(RR(FACE, FACE_R), SKIN)
-    up.part(P([(FACE[0] - 1, 17), (FACE[0] + 3, 17), (FACE[0] + 2, 30), (FACE[0] - 2, 34 + lag_y),
-               (FACE[0] - 4, 26)]), BROWN, shade=False)
-    up.flat(L([(FACE[0] - 1, 19), (FACE[0], 29)], 1), SKIN_D)  # lock highlight
-    up.flat(L([(15, 30), (13 - lag_x, 36 + lag_y), (14 - lag_x, 39 + lag_y)], 1), BROWN)  # loose locks flicking out
-    up.flat(L([(18, 33), (17 - lag_x, 38 + lag_y)], 1), BROWN)
-    # leaf mask: pointed leaf shape sweeping out at the sides (tips flick), midrib + veins
-    f = wv(2, 1.0)
-    mask = [(20, 21 + f), (24, 14), (36, 11), (47, 14), (51, 20 - f), (49, 26), (46, 29), (41, 29), (39, 27), (36, 27),
-            (34, 29), (27, 29), (22, 27)]
-    up.part(P(mask), GREEN)
-    up.flat(L([(36, 11), (36, 17)], 1), GREEN_D)
-    up.flat(L([(36, 14), (28, 17)], 1), GREEN_D)
-    up.flat(L([(36, 14), (45, 17)], 1), GREEN_D)
-    up.flat(L([(28, 14), (24, 17)], 1), GREEN_L)
-    up.flat(L([(22, 21 + f), (24, 24)], 1), GREEN_D)
-    up.flat(L([(49, 21 - f), (47, 24)], 1), GREEN_D)
-    up.dot(36, 10, GREEN_L)
-    # bangs: a scalloped fringe over the mask's brow (swaying a little), with a lit rim
-    bx = wv(1, 1.0) // 1
-    up.part(lambda d, f: [d.ellipse((x - 3, 9, x + 3, 15 + (i % 2)), f) for i, x in enumerate(range(24, 48, 4))], BROWN)
-    for x in range(25, 47, 4):
-        up.dot(x + bx % 2, 11, SKIN_D)
-    # glowing eyes in dark holes: shimmer every beat, a half-lid on the idle's last frame
-    up.flat(E((29, 20, 36, 28)), OUTLINE)
-    up.flat(E((39, 20, 46, 28)), OUTLINE)
-    blink = not walking and t % 4 == 3
-    glow = (YELLOW, ORANGE, YELLOW, ORANGE)[t % 4]
-    for x in EYES_X:
-        if KO:
-            x_eye(up, x, EYES_Y + 1, ORANGE)
-        elif blink:  # a subtle half-lid: only the lower glow row shows
-            up.flat(R((x, EYES_Y + 1, x + 3, EYES_Y + 5)), OUTLINE)
-            up.flat(R((x, EYES_Y + 4, x + 3, EYES_Y + 4)), ORANGE)
+def _eden_face(c: Canvas, pose, between) -> None:
+    """Sakura's face (full-width brow tapering to a small rounded chin, big eyes with a calm lid and a lash flick at each
+    outer corner, blush on the narrower cheeks), with green irises and a little smile. `between` draws the hair and mask
+    that overlap the face before the eyes go on. pose 'hit': eyes squeezed shut, an 'ow' mouth."""
+    c.part(lambda d, f: (d.rounded_rectangle((FACE[0], FACE[1], FACE[2], 29), FACE_R, f),
+                         d.ellipse((FACE[0] + 1, 19, FACE[2] - 1, FACE[3] - 1), f)), SKIN, line=False)
+    between()
+    if pose == "hit" and not KO:
+        for x in EYES_X:  # > <  squeezed shut
+            if x == EYES_X[0]:
+                c.flat(L([(x - 1, 22), (x + 2, 24), (x - 1, 26)], 1), OUTLINE)
+            else:
+                c.flat(L([(x + 4, 22), (x + 1, 24), (x + 4, 26)], 1), OUTLINE)
+        c.flat(R((MOUTH[0] - 1, MOUTH[1] - 1, MOUTH[0] + 2, MOUTH[1] + 1)), OUTLINE)
+        c.flat(R((MOUTH[0], MOUTH[1], MOUTH[0] + 1, MOUTH[1])), MAROON)
+    else:
+        big_eyes(c, EYES_Y, EYES_X, GREEN, h=6)
+        if not KO:
+            for x, out in ((29, -1), (39, 4)):
+                c.flat(R((x, 21, x + 3, 21)), OUTLINE)
+                c.dot(x + out, 21, OUTLINE)
+                c.dot(x + out + (1 if out > 0 else -1), 20, OUTLINE)
+            c.flat(R((MOUTH[0], MOUTH[1], MOUTH[0] + 1, MOUTH[1])), MAROON)  # a small smile: the corners lift
+            c.dot(MOUTH[0] - 1, MOUTH[1] - 1, MAROON)
+            c.dot(MOUTH[0] + 2, MOUTH[1] - 1, MAROON)
         else:
-            up.flat(R((x, EYES_Y + 1, x + 3, EYES_Y + 5)), OUTLINE)
-            up.flat(R((x, EYES_Y + 3, x + 3, EYES_Y + 4)), glow)
-            up.flat(R((x + (t % 2), EYES_Y + 1, x + (t % 2) + 1, EYES_Y + 2)), WHITE)  # glint wanders
-    for x in (33, 43):  # freckles
-        up.dot(x, 32, SKIN_D)
-    up.flat(R((MOUTH[0], MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)
-    if walking:  # lean forward into the stride (rows above the belt shear right)
-        up.img = ImageChops.offset(lean(up.img, 44, 0.04), 0, WALK_BOB[step])  # and bob twice as hard as the legs'
-        up.px = up.img.load()
+            c.flat(R((MOUTH[0], MOUTH[1], MOUTH[0] + 1, MOUTH[1])), MAROON)
+    c.flat(R((BLUSH[0] + 1, BLUSH[2], BLUSH[0] + 3, BLUSH[2])), PINK_L)
+    c.flat(R((BLUSH[1] - 3, BLUSH[2], BLUSH[1] - 2, BLUSH[2])), PINK_L)
+
+
+def _eden_braid(c: Canvas, bx: int, sway: float, lagy) -> None:
+    """A plait over the front of her shoulder: four stacked rounded segments, each lit top-left with a dark notch between
+    them. The lower segments swing further (sway) and trail the body's bob (lagy(i)); a cream ribbon and a tuft end it."""
+    ox = oy = 0
+    for i in range(4):
+        ox = round(sway * (i + 1) / 4)
+        oy = lagy(i)
+        y = 26 + i * 4 + oy
+        c.part(E((bx - 3 + ox, y, bx + 3 + ox, y + 6)), CHESTNUT)
+        c.flat(L([(bx - 2 + ox, y + 2), (bx - 1 + ox, y + 1)], 1), CHESTNUT_L)
+    c.part(R((bx - 2 + ox, 44 + oy, bx + 2 + ox, 45 + oy)), CREAM, line=False)
+    c.part(P([(bx - 2 + ox, 46 + oy), (bx + 2 + ox, 46 + oy), (bx + ox + (1 if sway > 1 else 0), 49 + oy)]), CHESTNUT,
+           shade=False)
+
+
+def eden(step=None, t=0, pose=None, sway=None, flare=None):
+    """Eden (redesign, 2026-11-01): a wanderer in an earthy pilgrim dress: bark-brown corset with a sweetheart neckline,
+    cream chemise band and a wooden pendant, cream puff sleeves, an olive bell skirt with an ochre hem and a cream apron,
+    twin chestnut braids over her shoulders (ribbon-tied), a small gourd; a carved walnut domino mask over the eyes (leaf
+    sprigs at the temples), Sakura's face with green eyes, small flowers at her temple. Cloth moves: the bell skirt lives
+    on the legs layer so the hem stays planted while the body bobs; its hem ripples, folds slide, the apron flutters and,
+    walking, the skirt swings after the stride and flares; braids sway with a lag per segment and trail the bob; puff
+    sleeves squash when she dips; the pendant and gourd swing. Waves are sines over the loop (4 frames idle, 8 walk).
+    pose 'hit' = squeezed eyes (the generic flash is hand-built in eden_hit_frames); `sway` / `flare` override the braids'
+    swing and the skirt's flare (hit and death frames)."""
+    walking = step is not None
+    n = 8 if walking else 4
+    wv = lambda lag=0, amp=1.0, harm=1: round(amp * math.sin(math.tau * harm * (t - lag) / n))
+    bobs = WALK_BOB if walking else IDLE_BOB
+    cur = bobs[t % len(bobs)]
+    lagy = lambda k: max(-2, min(2, bobs[(t - k) % len(bobs)] - cur)) if k else 0  # trails the body's bob
+    breath = (0, 0, 1, 1)[t % 4] if not walking else 0
+    squash = 1 if cur == max(bobs) else 0  # the sleeves' puffs compress when the body is lowest
+    if sway is None:
+        sway = wv(1, 1.0) + (wv(0, 1.0) if walking else 0)
+    if flare is None:
+        flare = round(1.2 * abs(math.cos(math.tau * (t - 1) / 8))) if walking else 0
+    shear = round(2 * math.cos(math.tau * (t - 2) / 8)) if walking else wv(2, 1.0)  # the hem swings after the stride
+
+    # ---- legs layer: legs, then the bell skirt, then the shoes in front of its hem
+    low = Canvas()
+    feet = legs(low, CREAM_D, BROWN, step)
+    left, right = 11 - flare + shear, 53 + flare + shear
+
+    def hem_y(x: int) -> int:
+        return 55 - round(0.5 + 0.5 * math.sin(math.tau * (x / 16 - t / n)))  # a slow wave runs along the hem
+
+    xs = list(range(right, left - 1, -2))
+    skirt = [(21, 43), (43, 43), (47 + shear // 2 + flare // 2, 48)] + [(x, hem_y(x)) for x in xs] + \
+            [(17 + shear // 2 - flare // 2, 48)]
+    low.part(P(skirt), OCHRE)  # the hem band (the olive is drawn over all but its last rows)
+    top = [(21, 43), (43, 43), (47 + shear // 2 + flare // 2, 48), (right - 1, 52), (left + 1, 52),
+           (17 + shear // 2 - flare // 2, 48)]
+    low.part(P(top), OLIVE, line=False)
+    low.flat(L([(left + 1, 53), (right - 1, 53)], 1), OCHRE_D)  # stitching line under the hem seam
+    for i, (xw, xh, col) in enumerate(((23, 20, LIGHTER[OLIVE]), (28, 25, DARKER[OLIVE]), (38, 40, DARKER[OLIVE]),
+                                       (42, 46, DARKER[OLIVE]))):  # long folds: they slide a pixel across the loop
+        slide = wv(i, 1.0) if not walking else wv(i * 2, 1.0) + shear // 2
+        low.flat(L([(xw, 45), (xh + slide, 51)], 1), col)
+    ap = wv(2, 1.0) if not walking else shear // 2 + wv(3, 1.0)  # the apron flutters a little more than the skirt
+    low.part(P([(29, 44), (36, 44), (39 + ap, hem_y(39) - 1), (37 + ap, hem_y(37) - 1), (28 + ap, hem_y(28) - 1),
+                (26 + ap, hem_y(26) - 1)]), CREAM, line=False)
+    low.flat(L([(30, 46), (28 + ap, 51)], 1), LIGHTER[CREAM])
+    low.flat(L([(35, 47), (37 + ap, 52)], 1), CREAM_D)
+    for x, dy in feet:  # shoes in front of the hem so a lifted foot reads
+        low.part(RR((x - 1, 53 + dy, x + 7, 57 + dy), 2), BROWN)
+        low.flat(R((x, 57 + dy, x + 6, 57 + dy)), SHADOW)
+
+    # ---- upper body
+    up = Canvas()
+    ay = wv(0, 1.0) if walking else 0
+    for k, x in enumerate(ARM_X):  # puff sleeves + hands (arms swing against each other when walking)
+        a = ay if k == 0 else -ay
+        up.part(E((x + 1, 41 + a, x + 5, 45 + a)), SKIN)
+        up.part(E((x - 1, 34 + squash, x + 7, 42 + (a if a > 0 else 0))), CREAM)
+        up.flat(R((x + 1, 41 + (a if a > 0 else 0), x + 5, 41 + (a if a > 0 else 0))), OCHRE)
+        if k == 0:
+            up.part(RR((21, 36, 43, 42), 3), BROWN)  # bark-brown corset
+            up.flat(L([(23, 39), (23, 40)], 1), SKIN_D)
+            up.part(R((21, 41, 43, 42)), OCHRE, line=False)
+            up.flat(L([(21, 41), (43, 41)], 1), YELLOW)
+            edge = [(25, 37), (27, 38), (30, 39), (32, 38), (33, 40), (34, 38), (36, 39), (39, 38), (41, 37)]
+            edge = [(x_, y_ - breath) for x_, y_ in edge]
+            up.flat(P([(25, 36), (41, 36)] + edge[::-1]), SKIN)  # the sweetheart scoop
+            up.flat(P(edge + [(x_, y_ + 2) for x_, y_ in edge[::-1]]), CREAM)  # cream chemise band
+            up.flat(L([(28, 36), (33, 38), (38, 36)], 1), BROWN)  # pendant cord
+            ps = wv(2, 1.0)
+            up.part(E((32 + ps, 37, 35 + ps, 40 + (1 if ps else 0))), OCHRE_D)  # wooden pendant swings
+            gx = wv(1, 1.0)  # gourd canteen on the right hip
+            up.flat(L([(41, 42), (41 + gx, 44)], 1), BROWN)
+            up.part(E((39 + gx, 44, 45 + gx, 50)), OCHRE_D)
+            up.part(R((41 + gx, 42, 42 + gx, 44)), BROWN, line=False)
+    braids = sway if not walking else sway
+    _eden_braid(up, 24, -braids, lagy)
+    _eden_braid(up, 43, braids, lagy)
+
+    # ---- head: a smooth cap, a middle part with soft bangs, the carved mask, flowers
+    up.part(RR((16, 6, 48, 28), 11), CHESTNUT)
+    up.flat(L([(22, 10), (28, 8), (36, 8)], 1), CHESTNUT_L)
+    up.flat(L([(40, 9), (44, 11)], 1), CHESTNUT_L)
+
+    def hair_and_mask():
+        up.part(P([(35, 7), (28, 9), (23, 15), (22, 24), (24, 22), (26, 17), (30, 14), (34, 13)]), CHESTNUT,
+                shade=False, line=False)
+        up.part(P([(35, 7), (42, 9), (47, 15), (48, 24), (46, 22), (44, 17), (40, 14), (36, 13)]), CHESTNUT,
+                shade=False, line=False)
+        up.flat(L([(33, 8), (28, 11), (25, 16)], 1), CHESTNUT_L)
+        up.flat(L([(37, 8), (42, 11), (46, 16)], 1), CHESTNUT_L)
+        up.part(P(EDEN_MASK), WALNUT)  # carved walnut domino mask, outlined
+        for line in (((24, 19), (28, 17), (34, 17), (36, 18)), ((41, 17), (46, 17), (50, 19)), ((26, 22), (26, 25)),
+                     ((49, 22), (48, 25))):  # lighter wood-grain lines
+            up.flat(L(list(line), 1), WALNUT_L)
+        up.flat(L([(37, 19), (37, 22)], 1), WALNUT_L)
+        for x, y, a in ((25, 18, -1.1), (50, 18, -2.0)):  # leaf sprigs at the temples, small and angled up
+            up.part(P(leaf_pts(x, y, a, 5, 1.7)), OLIVE, line=False)
+        up.part(P(leaf_pts(36, 14, -HALF_PI, 4, 1.6)), OLIVE, line=False)
+
+    _eden_face(up, pose, hair_and_mask)
+    for x, y, col in ((44, 8, WHITE), (40, 6, ORANGE)):  # two small flowers at her temple
+        up.part(E((x - 2, y - 2, x + 2, y + 2)), col)
+        up.dot(x, y, YELLOW)
     return low, up
 
 
-def eden_crown(t: int, dy: int) -> Canvas:
-    """The leafy crown: a tall fan of five leaves rising from the top of her hair. Tips sway with follow-through (the
-    outer leaves a beat behind the centre), and a loose leaf breaks off and spirals down every cycle (alternating
-    sides). A CELL canvas drawn behind the body; `dy` = the head's bob."""
-    c = Canvas(CELL)
-    ox, oy = PAD, PAD + UPPER_DY + dy
-    wave = lambda lag, amp: HAIR_FLOW[(t - lag) % 4] * amp
-    for x, y, ang, ln, w, col, lag in (
-            (25, 12, -2.55, 12, 3.2, GREEN_D, 3), (47, 12, -0.6, 12, 3.2, GREEN_D, 3),
-            (29, 9, -2.1, 16, 4.0, GREEN, 2), (43, 9, -1.04, 16, 4.0, GREEN, 2),
-            (36, 8, -1.571, 20, 4.4, GREEN_L, 1)):
-        draw_leaf(c, ox + x, oy + y, ang + wave(lag, 0.07) * (1 if ang > -1.571 else -1), ln, w, col, rib=DARKER[col])
-    k = t % 4  # a loose leaf: leaves the outer left/right leaf's tip on frame 1, drifts down and out, gone by frame 0
-    if k:
-        side = -1 if (t // 4) % 2 == 0 else 1
-        lx = ox + 36 + side * (12 + 3 * k) + (2 if k == 2 else 0) * side
-        ly = oy + 2 + 6 * k
-        draw_leaf(c, lx, ly, math.pi / 2 + side * (0.4 + 0.9 * k), 5, 1.8, (GREEN_L, GREEN, GREEN_D, GREEN)[k], shade=False)
-    return c
+HALF_PI = math.pi / 2
 
 
 ## --- Eden's hit and death, which are hand-built (HITS / DEATHS, used by main()) instead of the generic flash / topple
 
-def _eden_raw(dy: int = 0, t: int = 0) -> Image.Image:
-    """Her idle frame (CELL px) before the outline pass."""
-    low, up = eden(None, t)
-    f = eden_aura(t).img
-    f.alpha_composite(low.img)
-    f.alpha_composite(up.img, (0, UPPER_DY + dy))
-    out = eden_crown(t, dy).img
-    out.alpha_composite(f, (PAD, PAD))
-    return out
+def _eden_raw(t: int = 0, **kw) -> Image.Image:
+    """A standing frame (CELL px) before the outline pass; `kw` goes to eden() (pose / sway / flare)."""
+    low, up = eden(None, t, **kw)
+    f = low.img
+    f.alpha_composite(up.img, (0, UPPER_DY + IDLE_BOB[t % 4]))
+    return cell(f)
 
 
 def _squash(img: Image.Image, sx: float, sy: float, lift: int = 0) -> Image.Image:
@@ -4501,7 +4499,7 @@ def _squash(img: Image.Image, sx: float, sy: float, lift: int = 0) -> Image.Imag
 
 
 def _eden_leaves(img: Image.Image, leaves, k: float, ground: int) -> Image.Image:
-    """Loose leaves flung from (x, y) with velocity (vx, vy) and spin: ballistic, fluttering, resting on the floor."""
+    """Petals and leaves flung from (x, y) with velocity (vx, vy) and spin: ballistic, fluttering, resting on the floor."""
     c = Canvas(CELL)
     c.img = img.copy()
     c.px = c.img.load()
@@ -4516,35 +4514,40 @@ def _eden_leaves(img: Image.Image, leaves, k: float, ground: int) -> Image.Image
     return c.img
 
 
-EDEN_HIT_LEAVES = ((38, 40, -2.2, -3.2, 0.5, 5, GREEN_L), (60, 42, 2.4, -3.0, 2.0, 5, GREEN), (48, 24, 0.6, -4.2, 1.3, 4, GREEN_L))
-EDEN_DEATH_LEAVES = ((40, 44, -3.4, -4.6, 0.3, 6, GREEN_L), (58, 46, 3.2, -4.2, 2.2, 6, GREEN), (48, 20, -1.2, -5.4, 1.1, 5, GREEN_L),
-                     (36, 52, -4.2, -2.4, 2.8, 5, GREEN_D), (60, 52, 4.0, -2.8, 0.9, 5, GREEN_D), (50, 28, 2.0, -5.0, 1.7, 6, GREEN),
-                     (44, 34, -2.4, -3.6, 2.5, 4, GREEN_L), (54, 36, 1.4, -3.8, 0.2, 4, GREEN))
+EDEN_HIT_LEAVES = ((38, 40, -2.2, -3.2, 0.5, 5, GREEN_L), (60, 42, 2.4, -3.0, 2.0, 5, OLIVE_L), (48, 24, 0.6, -4.2, 1.3, 4, WHITE))
+EDEN_DEATH_LEAVES = ((40, 44, -3.4, -4.6, 0.3, 6, GREEN_L), (58, 46, 3.2, -4.2, 2.2, 6, OLIVE_L), (48, 20, -1.2, -5.4, 1.1, 5, WHITE),
+                     (36, 52, -4.2, -2.4, 2.8, 5, ORANGE), (60, 52, 4.0, -2.8, 0.9, 5, OLIVE), (50, 28, 2.0, -5.0, 1.7, 6, GREEN_L),
+                     (44, 34, -2.4, -3.6, 2.5, 4, WHITE), (54, 36, 1.4, -3.8, 0.2, 4, ORANGE))
 
 
 def eden_hit_frames(idle0: Image.Image) -> list[Image.Image]:
-    """Hit flash (white, squashed wide and low as the blow lands, leaves knocked loose) then one step lighter,
-    stretching back up (leaves flying)."""
-    raw = _eden_raw()
-    ground = raw.getbbox()[3]
-    a = outline(_eden_leaves(_squash(raw, 1.1, 0.88), EDEN_HIT_LEAVES, 0.6, ground))
-    b = outline(_eden_leaves(_squash(raw, 0.96, 1.03), EDEN_HIT_LEAVES, 1.8, ground))
+    """Hit: squashed wide and low as the blow lands (white flash), braids whipped out to the sides, skirt flaring, petals
+    and leaves knocked loose; then one step lighter, stretching back up with eyes squeezed shut and the braids swinging
+    back in."""
+    ground = _eden_raw().getbbox()[3]
+    a = _eden_raw(0, pose="hit", sway=4, flare=3)
+    b = _eden_raw(0, pose="hit", sway=-2, flare=1)
+    a = outline(_eden_leaves(_squash(a, 1.1, 0.88), EDEN_HIT_LEAVES, 0.6, ground))
+    b = outline(_eden_leaves(_squash(b, 0.96, 1.03), EDEN_HIT_LEAVES, 1.8, ground))
     return [recolor(a, lambda _c: WHITE), recolor(b, LIGHTER.__getitem__)]
 
 
 def eden_death_frames() -> list[Image.Image]:
-    """8 CELL frames: white flash, pops up stretched, tips back, crumples (squash) as she hits the floor, bounces,
-    lies dizzy with leaves drifting down, then dissolves (dither) in a last whirl of leaves."""
+    """8 CELL frames: white flash, pops up stretched (braids flung up and out, skirt flared), tips back, crumples
+    (squash) as she hits the floor, bounces, lies dizzy with petals drifting down, then dissolves (dither) in a last
+    whirl of leaves."""
     global KO
     KO = True
     try:
-        raw = _eden_raw()
+        up_raw = _eden_raw(0, sway=4, flare=3)
+        mid_raw = _eden_raw(0, sway=2, flare=2)
+        raw = _eden_raw(0, sway=0, flare=0)
     finally:
         KO = False
     ground = raw.getbbox()[3]
 
-    def pose(angle, sx=1.0, sy=1.0, lift=0, fade=0.0, k=None):
-        r = _squash(raw, sx, sy)
+    def pose(src, angle, sx=1.0, sy=1.0, lift=0, fade=0.0, k=None):
+        r = _squash(src, sx, sy)
         r = r.rotate(angle, Image.NEAREST, center=(CELL // 2, ground))
         left, top, right, low_ = r.getbbox()
         dx = (CELL - left - right) // 2 if angle else 0
@@ -4559,9 +4562,9 @@ def eden_death_frames() -> list[Image.Image]:
                     f.putpixel((x, y), (0, 0, 0, 0))
         return outline(f)
 
-    return [recolor(pose(0), lambda _c: WHITE), pose(0, 0.95, 1.03, 2, k=0.5), pose(30, 1.0, 1.0, 2, k=1.2),
-            pose(65, 1.12, 0.86, 0, k=2.0), pose(90, 1.04, 0.94, 3, k=2.8), pose(90, 1.08, 0.9, 0, k=3.6),
-            pose(90, 1.08, 0.9, 0, 0.45, k=4.4), pose(90, 1.08, 0.9, 0, 0.8, k=5.2)]
+    return [recolor(pose(raw, 0), lambda _c: WHITE), pose(up_raw, 0, 0.95, 1.03, 2, k=0.5), pose(mid_raw, 30, 1.0, 1.0, 2, k=1.2),
+            pose(raw, 65, 1.12, 0.86, 0, k=2.0), pose(raw, 90, 1.04, 0.94, 3, k=2.8), pose(raw, 90, 1.08, 0.9, 0, k=3.6),
+            pose(raw, 90, 1.08, 0.9, 0, 0.45, k=4.4), pose(raw, 90, 1.08, 0.9, 0, 0.8, k=5.2)]
 
 
 def eden_aura(i: int) -> Canvas:
@@ -4892,8 +4895,6 @@ def gust_frame(k: int) -> Image.Image:
 
 
 CHARACTERS["eden"] = eden
-CROWNS["eden"] = eden_crown
-AURAS["eden"] = eden_aura
 HITS["eden"] = eden_hit_frames
 DEATHS["eden"] = eden_death_frames
 WEAPONS["eden_sling"] = seed_sling
