@@ -6111,7 +6111,6 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
     hd.part(lambda d, f: (d.ellipse((14, 4, 50, 38), f), d.ellipse((10 + drape, 17 + dl, 30 + drape, 40 + dl), f)), SHADOW)
     hd.flat(L([(20, 9), (30, 5), (40, 6), (46, 10)], 1), STEEL_D)  # lit crown
     hd.flat(L([(13 + drape, 25 + dl), (12 + drape, 31 + dl), (15 + drape, 36 + dl)], 1), STEEL_D)  # lit drape
-    hd.flat(L([(15, 15), (13, 21)], 1), STEEL_D)
     hd.flat(L([(18 + drape, 36 + dl), (23, 38)], 1), OUTLINE)  # fold where the drape meets the shoulder
     hd.flat(RR((FACE[0] - 3, FACE[1] - 4, FACE[2] + 2, FACE[3] + 1), FACE_R + 3), STEEL_D)  # lit lip of the opening
     hd.flat(RR((FACE[0] - 2, FACE[1] - 3, FACE[2] + 1, FACE[3] + 1), FACE_R + 2), OUTLINE)  # the opening, in shadow
@@ -6121,10 +6120,6 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
     ty = lag(2)  # the fringe's tips trail the bob
     hd.part(P([(23, 25), (23, 16), (26, 13), (26, 7 + ty), (30, 12), (33, 5 + ty), (36, 13), (40, 8 + ty), (41, 14), (45, 12 + ty),
                (46, 17), (45, 22), (43, 18), (41, 20), (38, 18), (34, 20), (30, 18), (26, 20), (25, 27)]), OUTLINE, shade=False)
-    hd.flat(L([(26, 9 + ty), (27, 11)], 1), STEEL_D)
-    hd.flat(L([(33, 7 + ty), (34, 10)], 1), STEEL_D)
-    hd.flat(L([(40, 10 + ty), (40, 12)], 1), STEEL_D)
-    hd.flat(L([(29, 14), (33, 16)], 1), SHADOW)
     hd.part(P([(23, 24), (21, 31), (25, 29)]), OUTLINE, shade=False)  # sideburn tuft
     for x in (30, 40):  # brows: the left one lifted, the right sly
         if KO:
@@ -6257,10 +6252,8 @@ def shadow_aura(i: int) -> Canvas:
                 continue
             h = (y - 5) / 52.0  # 0 at the top, 1 at the bottom
             col = VIOLET if h > 0.45 else VIOLET_D
-            pts = [(x + round(math.sin((y + j + x) * 0.5) * 2), y + j) for j in range(0, 6 if h > 0.3 else 4)]
-            c.flat(L(pts, 1), col)
-            if h > 0.55:
-                sdot(c, pts[0][0], pts[0][1] - 1, VIOLET_L)
+            pts = [(x + round(math.sin((y + j + x) * 0.3) * 1.2), y + j) for j in range(0, 6 if h > 0.3 else 4)]
+            c.flat(L(pts, 2 if h > 0.45 else 1), col)  # one unbroken wavy strand; no loose sparkle pixels above it
     return c
 
 
