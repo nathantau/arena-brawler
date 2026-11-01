@@ -6100,6 +6100,8 @@ def shadow_legs(low: Canvas, step) -> None:
         low.flat(R((x - 1, 51 + dy, x + 6, 51 + dy)), SHADOW)
         low.flat(L([(x + 1, 47 + dy), (x + 1, 49 + dy)], 1), SHADOW)
         low.flat(L([(x + 5, 46 + dy), (x + 5, 50 + dy)], 1), YELLOW)
+        low.flat(L([(x - 1, 46 + dy), (x - 1, 49 + dy)], 1), STEEL_D)  # rim light down the lit side of the thigh
+        low.flat(R((x - 1, 52 + dy, x + 6, 52 + dy)), STEEL_D)  # ribbed cuff, lit
         low.part(RR((x - 2, 53 + dy, x + 8, 57 + dy), 2), SHADOW)
         low.flat(R((x - 1, 57 + dy, x + 7, 57 + dy)), YELLOW)
         low.flat(R((x + 4, 54 + dy, x + 7, 54 + dy)), WHITE)
@@ -6149,6 +6151,9 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
         up.part(E((x, 42, x + 5, 47)), SHADOW)
         up.flat(L([(x + 1, 43), (x + 3, 43)], 1), STEEL_D)
     arm(up, ARM_X[1] + a1, SHADOW, SHADOW)
+    for x in (ARM_X[0] + a0, ARM_X[1] + a1):  # sleeve creases: a lit ridge beside a dark fold
+        up.flat(L([(x + 1, 37), (x + 1, 39)], 1), STEEL_D)
+        up.flat(L([(x + 3, 38), (x + 4, 40)], 1), OUTLINE)
     for x in (ARM_X[0] + a0, ARM_X[1] + a1):  # ribbed sleeve cuffs
         up.flat(R((x, 41, x + 5, 42)), OUTLINE)
         up.flat(R((x, 41, x + 5, 41)), STEEL_D)
@@ -6162,6 +6167,8 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
     p = lag(2) - fly * 2
     up.flat(L([(23, 33), (25, 38 + round(c * 0.6)), (30, 41 + c), (35, 41 + c), (40, 38 + round(c * 0.6)), (42, 33)], 1), YELLOW)
     up.dot(25, 38 + round(c * 0.6), WHITE)
+    up.dot(36, 41 + c, WHITE)  # glints along the links
+    up.dot(40, 38 + round(c * 0.6), ORANGE)
     up.flat(L([(32, 41 + c), (32, 42 + p)], 1), YELLOW)
     up.flat(R((31, 42 + p, 33, 44 + p)), YELLOW)
     up.dot(31, 42 + p, WHITE)
@@ -6172,6 +6179,7 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
     dl = lag(2)
     hd.part(lambda d, f: (d.ellipse((14, 4, 50, 38), f), d.ellipse((10 + drape, 17 + dl, 30 + drape, 40 + dl), f)), SHADOW)
     hd.flat(L([(20, 9), (30, 5), (40, 6), (46, 10)], 1), STEEL_D)  # lit crown
+    hd.flat(L([(22, 8), (27, 6)], 1), STEEL)  # the rim light's brightest streak, top left
     hd.flat(L([(13 + drape, 25 + dl), (12 + drape, 31 + dl), (15 + drape, 36 + dl)], 1), STEEL_D)  # lit drape
     hd.flat(L([(18 + drape, 36 + dl), (23, 38)], 1), OUTLINE)  # fold where the drape meets the shoulder
     hd.flat(RR((FACE[0] - 3, FACE[1] - 4, FACE[2] + 2, FACE[3] + 1), FACE_R + 3), STEEL_D)  # lit lip of the opening
@@ -6315,7 +6323,7 @@ def shadow_aura(i: int) -> Canvas:
             h = (y - 5) / 52.0  # 0 at the top, 1 at the bottom
             col = VIOLET if h > 0.45 else VIOLET_D
             pts = [(x + round(math.sin((y + j + x) * 0.3) * 1.2), y + j) for j in range(0, 6 if h > 0.3 else 4)]
-            c.flat(L(pts, 2 if h > 0.45 else 1), col)  # one unbroken wavy strand; no loose sparkle pixels above it
+            c.flat(L(pts, 1), col)  # one unbroken wavy strand; no loose sparkle pixels above it
     return c
 
 
