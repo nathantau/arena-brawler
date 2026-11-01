@@ -1003,23 +1003,255 @@ APE_POSES = {"walk": ((((15, 26), (13, 36), (17, 44)), ((49, 26), (51, 36), (47,
              "smash": ((((15, 26), (28, 36), (40, 44)), ((49, 26), (54, 36), (54, 44))), ((35, 46, -2), (48, 46, 9)))}
 
 
-## Wukong's golden armour breaking in the morph: (crack, chunk that then falls away), in the armour's 24x15 px.
-APE_ARMOUR_BREAKS = [([(6, 0), (8, 4), (6, 7), (9, 10)], [(6, 0), (8, 4), (6, 7), (2, 6), (1, 1)]),
-                     ([(18, 2), (16, 5), (19, 8)], [(18, 2), (16, 5), (19, 8), (23, 7), (23, 2)]),
-                     ([(2, 9), (5, 11), (4, 15)], [(2, 9), (5, 11), (4, 15), (0, 15), (0, 10)]),
-                     ([(12, 6), (14, 10), (12, 14)], [(12, 6), (14, 10), (12, 14), (9, 12), (9, 8)])]
-
 ## The Great Ape's circlet: Wukong's, tilted askew and cracked; the morph cracks it one line at a time.
 APE_CIRCLET = [(23, 8), (47, 4), (47, 9), (23, 13)]
 APE_CRACKS = [[(36, 5), (34, 8), (37, 9), (35, 12)], [(29, 7), (30, 9), (28, 11)], [(42, 5), (43, 7), (41, 9)],
               [(26, 8), (25, 10)]]
 
+## Wukong's own gold armour, burst on the ape's much bigger body (a Trojan-style muscle cuirass): shaded with the same ramp as the
+## split pauldron: dark gold (BROWN deepest, OCHRE_D), gold (ORANGE), highlight (YELLOW), one WHITE glint.
+APE_GOLD, APE_GOLD_L, APE_GOLD_D, APE_GOLD_X = ORANGE, YELLOW, OCHRE_D, BROWN
+## The cuirass: the jagged split down the middle (left edge, right edge, top to bottom), opening at the neckline.
+APE_SPLIT_L = [(30, 31), (29, 33), (31, 35), (30, 37), (32, 39), (33, 41), (33, 43)]
+APE_SPLIT_R = [(36, 31), (37, 33), (35, 35), (36, 37), (34, 39), (33, 41), (33, 43)]
+APE_PLATE_L = [(22, 33), (24, 31), (26, 31), (27, 32), (29, 32)] + APE_SPLIT_L + [(32, 44), (23, 44), (22, 40)]
+APE_PLATE_R = ([(36, 31), (38, 32), (40, 32), (41, 31), (42, 31), (44, 33), (44, 38), (42, 39), (43, 41), (41, 42), (42, 44), (34, 44)]
+               + APE_SPLIT_R[::-1][1:])
+APE_PEC_CRACK = [(43, 34), (42, 35), (42, 36), (41, 36), (41, 37), (40, 37), (40, 38), (39, 39)]
+
+
+def ape_mask(shape, n=SIZE):
+    m = Image.new("1", (n, n), 0)
+    shape(ImageDraw.Draw(m), 1)
+    return m
+
+
+def ape_metal(c, shape, glint=True, lo2=True):
+    """Shaded gold plate (the split pauldron's ramp): mid gold, lit top-left edge, dark gold bottom-right edge, one glint,
+    a selective outline against what is already drawn."""
+    c.part(shape, APE_GOLD, shade=False, line=True)
+    m = ape_mask(shape, c.size).load()
+    n = c.size
+    ins = lambda x, y: 0 <= x < n and 0 <= y < n and m[x, y]
+    first = None
+    for y in range(n):
+        for x in range(n):
+            if not ins(x, y):
+                continue
+            if not ins(x, y + 1) or not ins(x + 1, y):
+                c.px[x, y] = (APE_GOLD_X if lo2 and (not ins(x, y + 2) and not ins(x + 2, y)) else APE_GOLD_D) + (255,)
+            elif not ins(x, y + 2) or not ins(x + 2, y):
+                c.px[x, y] = APE_GOLD_D + (255,)
+            elif not ins(x, y - 1) or not ins(x - 1, y):
+                c.px[x, y] = APE_GOLD_L + (255,)
+                if first is None:
+                    first = (x, y)
+    if glint and first:
+        c.dot(first[0] + 1, first[1], WHITE)
+
+
+def ape_dent(c, x, y):
+    c.dot(x, y, APE_GOLD_X)
+    c.dot(x + 1, y, APE_GOLD_D)
+    c.dot(x, y + 1, APE_GOLD_D)
+    c.dot(x - 1, y - 1, APE_GOLD_L)
+
+
+def ape_cuirass(up):
+    """The cracked muscle cuirass over his chest and belly: an arched neckline, a jagged split that opens at the top (fur
+    bulging through) and tapers to a point at the abs, a diagonal pec crack, pec domes lit top-left, ab blocks, a missing
+    bottom-right corner, snapped waist straps, rivets at the shoulder corners."""
+    hem = 44
+    up.part(P(APE_SPLIT_L + APE_SPLIT_R[::-1]), WALNUT, shade=False, line=True)  # the burst: fur showing
+    for x, y in ((32, 34), (33, 37), (33, 40)):
+        up.dot(x, y, WALNUT_D)
+    left, right = P(APE_PLATE_L), P(APE_PLATE_R)
+    up.part(left, ORANGE, shade=False, line=True)
+    up.part(right, ORANGE, shade=False, line=True)
+    m1, m2 = ape_mask(left).load(), ape_mask(right).load()
+    ins = lambda x, y: 0 <= x < SIZE and 0 <= y < SIZE and (m1[x, y] or m2[x, y])
+    for y in range(28, 46):
+        for x in range(20, 47):
+            if ins(x, y) and (not ins(x, y + 1) or not ins(x + 1, y)):
+                up.dot(x, y, APE_GOLD_X if (not ins(x, y + 2) and not ins(x + 2, y)) else APE_GOLD_D)
+    for x, y in ((23, 36), (23, 35), (24, 34), (25, 33), (26, 33), (27, 33), (38, 36), (38, 35), (39, 34), (40, 33), (41, 33)):
+        up.dot(x, y, YELLOW)  # pec domes: lit upper-left arc
+    for x, y in ((23, 37), (24, 38), (25, 38), (26, 38), (27, 38), (28, 37), (38, 37), (39, 38), (40, 38), (41, 38), (42, 38), (43, 37)):
+        up.dot(x, y, APE_GOLD_D)  # and a dark under-curve
+    up.dot(25, 34, WHITE)  # the one glint
+    for x0, y0 in ((25, 39), (24, 42), (38, 39), (39, 42)):  # ab blocks, a short highlight on the top edge only
+        up.dot(x0, y0, YELLOW)
+        up.dot(x0 + 1, y0, YELLOW)
+        for x in range(x0, x0 + 3):
+            up.dot(x, y0 + 2, APE_GOLD_D)
+    up.dot(24, 32, RED)  # shoulder-corner rivets
+    up.dot(42, 32, RED)
+    for x, y in APE_PEC_CRACK:
+        up.dot(x, y, WALNUT_D)
+    for x, y in ((30, 32), (31, 31), (35, 32), (36, 33), (30, 34), (35, 34)):
+        up.dot(x, y, BROWN)  # fur bulging over both plate edges at the top of the split
+    for sx, d in ((21, -1), (45, 1)):  # snapped waist straps
+        for k in range(2):
+            up.dot(sx + d * k, 40, APE_GOLD_D)
+            up.dot(sx + d * k, 41, APE_GOLD_X)
+        up.dot(sx, 40, ORANGE)
+    up.dot(19, 41, APE_GOLD_X)
+    up.dot(47, 41, APE_GOLD_X)
+
+
+def ape_ropes(up):
+    """Two makeshift twisted ropes stand in for the snapped shoulder straps: from the plate's top corners up beside the neck
+    and over the shoulders (they tuck under the jaw); a small knot round each rivet, a short loose end hanging."""
+    def line(p, q):
+        n = max(abs(q[0] - p[0]), abs(q[1] - p[1]))
+        return [(round(p[0] + (q[0] - p[0]) * i / n), round(p[1] + (q[1] - p[1]) * i / n)) for i in range(n + 1)]
+
+    def rope(way):
+        path = []
+        for p, q in zip(way, way[1:]):
+            path += [pt for pt in line(p, q) if pt not in path]
+        body = {}
+        for i, (x, y) in enumerate(path):
+            body[(x, y)] = CREAM if i % 2 == 0 else CREAM_D
+        for i, (x, y) in enumerate(path):
+            body.setdefault((x + 1, y), CREAM_D if i % 2 == 0 else CREAM)
+        for (x, y) in list(body):
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                if (x + dx, y + dy) not in body:
+                    up.dot(x + dx, y + dy, OUTLINE)
+        for (x, y), c in body.items():
+            up.dot(x, y, c)
+        ex, ey = path[-1]
+        up.dot(ex, ey, SKIN_D)  # darker where it curves away over the shoulder, behind
+        up.dot(ex + 1, ey, SKIN_D)
+        up.dot(ex, ey - 1, OUTLINE)
+        up.dot(ex + 1, ey - 1, OUTLINE)
+
+    def knot(cx, cy, loose):
+        for dx in range(-2, 3):
+            for dy in range(-2, 3):
+                if abs(dx) + abs(dy) <= 3:
+                    up.dot(cx + dx, cy + dy, OUTLINE)
+        for dx in range(-1, 2):
+            for dy in range(-1, 2):
+                up.dot(cx + dx, cy + dy, CREAM_D)
+        up.dot(cx - 1, cy - 1, CREAM)
+        up.dot(cx, cy - 1, CREAM)
+        up.dot(cx, cy, RED)  # the rivet showing through the knot
+        for x, y in loose:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1)):
+                if (x + dx, y + dy) not in loose:
+                    up.dot(x + dx, y + dy, OUTLINE)
+        for k, (x, y) in enumerate(loose):
+            up.dot(x, y, CREAM if k % 2 == 0 else CREAM_D)
+
+    rope([(24, 32), (24, 29), (25, 26), (26, 24)])  # left: tight, straight up beside the neck
+    rope([(42, 32), (44, 30), (44, 28), (43, 27)])  # right: a touch slack, a small bow outward
+    knot(24, 32, [(23, 35), (23, 36), (22, 37)])
+    knot(42, 32, [(43, 35), (44, 36), (44, 37)])
+
+
+def ape_face(up):
+    """The gorilla face on the ape's brown disc: a V brow of darker brown, slanted glowing red eyes (X eyes when knocked out),
+    a broad flat nose, a closed snarl with two long upper canines, plus the chipped circlet. Drawn over the base head."""
+    def clear(box, color=BROWN):  # repaint bits of the old face with its own brown
+        x0, y0, x1, y1 = box
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                if up.px[x, y][:3] in (OUTLINE, RED, ORANGE, WHITE):
+                    up.dot(x, y, color)
+    clear((30, 12, 47, 19))  # the plain brows and eyes
+    clear((36, 20, 45, 22))  # nostrils
+    clear((32, 22, 48, 28))  # mouth line and lower fangs
+    for y in range(18, 29):  # muzzle shade: lighter top-left, darker lower rim
+        for x in range(30, 48):
+            if up.px[x, y][:3] == BROWN and (x + y) % 2 == 0:
+                if x + y < 52 and 19 <= y < 24 and x < 36:
+                    up.dot(x, y, SKIN_D)
+                elif y >= 28:
+                    up.dot(x, y, WALNUT)
+    for side in (0, 1):  # V brow: 2 px of darker brown dropping hard to the centre, a lit edge on top
+        for i in range(8):
+            x = 31 + i
+            y = 13 + (i * 3) // 7
+            if side:
+                x = 77 - x
+            for yy in (y, y + 1):
+                up.dot(x, yy, WALNUT)
+            if i % 2 == 0:
+                up.dot(x, y - 1, WALNUT_L)
+    up.dot(38, 13, WALNUT_D)  # furrow between the brows
+    up.dot(39, 14, WALNUT_D)
+    up.dot(38, 19, WALNUT_D)  # crease above the nose
+    up.dot(39, 19, WALNUT_D)
+    l_eye = [(32, 17), (33, 17), (34, 18), (35, 18)]  # slanted, the inner end lower
+    r_eye = [(77 - x, y) for x, y in l_eye]
+    if KO:
+        x_eye(up, 32, 16, RED)
+        x_eye(up, 42, 16, RED)
+    else:
+        for eye in (l_eye, r_eye):
+            for x, y in eye:
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        if (x + dx, y + dy) not in eye and up.px[x + dx, y + dy][:3] in (BROWN, WALNUT, WALNUT_L, SKIN_D):
+                            up.dot(x + dx, y + dy, OUTLINE)
+            for x, y in eye:
+                up.dot(x, y, RED)
+            up.dot(*eye[2], YELLOW)  # bright core
+    up.part(E((35, 19, 43, 22)), WALNUT, shade=False, line=False)  # broad flat nose
+    up.flat(R((36, 19, 37, 19)), WALNUT_L)
+    up.dot(37, 21, OUTLINE)
+    up.dot(41, 21, OUTLINE)
+    up.dot(36, 21, WALNUT_D)
+    up.dot(42, 21, WALNUT_D)
+    up.flat(P([(32, 26), (34, 25), (44, 25), (46, 26), (45, 27), (43, 28), (35, 28), (33, 27)]), OUTLINE)  # closed snarl
+    up.flat(P([(32, 24), (34, 23), (35, 25), (33, 26)]), WALNUT_D)  # lip curled up at the sides
+    up.flat(P([(46, 24), (44, 23), (43, 25), (45, 26)]), WALNUT_D)
+    up.dot(33, 24, WALNUT_L)
+    for x in (38, 40):
+        up.dot(x, 26, WHITE)  # small upper teeth
+    up.dot(39, 27, SKIN_D)
+    for x0 in (35, 42):  # two long upper canines, 2 px wide
+        for i in range(3):
+            up.dot(x0, 26 + i, WHITE)
+            up.dot(x0 + 1, 26 + i, STEEL if i >= 1 else WHITE)
+    for x in range(36, 43):
+        up.dot(x, 28, WALNUT)  # lower lip
+    up.dot(35, 29, WALNUT_D)
+    up.dot(43, 29, WALNUT_D)
+    # the circlet: a chunk gone from the tip, a dent, glints, one more crack
+    up.flat(P([(23, 8), (27, 9), (25, 11), (23, 12)]), MAROON)
+    up.flat(L([(23, 8), (27, 9), (25, 11), (23, 12)], 1), OUTLINE)
+    up.dot(31, 7, WHITE)
+    up.dot(40, 5, WHITE)
+    up.dot(44, 7, ORANGE)
+    up.dot(45, 7, ORANGE)
+    up.dot(44, 6, OUTLINE)
+    up.flat(L([(33, 9), (32, 11)], 1), OUTLINE)
+
+
+def ape_pauldron(up):
+    """The split pauldron on his left shoulder: a cracked top on the shoulder, an outlined plate hanging below on a strap."""
+    ape_metal(up, P([(7, 24), (8, 20), (12, 18), (17, 19), (18, 22), (14, 21), (11, 24)]))
+    up.flat(L([(12, 19), (11, 21), (13, 22)], 1), APE_GOLD_X)
+    ape_dent(up, 15, 20)
+    up.flat(L([(9, 24), (8, 27), (8, 29)], 1), BROWN)  # strap
+    ape_metal(up, P([(4, 29), (11, 28), (12, 34), (8, 38), (4, 34)]))
+    up.flat(L([(5, 32), (11, 31)], 1), APE_GOLD_D)  # plate ridges
+    up.flat(L([(6, 35), (10, 34)], 1), APE_GOLD_D)
+    up.dot(6, 30, WHITE)
+    up.dot(7, 30, WHITE)
+    up.dot(10, 33, APE_GOLD_X)
+    ape_dent(up, 8, 36)
+
 
 def wukong_ape(step=None, t=0, pose=None):
-    """Great Ape (Wukong's special): an angry, dark-red brute. Hunched, broad-shouldered, long arms
-    with big fists, glowing red eyes under a heavy scowl, golden circlet and bracers, storm clouds.
-    A transformation form, drawn bigger in game (SkillData.form_scale). `pose` (attack frames): (from, to, mix)
-    between two APE_POSES; None = knuckle-walking."""
+    """Great Ape (Wukong's special): an angry, dark-red gorilla brute. Hunched, broad-shouldered, long arms with big fists,
+    a dark brown face under a heavy V brow with slanted glowing red eyes and long upper canines, Apex's own gold armour burst
+    on his body (a cracked muscle cuirass held up by rope, a split pauldron, a snapped bracer, a chipped circlet) and a
+    storm of clouds (ape_aura). A transformation form, drawn bigger in game (SkillData.form_scale). `pose` (attack frames):
+    (from, to, mix) between two APE_POSES; None = knuckle-walking."""
     low = Canvas()
     air = pose is not None and pose[0] == "raise"  # mid-leap: knees tucked up under him
     land = pose is not None and pose[:2] == ("smash", "smash")  # landed: feet planted wide
@@ -1035,11 +1267,16 @@ def wukong_ape(step=None, t=0, pose=None):
         for tx in (x + 4, x + 7):
             low.flat(R((tx, 56 + dy, tx, 58 + dy)), OUTLINE)  # toe creases
         low.flat(R((x - 1, 58 + dy, x + 9, 58 + dy)), SHADOW)
+    if pose is None and step is None:  # two gold shards from the burst armour lie on the floor
+        for pts in ([(4, 55), (7, 54), (6, 57)], [(57, 54), (60, 53), (59, 56)]):
+            ape_metal(low, P(pts), lo2=False)
     up = Canvas()
     s = SWAY[t % 4]
     up.part(L([(14, 40), (6, 38), (4, 31), (8, 27 + s)], 3), MAROON)  # tail
     up.part(E((10, 14, 54, 45)), MAROON)  # hunched back and shoulders
     up.part(E((22, 26, 44, 43)), BROWN)  # chest
+    ape_cuirass(up)  # his cracked armour, under the arms (they cross it when he smashes)
+    ape_ropes(up)
     for x, y in ((14, 18), (20, 13), (27, 11)):
         up.part(P([(x, y + 5), (x + 3, y), (x + 6, y + 5)]), MAROON)  # bristling back fur
     a, b, k = pose or ("walk", "walk", 0)
@@ -1060,12 +1297,19 @@ def wukong_ape(step=None, t=0, pose=None):
         s = -s if i else s
         by = y + 12 if y < 26 else y - 4  # golden bracers on the forearm: below a raised fist
         up.part(R((x + 2, by, x + 10, by + 3)), YELLOW)
+        if i == 0:  # the back bracer is snapped: cracked through, a chip gone, a piece falling
+            up.flat(L([(x + 6, by), (x + 7, by + 1), (x + 6, by + 2), (x + 7, by + 3)], 1), OUTLINE)
+            up.flat(R((x + 9, by, x + 10, by)), MAROON)
+            up.dot(x + 8, by + 1, SHADOW)
+            if y >= 26:
+                ape_metal(up, P([(x - 4, by + 4), (x - 1, by + 3), (x - 2, by + 6)]), lo2=False)
         up.part(RR((x, y + s, x + 12, y + 11 + s), 3), MAROON)
         up.part(E((x + thumb, y + 1 + s, x + thumb + 5, y + 6 + s)), MAROON)  # thumb wrapped over the fingers
         up.flat(RR((x + 1, y + 6 + s, x + 11, y + 11 + s), 1), BROWN)  # curled fingers
         for kx in (x + 4, x + 7):
             up.flat(R((kx, y + 6 + s, kx, y + 11 + s)), OUTLINE)  # knuckle splits
         up.flat(R((x + 1, y + 6 + s, x + 11, y + 6 + s)), OUTLINE)
+    ape_pauldron(up)
     up.part(E((24, 3, 50, 29)), MAROON)  # head, pushed forward
     up.part(E((28, 11, 50, 29)), BROWN)  # dark face
     up.part(P(APE_CIRCLET), YELLOW)  # Wukong's golden circlet (same shading and gem), knocked askew
@@ -1073,36 +1317,171 @@ def wukong_ape(step=None, t=0, pose=None):
     for crack in APE_CRACKS:
         up.flat(L(crack, 1), OUTLINE)
     up.flat(P([(43, 4), (47, 4), (47, 6)]), OUTLINE)  # chipped corner
-    for x in (32, 42):  # glowing red eyes
-        if KO:
-            x_eye(up, x, 14, RED)
-            continue
-        up.flat(R((x, 14, x + 3, 17)), OUTLINE)
-        up.flat(R((x, 15, x + 3, 16)), RED)
-        up.dot(x + 1, 15, ORANGE)
-    up.flat(P([(29, 11), (37, 14), (37, 12), (30, 10)]), OUTLINE)  # angry brows slant to the middle
-    up.flat(P([(48, 11), (40, 14), (40, 12), (47, 10)]), OUTLINE)
-    up.flat(R((38, 21, 39, 21)), OUTLINE)  # nostrils
-    up.flat(R((42, 21, 43, 21)), OUTLINE)
-    up.flat(R((34, 25, 46, 26)), OUTLINE)  # grim mouth
-    for x in (35, 43):  # two lower fangs jutting up over the lip
-        up.flat(P([(x, 27), (x + 3, 27), (x + 2, 23), (x + 1, 23)]), WHITE)
+    ape_face(up)
+    # torn red sash scraps hang from the belt
+    up.part(P([(21, 44), (26, 44), (25, 48), (24, 50), (23, 47), (22, 51), (21, 47)]), RED)
+    up.part(P([(40, 44), (45, 44), (46, 48), (44, 47), (43, 50), (41, 47)]), RED)
     return low, up
 
 
-def ape_storm(i: int) -> Canvas:
-    """Dark storm clouds churning around the Great Ape (thickest behind him); loops every 4 frames."""
-    c = Canvas()
-    s = SWAY[i % 4]
-    back = ((9, 28 + s, 6), (14, 19, 5), (8, 39 - s, 5), (10, 48 + s, 4), (21, 11 + s, 4))
-    c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in back], SHADOW)
-    front = ((55, 20 - s, 4), (58, 31, 3), (50, 12, 3))
-    c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in front], SHADOW)
-    for k, (x, y) in enumerate(((5, 14), (29, 8), (57, 44), (7, 54), (45, 6))):
-        phase = (i + k) % 4
-        r = (1, 2, 3, 2)[phase]
-        c.part(E((x - r, y - 2 * phase - r + 6, x + r, y - 2 * phase + r + 6)), SHADOW)
-    return c
+## --- The Great Ape's storm: heavy indigo / steel clouds massed behind his head and shoulders (cooler than his fur, with a 1 px
+## dark gap round him), a red-orange fork flickering inside them, curls of cloud round his limbs, drifting embers. Drawn on the
+## whole CELL, 4-frame loop.
+# (x, y, radius, dense) in CELL px
+APE_PUFFS = [(48, 17, 12, 1), (31, 23, 10, 0), (65, 22, 11, 0), (47, 29, 9, 1), (23, 29, 7, 1), (72, 28, 7, 0), (38, 13, 7, 0), (57, 12, 8, 1),
+             (17, 34, 8, 0), (79, 34, 8, 0), (11, 45, 6, 0), (85, 44, 6, 1), (26, 16, 6, 0), (69, 15, 6, 0), (14, 24, 5, 0), (83, 24, 5, 0)]
+# one fork per frame, (main path, [branches]); it moves round the clouds across the loop
+APE_FORKS = [
+    ([(27, 16), (30, 20), (26, 24), (30, 28)], [[(30, 20), (34, 22)], [(26, 24), (22, 26)]]),
+    ([(64, 13), (67, 17), (63, 21), (66, 25)], [[(67, 17), (71, 19)], [(63, 21), (59, 23)]]),
+    ([(50, 8), (47, 12), (51, 16), (47, 20)], [[(51, 16), (55, 18)], [(47, 12), (43, 14)]]),
+    ([(20, 28), (23, 32), (20, 36), (23, 40)], [[(23, 32), (27, 34)]]),
+]
+# soft cloud curls round him (CELL px): left forearm, right hip, right forearm, one ankle
+APE_WISPS = [
+    [(22, 68), (22, 62), (24, 57), (29, 55), (33, 57), (33, 61), (30, 62)],
+    [(76, 50), (74, 55), (70, 58), (69, 63), (72, 67), (76, 66)],
+    [(84, 62), (82, 56), (84, 50), (88, 50), (88, 54)],
+    [(35, 73), (37, 70), (41, 70), (43, 73)],
+]
+APE_EMBERS = [(20, 50), (76, 44), (30, 62), (70, 60), (14, 34), (84, 50), (60, 30), (38, 72)]
+
+
+def ape_puff(img, cx, cy, r, dense, k):
+    """One lumpy cloud puff: a wobbling radius, flattened top, torn dithered edge, a lit top-left rim and darker dithered
+    shading underneath (the dither uses an irregular hash, not a checker)."""
+    px = img.load()
+    rr = int(r * 1.5) + 2
+    for y in range(cy - rr, cy + rr + 1):
+        for x in range(cx - rr, cx + rr + 1):
+            if not (0 <= x < CELL and 0 <= y < CELL):
+                continue
+            dx, dy = x - cx, y - cy
+            if dy < 0:
+                dy *= 1.3  # flattened top
+            th = math.atan2(dy, dx)
+            rad = r * (1 + 0.16 * math.sin(3 * th + k * 1.7) + 0.10 * math.sin(5 * th + k * 2.9))
+            d = math.hypot(dx, dy) / rad
+            if d > 1.0:
+                continue
+            if d > 0.84 and (x * 7 + y * 3 + k) % 4 == 0:
+                continue  # torn edge
+            lit = -(dx + dy) * 0.7071 / rad
+            hz = ((x * 73856093) ^ (y * 19349663) ^ (k * 83492791)) % 100
+            if lit > 0.55 and d > 0.7:
+                c = STEEL_D
+            elif lit > 0.2 and d > 0.45:
+                c = NAVY
+            elif lit > 0.0 and d > 0.5 and hz < 48:
+                c = NAVY
+            else:
+                c = VIOLET_D
+                if lit < (-0.3 if dense else -0.5) and hz < 48 and d < 0.85:
+                    c = OUTLINE
+            px[x, y] = c + (255,)
+
+
+def ape_aura(i: int) -> Image.Image:
+    """The cloud mass on a CELL image (i = frame of the 4-frame loop), with its red-orange fork."""
+    img = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    for k, (x, y, r, dense) in enumerate(APE_PUFFS):
+        ph = (i % 4) / 4
+        dx = round(math.sin(math.tau * (ph + k * 0.37)))
+        dy = round(math.cos(math.tau * (ph + k * 0.53)))
+        grow = 1 if math.sin(math.tau * (ph + k * 0.21)) > 0.6 else 0
+        ape_puff(img, x + dx, y + dy, r + grow, dense, k)
+    cloud = img.load()
+
+    def trace(path):
+        pts = []
+        for p, q in zip(path, path[1:]):
+            n = max(abs(q[0] - p[0]), abs(q[1] - p[1]))
+            pts += [(round(p[0] + (q[0] - p[0]) * s / n), round(p[1] + (q[1] - p[1]) * s / n)) for s in range(n + 1)]
+        return [(x, y) for x, y in pts if 0 <= x < CELL and 0 <= y < CELL and cloud[x, y][3]]
+
+    main, branches = APE_FORKS[i % 4]
+    bolt = trace(main) + [pt for b in branches for pt in trace(b)]
+    bset = set(bolt)
+    for x, y in bolt:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < CELL and 0 <= ny < CELL and cloud[nx, ny][3] and (nx, ny) not in bset:
+                cloud[nx, ny] = RED + (255,)
+    for x, y in bolt:
+        cloud[x, y] = ORANGE + (255,)
+    mid = trace(main)
+    if mid:
+        cloud[mid[len(mid) // 2]] = YELLOW + (255,)
+    return img
+
+
+def ape_wisps(f: Image.Image, i: int, shift: int = 0) -> None:
+    """Soft curls of cloud round his limbs, drawn over the finished frame (in front of his limbs here and there, never over his
+    face or the middle of the cuirass): smooth arcs 1..3 px thick, a dithered lit row, drifting a little each frame."""
+    px = f.load()
+    for k, path in enumerate(APE_WISPS):
+        ph = (i % 4) / 4 + k * 0.29
+        ox, oy = round(2 * math.sin(math.tau * ph)), round(1.4 * math.cos(math.tau * ph))
+        pts = [path[0]] + path + [path[-1]]
+        curve = []
+        for a in range(1, len(pts) - 2):  # Catmull-Rom through the points: smooth arcs
+            p0, p1, p2, p3 = pts[a - 1], pts[a], pts[a + 1], pts[a + 2]
+            steps = max(abs(p2[0] - p1[0]), abs(p2[1] - p1[1])) * 2
+            for s in range(steps):
+                u = s / steps
+                curve.append(tuple(0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * u + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * u * u
+                                          + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * u ** 3) for j in (0, 1)))
+        seen = []
+        for x, y in curve:
+            c = (round(x + ox), round(y + oy))
+            if not seen or seen[-1] != c:
+                seen.append(c)
+        n = len(seen)
+        for t, (x, y) in enumerate(seen):
+            u = t / max(1, n - 1)
+            th = 1 if u < 0.15 or u > 0.85 else (3 if 0.35 < u < 0.65 else 2)
+            cells = [(x, y, STEEL if (x + y) % 2 == 0 else STEEL_D)]  # dithered lit row
+            for row in range(1, th):
+                cells.append((x, y + row, STEEL_D if row == 1 else NAVY))
+            if th > 1 and t % 3 == 0:
+                cells.append((x, y + th, NAVY))
+            for cx, cy, c in cells:
+                if not (0 <= cx < CELL and 0 <= cy < CELL):
+                    continue
+                if 42 <= cx <= 68 and 28 + shift <= cy <= 64 + shift:
+                    continue  # keep his face and the cuirass clear
+                px[cx, cy] = c + (255,)
+
+
+def ape_frame(i: int, step=None, dy: int = 0, pose=None, hop: int = 0) -> Image.Image:
+    """One CELL frame of the ape: the clouds behind (cleared 1 px round the body so the outline separates them), then the body,
+    the outline, the cloud curls over it and the embers on top. `i` = loop frame (aura, sway), `dy` = upper body bob."""
+    low, up = wukong_ape(step, i, pose)
+    body = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    body.alpha_composite(low.img, (PAD, PAD + hop))
+    body.alpha_composite(up.img, (PAD, PAD + UPPER_DY + dy + hop))
+    f = ape_aura(i)
+    f.paste((0, 0, 0, 0), mask=body.getchannel("A").filter(ImageFilter.MaxFilter(3)))
+    f.alpha_composite(body)
+    f = outline(f)
+    ape_wisps(f, i, dy + hop)
+    px = f.load()
+    for k, (x, y) in enumerate(APE_EMBERS):  # tiny embers drifting up and sideways, after the outline so they stay bright
+        j = i % 4
+        ex, ey = x + (j if k % 2 else -j), y - j * 2 - (k % 3)
+        if 0 <= ex < CELL and 0 <= ey < CELL and not px[ex, ey][3]:
+            px[ex, ey] = (ORANGE if k % 3 == 0 else RED) + (255,)
+    return f
+
+
+def ape_sheet() -> list[Image.Image]:
+    """The Great Ape's whole sheet (idle, hit, walk, death, attack), like frames() + death_frames() + attack_frames() but with
+    the cell-sized storm aura (death frames have none)."""
+    idle = [ape_frame(i, None, dy) for i, dy in enumerate(IDLE_BOB)]
+    hit = [recolor(idle[0], lambda _c: WHITE), recolor(idle[0], LIGHTER.__getitem__)]
+    walk = [ape_frame(i, i, dy) for i, dy in enumerate(WALK_BOB)]
+    attack = [ape_frame(i, None, dy, pose, hop) for i, (pose, dy, hop) in enumerate(ATTACKS["wukong_ape"])]
+    return idle + hit + walk + death_frames(wukong_ape) + attack
 
 
 def wukong_clouds(i: int) -> Canvas:
@@ -2302,16 +2681,14 @@ def ape_morph(t: float, scale: float) -> Image.Image:
         sx, sy = (b[2] - b[0]) / size[0], (b[3] - b[1]) / size[1]
         return (b[0] + rel[0] * sx, b[1] + rel[1] * sy, b[0] + rel[2] * sx, b[1] + rel[3] * sy)
 
-    # dark storm clouds gather: ape_storm's puffs drift in from further out, swelling one after another
-    for j, (x, y, r) in enumerate(((9, 28, 6), (14, 19, 5), (8, 39, 5), (10, 48, 4), (21, 11, 4), (55, 20, 4),
-                                   (58, 31, 3), (50, 12, 3))):
-        g = min(1.0, max(0.0, (t - 0.05 * j) / 0.6))  # this puff's growth
-        if g > 0:
-            push = (1 - g) * 10
-            dx = push if x > 32 else -push  # drift in from the sides
-            cx, cy = pt((x + dx, y), (x + dx, y))
-            rr = max(1, r * g * scale)
-            c.part(E((cx - rr, cy - rr, cx + rr, cy + rr)), SHADOW)
+    # the storm gathers: the ape's own clouds (APE_PUFFS) swell in one after another, drifting in from further out
+    for j, (x, y, r, dense) in enumerate(APE_PUFFS):
+        gr = min(1.0, max(0.0, (t - 0.04 * j) / 0.6))  # this puff's growth
+        if gr > 0:
+            push = (1 - gr) * 10
+            cx = CELL / 2 + (x - CELL / 2 + (push if x > CELL / 2 else -push)) * scale
+            cy = CELL / 2 + (y - CELL / 2) * scale
+            ape_puff(c.img, round(cx), round(cy), max(1, round(r * gr * scale)), dense, j)
     if t < 0.45:  # pheasant feathers retract
         c.part(L(shrink([(25, 10), (16, 4), (6, 6)], 0.45), w(2, 2)), RED, shade=False)
         c.part(L(shrink([(29, 9), (24, 3), (14, 2)], 0.45), w(2, 2)), RED, shade=False)
@@ -2337,21 +2714,51 @@ def ape_morph(t: float, scale: float) -> Image.Image:
                 c.flat(R(sub_box(foot, (tx, 3, tx, 5), (12, 5))), OUTLINE)
     # the hunched back swells out from behind the armour
     c.part(E(box((20, 31, 44, 48), (10, 14, 54, 45), u)), fur)
-    # the golden armour shrinks into the ape's chest
-    c.part(RR(box((20, 33, 44, 48), (22, 26, 44, 43), u), w(3, 8)), BROWN if ape else YELLOW)
+    # Apex's golden armour stretches over his swelling chest, cracks from the neckline down the middle and splits (the dark fur
+    # bulging through, a corner breaking away); halfway it is the burst cuirass, and the ropes tie it on at the end
+    chest = box((20, 33, 44, 48), (22, 26, 44, 43), u)
+    c.part(RR(chest, w(3, 8)), BROWN if ape else YELLOW)
     if not ape:
-        armour = box((20, 33, 44, 48), (22, 26, 44, 43), u)
-        on_armour = lambda q: [(armour[0] + x * (armour[2] - armour[0]) / 24, armour[1] + y * (armour[3] - armour[1]) / 15)
-                               for x, y in q]
+        on_armour = lambda q: [(chest[0] + x * (chest[2] - chest[0]) / 24, chest[1] + y * (chest[3] - chest[1]) / 15) for x, y in q]
         c.flat(R(box((31, 36, 33, 44), (32, 30, 34, 39), u)), ORANGE)  # the armour's centre line
-        # the armour cracks, then chunks break away one by one, showing the dark fur swelling underneath
-        for j, (crack, chunk) in enumerate(APE_ARMOUR_BREAKS):
-            if t > 0.15 + 0.07 * j:
-                c.flat(L(on_armour(crack), max(1, round(scale))), OUTLINE)
-            if t > 0.3 + 0.07 * j:
-                c.part(P(on_armour(chunk)), BROWN if j % 2 else MAROON)
+        crack = [(12, 0), (10, 3), (13, 6), (11, 9), (12, 12), (12, 15)]  # the split, from the neckline down
+        shown = int(len(crack) * min(1.0, max(0.0, (t - 0.06) / 0.3)))
+        if shown >= 2:
+            c.flat(L(on_armour(crack[:shown]), max(1, round(scale))), OUTLINE)
+        if t > 0.25:  # it opens: widest at the top, the fur bulging through
+            gap = min(3.5, (t - 0.25) * 14)
+            left = [(x - gap * (1 - 0.8 * y / 15), y) for x, y in crack]
+            right = [(x + gap * (1 - 0.8 * y / 15), y) for x, y in crack]
+            c.flat(P(on_armour(left + right[::-1])), WALNUT_D)
+            for fx_, fy_ in ((12, 2), (12, 6), (11, 10)):
+                c.flat(R(tuple(round(v) for q in on_armour([(fx_, fy_)]) for v in (q[0], q[1], q[0], q[1]))), BROWN)
+        if t > 0.4:  # a corner breaks away
+            c.flat(P(on_armour([(18, 10), (24, 8), (24, 15), (20, 15)])), fur)
         c.part(R(box((20, 44, 44, 46), (22, 40, 44, 42), u)), RED, line=False)  # sash
         c.part(P(shrink([(22, 45), (17, 52), (21, 52), (25, 46)], 0.55)), RED)  # sash tail tucks away
+    else:
+        src = box((20, 33, 44, 48), (22, 31, 44, 44), u)  # the cuirass' footprint, grown out of the armour's
+        cu = lambda q: [(src[0] + (x - 22) * (src[2] - src[0]) / 22, src[1] + (y - 31) * (src[3] - src[1]) / 13) for x, y in q]
+        c.part(P(cu(APE_SPLIT_L + APE_SPLIT_R[::-1])), WALNUT, shade=False)
+        c.part(P(cu(APE_PLATE_L)), ORANGE, shade=False)
+        c.part(P(cu(APE_PLATE_R)), ORANGE, shade=False)
+        for arc in ([(23, 36), (23, 35), (24, 34), (25, 33), (26, 33), (27, 33)], [(38, 36), (38, 35), (39, 34), (40, 33), (41, 33)]):
+            c.flat(L(cu(arc), max(1, round(scale))), YELLOW)
+        c.flat(L(cu(APE_PEC_CRACK), 1), WALNUT_D)
+        for x0, y0 in ((25, 41), (24, 43), (38, 41), (39, 43)):
+            c.flat(L(cu([(x0, y0), (x0 + 2, y0)]), 1), APE_GOLD_D)
+        if t > 0.8:  # the ropes tie it on over his shoulders
+            for way in ([(24, 32), (24, 29), (25, 26), (26, 24)], [(42, 32), (44, 30), (44, 28), (43, 27)]):
+                c.flat(L(cu(way), max(3, round(3 * scale))), OUTLINE)
+            for way in ([(24, 32), (24, 29), (25, 26), (26, 24)], [(42, 32), (44, 30), (44, 28), (43, 27)]):
+                c.flat(L(cu(way), max(2, round(2 * scale))), CREAM)
+            for kx, ky in ((24, 32), (42, 32)):
+                kx, ky = cu([(kx, ky)])[0]
+                c.flat(E((kx - scale * 1.5, ky - scale * 1.5, kx + scale * 1.5, ky + scale * 1.5)), CREAM_D)
+                c.dot(round(kx), round(ky), RED)
+        if t > 0.75:  # the split pauldron appears on his left shoulder
+            c.part(P(pts([(7, 24), (8, 20), (12, 18), (17, 19), (18, 22), (14, 21), (11, 24)],
+                         [(7, 24), (8, 20), (12, 18), (17, 19), (18, 22), (14, 21), (11, 24)], u)), ORANGE)
     # arms and fists grow out from the sides of the body, poking out on the first in-between; the back arm
     # swings across the chest into the ape's knuckle-walk
     for start, arm in zip(([(21, 35), (16, 39), (15, 43)], [(43, 35), (48, 39), (49, 43)]), APE_POSES["walk"][0]):
@@ -2430,20 +2837,24 @@ def ape_morph(t: float, scale: float) -> Image.Image:
         eh = w(6, 3)
         ew = w(3, 3)
         if ape:
-            c.flat(R((ex, ey, ex + ew, ey + eh)), OUTLINE)
-            c.flat(R((ex, ey + 1, ex + ew, ey + eh - 1)), RED)
-            c.dot(round(ex + scale), round(ey + 1), ORANGE)  # glow
+            continue  # (the ape's slanted eyes are drawn below, riding the face)
         else:
             c.flat(R((ex, ey, ex + ew, ey + eh)), OUTLINE)
             c.flat(R((ex, ey + eh - 2, ex + ew, ey + eh - 1)), YELLOW)
             c.dot(round(ex), round(ey), WHITE)
-    if ape:  # scowl and fangs push in
-        for bx in ((29, 11, 37, 14), (48, 11, 40, 14)):
-            c.flat(L(pts([bx[:2], bx[2:]], [bx[:2], bx[2:]], u), w(1, 2)), OUTLINE)
-        for fx in (35, 43):
-            c.flat(P(pts([(fx, 27), (fx + 3, 27), (fx + 2, 25), (fx + 1, 25)],
-                         [(fx, 27), (fx + 3, 27), (fx + 2, 23), (fx + 1, 23)], u)), WHITE)
-    return outline(c.img)
+    if ape:  # the gorilla face pushes in: V brows, slanted red eyes, a flat nose, two long upper canines
+        for line_ in ([(31, 13), (38, 16)], [(46, 13), (39, 16)]):
+            c.flat(L(on_face(line_, True), w(2, 2)), WALNUT)
+        for eye in ([(32, 17), (35, 18)], [(45, 17), (42, 18)]):
+            c.flat(L(on_face(eye, True), w(3, 3)), OUTLINE)
+            c.flat(L(on_face(eye, True), w(1, 1)), RED)
+        c.flat(P(on_face([(36, 20), (42, 20), (43, 22), (35, 22)], True)), WALNUT)
+        for x0 in (35, 42):
+            c.flat(P(on_face([(x0, 26), (x0 + 2, 26), (x0 + 1, 29)], True)), WHITE)
+    # the whole frame keeps a clear edge, even when the clouds outgrow the cell
+    out = outline(c.img)
+    ImageDraw.Draw(out).rectangle((0, 0, CELL - 1, CELL - 1), outline=(0, 0, 0, 0))
+    return out
 
 
 def morph_frames(a: Image.Image, b: Image.Image, b_scale: float, between) -> list[Image.Image]:
@@ -2452,10 +2863,13 @@ def morph_frames(a: Image.Image, b: Image.Image, b_scale: float, between) -> lis
     frames with the growth baked in, drawn at the normal sprite scale (SpecialFx) so pixels stay crisp."""
     rng = random.Random(7)
 
-    def at(img, sc):  # img scaled (NEAREST) about the cell centre
-        n = round(SIZE * sc)
+    def at(img, sc):  # img scaled (NEAREST) about the cell centre (cropped to the cell if it outgrows it)
+        n = round(img.width * sc)
         out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
-        out.alpha_composite(img.resize((n, n), Image.NEAREST), ((CELL - n) // 2, (CELL - n) // 2))
+        big = img.resize((n, n), Image.NEAREST)
+        o = (CELL - n) // 2
+        out.alpha_composite(big.crop((max(0, -o), max(0, -o), min(n, CELL - o), min(n, CELL - o))), (max(0, o), max(0, o)))
+        ImageDraw.Draw(out).rectangle((0, 0, CELL - 1, CELL - 1), outline=(0, 0, 0, 0))  # keep the frame edge clear
         return out
 
     def sparks(img, n=5):  # short gold crackles inside the body
@@ -3851,7 +4265,7 @@ FX = {
     # Transformation strips (SkillData.form_morph): the character's first idle frame into the form's.
     # 1.35 = great_ape.tres form_scale (keep in sync).
     "wukong_ape_morph": lambda: strip(morph_frames(frames(wukong, AURAS["wukong"])[0],
-                                                   frames(wukong_ape, AURAS["wukong_ape"])[0], 1.35, ape_morph)),
+                                                   ape_frame(0), 1.35, ape_morph)),
     "flint_inferno_morph": flint_inferno_morph,
     "blossom_ward": lambda: strip([blossom_ward_frame(k) for k in range(WARD_FRAMES)]),
     "blossom_ward_open": lambda: strip([blossom_ward_open_frame(k) for k in range(WARD_OPEN_FRAMES)]),
@@ -3979,8 +4393,8 @@ def supernova_frame(k: int) -> Image.Image:
 FX.update({"supernova_burst": lambda: strip([supernova_frame(k) for k in range(SUPERNOVA_FRAMES)])})
 
 
-FORMS = {"wukong_ape": wukong_ape, "flint_inferno": flint_inferno}
-AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers,
+FORMS = {"flint_inferno": flint_inferno}  # (the Great Ape has a hand-built sheet: SHEETS["wukong_ape"] = ape_sheet)
+AURAS = {"wukong": wukong_clouds, "flint": flint_embers,
          "flint_inferno": flint_inferno_aura}
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
@@ -3997,6 +4411,7 @@ KO_CROWNS = {"flicker"}  # crowns that stay on a knocked-out body (Flint's flame
 ATTACKS = {"wukong_ape": [(("walk", "raise", 0.6), 3, 0), (("raise", "raise", 0), -2, -9), (("raise", "smash", 0.5), -1, -12),
                           (("smash", "smash", 0), 3, 0), (("smash", "smash", 0), 2, 0), (("smash", "walk", 0.4), 1, 0),
                           (("smash", "walk", 0.8), 0, 0)]}
+SHEETS["wukong_ape"] = ape_sheet
 
 
 # --- Bolt: lightning runner (character, Arc Zapper, Overdrive FX) -------------------------------------------------
