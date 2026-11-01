@@ -49,6 +49,19 @@ const SLASH_ART_RADIUS: float = 46.0
 ## Melee slams (floor cracks, dust) are drawn on this absolute z: above the floor (Arena.FLOOR_Z), under players
 ## and their weapons.
 const GROUND_Z: int = -1
+## Hit marker: four ticks around the victim that spread out and shrink; bigger and gold on crits and kills.
+const MARKER_POOL: int = 8
+const MARKER_TIME: float = 0.18
+const MARKER_SIZE: float = 20.0
+const MARKER_GAP: float = 14.0
+## Auto-aim reticle: four rotating corner ticks on the locked target.
+const AIM_RADIUS: float = 34.0
+const AIM_TICK: float = 9.0
+const AIM_SPIN: float = 1.4
+const COLOR_AIM: Color = Color(1, 0.95, 0.6, 0.9)
+## Damage numbers pop to this scale as they appear.
+const NUMBER_POP_TIME: float = 0.12
+const NUMBER_POP_SCALE: float = 1.45
 
 
 class Particle:
@@ -66,6 +79,12 @@ class DamageNumber:
 	var text: String = ""
 	var crit: bool = false
 	var heal: bool = false
+
+
+class Marker:
+	var life: float = 0.0
+	var pos: Vector2 = Vector2.ZERO
+	var strong: bool = false
 
 
 class Wisp:
@@ -115,6 +134,10 @@ var _beams: Array[Beam] = []
 var _held: Dictionary = {}  # player_id -> HeldBeam
 var _wisps: Array[Wisp] = []
 var _wc: int = 0
+var _markers: Array[Marker] = []
+var _mc: int = 0
+## World position of the auto-aim reticle (Vector2.INF = hidden); set by the Arena every frame.
+var aim_marker: Vector2 = Vector2.INF
 var _swings: Array[Swing] = []
 var _rings: Array[Ring] = []
 var _pc: int = 0
@@ -140,6 +163,8 @@ func _ready() -> void:
 		_numbers.append(DamageNumber.new())
 	for i: int in BEAM_POOL:
 		_beams.append(Beam.new())
+	for i: int in MARKER_POOL:
+		_markers.append(Marker.new())
 	for i: int in WISP_POOL:
 		_wisps.append(Wisp.new())
 	for i: int in SWING_POOL:
@@ -162,6 +187,33 @@ func burst(at: Vector2, color: Color, count: int, speed: float, size: float, lif
 		p.life = p.max_life
 		p.size = size * _rng.randf_range(0.6, 1.0)
 		p.color = color
+
+
+## Drop everything in flight (new match, back to the lobby) so nothing from the last round lingers.
+func clear() -> void:
+	for p: Particle in _particles:
+		p.life = 0.0
+	for n: DamageNumber in _numbers:
+		n.life = 0.0
+	for b: Beam in _beams:
+		b.life = 0.0
+	for w: Wisp in _wisps:
+		w.life = 0.0
+	for s: Swing in _swings:
+		s.life = 0.0
+	for r: Ring in _rings:
+		r.life = 0.0
+	for m: Marker in _markers:
+		m.life = 0.0
+	_held.clear()
+
+
+func hit_marker(at: Vector2, strong: bool) -> void:
+	var m: Marker = _markers[_mc]
+	_mc = (_mc + 1) % _markers.size()
+	m.life = MARKER_TIME
+	m.pos = at
+	m.strong = strong
 
 
 func damage_number(at: Vector2, amount: int, crit: bool) -> void:
@@ -283,6 +335,8 @@ func _process(delta: float) -> void:
 		s.life -= delta
 	for r: Ring in _rings:
 		r.life -= delta
+	for m: Marker in _markers:
+		m.life -= delta
 	queue_redraw()
 	_ground.queue_redraw()
 
@@ -306,17 +360,22 @@ func _draw() -> void:
 		if w > px:
 			draw_line(b.from, b.to, BEAM_CORE_COLOR, maxf(px, snappedf(w * BEAM_CORE_SCALE, px)))
 	_draw_held_beams(px)
+	_draw_aim_marker(px)
 	for p: Particle in _particles:
 		if p.life <= 0.0:
 			continue
 		var size: float = maxf(px, snappedf(p.size * p.life / p.max_life, px))
 		draw_rect(Rect2((p.pos / px).floor() * px - Vector2(size, size) * 0.5, Vector2(size, size)), p.color)
+	_draw_markers(px)
 	for n: DamageNumber in _numbers:
 		if n.life <= 0.0:
 			continue
 		var nc: Color = COLOR_NUMBER_HEAL if n.heal else COLOR_NUMBER_CRIT if n.crit else COLOR_NUMBER
 		nc.a = clampf(n.life / NUMBER_TIME * 2.0, 0.0, 1.0)
 		var font_size: int = NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE
+		var age: float = NUMBER_TIME - n.life
+		if age < NUMBER_POP_TIME:  # punch in: starts big and settles
+			font_size = roundi(font_size * lerpf(NUMBER_POP_SCALE, 1.0, age / NUMBER_POP_TIME))
 		var w: float = UiStyle.text_width(n.text, font_size, true)
 		UiStyle.draw_text(self, n.pos - Vector2(w * 0.5, 0.0), n.text, font_size, nc, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
 
@@ -364,3 +423,33 @@ func _draw_held_beams(px: float) -> void:
 		var at: Vector2 = (w.pos / px).floor() * px
 		draw_colored_polygon(PackedVector2Array([at + Vector2(-r, 0), at + Vector2(0, -r * 2.5), at + Vector2(r, 0),
 			at + Vector2(0, r)]), UiStyle.C_YELLOW if f > 0.66 else UiStyle.C_ORANGE if f > 0.33 else UiStyle.C_RED)
+
+
+func _draw_markers(px: float) -> void:
+	for m: Marker in _markers:
+		if m.life <= 0.0:
+			continue
+		var k: float = 1.0 - m.life / MARKER_TIME  # 0 -> 1
+		var gap: float = MARKER_GAP * (1.0 + 0.6 * k) * (1.3 if m.strong else 1.0)
+		var len_px: float = snappedf(MARKER_SIZE * (1.0 - 0.5 * k) * (1.3 if m.strong else 1.0), px)
+		var color: Color = UiStyle.C_YELLOW if m.strong else UiStyle.C_WHITE
+		var w: float = px * 2.0 if m.strong else px
+		for d: Vector2 in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+			var a: Vector2 = m.pos + d.normalized() * gap
+			draw_line(a, a + d.normalized() * len_px, UiStyle.C_OUTLINE, w + px * 2.0)
+			draw_line(a, a + d.normalized() * len_px, color, w)
+
+
+func _draw_aim_marker(px: float) -> void:
+	if aim_marker == Vector2.INF:
+		return
+	var t: float = Time.get_ticks_msec() / 1000.0
+	var r: float = AIM_RADIUS + 3.0 * sin(t * 8.0)
+	for i: int in 4:
+		var a: float = t * AIM_SPIN + i * TAU / 4.0
+		var c: Vector2 = aim_marker + Vector2.from_angle(a) * r
+		var along: Vector2 = Vector2.from_angle(a + PI * 0.5) * AIM_TICK
+		var p0: Vector2 = (c - along).snapped(Vector2(px, px))
+		var p1: Vector2 = (c + along).snapped(Vector2(px, px))
+		draw_line(p0, p1, UiStyle.C_OUTLINE, px * 3.0)
+		draw_line(p0, p1, COLOR_AIM, px * 1.5)

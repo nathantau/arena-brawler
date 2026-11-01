@@ -29,6 +29,10 @@ const IDLE_ALPHA: float = 0.75
 const COLOR_COOLDOWN: Color = Color(0.1, 0.1, 0.18, 0.7)
 const COLOR_AIM: Color = Color(1, 0.45, 0.4, 0.85)
 const NO_FINGER: int = -1
+## A special coming off cooldown pulses a ring that grows this far past the button for this long.
+const READY_PULSE_TIME: float = 0.45
+const READY_PULSE_GROW: float = 22.0
+const COLOR_READY: Color = Color(1, 0.95, 0.6, 0.9)
 
 const TOUCH_FLAG: String = "--touch"
 
@@ -41,6 +45,9 @@ var attack_aim: Vector2 = Vector2.ZERO
 var skill_held: bool = false
 var special_held: bool = false
 
+## Called when a special comes off cooldown (Arena plays the sound).
+var ready_sfx: Callable
+
 var _joy_finger: int = NO_FINGER
 var _joy_origin: Vector2 = Vector2.ZERO
 var _joy_pos: Vector2 = Vector2.ZERO
@@ -49,11 +56,38 @@ var _attack_finger: int = NO_FINGER
 var _attack_origin: Vector2 = Vector2.ZERO
 var _skill_finger: int = NO_FINGER
 var _special_finger: int = NO_FINGER
+## Per special button: was it on cooldown last frame, and how long the "ready" pulse has left.
+var _was_cooling: Array[bool] = [false, false]
+var _pulse: Array[float] = [0.0, 0.0]
 
 
 func _ready() -> void:
 	UiStyle.fit_to_safe_area(self)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visibility_changed.connect(func() -> void:
+		if not visible:
+			release_all())
+
+
+## Let go of every finger. Called when something swallows the touch events (pause menu, app backgrounded,
+## controls hidden, a cancelled touch) so the stick / fire / specials can't stay held with nobody touching.
+func release_all() -> void:
+	_joy_finger = NO_FINGER
+	_attack_finger = NO_FINGER
+	_skill_finger = NO_FINGER
+	_special_finger = NO_FINGER
+	move_vec = Vector2.ZERO
+	attack_held = false
+	attack_aim = Vector2.ZERO
+	skill_held = false
+	special_held = false
+	queue_redraw()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_APPLICATION_FOCUS_OUT \
+			or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT or what == NOTIFICATION_PAUSED:
+		release_all()
 
 
 ## On for mobile/touchscreens, or desktop with --touch (mouse then emulates touch).
@@ -83,7 +117,9 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		var t := make_input_local(event) as InputEventScreenTouch
-		if t.pressed:
+		if t.canceled:
+			release_all()
+		elif t.pressed:
 			_on_press(t.index, t.position)
 		else:
 			_on_release(t.index)
@@ -128,7 +164,11 @@ func _on_press(finger: int, p: Vector2) -> void:
 
 func _on_drag(finger: int, p: Vector2) -> void:
 	if finger == _joy_finger:
-		# The base stays where the finger first landed until release; the knob is clamped to its ring.
+		# The knob is clamped to its ring; dragging past it pulls the base along, so reversing direction
+		# doesn't mean travelling back across the whole ring.
+		var beyond: Vector2 = p - _joy_origin
+		if beyond.length() > JOY_RADIUS:
+			_joy_origin = p - beyond.normalized() * JOY_RADIUS
 		var offset: Vector2 = (p - _joy_origin).limit_length(JOY_RADIUS)
 		_joy_pos = _joy_origin + offset
 		move_vec = offset / JOY_RADIUS
@@ -155,10 +195,21 @@ func _on_release(finger: int) -> void:
 	queue_redraw()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	# Cooldown sweeps change without input events.
-	if visible:
-		queue_redraw()
+	if not visible:
+		return
+	if player != null and is_instance_valid(player):
+		for i: int in 2:
+			var sk: CharacterSkill = player.skills[i]
+			var cooling: bool = not sk.is_ready() and not sk.is_active()
+			if _was_cooling[i] and sk.is_ready() and not player.dead:
+				_pulse[i] = READY_PULSE_TIME
+				if ready_sfx != null:
+					ready_sfx.call()
+			_was_cooling[i] = cooling
+			_pulse[i] = maxf(0.0, _pulse[i] - delta)
+	queue_redraw()
 
 
 func _draw() -> void:
@@ -178,9 +229,15 @@ func _draw() -> void:
 	UiStyle.draw_icon(self, UiStyle.tex("icon_fire"), ac + _drop(attack_held), ATTACK_SCALE)
 
 	# The two specials, with cooldown sweeps
-	if player != null:
+	if player != null and is_instance_valid(player):
 		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.skills[0], skill_held, player.skill_locked(0))
 		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.skills[1], special_held, player.skill_locked(1))
+		for i: int in 2:
+			if _pulse[i] > 0.0:
+				var k: float = 1.0 - _pulse[i] / READY_PULSE_TIME
+				var c: Vector2 = _skill_center() if i == 0 else _special_center()
+				var r: float = (SKILL_RADIUS if i == 0 else SPECIAL_RADIUS) + READY_PULSE_GROW * k
+				draw_arc(c, r, 0.0, TAU, SEGMENTS, Color(COLOR_READY, COLOR_READY.a * (1.0 - k)), 4.0)
 
 
 func _skill_button(c: Vector2, radius: float, scale_px: float, sk: CharacterSkill, held: bool, locked: bool = false) -> void:

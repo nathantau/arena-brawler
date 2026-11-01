@@ -10,6 +10,8 @@ var auto_target: Player
 var auto_aim_point: Vector2 = Vector2.ZERO
 ## Dev/test: drive in circles and fire continuously (--autopilot).
 var autopilot: bool = false
+## True while the player is holding fire (touch, mouse or key); the HUD uses it for the "out of energy" flash.
+var fire_held: bool = false
 
 var _frame := InputFrame.new()
 var _query := PhysicsRayQueryParameters2D.new()
@@ -33,6 +35,7 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 	var fire_mouse: bool = not touch_on and Input.is_action_pressed(&"fire_mouse")
 	var fire_auto: bool = Input.is_action_pressed(&"fire_auto") or (touch_on and touch.attack_held)
 	_frame.fire = fire_mouse or fire_auto
+	fire_held = _frame.fire
 	_frame.skill = Input.is_action_pressed(&"skill") or (touch_on and touch.skill_held)
 	_frame.special = Input.is_action_pressed(&"special") or (touch_on and touch.special_held)
 	_update_auto_target(player)
@@ -48,6 +51,14 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 	_frame.aim_vec = aim.normalized() if aim != Vector2.ZERO else Vector2.ZERO
 
 	return _frame
+
+
+## The auto-aim reticle shows while a target is locked and the thumb isn't aiming by hand.
+func shows_aim_marker() -> bool:
+	if auto_target == null or auto_target.dead:
+		return false
+	var manual: bool = touch != null and touch.visible and touch.attack_aim != Vector2.ZERO
+	return not manual and not Input.is_action_pressed(&"fire_mouse")
 
 
 ## Enemies hidden in their smoke are skipped; shadow clones count as targets (that's the trick).

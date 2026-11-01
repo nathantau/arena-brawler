@@ -39,9 +39,25 @@ const PROJECTILE_Z: int = 1
 const FLOOR_Z: int = -2
 const EFFECTS_Z: int = 2
 ## Camera shake: offset = SHAKE_MAX_OFFSET * trauma², trauma decays per second.
-const SHAKE_MAX_OFFSET: float = 14.0
+const SHAKE_MAX_OFFSET: float = 16.0
 const SHAKE_DECAY: float = 2.5
-const SHAKE_HURT_PER_DAMAGE: float = 0.012
+const SHAKE_HURT_PER_DAMAGE: float = 0.03
+## Every hit on you shakes at least this much (small hits used to be invisible: trauma is squared).
+const SHAKE_HURT_MIN: float = 0.2
+const SHAKE_DEATH: float = 0.7
+const SHAKE_DEALT_KILL: float = 0.3
+## Camera look-ahead eases toward the aim direction at this rate (1/s), so flicking the aim doesn't snap the view.
+const CAMERA_LOOK_EASE: float = 6.0
+## Heartbeat while at or below this fraction of max HP, once per HEARTBEAT_PERIOD (faster when lower).
+const LOW_HP_FRACTION: float = 0.3
+const HEARTBEAT_PERIOD: float = 0.9
+const HEARTBEAT_PERIOD_CRITICAL: float = 0.55
+const CRITICAL_HP_FRACTION: float = 0.15
+## A dealt hit that crits or kills buzzes the phone; plain hits only tick (SMGs would buzz non-stop).
+const RECOIL_KICK: float = 40.0
+const HAPTIC_DEATH_MS: int = 90
+const FIGHT_BANNER_TIME: float = 0.9
+const STREAK_NAMES: Array[String] = ["", "", "DOUBLE KILL", "TRIPLE KILL", "RAMPAGE", "UNSTOPPABLE"]
 const SHAKE_EXPLOSION: float = 0.6
 const SHAKE_EXPLOSION_RANGE: float = 500.0
 const HAPTIC_EXPLOSION_RANGE: float = 200.0
@@ -89,6 +105,12 @@ var _bot_ids: Array[int] = []
 var _walls: StaticBody2D
 var _floor := ArenaFloor.new()
 var _trauma: float = 0.0
+var _look: Vector2 = Vector2.ZERO
+var _heartbeat: float = 0.0
+var _hit_owner: int = 0
+var _streak: int = 0
+var _fx_phase: MatchState.Phase = MatchState.Phase.LOBBY
+var _input: LocalInput
 var _shake_rng := RandomNumberGenerator.new()
 
 
@@ -315,7 +337,7 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	# Follow in step with the sim (the target moves in _physics_process), so the player doesn't shake on screen.
 	camera.process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	add_child(camera)
-	camera.global_position = p.global_position
+	camera.global_position = clamp_camera(p.global_position, _camera_view(), Rect2(Vector2.ZERO, map.size))
 	camera.reset_smoothing()
 
 	var ui := CanvasLayer.new()
@@ -344,7 +366,26 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 
 	input.arena = self
 	input.touch = touch
+	_input = input
+	hud.input = input
+	touch.ready_sfx = func() -> void: sfx.play(&"ready")
 	_attach_effects()
+
+
+## Where the camera may sit so the view (`view` world units) stays inside `bounds`; an arena smaller than
+## the view on an axis is centred on it instead (no empty void around the map).
+static func clamp_camera(target: Vector2, view: Vector2, bounds: Rect2) -> Vector2:
+	var out: Vector2 = target
+	for axis: int in 2:
+		var half: float = view[axis] * 0.5
+		var lo: float = bounds.position[axis] + half
+		var hi: float = bounds.end[axis] - half
+		out[axis] = bounds.get_center()[axis] if lo >= hi else clampf(target[axis], lo, hi)
+	return out
+
+
+func _camera_view() -> Vector2:
+	return get_viewport().get_visible_rect().size / Constants.CAMERA_ZOOM
 
 
 func add_shake(amount: float) -> void:
@@ -376,6 +417,7 @@ func _attach_effects() -> void:
 	projectiles.exploded.connect(_fx_explosion)
 	projectiles.burst_shown.connect(effects.burst_strip)
 	hit_landed.connect(_fx_hit)
+	match_updated.connect(_on_match_updated)
 	kill_registered.connect(_fx_kill)
 	crates.destroyed.connect(func(at: Vector2) -> void:
 		effects.burst(at, CRATE_DEBRIS_COLOR, BURST_CRATE_COUNT, BURST_DEATH_SPEED, PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 1.5)
@@ -389,6 +431,8 @@ func _fx_shot(owner_id: int, origin: Vector2, facing: Vector2, w: WeaponData) ->
 	sfx.play(w.sfx, origin)
 	if local_player != null and owner_id == local_player.player_id:
 		add_shake(w.screen_shake)
+		# Recoil: nudge the view back against the shot, a touch on top of the random shake.
+		_look -= facing * w.screen_shake * RECOIL_KICK
 
 
 func _fx_explosion(at: Vector2, radius: float, color: Color, slam: bool, art: bool) -> void:
@@ -410,9 +454,17 @@ func _fx_hit(victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
 	effects.damage_number(at, damage, crit)
 	if victim != null and victim == local_player:
 		sfx.play(&"hurt")
-		add_shake(SHAKE_HURT_PER_DAMAGE * damage)
+		add_shake(maxf(SHAKE_HURT_MIN, SHAKE_HURT_PER_DAMAGE * damage))
+		hud.hurt_pulse()
 	else:
 		sfx.play(&"crit" if crit else &"hit", at)
+		if local_player != null and _hit_owner == local_player.player_id and victim != null:
+			# Hit marker on whoever you hit, so a connecting shot reads even in a crowd of bullets.
+			var dead: bool = victim.dead or victim.stats.hp <= 0
+			effects.hit_marker(victim.global_position + victim.visual_offset, crit or dead)
+			sfx.play(&"marker_kill" if dead else &"marker")
+			if crit or dead:
+				GameSettings.vibrate(Constants.HAPTIC_DEALT_MS)
 
 
 func _fx_kill(killer_id: int, victim_id: int) -> void:
@@ -421,8 +473,35 @@ func _fx_kill(killer_id: int, victim_id: int) -> void:
 		effects.burst(victim.global_position, victim.display_color, BURST_DEATH_COUNT, BURST_DEATH_SPEED,
 			PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 2.0)
 		sfx.play(&"death", victim.global_position)
-	if local_player != null and killer_id == local_player.player_id:
+	hud.add_kill_feed(player_name(killer_id) if killer_id > 0 else "", player_color(killer_id),
+		player_name(victim_id), player_color(victim_id), killer_id == local_player_id(), victim_id == local_player_id())
+	if local_player != null and killer_id == local_player.player_id and victim_id != killer_id:
 		GameSettings.vibrate(Constants.HAPTIC_KILL_MS)
+		_streak += 1
+		add_shake(SHAKE_DEALT_KILL)
+		hud.banner("KO  " + player_name(victim_id).to_upper(), UiStyle.C_YELLOW)
+		if _streak >= 2:
+			hud.banner(STREAK_NAMES[mini(_streak, STREAK_NAMES.size() - 1)], UiStyle.C_ORANGE, 1)
+			sfx.play(&"streak")
+	elif local_player != null and victim_id == local_player.player_id:
+		_streak = 0
+		add_shake(SHAKE_DEATH)
+		GameSettings.vibrate(HAPTIC_DEATH_MS)
+
+
+func local_player_id() -> int:
+	return local_player.player_id if local_player != null else -1
+
+
+func _on_match_updated() -> void:
+	# New match / back to the lobby: nothing from the last round may linger on screen.
+	if match_state.phase == MatchState.Phase.COUNTDOWN or match_state.phase == MatchState.Phase.LOBBY:
+		if match_state.phase != _fx_phase:
+			effects.clear()
+			hud.clear_transients()
+			_streak = 0
+			_trauma = 0.0
+	_fx_phase = match_state.phase
 
 
 func _on_skill_used(user: Player, skill: SkillData) -> void:
@@ -445,6 +524,23 @@ func _process(delta: float) -> void:
 	_trauma = maxf(0.0, _trauma - SHAKE_DECAY * delta)
 	var amount: float = _trauma * _trauma * SHAKE_MAX_OFFSET
 	camera.offset = Vector2(_shake_rng.randf_range(-1.0, 1.0), _shake_rng.randf_range(-1.0, 1.0)) * amount
+	if effects != null:
+		effects.aim_marker = _input.auto_aim_point if _input != null and _input.shows_aim_marker() else Vector2.INF
+	_tick_heartbeat(delta)
+
+
+func _tick_heartbeat(delta: float) -> void:
+	if local_player == null or local_player.dead or sfx == null or match_state.inputs_locked():
+		_heartbeat = 0.0
+		return
+	var frac: float = float(local_player.stats.hp) / float(maxi(1, local_player.stats.max_hp))
+	if frac > LOW_HP_FRACTION:
+		_heartbeat = 0.0
+		return
+	_heartbeat -= delta
+	if _heartbeat <= 0.0:
+		_heartbeat = HEARTBEAT_PERIOD_CRITICAL if frac <= CRITICAL_HP_FRACTION else HEARTBEAT_PERIOD
+		sfx.play(&"heartbeat")
 
 
 func _physics_process(delta: float) -> void:
@@ -455,7 +551,9 @@ func _physics_process(delta: float) -> void:
 		# Display only; the server sends the real value on every phase change.
 		match_state.time_left = maxf(0.0, match_state.time_left - delta)
 	if camera != null and local_player != null and not local_player.dead:
-		camera.global_position = local_player.global_position + local_player.facing * Constants.CAMERA_LOOKAHEAD
+		_look = _look.lerp(local_player.facing * Constants.CAMERA_LOOKAHEAD, 1.0 - exp(-CAMERA_LOOK_EASE * delta))
+		camera.global_position = clamp_camera(local_player.global_position + _look, _camera_view(),
+			Rect2(Vector2.ZERO, map.size))
 
 
 func _tick_respawns(delta: float) -> void:
@@ -485,6 +583,7 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 				sfx.play(&"countdown")
 			MatchState.Phase.PLAYING:
 				sfx.play(&"go")
+				hud.banner("FIGHT!", UiStyle.C_WHITE)
 			MatchState.Phase.RESULTS:
 				sfx.play(&"results")
 	var locked: bool = match_state.inputs_locked()
@@ -523,7 +622,9 @@ func _on_referee_changed() -> void:
 func _on_projectile_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool,
 		at: Vector2) -> void:
 	player_hit.emit(owner_id, shot_seq, pellet, victim_id, damage, crit, at)
+	_hit_owner = owner_id
 	hit_landed.emit(victim_id, damage, crit, at)
+	_hit_owner = 0
 
 
 func _on_player_died(victim: Player, killer_id: int) -> void:
