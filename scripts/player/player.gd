@@ -297,7 +297,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		var key: int = input.seq + NOVA_SEQ_OFFSET
 		projectiles.fire_shot(player_id, key, global_position, nova.direction, nova.data.nova_blast, match_seed)
 		shot_fired.emit(self, key, global_position, nova.direction, nova.data.nova_blast.id)
-	weapon.tick(delta)
+	var charged: CharacterSkill = active_skill(SkillData.Kind.OVERDRIVE)
+	weapon.tick(delta * (charged.data.overdrive_fire_scale if charged != null else 1.0))
 	var pressed: Array[bool] = [input.skill, input.special]
 	if frozen:
 		# Keep edge state current so a button held through the countdown doesn't fire on release.
@@ -342,6 +343,9 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			speed *= whirl.data.whirl_speed_scale
 		if overdrive != null:
 			speed *= overdrive.data.overdrive_speed_scale
+		var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
+		if smoke != null and is_hidden():
+			speed *= smoke.data.smoke_speed_scale
 		var steer: Vector2 = input.move_vec
 		if drift != null:  # glides on its own way until the stick says otherwise
 			speed *= drift.data.drift_speed_scale
@@ -571,6 +575,7 @@ func _throw_grapple(slot: CharacterSkill) -> void:
 		slot.cooldown_remaining = slot.data.grapple_miss_cooldown
 		return
 	slot.anchor = hit.position + hit.normal * (Constants.PLAYER_RADIUS + Constants.GRAPPLE_STANDOFF)
+	stats.invulnerable_time = maxf(stats.invulnerable_time, slot.data.grapple_iframes)
 	velocity = Vector2.ZERO
 
 

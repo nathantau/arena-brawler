@@ -9,10 +9,10 @@ extends Resource
 ## TRANSFORM: a stronger form for a while
 ## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
 ## SMOKE: a cloud where you stand; inside it
-## enemy auto-aim and bots can't lock on. VOLLEY: fires `volley_weapon` once (e.g. a ring of
+## enemy auto-aim and bots can't lock on, and you move x`smoke_speed_scale` faster. VOLLEY: fires `volley_weapon` once (e.g. a ring of
 ## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
 ## WARD: a ring round you that moves with you and catches enemy projectiles (not beams or melee).
-## GRAPPLE: a kunai on a chain thrown along the aim; if it bites a wall you're pulled straight to it.
+## GRAPPLE: a kunai on a chain thrown along the aim; if it bites a wall you're pulled straight to it (`grapple_iframes` of i-frames from the bite).
 ## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
 ## ERUPTION: marks a spot on the floor ahead along the aim (short of walls); when `duration` (the telegraph) runs out,
 ## `eruption_blast` goes off there.
@@ -29,7 +29,7 @@ extends Resource
 ## nearest visible enemy within `sapling_range`.
 ## STORM: a thundercloud at a spot ahead along the aim (short of walls) for `duration`: every `storm_interval` a bolt strikes
 ## each enemy within `storm_radius` of the spot that it can see.
-## OVERDRIVE: super speed for `duration`: move speed x`overdrive_speed_scale`, steerable and still able to fire, no i-frames.
+## OVERDRIVE: super speed for `duration`: move speed x`overdrive_speed_scale`, steerable and still able to fire, no i-frames; weapon cooldowns tick x`overdrive_fire_scale` faster.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
 enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19 }
 
@@ -63,6 +63,8 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var grapple_bite_time: float = 0.08
 ## Cooldown charged instead of `cooldown` when the kunai hits nothing.
 @export var grapple_miss_cooldown: float = 1.5
+## I-frames granted when the kunai bites (the zip is an escape as well as a gap closer). A miss grants none.
+@export var grapple_iframes: float = 0.35
 
 
 @export_group("Swing")
@@ -74,6 +76,8 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 
 @export_group("Smoke")
 @export var smoke_radius: float = 90.0
+## Move speed multiplier while you stand inside your own cloud (hidden): the smoke is a place to reposition from, not just a blind.
+@export var smoke_speed_scale: float = 1.0
 
 @export_group("Ward")
 ## Enemy projectiles crossing into this radius round the player are caught.
@@ -115,6 +119,8 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export_group("Overdrive")
 ## Move speed multiplier while it runs.
 @export var overdrive_speed_scale: float = 1.9
+## Weapon cooldowns tick this much faster while it runs (energy still limits the fire rate).
+@export var overdrive_fire_scale: float = 1.0
 
 
 @export_group("Nova")
