@@ -4208,15 +4208,16 @@ def eden(step=None, t=0):
     n = 8 if step is not None else 4
     wv = lambda lag=0, amp=1.0, harm=1: round(amp * math.sin(math.tau * harm * (t - lag) / n))
     low = Canvas()
-    for x, dy in legs(low, GREEN_D, BROWN, step):
-        low.part(RR((x - 1, 47 + dy, x + 6, 51 + dy), 1), STEEL_D)  # stone greaves
-        low.flat(R((x, 48 + dy, x + 5, 48 + dy)), STEEL)
-        low.dot(x + 4, 50 + dy, SHADOW)
-        low.flat(R((x + 1, 53 + dy, x + 4, 53 + dy)), GREEN)  # moss on the boot
+    for x, dy in legs(low, GREEN, BROWN, step):
+        low.flat(R((x, 50 + dy, x + 5, 50 + dy)), GREEN_D)  # leg wraps: stone greave band, moss
+        low.part(R((x - 1, 51 + dy, x + 6, 52 + dy)), STEEL_D)  # stone greaves
+        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), STEEL)
+        low.dot(x + 4, 49 + dy, GREEN_L)
+        low.flat(R((x + 4, 55 + dy, x + 6, 55 + dy)), STEEL)  # stone toe cap
     up = Canvas()
     walking = step is not None
     ay = wv(0, 1.0) if walking else 0  # arms swing against each other
-    breath = 1 if (not walking and t % 4 == 2) else 0  # chest rises at the top of the bob
+    breath = (0, 0, 1, 1)[t % 4] if not walking else 0  # a visible breath: chest, mantle and shoulders lift 1 px
     # back arm: long wooden vambrace with grooves
     _eden_arm(up, ARM_X[0], BROWN, SKIN, ay)
     up.part(R((ARM_X[0], 39 + ay, ARM_X[0] + 5, 43 + ay)), BROWN)
@@ -4249,7 +4250,7 @@ def eden(step=None, t=0):
     up.flat(R((39 + gx, 46 + gy, 40 + gx, 47 + gy)), BROWN)
     up.dot(38 + gx, 49 + gy, YELLOW)
     # big leaf cape over the right shoulder (asymmetry); its hem lags the body in waves
-    a, b, c_ = wv(1, 0.8), wv(2, 1.3), wv(2, 0.7)
+    a, b, c_ = wv(1, 1.3), wv(2, 2.0), wv(2, 1.0)
     sag = 1 if (not walking and t % 4 == 1) else 0
     cape = [(36, 31), (49, 33), (53 + a, 41), (50 + b, 49 + c_ + sag), (44, 47), (40, 40)]
     up.part(P(cape), GREEN)
@@ -4262,18 +4263,28 @@ def eden(step=None, t=0):
     up.part(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 42 - ay)), STEEL_D)
     up.flat(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 40 - ay)), STEEL)
     # small mossy mantle at the other shoulder
-    up.part(E((16, 31, 28, 40)), GREEN_D)
+    up.part(E((16, 31 - breath, 28, 40 - breath)), GREEN_D)
     for x, col, lag in ((18, GREEN, 3), (21, GREEN_L, 2), (24, GREEN, 1)):
-        draw_leaf(up, x, 35, math.pi / 2 + 0.1 + 0.12 * wv(lag, 1.0), 6, 2.5, col)
-    # hair: A's auburn bob; its ends and the side locks bounce a beat behind the head
+        draw_leaf(up, x, 35 - breath, math.pi / 2 + 0.1 + 0.12 * wv(lag, 1.0), 6, 2.5, col)
+    # hair: A's bob in warm brown (shaded by the brown ramp: lit top left, maroon underside) with strand highlights,
+    # a centre part, loose locks and bangs over the mask's brow; ends and locks bounce a beat behind the head
     lag_y = wv(1, 1.0)
-    up.part(RR((15, 6, 48, 36), 9), MAROON)
-    up.part(P([(15, 26), (19, 26), (19, 36 + lag_y), (16, 37 + lag_y)]), MAROON, shade=False)  # swinging ends
-    up.flat(L([(22, 9), (32, 7)], 1), BROWN)
-    up.flat(L([(17, 18), (16, 26)], 1), BROWN)
+    lag_x = wv(2, 1.0)
+    up.part(RR((15, 6, 48, 36), 9), BROWN)
+    up.part(P([(15, 26), (19, 26), (19, 36 + lag_y), (16, 37 + lag_y)]), BROWN, shade=False)  # swinging ends
+    for pts in (((34, 7), (26, 8), (19, 13), (17, 22)), ((34, 7), (42, 8), (47, 12)), ((30, 7), (23, 10), (18, 17)),
+                ((38, 7), (44, 9))):  # strands fanning from the part
+        up.flat(L(list(pts), 1), SKIN_D)
+    for pts in (((32, 8), (24, 12), (19, 20)), ((36, 8), (45, 11))):
+        up.flat(L(list(pts), 1), MAROON)
+    up.flat(L([(34, 6), (34, 10)], 1), MAROON)  # the part
+    up.flat(L([(16, 28), (16, 34 + lag_y)], 1), MAROON)
     up.part(RR(FACE, FACE_R), SKIN)
     up.part(P([(FACE[0] - 1, 17), (FACE[0] + 3, 17), (FACE[0] + 2, 30), (FACE[0] - 2, 34 + lag_y),
-               (FACE[0] - 4, 26)]), MAROON, shade=False)
+               (FACE[0] - 4, 26)]), BROWN, shade=False)
+    up.flat(L([(FACE[0] - 1, 19), (FACE[0], 29)], 1), SKIN_D)  # lock highlight
+    up.flat(L([(15, 30), (13 - lag_x, 36 + lag_y), (14 - lag_x, 39 + lag_y)], 1), BROWN)  # loose locks flicking out
+    up.flat(L([(18, 33), (17 - lag_x, 38 + lag_y)], 1), BROWN)
     # leaf mask: pointed leaf shape sweeping out at the sides (tips flick), midrib + veins
     f = wv(2, 1.0)
     mask = [(20, 21 + f), (24, 14), (36, 11), (47, 14), (51, 20 - f), (49, 26), (46, 29), (41, 29), (39, 27), (36, 27),
@@ -4286,7 +4297,12 @@ def eden(step=None, t=0):
     up.flat(L([(22, 21 + f), (24, 24)], 1), GREEN_D)
     up.flat(L([(49, 21 - f), (47, 24)], 1), GREEN_D)
     up.dot(36, 10, GREEN_L)
-    # glowing eyes in dark holes: shimmer every beat, blink on the idle's last frame
+    # bangs: a scalloped fringe over the mask's brow (swaying a little), with a lit rim
+    bx = wv(1, 1.0) // 1
+    up.part(lambda d, f: [d.ellipse((x - 3, 9, x + 3, 15 + (i % 2)), f) for i, x in enumerate(range(24, 48, 4))], BROWN)
+    for x in range(25, 47, 4):
+        up.dot(x + bx % 2, 11, SKIN_D)
+    # glowing eyes in dark holes: shimmer every beat, a half-lid on the idle's last frame
     up.flat(E((29, 20, 36, 28)), OUTLINE)
     up.flat(E((39, 20, 46, 28)), OUTLINE)
     blink = not walking and t % 4 == 3
@@ -4294,9 +4310,9 @@ def eden(step=None, t=0):
     for x in EYES_X:
         if KO:
             x_eye(up, x, EYES_Y + 1, ORANGE)
-        elif blink:
-            up.flat(R((x, EYES_Y + 3, x + 3, EYES_Y + 3)), ORANGE)
-            up.flat(R((x, EYES_Y + 4, x + 3, EYES_Y + 4)), MAROON)
+        elif blink:  # a subtle half-lid: only the lower glow row shows
+            up.flat(R((x, EYES_Y + 1, x + 3, EYES_Y + 5)), OUTLINE)
+            up.flat(R((x, EYES_Y + 4, x + 3, EYES_Y + 4)), ORANGE)
         else:
             up.flat(R((x, EYES_Y + 1, x + 3, EYES_Y + 5)), OUTLINE)
             up.flat(R((x, EYES_Y + 3, x + 3, EYES_Y + 4)), glow)
@@ -4304,6 +4320,9 @@ def eden(step=None, t=0):
     for x in (33, 43):  # freckles
         up.dot(x, 32, SKIN_D)
     up.flat(R((MOUTH[0], MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)
+    if walking:  # lean forward into the stride (rows above the belt shear right)
+        up.img = ImageChops.offset(lean(up.img, 44, 0.04), 0, WALK_BOB[step])  # and bob twice as hard as the legs'
+        up.px = up.img.load()
     return low, up
 
 
