@@ -5,6 +5,7 @@ extends RefCounted
 ##   --host [--port N]                listen server: this device hosts AND plays (the menu's HOST button)
 ##   --connect host[:port]            join a server directly
 ##   --offline                        local sandbox vs bots, skip the menu
+##   --discover                       print games found on the LAN for ~4 s, then quit
 ##   --autopilot                      (client) drive + fire automatically, for testing
 ##   --net-debug                      print net stats periodically
 ##   --touch                          show touch controls on desktop
@@ -24,6 +25,10 @@ var connect_host: String = ""
 var connect_port: int = Constants.DEFAULT_PORT
 var offline: bool = false
 var autopilot: bool = false
+## Debug: print LAN games found by discovery, then quit (see CLAUDE.md Commands).
+var discover: bool = false
+## Debug: host doesn't broadcast (answers unicast probes only), to test the entitlement-free sweep.
+var no_broadcast: bool = false
 var net_debug: bool = false
 var match_mode: MatchRules.Mode = MatchRules.Mode.FFA
 var time_limit: float = Constants.MATCH_TIME_LIMIT
@@ -59,6 +64,10 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				a.offline = true
 			"--autopilot":
 				a.autopilot = true
+			"--no-broadcast":
+				a.no_broadcast = true
+			"--discover":
+				a.discover = true
 			"--net-debug":
 				a.net_debug = true
 			"--mode":
