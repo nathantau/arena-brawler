@@ -652,15 +652,31 @@ def sakura(step=None, t=0):
     up.part(RR(BODY, 3), WHITE)  # kimono
     for x in range(BODY[0] + 2, BODY[2] - 1, 4):  # hem ripples, the folds rolling back
         up.dot(x + (t % 4), BODY[3] - 1, STEEL)
-    up.flat(L([(26, 33), (32, 40)], 1), RED)  # crossed collar
+    up.flat(L([(26, 33), (32, 40)], 1), RED)  # crossed collar over a pink under-collar
     up.flat(L([(38, 33), (32, 40)], 1), RED)
+    up.flat(L([(27, 33), (32, 39)], 1), PINK_L)
+    up.flat(L([(37, 33), (32, 39)], 1), PINK_L)
     for x, y in ((24, 36), (40, 37), (27, 46), (37, 47)):  # blossom pattern
         up.flat(R((x, y, x + 1, y + 1)), PINK_L)
+    for x in range(BODY[0] + 2, BODY[2] - 1, 3):  # hem trim: a band of pink blossoms along the bottom
+        up.flat(R((x, 47, x, 47)), PINK)
+    up.flat(R((BODY[0] + 1, 48, BODY[2] - 1, 48)), PINK_L)
+    for x, y0 in ((24, 44), (39, 45)):  # soft folds in the cloth, light from the top left
+        up.flat(L([(x, y0), (x, y0 + 2)], 1), STEEL)
     up.part(R((20, 40, 44, 44)), RED, line=False)  # obi
+    up.flat(R((20, 40, 44, 40)), ORANGE)  # its lit top edge
     up.flat(R((20, 42, 44, 42)), PINK)  # obi cord
+    for x in (23, 28, 36, 41):  # woven gold pattern
+        up.dot(x, 41, YELLOW)
+    for x in (25, 33, 39):
+        up.dot(x, 43, MAROON)
+    up.flat(R((31, 42, 33, 42)), PINK_L)  # the cord's knot
     up.part(E((ARM_X[1] + 1, 43, ARM_X[1] + 5, 47)), SKIN)  # front hand
     up.part(sleeve(ARM_X[1] - 1, ARM_X[1] + 6), WHITE)  # front sleeve
     up.flat(L([(ARM_X[1] - wave(3, 1), 44), (ARM_X[1] + 5 - wave(2, 1), 44)], 1), PINK_L)
+    for x in (ARM_X[0], ARM_X[1]):  # a blossom on each sleeve
+        up.flat(R((x + 2, 39, x + 3, 40)), PINK)
+        up.dot(x + 2, 39, PINK_L)
     # long ponytail from a high tie at the back of her head, flowing in the wind
     up.part(P([(19, 9), (12, 12), (8 - wave(0, 0.5), 20), (6 - wave(1, 1), 30), (6 - wave(2, 1.5), 40),
                (9 - wave(3, 2), 46), (12 - wave(2, 1.5), 38), (15 - wave(1, 1), 28), (19, 17)]), PINK)
