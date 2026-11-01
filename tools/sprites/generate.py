@@ -918,12 +918,27 @@ def wukong(step=None, t=0, swing=False):
     else:
         up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11 + s, 31)], 3), BROWN)  # curly tail, tip wags
     arm(up, ARM_X[0], YELLOW, SKIN)
+    up.flat(R((ARM_X[0], 40, ARM_X[0] + 5, 41)), ORANGE)  # bracer
+    up.flat(R((ARM_X[0], 41, ARM_X[0] + 5, 41)), RED)
     up.part(RR(BODY, 3), YELLOW)  # golden armour
     up.flat(R((31, 36, 33, 44)), ORANGE)
+    for y in (39, 42):  # lames: the plate overlaps in bands, each with a shaded edge
+        up.flat(R((22, y, 30, y)), ORANGE)
+        up.flat(R((34, y, 42, y)), ORANGE)
+    for x in (23, 41):  # rivets
+        up.dot(x, 37, WHITE)
+        up.dot(x, 40, RED)
+    up.flat(R((22, 35, 24, 35)), WHITE)  # the plate's specular, top left
     up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
+    up.flat(R((30, 44, 34, 46)), YELLOW)  # gold sash clasp
+    up.flat(R((31, 45, 33, 45)), ORANGE)
+    up.dot(30, 44, WHITE)
     up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
     if not swing:
         arm(up, ARM_X[1], YELLOW, SKIN)
+        up.flat(R((ARM_X[1], 40, ARM_X[1] + 5, 41)), ORANGE)  # bracer
+        up.flat(R((ARM_X[1], 41, ARM_X[1] + 5, 41)), RED)
+        up.dot(ARM_X[1] + 1, 40, YELLOW)
     # pheasant feathers sway: two tapered plumes, the longer one behind (lit top edge, shaded underside)
     up.part(P([(26, 10), (17, 4), (6, 5 + s), (15, 8), (23, 12)]), RED, shade=False)
     up.flat(L([(23, 8), (16, 5), (9, 5 + s)], 1), ORANGE)
