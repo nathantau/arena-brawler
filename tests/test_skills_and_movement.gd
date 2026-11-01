@@ -2031,6 +2031,22 @@ func test_leaf_gust_pushes_and_hurts_only_enemies_in_the_cone() -> void:
 	assert_eq(hits.size(), 1, "the hit lands on the press only")
 
 
+func test_leaf_gust_on_a_remote_copy_clears_shots_from_its_process() -> void:
+	var s: Array = _gust_setup()
+	var p: Player = s[2]
+	var pool: ProjectilePool = s[1]
+	await wait_physics_frames(2)
+	pool.authoritative = false
+	_press_special(p, Vector2.RIGHT)  # state as a snapshot would leave it; no more simulate() calls follow
+	var gun: WeaponData = WeaponCatalog.load_all().get_weapon(&"pistol")
+	pool.fire_shot(2, 5, Vector2(300 + 90, 300), Vector2.LEFT, gun, 3)  # an enemy shot flies into the cone
+	pool.fire_shot(2, 6, Vector2(300 + 90, 300 + 120), Vector2.LEFT, gun, 3)  # outside it
+	assert_eq(pool.active_count(), 2)
+	p._process(DT)  # a remote copy has no controller, so only _process runs
+	assert_eq(pool.active_count(), 1, "the cone cleared the shot on this peer too")
+	assert_eq(s[3].stats.hp, s[3].stats.max_hp, "and a client's gust hurts nobody")
+
+
 func test_leaf_gust_destroys_enemy_shots_in_the_cone_but_not_her_own() -> void:
 	var s: Array = _gust_setup()
 	var p: Player = s[2]
