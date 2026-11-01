@@ -631,6 +631,54 @@ def flame_tongue(c: Canvas, root, ctrl, tip, phase, side=1, wide=6.0, mid=32):
 HAIR_FLOW = [0, 1, 2, 1]  # px a lock blows back per tick (period 4, so idle and walk loop)
 
 
+## The cast's female face (Sakura; Eden reuses it): a heart / V shape, full-width brow and cheeks tapering to a small soft
+## pointed chin. Pixel widths per art row, centred on x = FEMALE_FACE_CX (rows 15..36, same box as FACE).
+FEMALE_FACE_CX = 35
+FEMALE_FACE_ROWS = {15: 15, 16: 19, 17: 21, 18: 23, 19: 25, 20: 25, 21: 25, 22: 25, 23: 25, 24: 25, 25: 25, 26: 25,
+                    27: 23, 28: 23, 29: 21, 30: 21, 31: 19, 32: 19, 33: 17, 34: 15, 35: 11, 36: 5}
+
+
+def female_face(c: Canvas, iris=PINK, blush=PINK, between=None) -> None:
+    """The shared female head and face. Draws, in this order: the skin shape + shading + neck shadow, then
+    `between()` (call it to draw the hair that overlaps the face), then eyes, lashes, blush and mouth.
+
+    Pixel profile, rows y = 15..36, width centred on x = 35 (left x = 35 - w // 2, right x = 35 + w // 2):
+      brow    y15 15 | y16 19 | y17 21 | y18 23
+      cheeks  y19..y26 25 (x 23..47, the full FACE width)
+      jaw     y27 23 | y28 23 | y29 21 | y30 21 | y31 19 | y32 19 | y33 17 | y34 15 | y35 11 | y36 5  (soft pointed chin)
+    That is ~2-3 px narrower per side than the old rounded box (FACE, radius 8) at chin level (y34: 19 -> 15 wide).
+    Skin ramp: WHITE glint (nose bridge) / SKIN / SKIN_D (right edge and lower contour, the whole chin row) / BROWN (the
+    shadow under the chin cast on the neck, rows y37). Eyes: big_eyes, 4 px wide, 8 rows (y22..29, one row taller than
+    the rest of the cast), `iris` colour, a one-pixel lash at each eye's top outer corner (y21); blush 3 px at y30
+    (x 27..29 and 42..44) in `blush`; mouth 2 px MAROON at MOUTH (37, 30)."""
+    cx = FEMALE_FACE_CX
+
+    def span(y):
+        w = FEMALE_FACE_ROWS[y]
+        return cx - w // 2, cx + w // 2
+
+    def inside(x, y):
+        return y in FEMALE_FACE_ROWS and span(y)[0] <= x <= span(y)[1]
+
+    c.part(lambda d, f: [d.rectangle((span(y)[0], y, span(y)[1], y), f) for y in FEMALE_FACE_ROWS], SKIN, shade=False)
+    for y in FEMALE_FACE_ROWS:
+        for x in range(span(y)[0], span(y)[1] + 1):
+            if y >= 35 or (y >= 18 and (not inside(x + 1, y) or not inside(x + 1, y + 1))):
+                c.dot(x, y, SKIN_D)  # shade: right edge, lower-right contour, the chin
+    c.dot(36, 27, WHITE)  # glint on the nose bridge
+    c.flat(R((cx - 3, 37, cx + 3, 37)), SKIN_D)  # the chin's shadow falling on the neck: two tones
+    c.flat(R((cx - 1, 37, cx + 1, 37)), BROWN)
+    if between:
+        between()
+    big_eyes(c, EYES_Y, EYES_X, iris, h=7)
+    if not KO:
+        c.dot(EYES_X[0] - 1, EYES_Y - 1, OUTLINE)  # lashes: one pixel at the top outer corner of each eye
+        c.dot(EYES_X[1] + 4, EYES_Y - 1, OUTLINE)
+    c.flat(R((27, 30, 29, 30)), blush)
+    c.flat(R((42, 30, 44, 30)), blush)
+    c.flat(R((MOUTH[0], MOUTH[1], MOUTH[0] + 1, MOUTH[1])), MAROON)
+
+
 def sakura(step=None, t=0):
     """Blossom: a cool-eyed girl in a white kimono with wide sleeves, red obi tied in a bow at the back; pink hair
     parted in the middle, curtains framing her face, and a long ponytail tied with a cherry blossom that sways
@@ -682,32 +730,23 @@ def sakura(step=None, t=0):
                (9 - wave(3, 2), 46), (12 - wave(2, 1.5), 38), (15 - wave(1, 1), 28), (19, 17)]), PINK)
     up.flat(L([(12, 17), (10 - wave(1, 0.5), 24)], 1), PINK_L)  # its sheen: one short lit streak, the rest is the part's own shading
     up.part(E((16, 5, 48, 37)), PINK)  # hair
-    # a soft, narrow jaw: the full-width brow tapers into a smaller rounded chin
-    up.part(lambda d, f: (d.rounded_rectangle((FACE[0], FACE[1], FACE[2], 29), FACE_R, f),
-                          d.ellipse((FACE[0] + 1, 19, FACE[2] - 1, FACE[3] - 1), f)), SKIN)
-    # middle part: two curtains and two long side locks, mirrored about the face's centre line
-    mid = (FACE[0] + FACE[2]) // 2
-    curtain = [(mid, 10), (mid + 9, 9), (mid + 13, 14), (mid + 14, 23), (mid + 12, 23), (mid + 11, 19), (mid + 6, 15),
-               (mid + 1, 14)]  # sweeps off the forehead
-    drift = wave(2, 0.5)  # the side locks' ends drift with the breeze
-    lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16 - drift, 40), (mid + 9 - drift, 37), (mid + 10, 29)]  # swings in over the cheek, narrowing the jaw
-    for side in (1, -1):  # each curtain and its lock as one shape, so no line where the lock meets the curtain
-        c_pts, l_pts = ([(mid + side * (x - mid), y) for x, y in pts] for pts in (curtain, lock))
-        up.part(lambda d, f, c_pts=c_pts, l_pts=l_pts: (d.polygon(c_pts, f), d.polygon(l_pts, f)), PINK)  # shaded like the ponytail
-        up.flat(L([(mid + side * 6, 11), (mid + side * 10, 14)], 1), PINK_L)  # sheen: short, light from the top
-    up.flat(L([(mid, 8), (mid, 13)], 1), MAROON)  # the parting
-    up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
-                          ((19, 4), (22, 6), (21, 9), (17, 9), (16, 6))], PINK_L)  # cherry blossom tying the ponytail
-    up.dot(19, 7, YELLOW)
-    big_eyes(up, EYES_Y, EYES_X, PINK, h=6)
-    if not KO:
-        for x, out in ((29, -1), (39, 4)):  # calm lids, lashes flicking out at the outer corners
-            up.flat(R((x, 21, x + 3, 21)), OUTLINE)
-            up.dot(x + out, 21, OUTLINE)
-            up.dot(x + out + (1 if out > 0 else -1), 20, OUTLINE)
-    up.flat(R((BLUSH[0] + 1, BLUSH[2], BLUSH[0] + 3, BLUSH[2])), PINK)  # pink blush, kept on the narrower cheeks
-    up.flat(R((BLUSH[1] - 3, BLUSH[2], BLUSH[1] - 2, BLUSH[2])), PINK)
-    up.flat(R((MOUTH[0], MOUTH[1], MOUTH[0] + 1, MOUTH[1])), MAROON)  # small mouth
+    def front_hair():
+        # middle part: two curtains and two long side locks, mirrored about the face's centre line
+        mid = (FACE[0] + FACE[2]) // 2
+        curtain = [(mid, 10), (mid + 9, 9), (mid + 13, 14), (mid + 14, 23), (mid + 12, 23), (mid + 11, 19), (mid + 6, 15),
+                   (mid + 1, 14)]  # sweeps off the forehead
+        drift = wave(2, 0.5)  # the side locks' ends drift with the breeze
+        lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16 - drift, 40), (mid + 7 - drift, 38), (mid + 11, 32), (mid + 13, 26)]  # swings in over the cheek, narrowing the jaw
+        for side in (1, -1):  # each curtain and its lock as one shape, so no line where the lock meets the curtain
+            c_pts, l_pts = ([(mid + side * (x - mid), y) for x, y in pts] for pts in (curtain, lock))
+            up.part(lambda d, f, c_pts=c_pts, l_pts=l_pts: (d.polygon(c_pts, f), d.polygon(l_pts, f)), PINK)  # shaded like the ponytail
+            up.flat(L([(mid + side * 6, 11), (mid + side * 10, 14)], 1), PINK_L)  # sheen: short, light from the top
+        up.flat(L([(mid, 8), (mid, 13)], 1), MAROON)  # the parting
+        up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
+                              ((19, 4), (22, 6), (21, 9), (17, 9), (16, 6))], PINK_L)  # cherry blossom tying the ponytail
+        up.dot(19, 7, YELLOW)
+
+    female_face(up, iris=PINK, blush=PINK, between=front_hair)
     return low, up
 
 
