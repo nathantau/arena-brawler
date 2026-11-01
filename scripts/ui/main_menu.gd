@@ -11,7 +11,14 @@ signal join_pressed(address: String)
 const FAKE_KEYBOARD_FLAG: String = "--fake-keyboard"
 const BUTTON_MIN_SIZE: Vector2 = Vector2(360, 64)
 const FIELD_MIN_SIZE: Vector2 = Vector2(236, 64)
+const PLAY_SIZE: Vector2 = Vector2(440, 112)
+const PLAY_FONT: int = 44
+const MENU_EDGE: float = 24.0
+## Concept C menu column width (centred under the logo).
+const CENTRE_W: float = 620.0
 const SPACING: int = 12
+const SHOT_FLAG: String = "--home-shot="
+const SHOT_DELAY: float = 2.0
 const GAME_LABEL_W: float = 430.0
 
 var _status: Label
@@ -19,6 +26,8 @@ var _address: LineEdit
 var _join: Button
 var _host: Button
 var _box: VBoxContainer
+var _backdrop: TitleBackdrop
+var _concept: String = "A"
 var _hide_while_typing: Array[Control] = []
 var _browser: LanDiscovery
 var _games_box: VBoxContainer
@@ -31,27 +40,32 @@ func _ready() -> void:
 
 	var backdrop := TitleBackdrop.new()
 	add_child(backdrop)
+	_backdrop = backdrop
+	_concept = backdrop.concept
+	var stacked: bool = _concept == "A"
 
 	var box := VBoxContainer.new()
 	_box = box
 	box.add_theme_constant_override("separation", SPACING)
-	box.alignment = BoxContainer.ALIGNMENT_END
+	box.alignment = BoxContainer.ALIGNMENT_BEGIN if _concept == "C" else (BoxContainer.ALIGNMENT_CENTER if _concept == "B" else BoxContainer.ALIGNMENT_END)
 	add_child(box)
-	UiStyle.fit_to_safe_area(box)
+	_place_box()
+	get_viewport().size_changed.connect(_place_box)
 
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.add_theme_color_override("font_color", UiStyle.C_ORANGE)
-	box.add_child(_status)
 
-	var offline := _button("PLAY VS BOTS", BUTTON_MIN_SIZE)
+	var play_w: float = CENTRE_W - 60.0 if _concept == "C" else PLAY_SIZE.x
+	var offline := _button("PLAY VS BOTS", Vector2(play_w, PLAY_SIZE.y))
 	offline.theme_type_variation = &"PrimaryButton"
-	offline.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
+	offline.add_theme_font_size_override("font_size", PLAY_FONT)
 	offline.add_child(ButtonShine.new())
 	offline.pressed.connect(offline_pressed.emit)
 	var offline_row := _centered(offline)
 	box.add_child(offline_row)
 	_hide_while_typing.append(offline_row)
+	box.add_child(_status)
 
 	_games_box = VBoxContainer.new()
 	_games_box.add_theme_constant_override("separation", SPACING)
@@ -63,11 +77,14 @@ func _ready() -> void:
 	visibility_changed.connect(_sync_browser)
 	_sync_browser()
 
-	_ip_toggle = _button("Enter IP", Vector2(BUTTON_MIN_SIZE.x, FIELD_MIN_SIZE.y))
+	var row_w: float = play_w
+	var small_w: float = ((CENTRE_W if _concept == "C" else TitleBackdrop.COLUMN_W) - SPACING * 2.0) / 3.0
+	_ip_toggle = _button("Enter IP", Vector2(row_w if stacked else small_w, FIELD_MIN_SIZE.y))
 	_ip_toggle.pressed.connect(func() -> void: _ip_row.visible = not _ip_row.visible)
-	var toggle_row := _centered(_ip_toggle)
-	box.add_child(toggle_row)
-	_hide_while_typing.append(toggle_row)
+	_host = _button("HOST A GAME ON THIS WI-FI" if stacked else "Host Wi-Fi", Vector2(row_w if stacked else small_w, FIELD_MIN_SIZE.y))
+	_host.pressed.connect(host_pressed.emit)
+	var settings := _button("Settings", Vector2(row_w if stacked else small_w, FIELD_MIN_SIZE.y))
+	settings.pressed.connect(func() -> void: SettingsPanel.show_on(self))
 
 	var join_row := HBoxContainer.new()
 	join_row.add_theme_constant_override("separation", SPACING)
@@ -84,19 +101,52 @@ func _ready() -> void:
 	join_row.add_child(_join)
 	_ip_row = _centered(join_row)
 	_ip_row.visible = false  # manual IP is the fallback; "Enter IP" reveals it
-	box.add_child(_ip_row)
 
-	_host = _button("HOST A GAME ON THIS WI-FI", Vector2(BUTTON_MIN_SIZE.x, FIELD_MIN_SIZE.y))
-	_host.pressed.connect(host_pressed.emit)
-	var host_row := _centered(_host)
-	box.add_child(host_row)
-	_hide_while_typing.append(host_row)
-	var settings := _button("Settings", Vector2(BUTTON_MIN_SIZE.x, FIELD_MIN_SIZE.y))
-	settings.pressed.connect(func() -> void: SettingsPanel.show_on(self))
-	var settings_row := _centered(settings)
-	box.add_child(settings_row)
-	_hide_while_typing.append(settings_row)
+	if stacked:
+		for c: Control in [_ip_toggle, _ip_row, _host, settings]:
+			var holder: Control = c if c == _ip_row else _centered(c)
+			box.add_child(holder)
+			_hide_while_typing.append(holder)
+		_hide_while_typing.erase(_ip_row)
+	else:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", SPACING)
+		for c: Control in [_ip_toggle, _host, settings]:
+			row.add_child(c)
+		var holder2 := _centered(row)
+		box.add_child(holder2)
+		_hide_while_typing.append(holder2)
+		box.add_child(_ip_row)
 	add_child(IntroSplash.new(backdrop, box))  # first-launch opening; skippable
+	_maybe_shoot()
+
+
+## Anchors the menu column for the active concept: A / B stack in a right-hand column under the logo, C is centred under it.
+func _place_box() -> void:
+	var i: Vector4 = UiStyle.safe_insets(get_viewport())
+	_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	if _concept == "C":
+		var half: float = CENTRE_W * 0.5
+		_box.anchor_left = 0.5
+		_box.anchor_right = 0.5
+		_box.offset_left = -half
+		_box.offset_right = half
+	else:
+		_box.anchor_left = 1.0
+		_box.offset_right = -(i.z + MENU_EDGE)
+		_box.offset_left = _box.offset_right - TitleBackdrop.COLUMN_W
+	_box.offset_top = _backdrop.logo_bottom()
+	_box.offset_bottom = -i.w
+
+
+## `--home-shot=PATH`: save the menu to PNG once the intro is done and quit (layout checks / renders).
+func _maybe_shoot() -> void:
+	for a: String in OS.get_cmdline_user_args():
+		if a.begins_with(SHOT_FLAG):
+			var path: String = a.trim_prefix(SHOT_FLAG)
+			get_tree().create_timer(SHOT_DELAY).timeout.connect(func() -> void:
+				get_viewport().get_texture().get_image().save_png(path)
+				get_tree().quit())
 
 
 ## Browse only while the menu is showing (the socket is closed during a match).
@@ -155,6 +205,7 @@ func set_status(text: String) -> void:
 
 
 func _process(_delta: float) -> void:
+	_box.offset_top = _backdrop.logo_bottom()
 	_lift_above_keyboard()
 
 
