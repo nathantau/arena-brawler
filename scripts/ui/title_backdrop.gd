@@ -31,26 +31,31 @@ const MID_PARALLAX: float = 1.5
 const PUNCH_DECAY: float = 3.0
 const PUNCH_PX: float = 14.0
 
-## Home layout: logo, tagline and the menu form one centred group at the top; the roster stands in an arc along the
-## bottom, cropped by the screen edge, scaled so it never reaches the group.
+## Home layout: logo, tagline and the menu form one compact centred group at the top (the logo as big as the screen
+## allows); the roster stands below it as a group shot in depth: a front row and a staggered back row that stands
+## higher, a little smaller and darker, drawn first. The scale keeps the back row's heads clear of the menu block.
 const LOGO_BOB: float = 5.0
 const LOGO_BOB_SPEED: float = 2.0
 const SHINE_PERIOD: float = 3.8
 const SHINE_TIME: float = 0.8
 const TAGLINE: String = "Pick a fighter. Grab a weapon. Brawl."
-const LOGO_PX_WIDE: float = 6.0
-const LOGO_PX_NARROW: float = 4.0
-const WIDE_MIN: float = 1400.0
+const LOGO_PX_MAX: float = 12.0
+const LOGO_PX_MIN: float = 4.0
+const LOGO_MAX_W: float = 0.5  ## logo width <= this share of the screen
+const LOGO_MAX_H: float = 0.26  ## logo height <= this share of the screen
 const TAG_GAP: float = 10.0  ## logo -> tagline
 const MENU_GAP: float = 16.0  ## tagline -> PLAY
-const MENU_BLOCK_H: float = 210.0  ## PLAY + status + secondary row, as built by MainMenu
-const ARC_GAP: float = 20.0  ## menu block -> tallest fighter
-const ARC_SPREAD: float = 0.46  ## fighters span +-this fraction of the width around the centre
-const ARC_DIP: float = 40.0  ## the outer fighters stand this much higher than the centre one
-const ARC_FEET: float = 14.0  ## centre fighters' feet below the screen bottom
-const ARC_FIT: float = 0.85  ## share of a sprite's opaque width that counts toward overlap
-const ARC_SCALE_MIN: float = 3.0
-const ARC_SCALE_MAX: float = 5.5
+const MENU_BLOCK_H: float = 256.0  ## PLAY + status + secondary row, plus room for one found game
+const ARC_GAP: float = 12.0  ## menu block -> tallest fighter
+const FEET_LIFT: float = 12.0  ## front row's feet this far above the screen bottom
+const STEP_FRAC: float = 1.0  ## front-row spacing as a share of a sprite's opaque width (they overlap a little)
+const BACK_RISE: float = 0.34  ## back row stands this share of a sprite's height higher
+const BACK_SHADE: Color = Color(0.64, 0.66, 0.82, 1.0)  ## depth tint of the back row
+const SIDE_FILL: float = 0.96  ## the group may span this share of the width
+const SCALE_MIN: float = 2.5
+const SCALE_MAX: float = 7.0
+## Fighter ids, lead first: front slots are filled from the middle out, then the back row (flint glows, so he is not lost in the dark).
+const LEADS: Array[StringName] = [&"flicker", &"bolt", &"wukong", &"sakura", &"flint", &"eden", &"shadow"]
 
 const POSE_IDLE: int = 0
 const POSE_STRIKE: int = 2
@@ -92,6 +97,7 @@ var _run: Array = []
 var _strike: Array = []
 var _time: float = 0.0
 var _fighters: Array[Dictionary] = []  ## placed per layout: i, feet, sc, flip, pose
+var _ids: Array[StringName] = []
 var _boxes: Array[Rect2] = []  ## opaque rect of each fighter's idle frame inside its cell
 var _laid_out: Vector2 = Vector2.ZERO
 var _logo_rect: Rect2 = Rect2()
@@ -113,6 +119,7 @@ func _ready() -> void:
 	var roster: Array[CharacterData] = CharacterCatalog.load_all().ordered
 	for i: int in roster.size():
 		var f: SpriteFrames = roster[i].sprite_frames()
+		_ids.append(roster[i].id)
 		_idle.append(_textures(f, &"idle"))
 		_run.append(_textures(f, &"walk"))
 		_strike.append(_textures(f, &"attack") if f.has_animation(&"attack") else _textures(f, &"idle"))
@@ -202,30 +209,60 @@ func _draw_floor(stage_at: Vector2, floor_top: float) -> void:
 		PackedColorArray([dark, dark, clear, clear]))
 
 
-## Places the roster in the arc and sets the logo + spotlight; the arc scale keeps clear of the menu block.
+## Places the roster as a front + back row and sets the logo + spotlight.
 func _place(_floor_top: float) -> void:
 	_fighters.clear()
 	var n: int = _idle.size()
 	var w: float = size.x
 	var h: float = size.y
 	var logo: Vector2 = _logo.get_size()
-	var lpx: float = LOGO_PX_WIDE if w >= WIDE_MIN else LOGO_PX_NARROW
+	var lpx: float = clampf(floorf(minf(w * LOGO_MAX_W / logo.x, h * LOGO_MAX_H / logo.y)), LOGO_PX_MIN, LOGO_PX_MAX)
 	_logo_rect = Rect2(Vector2((w - logo.x * lpx) * 0.5, _insets.y + 4.0), logo * lpx)
 	var max_w: float = 1.0
 	var max_h: float = 1.0
 	for b: Rect2 in _boxes:
 		max_w = maxf(max_w, b.size.x)
 		max_h = maxf(max_h, b.size.y)
-	var spacing: float = w * ARC_SPREAD * 2.0 / maxf(1.0, n - 1.0)
-	var room: float = h + ARC_FEET - ARC_DIP - (logo_bottom() + MENU_BLOCK_H + ARC_GAP)
-	var sc: float = floorf(minf(spacing / (max_w * ARC_FIT), room / max_h) * 2.0) * 0.5
-	sc = clampf(sc, ARC_SCALE_MIN, ARC_SCALE_MAX)
+	var front_n: int = ceili(n * 4.0 / 7.0)
+	var feet_y: float = h - FEET_LIFT
+	var top_y: float = logo_bottom() + MENU_BLOCK_H + ARC_GAP
+	var sc: float = SCALE_MAX
+	while sc > SCALE_MIN:
+		var head: float = feet_y - BACK_RISE * max_h * sc - max_h * maxf(SCALE_MIN, sc - 0.5)
+		var span: float = (max_w * STEP_FRAC * (front_n - 1) + max_w) * sc
+		if head >= top_y and span <= w * SIDE_FILL:
+			break
+		sc -= 0.5
+	var bsc: float = maxf(SCALE_MIN, sc - 0.5)
+	var step: float = max_w * STEP_FRAC * sc
+	var order: Array[int] = []
+	for lid: StringName in LEADS:
+		if _ids.has(lid):
+			order.append(_ids.find(lid))
+	for id: int in n:
+		if not order.has(id):
+			order.append(id)
+	var front_x: Array[float] = _slots(front_n)
+	var back_x: Array[float] = _slots(n - front_n)
 	for k: int in n:
-		var u: float = (k - (n - 1) * 0.5) / ((n - 1) * 0.5)
-		_fighters.append({"i": k, "feet": Vector2(w * 0.5 + u * w * ARC_SPREAD, h + ARC_FEET - u * u * ARC_DIP),
-			"sc": sc, "flip": u > 0.05, "pose": POSE_STRIKE if k == n / 2 else POSE_IDLE})
-	_spot = Vector3(w * 0.5, h - 30.0, w * 0.4)
+		var is_front: bool = k < front_n
+		var u: float = front_x[k] if is_front else back_x[k - front_n]
+		_fighters.append({"i": order[k], "feet": Vector2(w * 0.5 + u * step,
+			feet_y - (0.0 if is_front else BACK_RISE * max_h * sc)), "sc": sc if is_front else bsc, "flip": u > 0.05,
+			"pose": POSE_STRIKE if k == 0 else POSE_IDLE, "shade": Color.WHITE if is_front else BACK_SHADE})
+	_spot = Vector3(w * 0.5, feet_y - 10.0, minf(w * 0.4, step * 3.5))
 	_fighters.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["feet"] as Vector2).y < (b["feet"] as Vector2).y)
+
+
+## `count` x offsets in steps from the centre, inner slots first: odd counts start at 0, even counts at +-0.5.
+static func _slots(count: int) -> Array[float]:
+	var out: Array[float] = []
+	for k: int in count:
+		if count % 2 == 1:
+			out.append(0.0 if k == 0 else float((k + 1) / 2) * (-1.0 if k % 2 == 1 else 1.0))
+		else:
+			out.append((float(k / 2) + 0.5) * (-1.0 if k % 2 == 0 else 1.0))
+	return out
 
 
 ## Warm spotlight pool (stacked ellipses) under the arc.
@@ -251,6 +288,7 @@ func _draw_fighter(f: Dictionary, rise: float) -> void:
 	var i: int = f["i"]
 	var sc: float = f["sc"]
 	var flip: bool = f["flip"]
+	var shade: Color = f["shade"]
 	var t: float = _time + i * 0.37
 	var tex: Texture2D
 	var ph: float = fposmod(_time + i * 1.1, STRIKE_PERIOD)
@@ -268,12 +306,12 @@ func _draw_fighter(f: Dictionary, rise: float) -> void:
 	var feet: Vector2 = (f["feet"] as Vector2) + Vector2(0.0, rise)
 	var ss: Vector2 = _shadow.get_size() * sc * 1.2
 	draw_texture_rect(_shadow, Rect2(feet - Vector2(ss.x * 0.5, ss.y * 0.55), ss), false,
-		Color(1, 1, 1, SHADOW_ALPHA * reveal))
+		Color(shade, SHADOW_ALPHA * reveal))
 	var cx: float = box.get_center().x
 	var ox: float = feet.x - ((CELL - cx) if flip else cx) * sc
 	var oy: float = feet.y - box.end.y * sc
 	draw_texture_rect(tex, Rect2(Vector2(ox, oy), Vector2(CELL * sc * (-1.0 if flip else 1.0), CELL * sc)), false,
-		Color(1, 1, 1, reveal))
+		Color(shade, reveal))
 	var frames: int = _ring.get_width() / _ring.get_height()
 	if strike and ph < float(frames) / RING_FPS:
 		var rs: float = _ring.get_height() * minf(sc / 3.0, 1.6)
