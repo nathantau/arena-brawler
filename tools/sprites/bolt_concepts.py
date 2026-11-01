@@ -481,5 +481,158 @@ def main2():
     out.convert("RGB").save(OUT_DIR / "bolt_c2.png")
 
 
+# --- round 3: centre-parted curtain hair, soft godspeed glow (no sticker rim), rounded electric eyes ---------------------------------
+PART_X = 35  # the parting, on the face's centre line
+HAIR3 = {
+    "short": dict(label="1  middle part, short curtains",
+                  left=[(21, 15), (34, 15), (33, 17), (29, 20), (26, 23), (24, 25), (21, 22)],
+                  right=[(37, 15), (49, 15), (49, 24), (46, 23), (44, 20), (41, 18), (38, 16)]),
+    "long": dict(label="2  middle part, long full curtains",
+                 left=[(21, 15), (34, 15), (32, 17), (28, 20), (25, 24), (24, 28), (21, 27)],
+                 right=[(37, 15), (49, 15), (50, 27), (47, 26), (46, 22), (43, 19), (39, 16)]),
+}
+GOD3_TOP = [(22, 17, -2, 6), (28, 24, -10, 6), (33, 32, -15, 6), (38, 39, -15, 6), (43, 47, -10, 6), (47, 52, -2, 5)]
+GOD3_BACK = [[(22, 16), (5, 8), (25, 27)]]
+GOD3_LEFT = [(21, 15), (35, 15), (34, 16), (31, 19), (29, 18), (27, 21), (24, 19), (22, 21)]
+GOD3_RIGHT = [(36, 15), (49, 15), (49, 21), (47, 19), (45, 21), (42, 19), (40, 18), (37, 16)]
+
+
+def hair_layer3(opt, a, god):
+    h = Canvas(g.CELL)
+    h.img.paste(a.img, (O, O))
+    h.px = h.img.load()
+    col = YELLOW if god else BROWN
+    h.part(lambda d, f: d.ellipse(tuple(v + O for v in HEAD2), f), col, shade=not god)
+    if god:
+        sp = Canvas(g.CELL)
+        for poly in GOD3_BACK:
+            sp.part(P(pts(poly)), YELLOW, shade=False)
+            sp.flat(P(pts([poly[1], poly[2], (poly[0][0] + 2, poly[0][1] + 6)])), ORANGE)
+        for t in GOD3_TOP:
+            spike2(sp, *t)
+        h.img.alpha_composite(sp.img)
+        h.px = h.img.load()
+        h.flat(lambda d, f: d.arc(tuple(v + O for v in HEAD2), 100, 175, f), ORANGE)
+    else:
+        h.flat(L(pts([(PART_X, 8), (PART_X, 14)]), 1), DARKER[col])  # the parting
+        h.flat(L(pts([(PART_X - 1, 9), (PART_X - 1, 13)]), 1), LIGHTER[col])  # lit hair beside it
+        h.flat(L(pts([(24, 10), (30, 8)]), 1), LIGHTER[col])
+        h.flat(L(pts([(41, 8), (45, 11)]), 1), LIGHTER[col])
+    return h
+
+
+def eyes3(b):
+    for x in g.EYES_X:
+        b.flat(lambda d, f, x=x: d.ellipse((x - 1, 22, x + 4, 27), f), OUTLINE)
+        b.flat(lambda d, f, x=x: d.ellipse((x, 23, x + 3, 26), f), TEAL)
+        b.flat(R((x + 1, 24, x + 2, 26)), TEAL_L)
+        b.flat(R((x, 23, x + 1, 23)), WHITE)  # bright highlight
+        b.dot(x + 1, 24, WHITE)
+        b.dot(x - 2, 25, TEAL_L)  # crackle at the corners
+        b.dot(x + 5, 24, TEAL_L)
+
+
+def face_layer3(opt, h, god):
+    b = Canvas()
+    b.img.paste(h.img.crop((O, O, O + 64, O + 64)))
+    b.px = b.img.load()
+    col = YELLOW if god else BROWN
+    b.part(RR(FACE, FACE_R), SKIN)
+    b.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)
+    left, right = (GOD3_LEFT, GOD3_RIGHT) if god else (HAIR3[opt]["left"], HAIR3[opt]["right"])
+    b.part(P(left), col, shade=False)
+    b.part(P(right), col, shade=False)
+    for x in range(21, 50):  # no seam where the curtains meet the hair mass
+        if b.px[x, 14][:3] == OUTLINE and b.px[x, 13][3] and b.px[x, 13][:3] != OUTLINE:
+            b.px[x, 14] = b.px[x, 13]
+    if not god:  # keep the parting reading down to the forehead
+        b.dot(PART_X, 14, DARKER[col])
+        b.dot(PART_X, 15, OUTLINE)
+    if god:
+        eyes3(b)
+        b.flat(L([(29, 20), (35, 22)], 1), OUTLINE)
+        b.flat(L([(40, 22), (46, 20)], 1), OUTLINE)
+    else:
+        big_eyes(b, g.EYES_Y, g.EYES_X, BROWN)
+    g.face(b, g.BLUSH, None)
+    if god:
+        b.flat(R((36, 29, 41, 31)), MAROON)
+        b.flat(R((36, 29, 41, 29)), WHITE)
+        b.dot(35, 28, OUTLINE)
+        b.dot(42, 28, OUTLINE)
+    else:
+        b.flat(L([(36, 30), (37, 31), (39, 31), (40, 30)], 1), MAROON)
+    return b
+
+
+def character3(opt, god):
+    v = VARIANTS["c"]
+    low = build_legs(v)
+    a = build_body(v)
+    h = hair_layer3(opt, a, god)
+    b = face_layer3(opt, h, god)
+    f = Image.new("RGBA", (g.CELL, g.CELL), (0, 0, 0, 0))
+    f.alpha_composite(low.img, (O, O))
+    up = h.img.copy()
+    up.alpha_composite(b.img, (O, O))
+    f.alpha_composite(up, (0, g.UPPER_DY))
+    return g.outline(f)
+
+
+BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+
+
+def glow3(f, reach=7):
+    """A soft glow behind him: ordered-dither layers (yellow near, orange far) thinning out with distance; no solid rim."""
+    sil = silhouette(f)
+    w, h = f.size
+    dist = [[0 if sil[y][x] else 99 for x in range(w)] for y in range(h)]
+    for d in range(1, reach + 1):
+        for y in range(h):
+            for x in range(w):
+                if dist[y][x] == 99 and any(0 <= x + dx < w and 0 <= y + dy < h and dist[y + dy][x + dx] == d - 1
+                                            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                    dist[y][x] = d
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    px = out.load()
+    for y in range(h):
+        for x in range(w):
+            d = dist[y][x]
+            if d in (0, 99) or d < 2:
+                continue  # leave the first px clear so his outline stays crisp
+            p = max(0.0, 1 - (d - 1) / reach) * 0.7
+            if BAYER[y % 4][x % 4] / 16 < p:
+                px[x, y] = (YELLOW if d <= 3 else ORANGE) + (255,)
+    return out
+
+
+def godspeed3(f):
+    c = Canvas(g.CELL)
+    rng = random.Random(9)
+    arcs_from(c, rng, [r for r in edge_roots(f, rng, 200, lo=24) if r[1] < 64], (48, 52), 7, (10, 20), forks=0.6, glow=YELLOW, tip=WHITE, jit=2.8)
+    out = Image.new("RGBA", f.size, (0, 0, 0, 0))
+    out.alpha_composite(glow3(f))
+    out.alpha_composite(f)
+    out.alpha_composite(c.img)
+    return out
+
+
+def main3():
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for opt in HAIR3:
+        pn, ps = look_panel(character3(opt, False)), look_panel(godspeed3(character3(opt, True)))
+        sheet = Image.new("RGBA", (pn.width + ps.width + 24, pn.height + 16), (24, 24, 32, 255))
+        sheet.alpha_composite(pn, (8, 8))
+        sheet.alpha_composite(ps, (pn.width + 16, 8))
+        rows.append(labelled(sheet, "C round 3, hair " + HAIR3[opt]["label"]))
+    out = Image.new("RGBA", (rows[0].width, sum(r.height for r in rows)), (24, 24, 32, 255))
+    y = 0
+    for r in rows:
+        out.alpha_composite(r, (0, y))
+        y += r.height
+    out.convert("RGB").save(OUT_DIR / "bolt_c3.png")
+
+
 if __name__ == "__main__":
-    main2() if "--c2" in sys.argv else main()
+    main3() if "--c3" in sys.argv else main2() if "--c2" in sys.argv else main()
