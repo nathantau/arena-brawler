@@ -4169,18 +4169,19 @@ def bolt_parts(step=None, t: int = 0, stage: int = 0):
                     up.px[fx, fy] = SKIN + (255,)
     up.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)  # chin shade
     s = SWAY[(t - 1) % 4]  # the curtains' ends drift a frame behind the bob
-    if stage >= 3:  # all of it stands up and away: a jagged anime fringe of small points high on the forehead, some forehead left bare
-        teeth = [(21, 14), (49, 14), (49, 15), (47, 15), (46, 18), (44, 15), (43, 18), (41, 15), (40, 18), (38, 15), (37, 18),
-                 (35, 15), (34, 18), (32, 15), (31, 18), (29, 15), (28, 18), (26, 15), (25, 18), (23, 15), (21, 15)]
-        up.part(P(teeth), col, shade=False)
+    if stage >= 3:  # all of it stands up and away: a jagged anime fringe of five uneven points, skin showing in the gaps
+        for x0, x1, ln in ((23, 28, 3), (29, 34, 4), (35, 40, 2), (41, 46, 3), (47, 49, 2)):  # base from x0..x1 on row 15, length
+            ln = max(1, round(ln * (1.0 if stage >= 4 else 0.6)))
+            up.part(P([(x0, 15), (x1, 15), ((x0 + x1) // 2, 15 + ln)]), col, shade=False)
+        up.part(P([(21, 13), (49, 13), (49, 15), (21, 15)]), col, shade=False, line=False)  # the band they hang from
         for yy in range(13, 19):  # no outline seam where the fringe sits on the yellow hair
             for xx in range(17, 53):
                 if up.px[xx, yy][:3] == OUTLINE and (
                         (up.px[xx - 1, yy][:3] == YELLOW and up.px[xx + 1, yy][:3] == YELLOW)
                         or (up.px[xx, yy - 1][:3] == YELLOW and up.px[xx, yy + 1][:3] == YELLOW)):
                     up.px[xx, yy] = YELLOW + (255,)
-        up.dot(37, 19, SKIN_D)  # a furrow between the brows
-        up.dot(37, 20, SKIN_D)
+        up.dot(37, 20, SKIN_D)  # a furrow between the brows
+        up.dot(37, 21, SKIN_D)
     else:  # the curtains lift and shorten as the power-up starts
         if stage == 0:
             left = [(21, 15), (34, 15), (33, 17), (29, 20), (26 + s, 23), (24 + s, 25), (21, 22)]
