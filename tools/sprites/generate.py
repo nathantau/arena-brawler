@@ -5949,92 +5949,234 @@ def app_icon(style: str | None = None) -> Image.Image:
 
 
 # --- Shadow: shadow-magic ninja (character, Umbral Shuriken, Shadow Step / Gloom Hound / Shadow Bind FX) --------------
-# A hooded figure of dark violet with a void for a face and two glowing eyes. His hood ends in a long curled tip
-# (CROWNS shadow_crown) and a tattered cloak streams behind him; wisps of shadow rise off him (AURAS shadow_aura).
+# A cocky street kid in an oversized black hoodie (hood up, spiky black fringe, gold chain, violet eyes), grinning shadow on the floor;
+# wisps of shadow rise off him (AURAS shadow_aura); hand-built hit / death (HITS / DEATHS).
 EYE_GLOW = (PINK_L, WHITE)
 
 
-def shadow_eyes(c: Canvas) -> None:
-    """Two slanted glowing slits in the void of the face (X eyes when knocked out)."""
-    y = EYES_Y - 1
-    for i, x in enumerate(EYES_X):
-        if KO:
-            x_eye(c, x, EYES_Y, PINK_L)
-            continue
-        rows = ((x, x + 1), (x, x + 1, x + 2, x + 3), (x + 2, x + 3)) if i == 0 else \
-            ((x + 2, x + 3), (x, x + 1, x + 2, x + 3), (x, x + 1))  # slanting down towards the nose
-        for r, xs in enumerate(rows):
-            for px_ in xs:
-                c.dot(px_, y + r, PINK_L if r != 1 else WHITE)
-        c.dot(x + (0 if i else 3), y + 1, PINK)  # the outer tip cools
-        for hx, hy in ((x - 1 + 5 * (1 - i), y + 2), (x + 1, y - 1), (x + 2, y + 3)):  # a faint glow round the slit
-            c.dot(hx, hy, VIOLET)
+def shadow_floor_grin(c: Canvas, t: int = 0) -> None:
+    """His own shadow on the floor, grinning up at you; the grin flickers (narrows) on one idle tick."""
+    c.flat(E((12, 57, 54, 64)), VIOLET_D)
+    c.flat(E((14, 58, 52, 63)), OUTLINE)
+    narrow = t % 4 == 3
+    up = -1 if narrow else 0
+    c.flat(L([(25, 61 + up), (29, 62 + up), (36, 62 + up), (40, 61 + up)], 1), PINK_L)  # grin
+    for x in (27, 38):
+        if narrow:
+            c.dot(x, 59, PINK_L)
+        else:
+            c.flat(R((x, 59, x + 1, 59)), PINK_L)  # eyes
 
 
-def shadow(step=None, t=0):
-    """Shadow: a hooded shadow-magic ninja. A tall curled hood tip (drawn above the art box: CROWNS shadow_crown), a face
-    that is only a void with two glowing slits for eyes, a dark violet cloak torn into streamers that stream behind him,
-    dark gloves, a lilac sash with a glowing rune on the chest and a glowing gem at the belt. Wisps rise off him
-    (shadow_aura)."""
+def shadow_legs(low: Canvas, step) -> None:
+    """Black joggers (gold stripe, elastic cuff) and chunky dark sneakers with gold soles; WALK_LEGS lift / plant the feet."""
+    for x, (dx, dy) in zip((23, 34), WALK_LEGS[step] if step is not None else ((0, 0), (0, 0))):
+        x += dx
+        low.part(RR((x - 1, 45 + dy, x + 6, 54 + dy), 1), OUTLINE)
+        low.flat(R((x - 1, 51 + dy, x + 6, 51 + dy)), SHADOW)
+        low.flat(L([(x + 1, 47 + dy), (x + 1, 49 + dy)], 1), SHADOW)
+        low.flat(L([(x + 5, 46 + dy), (x + 5, 50 + dy)], 1), YELLOW)
+        low.part(RR((x - 2, 53 + dy, x + 8, 57 + dy), 2), SHADOW)
+        low.flat(R((x - 1, 57 + dy, x + 7, 57 + dy)), YELLOW)
+        low.flat(R((x + 4, 54 + dy, x + 7, 54 + dy)), WHITE)
+        low.dot(x + 2, 54 + dy, STEEL_D)
+
+
+def shadow(step=None, t=0, pose=None, floor: bool = True):
+    """Shadow: a cocky street kid in an oversized black hoodie, hood up over messy black spiky hair. Human chibi face, half-lidded
+    violet eyes, a raised brow and a lopsided smirk with a dimple; a gold chain with a pendant and a gold stud; joggers and
+    sneakers with gold soles; his own shadow on the floor grins up at you. Secondary motion: the hood's drape, the hem, the
+    drawstrings, the chain and the hair tips all lag behind the body's bob; the sleeves swing against the legs on a walk.
+    `pose` = "hit" / "hit2" (flinching, chain flying up) or "ko" (knocked out, with KO)."""
+    walk = step is not None
+    bobs = WALK_BOB if walk else IDLE_BOB
+    cur = bobs[t % len(bobs)]
+    lag = lambda k: max(-2, min(2, bobs[(t - k) % len(bobs)] - cur))  # px a loosely hung part trails the body's bob
+    cyc = lambda k=0: math.sin(math.tau * (t - k) / 8)
+    fly = {"hit": 3, "hit2": 5, "ko": 4}.get(pose, 0)
     low = Canvas()
-    for x, dy in legs(low, VIOLET_D, SHADOW, step):
-        low.flat(R((x, 49 + dy, x + 5, 49 + dy)), VIOLET)  # leg wrap
-        low.flat(R((x, 52 + dy, x + 5, 52 + dy)), VIOLET)
-        low.dot(x + 1, 46 + dy, VIOLET)  # fold
-        low.dot(x + 4, 55 + dy, VIOLET_L)  # boot sheen
+    if floor:
+        shadow_floor_grin(low, t)
+    shadow_legs(low, step)
     up = Canvas()
-    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
-    sw = SWAY[t % 4]
-    # cloak: torn streamers trailing behind him (left), the longest in the wind
-    up.part(P([(22, 34), (14 - wave(0, 1), 37), (9 - wave(1, 1.5), 44 + sw), (5 - wave(2, 2), 51), (9 - wave(1, 1), 51),
-               (8 - wave(2, 1.5), 58), (13 - wave(2, 1), 55), (14 - wave(1, 1), 60), (18 - wave(1, 1), 54),
-               (21, 50)]), VIOLET_D)
-    up.flat(L([(18, 38), (11 - wave(1, 1.5), 46 + sw)], 1), VIOLET)  # a lit fold
-    up.flat(L([(16, 47), (10 - wave(2, 1.5), 55)], 1), VIOLET)
-    arm(up, ARM_X[0], VIOLET_D, SHADOW)
-    up.flat(R((ARM_X[0], 41, ARM_X[0] + 5, 41)), VIOLET)  # cuff
-    up.part(RR(BODY, 3), VIOLET_D)
-    up.flat(L([(23, 34), (41, 46)], 2), VIOLET)  # sash across the chest
-    up.flat(L([(23, 34), (40, 45)], 1), VIOLET_L)  # its lit edge
-    up.flat(L([(33, 38), (32, 40), (33, 42)], 1), PINK_L)  # a glowing crescent rune
-    up.dot(34, 40, WHITE)
-    up.flat(R((20, 46, 44, 47)), SHADOW)  # belt
-    up.flat(R((31, 46, 33, 47)), PINK)  # gem
-    up.dot(32, 46, WHITE)
-    up.flat(R((21, 33, 43, 34)), VIOLET)  # raised collar
-    up.dot(24, 37, VIOLET)  # cloth sheen
-    up.dot(24, 38, VIOLET)
-    arm(up, ARM_X[1], VIOLET_D, SHADOW)
-    up.flat(R((ARM_X[1], 41, ARM_X[1] + 5, 41)), VIOLET)
-    up.dot(ARM_X[1] + 2, 44, PINK_L)  # a spark of magic in the fingertips
-    # the hood: a lilac outer shell with a drape down the back
-    up.part(lambda d, f: (d.ellipse((16, 6, 48, 37), f), d.polygon(
-        [(16, 20), (12, 29 + wave(1, 1)), (15, 28), (14, 36), (19, 32), (21, 39), (24, 31), (24, 20)], f)), VIOLET)
-    up.flat(L([(22, 9), (31, 7), (38, 8)], 1), VIOLET_L)  # sheen
-    up.flat(L([(17, 22), (16, 27)], 1), VIOLET_L)
-    up.part(RR(FACE, FACE_R), VIOLET_D)  # the hood's opening
-    up.flat(RR((FACE[0] + 1, FACE[1] + 3, FACE[2] - 1, FACE[3] - 1), FACE_R - 2), OUTLINE)  # and the void in it
-    up.part(P([(FACE[0], 14), (FACE[2] + 1, 14), (FACE[2] + 1, 18), (43, 19), (39, 21), (35, 19), (31, 21), (27, 19),
-               (FACE[0], 18)]), VIOLET_D, shade=False)  # the hood's brow, a V over the eyes
-    up.flat(L([(FACE[0] + 2, 14), (FACE[2] - 2, 14)], 1), VIOLET_L)  # its lit rim
-    shadow_eyes(up)
-    if not KO:
-        up.flat(L([(35, 31), (38, 31)], 1), VIOLET_D)  # a sliver of a grin
-        up.dot(39, 30, VIOLET_D)
+    a0, a1 = (round(-2.4 * cyc()), round(2.4 * cyc())) if walk else (0, 0)
+    hs = round(3 * cyc(1)) if walk else SWAY[(t - 1) % 4]  # the hem swings after the stride
+    sd = round(1.5 * cyc(2)) if walk else SWAY[(t - 2) % 4]  # drawstrings swing a little later
+    if fly:
+        a0, a1, hs, sd = -2, 2, 2, -2
+    # back sleeve, then torso: loose, soft, hanging past the hips
+    arm(up, ARM_X[0] + a0, SHADOW, SHADOW)
+    up.part(RR((19, 32, 45, 49), 4), SHADOW)
+    up.flat(L([(22, 34), (21, 40)], 1), STEEL_D)  # folds: lit one on the left, dark ones on the right
+    up.flat(L([(22, 36), (21, 43)], 1), STEEL_D)
+    up.flat(L([(40, 37), (41, 42)], 1), OUTLINE)
+    up.flat(L([(37, 44), (38, 46)], 1), OUTLINE)
+    # ribbed hem band swinging after the body
+    up.part(RR((19 + hs, 46, 45 + hs, 50), 2), OUTLINE)
+    up.flat(L([(20 + hs, 46), (44 + hs, 46)], 1), STEEL_D)
+    for x in range(22, 44, 3):
+        up.flat(L([(x + hs, 48), (x + hs, 49)], 1), SHADOW)
+    # kangaroo pocket with both fists in it
+    up.flat(P([(23, 43), (41, 43), (43, 48), (21, 48)]), OUTLINE)
+    up.flat(L([(23, 43), (41, 43)], 1), STEEL_D)
+    up.flat(L([(23, 43), (21, 48)], 1), STEEL_D)
+    up.flat(L([(41, 43), (43, 48)], 1), SHADOW)
+    for x in (27, 35):
+        up.part(E((x, 42, x + 5, 47)), SHADOW)
+        up.flat(L([(x + 1, 43), (x + 3, 43)], 1), STEEL_D)
+    arm(up, ARM_X[1] + a1, SHADOW, SHADOW)
+    for x in (ARM_X[0] + a0, ARM_X[1] + a1):  # ribbed sleeve cuffs
+        up.flat(R((x, 41, x + 5, 42)), OUTLINE)
+        up.flat(R((x, 41, x + 5, 41)), STEEL_D)
+    # drawstrings with aglets, swinging at different lags
+    up.flat(L([(26, 35), (25 + sd, 41 + lag(2) - fly // 2)], 1), YELLOW)
+    up.flat(L([(33, 35), (34 - sd, 40 + lag(3) - fly // 2)], 1), YELLOW)
+    up.dot(25 + sd, 42 + lag(2) - fly // 2, WHITE)
+    up.dot(34 - sd, 41 + lag(3) - fly // 2, WHITE)
+    # gold chain and pendant: bounce late (and fly up when he is hit)
+    c = lag(1) - fly
+    p = lag(2) - fly * 2
+    up.flat(L([(23, 33), (25, 38 + round(c * 0.6)), (30, 41 + c), (35, 41 + c), (40, 38 + round(c * 0.6)), (42, 33)], 1), YELLOW)
+    up.dot(25, 38 + round(c * 0.6), WHITE)
+    up.flat(L([(32, 41 + c), (32, 42 + p)], 1), YELLOW)
+    up.flat(R((31, 42 + p, 33, 44 + p)), YELLOW)
+    up.dot(31, 42 + p, WHITE)
+    up.dot(32, 44 + p, ORANGE)
+    # the head: hood shell (a lighter charcoal than the hair, lit rim), a drape that trails, face, fringe
+    hd = Canvas()
+    drape = -3 if fly else (-(1 + round(1.4 * cyc(1))) if walk else -round(HAIR_FLOW[(t - 1) % 4] * 0.5))
+    dl = lag(2)
+    hd.part(lambda d, f: (d.ellipse((14, 4, 50, 38), f), d.ellipse((10 + drape, 17 + dl, 30 + drape, 40 + dl), f)), SHADOW)
+    hd.flat(L([(20, 9), (30, 5), (40, 6), (46, 10)], 1), STEEL_D)  # lit crown
+    hd.flat(L([(13 + drape, 25 + dl), (12 + drape, 31 + dl), (15 + drape, 36 + dl)], 1), STEEL_D)  # lit drape
+    hd.flat(L([(15, 15), (13, 21)], 1), STEEL_D)
+    hd.flat(L([(18 + drape, 36 + dl), (23, 38)], 1), OUTLINE)  # fold where the drape meets the shoulder
+    hd.flat(RR((FACE[0] - 3, FACE[1] - 4, FACE[2] + 2, FACE[3] + 1), FACE_R + 3), STEEL_D)  # lit lip of the opening
+    hd.flat(RR((FACE[0] - 2, FACE[1] - 3, FACE[2] + 1, FACE[3] + 1), FACE_R + 2), OUTLINE)  # the opening, in shadow
+    hd.part(RR(FACE, FACE_R), SKIN)
+    hd.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)  # chin shade
+    hd.flat(L([(28, 16), (33, 15)], 1), SKIN)  # forehead sheen
+    ty = lag(2)  # the fringe's tips trail the bob
+    hd.part(P([(23, 25), (23, 16), (26, 13), (26, 7 + ty), (30, 12), (33, 5 + ty), (36, 13), (40, 8 + ty), (41, 14), (45, 12 + ty),
+               (46, 17), (45, 22), (43, 18), (41, 20), (38, 18), (34, 20), (30, 18), (26, 20), (25, 27)]), OUTLINE, shade=False)
+    hd.flat(L([(26, 9 + ty), (27, 11)], 1), STEEL_D)
+    hd.flat(L([(33, 7 + ty), (34, 10)], 1), STEEL_D)
+    hd.flat(L([(40, 10 + ty), (40, 12)], 1), STEEL_D)
+    hd.flat(L([(29, 14), (33, 16)], 1), SHADOW)
+    hd.part(P([(23, 24), (21, 31), (25, 29)]), OUTLINE, shade=False)  # sideburn tuft
+    for x in (30, 40):  # brows: the left one lifted, the right sly
+        if KO:
+            hd.flat(L([(x, 19), (x + 5, 19)], 1), OUTLINE)
+        elif x == 30:
+            hd.flat(L([(x, 19), (x + 2, 17), (x + 5, 17)], 1), OUTLINE)
+        else:
+            hd.flat(L([(x, 19), (x + 5, 20)], 1), OUTLINE)
+    for x in (31, 41):  # eyes
+        if KO:
+            x_eye(hd, x, 22, OUTLINE)
+        elif fly:  # squeezed shut
+            hd.flat(L([(x - 1, 22 if x == 31 else 26), (x + 2, 24), (x - 1, 26 if x == 31 else 22)], 1), OUTLINE)
+        else:  # half-lidded violet
+            hd.flat(R((x, 23, x + 3, 26)), OUTLINE)
+            hd.flat(R((x + 1, 25, x + 2, 25)), VIOLET_L)
+            hd.flat(R((x + 1, 26, x + 2, 26)), VIOLET)
+            hd.dot(x, 24, WHITE)
+            hd.dot(x + 2, 25, PINK_L)
+            hd.flat(R((x - 1, 22, x + 4, 22)), SKIN_D)  # the heavy lid
+            hd.flat(R((x, 22, x + 3, 22)), OUTLINE)
+    if KO:
+        hd.flat(L([(35, 31), (39, 31)], 1), OUTLINE)
+        hd.flat(R((37, 32, 38, 33)), RED)  # tongue lolling out
+        hd.dot(37, 34, MAROON)
+    elif fly:
+        hd.flat(R((36, 30, 39, 32)), OUTLINE)  # an "ow"
+        hd.flat(R((37, 31, 38, 32)), MAROON)
+    else:  # a short lopsided smirk: the far corner lifted, a tiny dimple beside it
+        hd.flat(L([(35, 31), (37, 32), (39, 31)], 1), OUTLINE)
+        hd.dot(40, 30, OUTLINE)
+        hd.dot(41, 29, SKIN_D)
+        hd.dot(41, 31, SKIN_D)
+    hd.flat(R((BLUSH[0], 29, BLUSH[0] + 1, 29)), ORANGE)
+    hd.flat(R((45, 29, 46, 29)), ORANGE)
+    hd.flat(R((21, 30, 22, 31)), YELLOW)  # gold stud
+    hd.dot(21, 30, WHITE)
+    hx = (0, 0, 1, 0)[t % 4] if not walk else (2 if cur >= 1 else 1)  # a head tilt on one idle tick / a lean when walking
+    hy = max(-1, min(1, lag(1)))
+    up.img.alpha_composite(outline(hd.img), (hx, hy))
     return low, up
 
 
-def shadow_crown(t: int, dy: int) -> Canvas:
-    """The hood's tip: a long point rising above the head and curling back, its end tattering into a wisp that sways."""
+def _shadow_raw(t: int = 0, pose=None, floor: bool = True, aura: bool = True) -> Image.Image:
+    """His frame (CELL px) before the outline pass."""
+    low, up = shadow(None, t, pose, floor)
+    f = shadow_aura(t).img if aura else Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    f.alpha_composite(low.img)
+    f.alpha_composite(up.img, (0, UPPER_DY))
+    return cell(f)
+
+
+def shadow_hit_frames(idle0: Image.Image) -> list[Image.Image]:
+    """Hit flash (white, squashed wide and low as the blow lands, the chain flying up) then one step lighter, stretching
+    back up with the chain higher still."""
+    a = outline(_squash(_shadow_raw(pose="hit"), 1.1, 0.88))
+    b = outline(_squash(_shadow_raw(pose="hit2"), 0.96, 1.03))
+    return [recolor(a, lambda _c: WHITE), recolor(b, LIGHTER.__getitem__)]
+
+
+def _shadow_puddle(img: Image.Image, cx: int, cy: int, rx: int, fade: float = 0.0) -> Image.Image:
+    """The puddle he melts into (drawn under the body), grinning; `fade` dithers the puddle away but never the grin."""
     c = Canvas(CELL)
-    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
-    at = lambda pts: [(PAD + x, PAD + UPPER_DY + dy + y) for x, y in pts]
-    c.part(P(at([(34, 12), (33, 5), (29, -1), (22, -7), (13, -11 + wave(1, 1)), (4 - wave(2, 1), -10), (-2 - wave(2, 2), -7),
-                 (6 - wave(2, 1), -6), (13, -4), (19, 0), (22, 6), (21, 12)])), VIOLET)
-    c.flat(L(at([(31, 6), (28, 0), (22, -5), (13, -9 + wave(1, 1))]), 1), VIOLET_L)  # lit edge
-    spark = at([(-1, -7), (3, -9), (1, -8), (5, -9)])[t % 4]
-    sdot(c, spark[0], spark[1], PINK_L)
-    return c
+    ry = max(3, round(rx * 0.3))
+    c.flat(E((cx - rx, cy - ry, cx + rx, cy + ry)), VIOLET_D)
+    c.flat(E((cx - rx + 2, cy - ry + 1, cx + rx - 2, cy + ry - 1)), OUTLINE)
+    c.flat(L([(cx - round(rx * 0.7), cy - round(ry * 0.5)), (cx - rx // 3, cy - ry + 1)], 1), VIOLET)  # lit rim
+    for y in range(CELL):
+        for x in range(CELL):
+            if BAYER[y % 4][x % 4] / 16 < fade:
+                c.px[x, y] = (0, 0, 0, 0)
+    s = max(1, rx // 14)
+    c.flat(L([(cx - 7 * s, cy + 1), (cx - 3 * s, cy + 2), (cx + 4 * s, cy + 2), (cx + 8 * s, cy + 1)], 1), PINK_L)
+    for x in (cx - 10 * s, cx + 9 * s):
+        c.flat(R((x, cy - 2, x + 1, cy - 2)), PINK_L)
+    out = img.copy()
+    out.alpha_composite(c.img)
+    return out
+
+
+def shadow_death_frames() -> list[Image.Image]:
+    """8 CELL frames: white flash, pops up, flips over backwards in the air, lands squashed and melts into his own shadow,
+    which is left grinning; the grin is the last thing to fade."""
+    global KO
+    KO = True
+    try:
+        raw = _shadow_raw(pose="ko", floor=False, aura=False)
+    finally:
+        KO = False
+    ground = raw.getbbox()[3]
+    cx, cy = CELL // 2, ground + 1
+
+    def body(angle, sx=1.0, sy=1.0, lift=0, fade=0.0):
+        r = _squash(raw, sx, sy)
+        r = r.rotate(angle, Image.NEAREST, center=(CELL // 2, ground))
+        left, top, right, low_ = r.getbbox()
+        dx = (CELL - left - right) // 2 if angle else 0
+        dy = ground - low_ - lift
+        f = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        f.alpha_composite(r.crop((-dx, -dy, CELL - dx, CELL - dy)))
+        for y in range(CELL):
+            for x in range(CELL):
+                if BAYER[y % 4][x % 4] / 16 < fade:
+                    f.putpixel((x, y), (0, 0, 0, 0))
+        return f
+
+    def frame(img, rx, fade=0.0):
+        return outline(_shadow_puddle(img, cx, cy, rx, fade))
+
+    empty = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    flash = frame(body(0, 1.1, 0.88), 21)
+    return [recolor(flash, lambda _c: WHITE), frame(body(14, 0.95, 1.04, 4), 21), frame(body(100, 1.0, 1.0, 9), 21),
+            frame(body(205, 1.0, 1.0, 7), 21), frame(body(350, 1.12, 0.86, 0), 22),
+            frame(body(0, 1.25, 0.6, 0, 0.15), 26), frame(body(0, 1.4, 0.3, 0, 0.5), 30), frame(empty, 30, 0.45)]
 
 
 SHADOW_WISPS = ((9, 38), (20, 28), (50, 34), (55, 22), (13, 20), (52, 48), (8, 52))
@@ -6110,7 +6252,8 @@ ICONS["shadow_bind"] = lambda c: (c.flat(L([(0, 11), (5, 9), (8, 5), (12, 1)], 2
                                   c.flat(L([(9, 3), (11, 1)], 1), PINK_L))
 
 CHARACTERS["shadow"] = shadow
-CROWNS["shadow"] = shadow_crown
+HITS["shadow"] = shadow_hit_frames
+DEATHS["shadow"] = shadow_death_frames
 AURAS["shadow"] = shadow_aura
 WEAPONS["shadow_shuriken"] = umbral_shuriken
 WEAPON_ANIMS["shadow_shuriken"] = umbral_shuriken
@@ -6154,8 +6297,8 @@ def dither_out(img: Image.Image, frac: float, flip: bool = False) -> Image.Image
 
 @functools.lru_cache(maxsize=None)
 def shadow_idle() -> Image.Image:
-    """His first idle frame without the wisps (CELL px): the body the sink / rise strips squash into the floor."""
-    return frames(shadow, None, shadow_crown)[0]
+    """His first idle frame without the wisps and the floor shadow (CELL px): the body the sink / rise strips squash into the floor."""
+    return outline(_shadow_raw(0, None, False, False))
 
 
 def puddle_shape(c: Canvas, cx: float, cy: float, rx: float, k: float = 0.0, eyes: bool = True, seed: int = 3) -> None:

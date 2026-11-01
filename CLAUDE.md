@@ -432,16 +432,20 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   v2 polish (2026-11-01, after merging Shadow): moss patch is ~25% smaller (`MOSS_R` 35 art px / `bloom_radius` 52), darker, dithered rim + specks so the floor shows through, swaying grass tufts and tiny flowers drawn bright over it (`moss_frame`, `_moss_holes`); Bark Skin plates hug her torso and arms (no brow plate); Leaf Gust is a dithered wedge with crisp edges, curved wind streaks and big tumbling leaves (`gust_frame`); Verdant Bloom shows a green floating "+N" (`Player.healed` from `SpecialFx`, seen from the synced hp jumping inside the patch, -> `Effects.heal_number`).
   Fighters sim (`mode=fighters`, 20 games per row, seeds 1 / 3, win%): Eden 45 / 38 (first try with a weaker sling, 16 dmg, 0.6 s, 110 hp: 35), Bolt 50 / 58, Shade 55 / 45, Flint 43 / 40, Sakura 50 / 58, Apex 70 / 58. Eden deals little but takes a lot; the sim bots don't dodge and rarely time Bark/Bloom, so she is likely a bit better with a human. Note the sim ignores `slice=` (all slices ran the full set).
 - **Shadow + Shadow Step / Gloom Hound / Shadow Bind** (2026-11-01, `shadow`): new fighter `shadow` (in rotation; 90 hp, 40 armor, 275 speed, tags shadow/light/arcane).
-  Look: a hooded shadow-magic ninja, nothing but a void with two glowing slit eyes under a violet hood whose long tip curls back above his head
-  (generate.py `shadow_crown`, in `CROWNS`), a torn dark-violet cloak streaming behind him, lilac sash with a glowing rune, belt gem, dark gloves;
-  thin wisps of shadow rise off him (`shadow_aura`, period 4: wisps 12 px apart rising 3 px a tick). **Palette grew by three violets** (`VIOLET_D/VIOLET/VIOLET_L`
-  in palette.py, 21 colours now, ramps added) because the brief wanted violet/black: everything else still draws from the shared palette.
+  Look (redesigned 2026-11-01, variant I): a cocky street kid in an oversized black hoodie, hood up (a lighter charcoal shell with a lit rim, round drape behind),
+  messy black spiky fringe poking out of the opening, human chibi face with half-lidded violet eyes, a raised brow and a short lopsided smirk with a dimple, gold chain with
+  a pendant, gold stud, ribbed cuffs and hem, fists in the kangaroo pocket, black joggers with a gold stripe, dark sneakers with gold soles, and his own violet shadow
+  on the floor grinning up (drawn into every frame; the grin flickers). No crown any more (`CROWNS["shadow"]` removed). Secondary motion with per-part lag in generate.py `shadow()`:
+  hood drape, hem, drawstrings, chain/pendant, fringe tips trail the body bob; sleeves swing against the legs on a walk; head tilt / lean. Hand-built hit (`HITS`: squash flash, chain flying up)
+  and death (`DEATHS`: flips over backwards and melts into the grinning shadow puddle, the grin fades last). `shadow_aura` (period 4) still draws the wisps. Soles stay on row 57 (`SH_FEET`)
+  so Shadow Step's sink/puddle/rise line up. Concept script + previews: `tools/sprites/shadow_concepts.py` (`--final` writes the final sheet / in-game previews).
+  **Palette**: no new colours (violets from the first version are still used by FX). Step bug fix: see Shadow Step below (he slides under walls).
   **Umbral Shuriken** (signature weapon `shadow_shuriken`, ordinary projectile kind): 9 dmg every 0.3 s, 30 energy, 820 px/s, range 460, `homing` 1.2, one wall bounce;
   held art is a spinning star (WEAPON_ANIMS, quarter turn a frame). His three signature specials are all tagged `shadow` (his alone): the first, Shadow Step,
   is `signature_skill`; loading room lists all three. New `SkillData.Kind` values start at 30 (`STEP = 30, HOUND = 31, BIND = 32`) so parallel fighter work
   doesn't collide; new `Player` key offsets `STEP_SEQ_OFFSET` (1 << 31) and `HOUND_SEQ_OFFSET` (1 << 32); new `StateField.STUN_REMAINING`.
   - **Shadow Step** (`shadow_step`, STEP, cd 8 s, `duration` 1.2 s): like Petal Drift's glide but a puddle: i-frames the whole time (`try_activate`), `Player.is_hidden()`
-    (auto-aim / bots skip him), can't fire, `step_speed_scale` 1.5x, steerable, gliding along the press direction without a stick, walls still stop him. When it ends
+    (auto-aim / bots skip him), can't fire, `step_speed_scale` 1.5x, steerable, gliding along the press direction without a stick; he slides UNDER walls and crates (2026-11-01 fix: `collision_mask = 0` while stepping, clamped to the arena, `Player._surface` moves him to the nearest free spot when it ends; before, walls stopped him dead, which read as "can't travel through his shadow"). When it ends
     `Player._shadow_tick` calls `ProjectilePool.strike` on where he stands: `step_radius` 80 (needs sight), `step_damage` 24, `step_knockback` 200, authoritative,
     replay-safe, keyed `seq + STEP_SEQ_OFFSET`. Art: `shadow_sink` (10 frames of his body submerging, played backwards to rise), floor-layer `shadow_puddle_in/_out`
     (10) + `shadow_puddle` loop (8, glowing eyes, ripples, wisps), `shadow_burst` (14 frames of spikes erupting out to the strike radius) + `shadow_burst_floor`.

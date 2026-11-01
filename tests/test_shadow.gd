@@ -128,7 +128,7 @@ func test_step_is_untargetable_fast_and_cannot_fire() -> void:
 	assert_eq(foe.stats.hp, foe.stats.max_hp)
 
 
-func test_step_keeps_gliding_without_input_and_walls_still_stop_him() -> void:
+func test_step_keeps_gliding_and_slides_under_walls_then_surfaces_clear() -> void:
 	var w: Array = _world()
 	var world: Node2D = w[0]
 	var body := StaticBody2D.new()
@@ -147,7 +147,15 @@ func test_step_keeps_gliding_without_input_and_walls_still_stop_him() -> void:
 	_run(p, 60)
 	assert_gt(p.global_position.x, 200.0, "glides on its own")
 	_run(p, 90)
-	assert_lt(p.global_position.x, 400.0, "the wall stops him")
+	assert_gt(p.global_position.x, 410.0, "the puddle slides under the wall")
+	var feet := PhysicsShapeQueryParameters2D.new()
+	feet.collision_mask = Constants.LAYER_WALL_FEET
+	var circle := CircleShape2D.new()
+	circle.radius = Constants.PLAYER_RADIUS
+	feet.shape = circle
+	feet.transform = Transform2D(0.0, p.global_position)
+	assert_true(p.get_world_2d().direct_space_state.intersect_shape(feet, 1).is_empty(), "and comes up on free floor")
+	assert_eq(p.collision_mask, Constants.LAYER_WALL_FEET, "walls solid again")
 
 
 func test_step_strikes_where_he_emerges_only() -> void:
@@ -474,3 +482,16 @@ func test_bots_rotate_through_his_whole_kit_and_leave_others_alone() -> void:
 		flicker.skills[1].cooldown_remaining = 5.0
 		other._rotate_kit(flicker)
 	assert_eq(flicker.skills[1].data.id, &"shadow_clones", "other fighters keep their pick")
+
+
+func test_step_actually_travels_with_move_input() -> void:
+	var w: Array = _world()
+	var p: Player = _shadow(w[0], w[1], &"shadow_step")
+	await wait_physics_frames(2)
+	_press(p, Vector2.RIGHT, Vector2.RIGHT)
+	var start: float = p.global_position.x
+	_run(p, 30, Vector2.RIGHT)
+	assert_gt(p.global_position.x - start, 100.0, "the puddle moves")
+	var mid: float = p.global_position.x
+	_run(p, 30, Vector2.DOWN)
+	assert_gt(p.global_position.y, 300.0 + 50.0, "and steers")
