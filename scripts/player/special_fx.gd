@@ -51,6 +51,14 @@ const SAPLING_IDLE_FPS: float = 10.0
 const SAPLING_FIRE_FPS: float = 32.0
 const CRACK_ART: Texture2D = preload(FX_DIR + "eruption_crack.png")
 const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
+## Ease-in times (s) so floor marks and loops don't pop on, and the ward's floor glow colour.
+const CRACK_EASE_IN: float = 0.15
+const RING_EASE_IN: float = 0.1
+const SMOKE_EASE_IN: float = 0.12
+const OD_DOUBLE_ALPHA: float = 0.6  # a second, out-of-step crackle frame: the 1 px arcs were too faint alone
+const WARD_GLOW: Color = Color(1.0, 0.72, 0.86)
+const WARD_GLOW_ALPHA: float = 0.14
+const WARD_RING_ALPHA: float = 0.45
 const CRACK_FPS: float = 24.0  # 16-frame loop (was 8 at 12)
 ## The crack's ring of embers is drawn for this blast radius (generate.py ERUPT_R); other radii scale it.
 const ERUPTION_ART_RADIUS: float = 80.0
@@ -575,7 +583,9 @@ func _draw_overdrive() -> void:
 	if _od_t < 0.0:
 		return
 	var n: int = OD_ART.get_width() / OD_ART.get_height()
-	_draw_frame(OD_ART, int(_od_t * OD_FPS) % n, OD_ART.get_height(), _od_at, Constants.SPRITE_SCALE)
+	var a: float = clampf(_od_t / RING_EASE_IN, 0.0, 1.0)
+	_draw_frame(OD_ART, int(_od_t * OD_FPS) % n, OD_ART.get_height(), _od_at, Constants.SPRITE_SCALE, a)
+	_draw_frame(OD_ART, (int(_od_t * OD_FPS) + 3) % n, OD_ART.get_height(), _od_at, Constants.SPRITE_SCALE, a * OD_DOUBLE_ALPHA)
 
 
 func _sync_drift(p: Player) -> void:
@@ -811,7 +821,7 @@ func _draw() -> void:
 		var k: float = _smoke.data.smoke_radius / SMOKE_ART_RADIUS * swell
 		var fade: float = clampf(_smoke.active_remaining / FADE_TIME, 0.0, 1.0)
 		_draw_frame(SMOKE_ART, frame, SMOKE_ART.get_height(), _smoke.anchor, Constants.SPRITE_SCALE * k,
-			SMOKE_ALPHA * fade)
+			SMOKE_ALPHA * fade * clampf(_smoke_t / SMOKE_EASE_IN, 0.0, 1.0))
 
 
 func _draw_floor() -> void:
@@ -819,11 +829,17 @@ func _draw_floor() -> void:
 	if _crack != null:
 		var n: int = CRACK_ART.get_width() / CRACK_ART.get_height()
 		var k: float = _crack.data.eruption_blast.splash_radius / ERUPTION_ART_RADIUS
-		_draw_frame(CRACK_ART, int(_crack.elapsed() * CRACK_FPS) % n, CRACK_ART.get_height(), _crack.anchor,
-			px * k, 1.0, _floor)
+		var ct: float = _crack.elapsed()
+		var heat: float = clampf(ct / maxf(_crack.data.duration, 0.01), 0.0, 1.0)
+		_floor.modulate = Color(1.0 + 0.35 * heat, 1.0 + 0.1 * heat, 1.0, 1.0)  # glows hotter as it nears the blast
+		_draw_frame(CRACK_ART, int(ct * CRACK_FPS) % n, CRACK_ART.get_height(), _crack.anchor,
+			px * k * lerpf(0.9, 1.0, minf(ct / CRACK_EASE_IN, 1.0)), clampf(ct / CRACK_EASE_IN, 0.0, 1.0), _floor)
+	else:
+		_floor.modulate = Color.WHITE
 	if _whirl_t >= 0.0:
 		_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
-			WHIRL_RING_ART.get_height(), _whirl_at, px * _whirl_radius / WHIRL_ART_RADIUS, 1.0, _floor)
+			WHIRL_RING_ART.get_height(), _whirl_at, px * _whirl_radius / WHIRL_ART_RADIUS,
+			clampf(_whirl_t / RING_EASE_IN, 0.0, 1.0), _floor)
 	if _storm != null:  # the cloud's shadow and rain splashes, same frames as the cloud itself
 		var t: float = _storm.elapsed()
 		var centre: Vector2 = _storm_art_centre(_storm.anchor)
@@ -832,6 +848,10 @@ func _draw_floor() -> void:
 				STORM_SIZE, centre, px, 1.0, _floor)
 		else:
 			_draw_frame(STORM_FLOOR_ART, int(t * STORM_FPS) % STORM_LOOP_COUNT, STORM_SIZE, centre, px, 1.0, _floor)
+	if _ward_t >= 0.0:  # a soft pool of petal light on the floor so the ward's reach reads under the players
+		var glow: float = clampf(_ward_t / WARD_OPEN_TIME, 0.0, 1.0)
+		_floor.draw_circle(_ward_at, _ward_radius, Color(WARD_GLOW, WARD_GLOW_ALPHA * glow))
+		_floor.draw_arc(_ward_at, _ward_radius, 0.0, TAU, 48, Color(WARD_GLOW, WARD_RING_ALPHA * glow), 2.0)
 	_draw_overdrive_floor()
 	for pf: Poof in _poofs:
 		if pf.on_floor:
@@ -914,7 +934,8 @@ func _draw_snare() -> void:
 	var n: int = SNARE_ART.get_width() / SNARE_ART.get_height()
 	var px: float = Constants.SPRITE_SCALE
 	var up: float = (SNARE_ART.get_height() * 0.5 - SNARE_BASE_Y) * px
-	_draw_frame(SNARE_ART, int(_time * SNARE_FPS) % n, SNARE_ART.get_height(), _snare_at + Vector2(0.0, up), px)
+	_draw_frame(SNARE_ART, int(_time * SNARE_FPS) % n, SNARE_ART.get_height(), _snare_at + Vector2(0.0, up), px,
+		clampf(_snare_left / FADE_TIME, 0.0, 1.0))
 
 
 ## Poofs play their strip once.
