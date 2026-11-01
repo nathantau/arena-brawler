@@ -768,7 +768,7 @@ def flint(step=None, t=0, heat=0.0):
     mid_y = (HEAD[1] + HEAD[3]) // 2
     up.part(lambda d, f: (d.rounded_rectangle((HEAD[0], HEAD[1], HEAD[2], mid_y + 2), 4, f), d.ellipse(HEAD, f),
                           d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)
-    up.part(E((MOUTH[0] - 6, 26, MOUTH[0] + 6, 34)), YELLOW, line=False)  # hot glow around the mouth
+    up.part(E((MOUTH[0] - 5, 29, MOUTH[0] + 5, 35)), YELLOW, line=False)  # hot glow round the mouth, clear of the eyes
     if hot and not KO:  # blazing eyes: white-hot with flame trailing back off them
         for x in EYES_X:
             up.flat(R((x, EYES_Y, x + 3, EYES_Y + 5)), YELLOW)  # same eye shape, lit from inside
@@ -781,7 +781,8 @@ def flint(step=None, t=0, heat=0.0):
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
     # Tongues licking up from the forehead; orange rim so no red stripe runs across the face.
     mid = (HEAD[0] + HEAD[2]) // 2
-    flame(up, mid - 13, mid + 13, FACE[1] + 5, 8, t + 2, tongues=5, line=False, rim=ORANGE)
+    if hot:  # (only Inferno: on the idle face the yellow tongues dripped down over the eyes)
+        flame(up, mid - 13, mid + 13, FACE[1] + 5, 8, t + 2, tongues=5, line=False, rim=ORANGE)
     return low, up
 
 
@@ -818,7 +819,7 @@ def flint_crown(t: int, dy: int, heat: float = 0.0) -> Canvas:
         ph = (t + k) % 4
         ex = mid - hw + 3 + (k * 11 + 5) % (2 * hw - 5) + SWAY[(t + k) % 4]
         c.dot(ex, top + 6 - 4 * ph - (k % 2) * 3 - round(heat * 3), (YELLOW, ORANGE, RED, MAROON)[ph])
-    return c
+    return fill_notches(c)  # no dark specks in the tufts' valleys
 
 
 def flint_embers(i: int, heat: float = 0.0) -> Canvas:
