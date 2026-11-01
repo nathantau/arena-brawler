@@ -10,6 +10,10 @@ var auto_target: Player
 var auto_aim_point: Vector2 = Vector2.ZERO
 ## Dev/test: drive in circles and fire continuously (--autopilot).
 var autopilot: bool = false
+## Test only: with the autopilot, press the special every this many frames (0 = only with an enemy in sight, the default).
+var special_every: int = 0
+## Test only (--passive): every autopilot stands still and never fires.
+static var passive_test: bool = false
 ## True while the player is holding fire (touch, mouse or key); the HUD uses it for the "out of energy" flash.
 var fire_held: bool = false
 
@@ -93,9 +97,17 @@ func _is_visible(i: int) -> bool:
 
 ## Circle-strafe and fire when a target is visible, otherwise walk toward the nearest enemy.
 func _drive_autopilot(player: Player) -> void:
+	if passive_test:
+		_frame.fire = false
+		_frame.skill = false
+		_frame.special = false
+		_frame.move_vec = Vector2.ZERO
+		return
 	_frame.fire = auto_target != null
 	_frame.skill = auto_target != null and _frame.seq % Constants.AUTOPILOT_SKILL_EVERY_FRAMES == 0
 	_frame.special = auto_target != null and _frame.seq % Constants.AUTOPILOT_SPECIAL_EVERY_FRAMES == 0
+	if special_every > 0:
+		_frame.special = _frame.seq % special_every == 0
 	if auto_target != null:
 		_frame.move_vec = Vector2.RIGHT.rotated(_frame.seq * Constants.AUTOPILOT_TURN_PER_FRAME)
 		return

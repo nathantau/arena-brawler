@@ -726,6 +726,7 @@ def flint(step=None, t=0, heat=0.0):
         low.part(E((32 - rx, 49 - ry, 32 + rx, 49 + ry)), RED, shade=False, line=False)
         flame(low, 7, 57, 50, round(34 * heat), t, tongues=7, line=False)
         flame(low, 14, 50, 50, round(46 * heat), t + 1, tongues=5, line=False)
+        flint_ragged_base(low, t, heat)
     for k, (x, dy) in enumerate(legs(low, ORANGE if hot else RED, RED, step)):  # molten legs and feet, on fire too
         low.flat(R((x + 2, 46 + dy, x + 3, 52 + dy)), YELLOW if hot else ORANGE)  # glowing inside
         low.flat(R((x + 2, 47 + dy, x + 2, 51 + dy)), crack)  # a vein of fire down each
@@ -736,6 +737,13 @@ def flint(step=None, t=0, heat=0.0):
                      shade=False, line=False)
             low.part(P([(fx - 1, 57 + dy), (fx, 58 + dy - h + 1), (fx + 1, 57 + dy)]), YELLOW if h > 5 else ORANGE,
                      shade=False, line=False)
+    if heat > 0:  # licks of fire curling up round his legs, out of step
+        for k, (root, ctrl, tip, side) in enumerate((((21, 57), (15, 51), (21, 43), 1), ((27, 58), (23, 53), (28, 46), 1),
+                                                     ((37, 58), (41, 53), (36, 46), 1), ((43, 57), (49, 51), (43, 43), 1))):
+            sh = (0.7 + 0.3 * ((t + k) % 2)) * heat
+            flame_tongue(low, root, [root[0] + (ctrl[0] - root[0]) * sh, root[1] + (ctrl[1] - root[1]) * sh],
+                         [root[0] + (tip[0] - root[0]) * sh, root[1] + (tip[1] - root[1]) * sh], (t + k * 2) * math.pi / 2,
+                         wide=2.4 + heat)
     up = Canvas()
 
     def fist(cx, k):  # a ball of fire for a hand, its flame licking up and flickering every tick
@@ -818,6 +826,44 @@ def flint(step=None, t=0, heat=0.0):
         big_eyes(up, EYES_Y, EYES_X, YELLOW)
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
     return low, up
+
+
+def flint_ragged_base(c: Canvas, t: int, heat: float) -> None:
+    """Inferno's blaze doesn't sit on a ruler-straight edge: notches are cut up into its underside between tongues of
+    different lengths (a few flicker every tick), so the bottom is uneven and the fire reads as growing from the floor."""
+    px = c.img.load()
+    tongues = [(7 + k * 4.3 + ((k * 5) % 3 - 1), (5, 2, 4, 1, 5, 3, 2, 5, 1, 4, 3, 2, 5)[k % 13]) for k in range(13)]
+    for x in range(c.size):
+        reach = 0.0
+        for cx, h in tongues:
+            hh = h * (0.75 + 0.25 * ((t + int(cx)) % 2))
+            reach = max(reach, hh * (1 - abs(x - cx) / 2.6))
+        top = 59 - round(reach)  # from here down the underside is cut away, tongues hang to 59
+        for y in range(max(top, 53), c.size):
+            if px[x, y][3]:
+                px[x, y] = (0, 0, 0, 0)
+
+
+def flint_ground_glow(t: int, heat: float = 1.0) -> Canvas:
+    """Under Inferno Flint (CELL canvas, laid UNDER his outlined sprite, no outline of its own): a dithered pool of firelight
+    fading into the ground (hot orange / red / maroon, flickering with `t`), with a few embers dropping off the base."""
+    c = Canvas(CELL)
+    gx, gy = CELL // 2, PAD + 57
+    rx, ry = 33 * heat, 10 * heat
+    if heat > 0.05:
+        for y in range(gy - 10, gy + 14):
+            for x in range(gx - 36, gx + 37):
+                r = ((x - gx) / rx) ** 2 + ((y - gy) / ry) ** 2
+                if r >= 1.0:
+                    continue
+                k = 1 - r + 0.12 * math.sin(x * 0.7 + t * 1.57)  # brightness, flickering
+                if BAYER[y % 4][x % 4] / 16 < k * 1.0 - 0.05:
+                    c.px[x, y] = (ORANGE if k > 0.7 else RED if k > 0.4 else MAROON) + (255,)
+        for k in range(5):  # embers lifting off the base and dying out
+            ph = (t + k * 3) % 4
+            ex = gx - 24 + k * 12 + (k * 7) % 5 + SWAY[(t + k) % 4]
+            c.dot(ex, gy + 1 - 3 * ph - (k % 2) * 2, (YELLOW, ORANGE, RED, MAROON)[ph])
+    return c
 
 
 def flint_burn(x: int, y: int) -> float:
@@ -923,7 +969,9 @@ def flint_inferno_morph() -> Image.Image:
         f.alpha_composite(up.img, (0, UPPER_DY))
         cell_img = flint_crown(k % 4, 0, h).img
         cell_img.alpha_composite(f, (PAD, PAD))
-        img = outline(cell_img)
+        under = flint_ground_glow(k % 4, h).img
+        under.alpha_composite(outline(cell_img))
+        img = under
         ov = Canvas(CELL)
         cx, cy = CELL // 2, PAD + 40
         spark_cloud(ov, 29, int(10 + 30 * h), k, lambda r: (cx + r.uniform(-12, 12), cy + r.uniform(-4, 16)), (0.8, 2.6),
@@ -4046,6 +4094,7 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers
          "flint_inferno": flint_inferno_aura}
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
+GROUND_GLOWS = {"flint_inferno": flint_ground_glow}  # optional floor glow laid under each frame
 CROWNS = {"flicker": flicker_topknot, "flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
 HITS = {}  # per-character hit frames: fn(idle frame 0) -> 2 frames (default: white flash, then one step lighter)
 DEATHS = {}  # per-character death frames: fn() -> 8 CELL frames (default: death_frames)
@@ -5063,7 +5112,7 @@ def recolor(img: Image.Image, fn) -> Image.Image:
     return out
 
 
-def frames(build, aura=None, crown=None) -> list[Image.Image]:
+def frames(build, aura=None, crown=None, ground=None) -> list[Image.Image]:
     """Idle, hit and walk frames: SIZE px, or CELL px with `crown` (CROWNS) composited behind before the
     single outline pass, so the crown and body share one silhouette with no line between them."""
     def frame(step, dy, i):
@@ -5075,6 +5124,10 @@ def frames(build, aura=None, crown=None) -> list[Image.Image]:
             out = crown(i, dy).img
             out.alpha_composite(f, (PAD, PAD))
             f = out
+        if ground:  # a glow on the floor under the outlined sprite (no outline of its own)
+            under = ground(i).img
+            under.alpha_composite(outline(f))
+            return under
         return outline(f)
 
     idle = [frame(None, dy, i) for i, dy in enumerate(IDLE_BOB)]
@@ -6918,7 +6971,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
         if name in CROWNS:
-            fs = frames(build, AURAS.get(name), CROWNS[name])
+            fs = frames(build, AURAS.get(name), CROWNS[name], GROUND_GLOWS.get(name))
         else:
             fs = [cell(f) for f in frames(build, AURAS.get(name))]
         if name in HITS:

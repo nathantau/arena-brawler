@@ -25,6 +25,10 @@ var connect_host: String = ""
 var connect_port: int = Constants.DEFAULT_PORT
 var offline: bool = false
 var autopilot: bool = false
+## Test only (--press-special S): with --autopilot, press the special every S seconds whether or not an enemy is in sight.
+var press_special_every: int = 0
+## Test only (--passive): the autopilot stands still and never fires (a client that just watches the host).
+var passive: bool = false
 ## Debug: print LAN games found by discovery, then quit (see CLAUDE.md Commands).
 var discover: bool = false
 ## Debug: host doesn't broadcast (answers unicast probes only), to test the entitlement-free sweep.
@@ -65,6 +69,11 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				a.offline = true
 			"--autopilot":
 				a.autopilot = true
+			"--passive":
+				a.passive = true
+			"--press-special":
+				a.press_special_every = roundi(next.to_float() * 60.0)
+				i += 1
 			"--no-broadcast":
 				a.no_broadcast = true
 			"--discover":

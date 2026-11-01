@@ -4,7 +4,8 @@ extends SceneTree
 ##   godot --path . --write-movie /tmp/f.png --fixed-fps 60 --quit-after 330 -s tools/transition_preview.gd -- \
 ##     char=sakura special=petal_drift move=1,0 hold=0 press=1 aim=1,0
 ## Args: char, special (slot 1), move (stick while it runs), aim, press (extra presses at these seconds after the first
-## after the run starts, comma separated, e.g. press=0,1.5 to start / end), fire (hold the weapon the whole time).
+## after the run starts, comma separated, e.g. press=0,1.5 to start / end), fire (hold the weapon the whole time),
+## target=x,y (the passive bot stands there, relative to the fighter), edge=1 (fighter starts near the right wall).
 
 const START_FRAME: int = 420  # the match countdown is over
 const PRESS_AT: int = 30  # frames after START_FRAME
@@ -69,9 +70,14 @@ func _tick() -> void:
 		return
 	if frames == START_FRAME - 4:
 		home = me.global_position
-	if bot != null and is_instance_valid(bot):  # passive and far away
+		if args.get("edge", "0") == "1":  # stand 330 px off the arena's right edge, so a wall is in range along +x
+			var area: Rect2 = arena.play_area()
+			home = Vector2(area.end.x - 330.0, area.get_center().y)
+	if bot != null and is_instance_valid(bot):  # passive; far away unless target=x,y (pixels from the fighter) puts it in reach
 		bot.controller = null
-		bot.global_position = home + Vector2(2000.0, 2000.0)
+		bot.stats.tick(1.0 / 60.0)  # nothing simulates it, so let its stun / slow run down here
+		bot.global_position = home + (Vector2(float(String(args["target"]).split(",")[0]), float(String(args["target"]).split(",")[1]))
+			if args.has("target") else Vector2(2000.0, 2000.0))
 	var runner: Runner = me.controller as Runner
 	var n: int = frames - START_FRAME
 	runner.aim = _vec("aim", Vector2.RIGHT)

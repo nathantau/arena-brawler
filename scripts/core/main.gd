@@ -28,6 +28,7 @@ func _ready() -> void:
 		_add_audio()
 
 	args = CmdArgs.parse(OS.get_cmdline_user_args())
+	LocalInput.passive_test = args.passive
 	# Render at the sim rate: on 120 Hz phones, frames between sim ticks made moving sprites judder.
 	Engine.max_fps = Constants.PHYSICS_FPS
 	if args.discover:
@@ -117,6 +118,7 @@ func _start_host() -> void:
 	_server_arena.leave_requested.connect(_on_host_leave, CONNECT_DEFERRED)
 	var input := LocalInput.new()
 	input.autopilot = args.autopilot
+	input.special_every = args.press_special_every
 	var me: Player = _server_arena.add_player(NetSession.HOST_ID, _server_arena.free_color_index(), input)
 	_server_arena.attach_local_view(me, input)
 	if args.character != &"":
@@ -151,6 +153,7 @@ func _start_offline() -> void:
 	_offline_arena.leave_requested.connect(_on_offline_leave, CONNECT_DEFERRED)
 	var input := LocalInput.new()
 	input.autopilot = args.autopilot
+	input.special_every = args.press_special_every
 	var me: Player = _offline_arena.add_player(1, 0, input)
 	_offline_arena.attach_local_view(me, input)
 	for i: int in Constants.BOT_COUNT:
