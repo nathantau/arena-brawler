@@ -570,7 +570,11 @@ func _process(delta: float) -> void:
 	var amount: float = _trauma * _trauma * SHAKE_MAX_OFFSET
 	camera.offset = Vector2(_shake_rng.randf_range(-1.0, 1.0), _shake_rng.randf_range(-1.0, 1.0)) * amount
 	if effects != null:
-		effects.aim_marker = _input.auto_aim_point if _input != null and _input.shows_aim_marker() else Vector2.INF
+		var lock: bool = _input != null and _input.shows_aim_marker()
+		effects.aim_marker = _input.auto_aim_point if lock else Vector2.INF
+		if lock:
+			var tf: CharacterSkill = _input.auto_target.form()
+			effects.aim_scale = tf.data.form_scale if tf != null else 1.0
 	_tick_heartbeat(delta)
 
 

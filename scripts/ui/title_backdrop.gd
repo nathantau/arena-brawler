@@ -45,12 +45,13 @@ const TAGLINE_GAP: float = 14.0
 const POSE_IDLE: int = 0
 const POSE_RUN: int = 1
 const POSE_STRIKE: int = 2
-const TEAM_INNER_X: float = 120.0  ## innermost fighter of each team, from the screen centre
-const TEAM_OUTER_X: float = 430.0  ## outermost allowed (clear of the pillars)
+const TEAM_INNER_X: float = 270.0  ## innermost fighter of each team, from the screen centre (clear of the menu buttons)
+const TEAM_OUTER_X: float = 460.0  ## outermost allowed (clear of the pillars)
 const TEAM_STEP_X: float = 190.0
 ## Per rank within a team (0 = frontline): (dy, pixel scale, pose).
 const RANKS: Array[Vector3] = [
 	Vector3(6.0, 3.0, POSE_STRIKE), Vector3(-14.0, 2.9, POSE_RUN), Vector3(-40.0, 2.5, POSE_IDLE)]
+const FIGHTER_SCALE: float = 0.75  ## all fighters drawn this much smaller so three fit beside the buttons
 const FLOOR_LINE_ART: float = 14.0  ## fighters stand this many art px (x ART_SCALE) below the horizon
 const CELL_FEET: float = 78.0  ## feet row inside a 96 px sprite cell
 const CELL: float = 96.0
@@ -207,7 +208,7 @@ func _draw_fighters(centre_x: float, ground_y: float) -> void:
 
 
 func _draw_fighter(i: int, slot: Vector4, base: Vector2, rise: float) -> void:
-	var sc: float = slot.z
+	var sc: float = slot.z * FIGHTER_SCALE
 	var right_team: bool = slot.x > 0.0
 	var pose: int = int(slot.w)
 	var t: float = _time + i * 0.37
@@ -231,7 +232,7 @@ func _draw_fighter(i: int, slot: Vector4, base: Vector2, rise: float) -> void:
 			var idle2: Array = _idle[i]
 			tex = idle2[int(t * Constants.SPRITE_IDLE_FPS) % idle2.size()]
 	var feet := Vector2(base.x + dx, base.y + slot.y + rise)
-	var shade: float = BACK_DIM if sc < 2.6 else 1.0
+	var shade: float = BACK_DIM if slot.z < 2.6 else 1.0
 	var tint := Color(shade, shade, shade, reveal)
 	var ss: Vector2 = _shadow.get_size() * sc * 1.1
 	draw_texture_rect(_shadow, Rect2(feet - Vector2(ss.x * 0.5, ss.y * 0.55), ss), false,

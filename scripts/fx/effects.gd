@@ -61,11 +61,13 @@ const MARKER_POOL: int = 8
 const MARKER_TIME: float = 0.18
 const MARKER_SIZE: float = 20.0
 const MARKER_GAP: float = 14.0
-## Auto-aim reticle: four rotating corner ticks on the locked target.
-const AIM_RADIUS: float = 34.0
-const AIM_TICK: float = 9.0
-const AIM_SPIN: float = 1.4
-const COLOR_AIM: Color = Color(1, 0.95, 0.6, 0.9)
+## Auto-aim reticle: four corner brackets that ease in and tighten around the locked target, then pulse gently.
+const AIM_HALF: float = 24.0  ## half side of the bracket box around a normal-sized fighter
+const AIM_LEG: float = 8.0
+const AIM_EASE_TIME: float = 0.22
+const AIM_START_SPREAD: float = 1.0  ## extra box size at the moment of locking (x AIM_HALF)
+const AIM_PULSE: float = 2.0
+const COLOR_AIM: Color = UiStyle.C_YELLOW
 ## Damage numbers pop to this scale as they appear.
 const NUMBER_POP_TIME: float = 0.12
 const NUMBER_POP_SCALE: float = 1.45
@@ -149,6 +151,10 @@ var _markers: Array[Marker] = []
 var _mc: int = 0
 ## World position of the auto-aim reticle (Vector2.INF = hidden); set by the Arena every frame.
 var aim_marker: Vector2 = Vector2.INF
+## Size of the locked target relative to a normal fighter (form_scale), set with `aim_marker`.
+var aim_scale: float = 1.0
+var _aim_prev: Vector2 = Vector2.INF
+var _aim_since: float = 0.0
 var _swings: Array[Swing] = []
 var _rings: Array[Ring] = []
 var _pc: int = 0
@@ -489,14 +495,27 @@ func _draw_markers(px: float) -> void:
 
 func _draw_aim_marker(px: float) -> void:
 	if aim_marker == Vector2.INF:
+		_aim_prev = Vector2.INF
 		return
 	var t: float = Time.get_ticks_msec() / 1000.0
-	var r: float = AIM_RADIUS + 3.0 * sin(t * 8.0)
-	for i: int in 4:
-		var a: float = t * AIM_SPIN + i * TAU / 4.0
-		var c: Vector2 = aim_marker + Vector2.from_angle(a) * r
-		var along: Vector2 = Vector2.from_angle(a + PI * 0.5) * AIM_TICK
-		var p0: Vector2 = (c - along).snapped(Vector2(px, px))
-		var p1: Vector2 = (c + along).snapped(Vector2(px, px))
-		draw_line(p0, p1, UiStyle.C_OUTLINE, px * 3.0)
-		draw_line(p0, p1, COLOR_AIM, px * 1.5)
+	if _aim_prev == Vector2.INF or aim_marker.distance_to(_aim_prev) > AIM_HALF * 3.0:
+		_aim_since = t  # new lock: ease in again
+	_aim_prev = aim_marker
+	var k: float = clampf((t - _aim_since) / AIM_EASE_TIME, 0.0, 1.0)
+	var eased: float = 1.0 - pow(1.0 - k, 3.0)
+	var half: float = AIM_HALF * aim_scale * (1.0 + AIM_START_SPREAD * (1.0 - eased)) + AIM_PULSE * sin(t * 6.0) * eased
+	half = roundf(half / px) * px
+	var leg: float = AIM_LEG * minf(aim_scale, 1.5)
+	var c: Vector2 = aim_marker.snapped(Vector2(px, px))
+	var col := Color(COLOR_AIM, 0.35 + 0.65 * eased)
+	var dark := Color(UiStyle.C_OUTLINE, col.a)
+	for sx: float in [-1.0, 1.0]:
+		for sy: float in [-1.0, 1.0]:
+			var corner: Vector2 = c + Vector2(sx, sy) * half
+			var h_end: Vector2 = corner - Vector2(sx * leg, 0.0)
+			var v_end: Vector2 = corner - Vector2(0.0, sy * leg)
+			# 1 px dark outline around each 1.5 px bracket leg.
+			draw_line(corner + Vector2(sx * px, 0.0), h_end - Vector2(sx * px, 0.0), dark, px * 3.5)
+			draw_line(corner + Vector2(0.0, sy * px), v_end - Vector2(0.0, sy * px), dark, px * 3.5)
+			draw_line(corner, h_end, col, px * 1.5)
+			draw_line(corner, v_end, col, px * 1.5)
