@@ -86,16 +86,18 @@ func _draw_vitals() -> void:
 	UiStyle.draw_text(self, Vector2(2.0, name_y), active_w.display_name, UiStyle.SIZE_SMALL, UiStyle.C_YELLOW)
 	if show_skill:
 		var y: float = name_y
-		for pair: Array in [[player.skills[0], "Space"], [player.skills[1], "E"]]:
+		for pair: Array in [[player.skills[0], "Space", 0], [player.skills[1], "E", 1]]:
 			var sk: CharacterSkill = pair[0]
 			var text: String = "%s [%s]" % [sk.data.display_name, pair[1]]
-			if sk.is_active():
+			if player.skill_locked(pair[2] as int):
+				text += " · locked"
+			elif sk.is_active():
 				text += " · active"
 			elif not sk.is_ready():
 				text += " · %.1fs" % sk.cooldown_remaining
 			y += UiStyle.SIZE_SMALL + 6.0
 			UiStyle.draw_text(self, Vector2(2.0, y), text, UiStyle.SIZE_SMALL,
-				UiStyle.C_WHITE if sk.is_ready() else UiStyle.C_DIM)
+				UiStyle.C_WHITE if sk.is_ready() and not player.skill_locked(pair[2] as int) else UiStyle.C_DIM)
 
 
 ## Icon, then a pixel bar (outline, dark well, two-tone fill, highlight) with "value / max" inside.
