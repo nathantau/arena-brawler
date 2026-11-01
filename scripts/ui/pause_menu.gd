@@ -5,10 +5,10 @@ extends Control
 ## Offline the whole tree pauses while it's open; online the match keeps running underneath.
 ## Esc toggles it on desktop.
 
-const BUTTON_SIZE: Vector2 = Vector2(64, 56)
-const BUTTON_TOP: float = 28.0
-const MENU_BUTTON_SIZE: Vector2 = Vector2(300, 64)
-const SPACING: int = 14
+const BUTTON_SIZE: Vector2 = Vector2(UiStyle.TOUCH_MIN_H, UiStyle.TOUCH_MIN_H)
+const BUTTON_TOP: float = 20.0
+const MENU_BUTTON_SIZE: Vector2 = Vector2(300, UiStyle.TOUCH_MIN_H)
+const SPACING: int = 10
 const COLOR_VEIL: Color = Color(0.05, 0.05, 0.1, 0.6)
 
 var arena: Arena

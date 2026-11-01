@@ -21,6 +21,8 @@ const SIZE_HEADING: int = 30
 const SIZE_TITLE: int = 56
 const SIZE_HUGE: int = 120
 const TEXT_OUTLINE: int = 6
+## Thumb-sized buttons: ~44 pt on a phone is ~78 canvas units; 72 is the compromise that still fits a stack of four.
+const TOUCH_MIN_H: float = 72.0
 
 ## Palette (tools/sprites/palette.py).
 const C_OUTLINE: Color = Color8(27, 26, 46)
@@ -152,6 +154,24 @@ static func draw_text(ci: CanvasItem, pos: Vector2, text: String, font_size: int
 static func text_width(text: String, font_size: int, heavy: bool = false) -> float:
 	var font: Font = bold() if heavy else FONT
 	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+
+
+## Largest font size <= `size` (never below `min_size`) at which `text` fits in `max_w`; labels also clip with an
+## ellipsis as the last resort.
+static func fit_size(text: String, max_w: float, size: int, min_size: int = SIZE_TINY - 2, heavy: bool = false) -> int:
+	var s: int = size
+	while s > min_size and text_width(text, s, heavy) > max_w:
+		s -= 1
+	return s
+
+
+## Sets `label`'s text, shrinking the font to fit `max_w` and clipping with "..." if even the smallest doesn't.
+static func fit_label(label: Label, text: String, max_w: float, size: int, min_size: int = SIZE_TINY - 2,
+		heavy: bool = false) -> void:
+	label.text = text
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.add_theme_font_size_override("font_size", fit_size(text, max_w, size, min_size, heavy))
 
 
 ## A pixel-art texture centred on `center`, scaled by a whole number so pixels stay square.

@@ -5,7 +5,7 @@ extends CenterContainer
 
 const PANEL_MIN_SIZE: Vector2 = Vector2(560, 0)
 const SPACING: int = 10
-const LEAVE_MIN_SIZE: Vector2 = Vector2(180, 56)
+const LEAVE_MIN_SIZE: Vector2 = Vector2(180, UiStyle.TOUCH_MIN_H)
 const ROW_SPACING: int = 14
 const ICON_SIZE: Vector2 = Vector2(26, 26)
 const PORTRAIT_SIZE: Vector2 = Vector2(48, 48)
@@ -100,6 +100,8 @@ func _add_row(place: int, id: int, is_me: bool, kills: int, deaths: int) -> void
 		_icon(line, p.character.portrait(), PORTRAIT_SIZE)
 	var name_label := _text(line, arena.player_name(id) + (" (you)" if is_me else ""), arena.player_color(id))
 	name_label.custom_minimum_size.x = NAME_MIN_W
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	if is_me:
 		name_label.add_theme_font_override("font", UiStyle.bold())
 	_icon(line, UiStyle.tex("icon_kills"), ICON_SIZE)

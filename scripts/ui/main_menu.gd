@@ -10,8 +10,8 @@ signal join_pressed(address: String)
 ## `--fake-keyboard N`: pretend an N-unit tall on-screen keyboard is up (desktop layout checks).
 const FAKE_KEYBOARD_FLAG: String = "--fake-keyboard"
 const BUTTON_MIN_SIZE: Vector2 = Vector2(360, 64)
-const FIELD_MIN_SIZE: Vector2 = Vector2(236, 56)
-const SPACING: int = 14
+const FIELD_MIN_SIZE: Vector2 = Vector2(236, 64)
+const SPACING: int = 12
 
 var _status: Label
 var _address: LineEdit
