@@ -516,3 +516,25 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   | Flare Burst | 25 -> 32 dmg | flare_burst_blast damage |
   | Barrier, Dash, Grapple, Vine Swing, Petal Drift, Blossom Ward, Great Ape, Inferno, Eruption (40), Sky Pillar (30), Staff Whirl (up to 64), Petal Storm (16-66) | judged fine | unchanged |
 - **Animation polish pass** (2026-11-01, `anim-polish`, code only, no art regenerated: the audit of every sheet/strip found the art consistent, regeneration is byte-identical): `SpecialFx` eases things in/out instead of popping: Eruption telegraph fades/swells in and glows hotter toward the blast (floor modulate), Staff Whirl ring and Overdrive crackle fade in (`RING_EASE_IN`), Overdrive crackle gets a second out-of-step frame at 0.6 alpha (the 1 px arcs were too faint), Smoke Bomb fades in, Snare vines fade out with the slow, Blossom Ward gets a soft pink pool + ring on the floor layer so its reach reads under players. `Effects._draw_strip` fades the last 15% of blast/slash/slam strips so the final sparks don't vanish. Art (generate.py): `blast` smoke puffs now cool orange/grey-blue -> dark instead of jumping red -> navy; `smoke` lumps breathe/turn more; `eruption_crack` lava pulse stronger; `bolt_ghost` one constant blue/cyan dither (no per-frame flip); `bolt_spark` 64 px (bigger arcs) and `whirl_spark` 32 px (bigger chips). Checked in engine via --write-movie (Flint/Bolt autopilot, fx_preview): walk cycles and bullets look clean. Not done: specials weren't individually captured in motion in-engine (smoke test covers errors only).
+- **Balance pass 2 + sim** (2026-11-01, `balance-pass`): `tools/balance_sim.gd` = headless bot-vs-bot duels in a real offline Arena
+  (`godot --path . --headless --fixed-fps 60 -s tools/balance_sim.gd -- mode=fighters|specials|weapons n=4 [slice=k/m] [only=<char>]`;
+  ~14x real time, run `slice=k/8` in parallel; prints win%, damage dealt/taken, seconds per config). Sim bots (`SimBot`) target any
+  fighter, close in for melee/beams and press the special when ready; they are not humans, trust it for outliers only (n~10 per row is noisy).
+  Note `mode=specials` rows named `dash` are just the default loadout with the keys swapped.
+  Roles: Dash escape; Barrier directional wall (weak alone, no offence); Ward 360 deg shield; Drift escape + reposition; Smoke anti-auto-aim + repositioning;
+  Clones decoys (bots fall for them: fine); Grapple gap-close/escape; Vine Swing over-wall mobility; Snare/Sapling/Storm/Blaze Run/Eruption/Pillar/Whirl/Flare
+  zone or burst; Great Ape tank brawler; Overdrive burst-fire kit; Fan/Supernova/Petal Storm rings.
+  New mechanics (3 `SkillData` exports): Smoke `smoke_speed_scale` 1.25 (faster while inside your cloud), Grapple `grapple_iframes` 0.35 (on a bite only),
+  Overdrive `overdrive_fire_scale` 1.5 (weapon cooldowns tick faster; energy still limits).
+  | Item | Before -> After |
+  |---|---|
+  | Bolt | hp/armor 85/40 -> 80/35; Arc Zapper interval 0.12 -> 0.15, homing 2.5 -> 1.5, range 300 -> 260 (was ~90% win in sim) |
+  | Overdrive | cooldown 9 -> 8, + fire scale 1.5 |
+  | Flint | Ember Palm dmg 4 -> 5; Eruption radius 80 -> 100; Flare Burst dmg 32 -> 36, radius 120 -> 140, cd 7 -> 6.5; Blaze Run trail dmg 10 -> 13, cd 6.5 -> 6 |
+  | Sakura | Snare dmg 20 -> 24; Sapling petal 6 -> 8, cd 10 -> 9; Ward 3.3 -> 4 s, radius 69 -> 78, cd 9 -> 8; Drift 1.0 -> 1.2 s, cd 6.5 -> 5.5 |
+  | Apex | Cloud Staff dmg 24 -> 26, reach 110 -> 120, knockback 260 -> 180; Ape fists 36 -> 46, ape speed 0.9 -> 1.0; Sky Pillar 30 -> 36 dmg, width 36 -> 44; Storm 13 -> 15; Whirl 8 -> 10 dmg, radius 70 -> 80 |
+  Follow-up (same branch, after rebase on main): **Barrier now reflects** (`SkillData.shield_reflect`, `ShieldWall.reflects`, `ProjectilePool._reflect`): enemy shots
+  that hit it bounce off and become the owner's (pellet key kept, like the Arc Blade; beams/melee unaffected; blurb "Reflects shots"). Test in `test_weapon_kinds.gd`.
+  Rolled back part of the Sakura buffs: Snare 24 -> 22, Sapling petal 8 -> 7 and cooldown 9 -> 9.5 (Ward and Drift buffs kept). Apex still lagged in the sim
+  (melee bias): Great Ape fists 46 -> 52 and cooldown 15 -> 13, Cloud Staff 26 -> 28. Final fighters sim (48 games each, seed 3): Bolt 55, Shade 52, Flint 47, Sakura 62, Apex 36 win%
+  (seeds 1/2 gave Sakura 46/41, Apex 14/36 before the Apex buff; the sim is noisy, +-10).

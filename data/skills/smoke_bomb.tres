@@ -15,3 +15,4 @@ tags = Array[StringName]([&"flicker"])
 cooldown = 7.0
 duration = 5.0
 smoke_radius = 115.0
+smoke_speed_scale = 1.25

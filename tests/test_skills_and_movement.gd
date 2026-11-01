@@ -1071,6 +1071,7 @@ func test_blaze_run_trail_expires() -> void:
 	var p: Player = s[2]
 	var foe: Player = s[3]
 	var d: SkillData = skills.get_skill(&"blaze_run")
+	foe.stats.hp = 5000  # must outlast the whole trail
 	foe.global_position = Vector2(200, 300)
 	await wait_physics_frames(2)
 	var hits: Array = _hits(s[1])
@@ -1824,3 +1825,61 @@ func test_overdrive_replay_matches() -> void:
 		b.simulate(f, DT, true)
 	assert_almost_eq(b.global_position, a.global_position, Vector2(0.01, 0.01))
 	assert_almost_eq(b.skills[1].active_remaining, a.skills[1].active_remaining, 0.0001)
+
+
+# --- Balance pass: purposes for Smoke Bomb, Grapple Kunai, Overdrive ------------
+
+func test_overdrive_ticks_the_weapon_faster_only_while_active() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var p: Player = _bolt(world, null)
+	var d: SkillData = skills.get_skill(&"overdrive")
+	await wait_physics_frames(2)
+	var idle := InputFrame.new()
+	p.weapon.cooldown = 1.0
+	p.simulate(idle, DT)
+	assert_almost_eq(p.weapon.cooldown, 1.0 - DT, 0.0001, "normal tick")
+	_press_special(p, Vector2.RIGHT, Vector2.RIGHT)
+	p.weapon.cooldown = 1.0
+	p.simulate(idle, DT)
+	assert_almost_eq(p.weapon.cooldown, 1.0 - DT * d.overdrive_fire_scale, 0.0001, "faster while overdriving")
+	assert_gt(d.overdrive_fire_scale, 1.0)
+
+
+func test_smoke_speeds_you_up_only_inside_the_cloud() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var p: Player = _flicker_in(world, &"smoke_bomb")
+	var d: SkillData = skills.get_skill(&"smoke_bomb")
+	p.global_position = Vector2(200, 400)
+	await wait_physics_frames(2)
+	var go := InputFrame.new()
+	go.move_vec = Vector2.RIGHT
+	for i: int in 30:
+		p.simulate(go, DT)
+	var normal: float = p.velocity.x
+	p.global_position = Vector2(200, 400)
+	_press_special(p, Vector2.RIGHT)
+	p.simulate(go, DT)
+	for i: int in 10:
+		p.simulate(go, DT)
+	assert_true(p.is_hidden())
+	assert_almost_eq(p.velocity.x, normal * d.smoke_speed_scale, 1.0, "hurried inside the cloud")
+	assert_gt(d.smoke_speed_scale, 1.0)
+
+
+func test_grapple_bite_grants_iframes_but_a_miss_does_not() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	_wall(world, Vector2(500, 300), Vector2(20, 400))
+	var p: Player = _flicker_in(world, &"grapple_kunai")
+	p.global_position = Vector2(200, 300)
+	await wait_physics_frames(2)
+	var sk: SkillData = skills.get_skill(&"grapple_kunai")
+	_press_special(p, Vector2.RIGHT)
+	assert_almost_eq(p.stats.invulnerable_time, sk.grapple_iframes, 0.001, "bite = i-frames")
+	var q: Player = _flicker_in(world, &"grapple_kunai")
+	q.global_position = Vector2(200, 700)
+	await wait_physics_frames(2)
+	_press_special(q, Vector2.LEFT)  # nothing within range that way
+	assert_almost_eq(q.stats.invulnerable_time, 0.0, 0.001, "a miss grants nothing")

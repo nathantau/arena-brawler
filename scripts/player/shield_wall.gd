@@ -16,6 +16,8 @@ const EDGE_WIDTH: float = 2.0
 var owner_id: int = 0
 var color: Color = Color.WHITE
 var is_ward: bool = false
+## Shots that hit it are sent back as the owner's (barrier with `shield_reflect`).
+var reflects: bool = false
 
 var _shape := RectangleShape2D.new()
 var _circle := CircleShape2D.new()
@@ -45,6 +47,7 @@ func sync(skill: CharacterSkill, dead: bool) -> void:
 	if up and is_ward:
 		_circle.radius = skill.data.ward_radius
 	elif up:
+		reflects = skill.data.shield_reflect
 		global_position = skill.anchor
 		rotation = skill.direction.angle()
 		if _width != skill.data.shield_width:

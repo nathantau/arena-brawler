@@ -18,3 +18,4 @@ grapple_range = 420.0
 grapple_speed = 1100.0
 grapple_bite_time = 0.08
 grapple_miss_cooldown = 1.5
+grapple_iframes = 0.35

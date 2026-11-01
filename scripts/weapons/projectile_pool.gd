@@ -391,6 +391,9 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 		if collider is ShieldWall and (collider as ShieldWall).is_ward:
 			_catch(s, hit.position, collider)
 			return
+		if collider is ShieldWall and (collider as ShieldWall).reflects:
+			_reflect(s, hit.position, hit.normal, (collider as ShieldWall).owner_id)
+			return
 		if s.bounces_left > 0 and not collider is ShieldWall:
 			if collider is Crate and authoritative and s.splash_radius <= 0.0:
 				(collider as Crate).take_damage(s.damage)  # ricochets still chip crates
@@ -458,6 +461,14 @@ func _stop(s: Slot, at: Vector2) -> void:
 		_explode(s, at - s.vel.normalized() * s.radius)
 	else:
 		_finish(s, at)
+
+
+## Hit a reflecting barrier: bounces off it and now belongs to the barrier's owner (the pellet key stays).
+func _reflect(s: Slot, at: Vector2, normal: Vector2, new_owner: int) -> void:
+	s.pos = at + normal * Constants.BOUNCE_EPSILON
+	s.vel = s.vel.bounce(normal)
+	s.attacker_id = new_owner
+	s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
 
 
 ## Caught by a Blossom Ward: gone in a petal pop, without its blast.
