@@ -293,6 +293,7 @@ func _process(delta: float) -> void:
 func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	last_input_seq = input.seq
 	if dead:
+		_prev_skills = [input.skill, input.special]  # a button held (or tapped) while dead must not fire on the respawn frame
 		return
 	stats.tick(delta)
 	if stats.is_stunned():

@@ -10,7 +10,7 @@ enum Mode { OFF, HOST, BROWSE }
 
 const MAGIC: String = "BRWL"
 ## Bump when the net protocol changes: other versions are listed greyed-out ("different version").
-const VERSION: int = 1
+const VERSION: int = 2  # 2: snapshots arrive as several packets per tick
 const DISCOVERY_PORT: int = 7778
 const ANNOUNCE_INTERVAL_S: float = 1.0
 const EXPIRY_S: float = 3.0

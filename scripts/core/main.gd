@@ -92,14 +92,16 @@ func _start_server() -> void:
 
 
 ## Listen server: the same NetServer as `--server`, plus this device plays as peer 1 (the
-## server's own id, so it never clashes with a client) through a local view, like offline.
+## server's own id, so it never clashes with a client) through a local view, like offline. The host takes one of the
+## MAX_CLIENTS seats, so one client fewer fits (a fifth human could never start: the lobby blocks on too many players).
 func _start_host() -> void:
 	_arena_rng.randomize()
 	_hide_menu()
 	_server_arena = Arena.new(Arena.Mode.SERVER, randi(), args.match_mode, args.time_limit)
 	_server_arena.match_state.arena_index = args.pick_arena(_arena_rng)
 	add_child(_server_arena)
-	var err: Error = session.start_server(_server_arena, args.port, args.bots, args.net_debug)
+	var err: Error = session.start_server(_server_arena, args.port, args.bots, args.net_debug,
+			Constants.MAX_CLIENTS - 1)
 	if err != OK:
 		_server_arena.queue_free()
 		_server_arena = null
