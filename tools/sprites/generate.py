@@ -2720,7 +2720,8 @@ def petal_pop_frame(k: int) -> Image.Image:
 
 # --- Petal Drift (Sakura): she dissolves into a tight spiral of petals, glides, and gathers back ---
 DRIFT_FRAMES = 16  # dissolve, reform and the swirl loop (SpecialFx.DRIFT_FPS keeps the old speed)
-DRIFT_SEEDS = 28  # chunks of her that break off: the first DRIFT_PETALS become the swirl's petals, the rest motes
+DISSOLVE_FRAMES = 24  # dissolve / reform strips (SpecialFx.DISSOLVE_FPS = 60: 0.4 s)
+DRIFT_SEEDS = 36  # chunks of her that break off: the first DRIFT_PETALS become the swirl's petals, the rest motes
 DRIFT_PETALS = 16  # petals in the swirl
 DRIFT_TRAIL = 7  # petals streaming behind
 
@@ -2749,7 +2750,7 @@ def swirl_color(depth: float, flutter: float):
     return (PINK_L if flutter >= 0 else WHITE) if depth > 0 else PINK
 
 
-def swirl_extras(c: Canvas, k: int, grow: float = 1.0, shed: bool = True):
+def swirl_extras(c: Canvas, k: int, grow: float = 1.0, shed: float = 1.0):
     """The knot of petals at the foot, the stragglers streaming behind, a glint at the heart (`grow` 0..1 = how far
     they've formed) and petals shed off the tornado, falling."""
     m = CELL / 2
@@ -2766,12 +2767,13 @@ def swirl_extras(c: Canvas, k: int, grow: float = 1.0, shed: bool = True):
         if ln >= 2:
             ward_petal(c, x, y, math.pi + 0.7 * math.sin(math.tau * u * 2 + j), ln,
                        math.cos(math.tau * (u * 2 + j / 3)), PINK_L if j % 2 else WHITE)
-    if shed:
+    if shed > 0:
         for j in range(3):  # petals peeling off the tornado's top, spinning away and down
             u = (f + j / 3) % 1.0
             a = math.tau * j / 3 + 0.8
-            ward_petal(c, m - 6 + math.cos(a) * (18 + 6 * u) - 6 * u, m - 22 + 26 * u * u + math.sin(a) * 4,
-                       a + 5 * u, 6 - 3 * u, math.cos(7 * u + j), PINK_L if j % 2 else WHITE)
+            if (6 - 3 * u) * shed >= 2:
+                ward_petal(c, m - 6 + math.cos(a) * (18 + 6 * u) - 6 * u, m - 22 + 26 * u * u + math.sin(a) * 4,
+                           a + 5 * u, (6 - 3 * u) * shed, math.cos(7 * u + j), PINK_L if j % 2 else WHITE)
     ph = (f * 2) % 1.0  # the glint at the heart, twice per loop
     if ph < 0.5 and grow >= 1.0:
         twinkle(c, m - 4, m - 4, (1, 2, 2, 1)[min(3, int(ph * 8))])
@@ -2788,74 +2790,133 @@ def drift_swirl_frame(k: int) -> Image.Image:
     return outline(c.img)
 
 
-def drift_dissolve_frame(k: int) -> Image.Image:
-    """Dissolve (16 frames; the reform strip plays it backwards): her idle frame squeezes in towards the column, flashes
-    pale and breaks into chunks, back (left) first. Each chunk turns into a petal and spirals in to its place in the
-    swirl, tightening as it goes; the last frame is the swirl's first. Small motes scatter off and vanish."""
+@functools.lru_cache(maxsize=None)
+def drift_plan():
+    """What breaks off her and when, the same for every frame: the body's pixels grouped into DRIFT_SEEDS chunks (evenly
+    sized: a few relaxation passes), the outermost ones (hair, hem, hands) peeling off first and the middle last, each with
+    the time it starts (0..1 of the dissolve)."""
     rng = random.Random(5)
     body = drift_body()
     px = body.load()
-    t = k / (DRIFT_FRAMES - 1)
     pts = [(x, y) for y in range(CELL) for x in range(CELL) if px[x, y][3]]
+    solid = set(pts)
+    depth = {}
+    ring = {p for p in pts if any((p[0] + dx, p[1] + dy) not in solid for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))}
+    d = 0
+    while ring:
+        for p in ring:
+            depth[p] = d
+        d += 1
+        ring = {(x + dx, y + dy) for x, y in ring for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                if (x + dx, y + dy) in solid and (x + dx, y + dy) not in depth}
     seeds = [rng.choice(pts) for _ in range(DRIFT_SEEDS)]
+    for _ in range(3):  # relax towards even chunks
+        groups = [[] for _ in seeds]
+        for x, y in pts:
+            groups[min(range(DRIFT_SEEDS), key=lambda s: (seeds[s][0] - x) ** 2 + (seeds[s][1] - y) ** 2)].append((x, y))
+        seeds = [(sum(x for x, _ in g) / len(g), sum(y for _, y in g) / len(g)) if g else seeds[i] for i, g in enumerate(groups)]
+    groups = [[] for _ in seeds]
+    for x, y in pts:
+        groups[min(range(DRIFT_SEEDS), key=lambda s: (seeds[s][0] - x) ** 2 + (seeds[s][1] - y) ** 2)].append((x, y))
+    cen = [(sum(x for x, _ in g) / len(g), sum(y for _, y in g) / len(g)) if g else seeds[i] for i, g in enumerate(groups)]
+    dep = [sum(depth[p] for p in g) / len(g) if g else 0.0 for g in groups]
+    dmax = max(dep) or 1.0
+    start = [0.03 + 0.42 * (dep[i] / dmax) + 0.05 * (1 - (cen[i][0] - 28) / 40) + rng.uniform(0, 0.05)
+             for i in range(DRIFT_SEEDS)]
+    start = [min(max(v, 0.03), 0.5) for v in start]
+    # the 16 chunks that become the swirl's petals: spread over the body (every other by start time), matched to the
+    # slots top to bottom so they don't cross over
+    order = sorted(range(DRIFT_SEEDS), key=lambda i: start[i])
+    petal_ids = [order[j] for j in range(0, DRIFT_SEEDS, 2)][:DRIFT_PETALS]
+    for j in range(DRIFT_SEEDS):
+        if len(petal_ids) >= DRIFT_PETALS:
+            break
+        if order[j] not in petal_ids:
+            petal_ids.append(order[j])
+    petal_ids.sort(key=lambda i: cen[i][1])
+    return groups, cen, start, petal_ids
+
+
+def drift_dissolve_frame(k: int) -> Image.Image:
+    """Dissolve (DISSOLVE_FRAMES; the reform strip plays it backwards): the outermost bits of her (hair, hem, hands) lift
+    off first, each chunk shrinking and carrying its own pixels as it bulges outward then spirals in to its slot in the
+    swirl, crumbling (dithered) into a petal on the way; the middle goes last, the column squeezing in as she thins.
+    The last frame is the swirl's first. Small motes scatter off and vanish."""
+    groups, cen, start, petal_ids = drift_plan()
+    body = drift_body()
+    px = body.load()
+    t = k / (DISSOLVE_FRAMES - 1)
     slots = sorted(swirl_items(0), key=lambda it: it[2])  # top to bottom
-    heads = sorted(seeds[:DRIFT_PETALS], key=lambda p: p[1])
-    seeds = heads + seeds[DRIFT_PETALS:]
-    # a seed breaks off earlier the further back (left) it sits, so she peels away from the trailing side
-    start = [min(max(0.06 + 0.42 * ((x - 28) / 40) + rng.uniform(0, 0.2), 0.06), 0.66) for x, y in seeds]
-    sq = 1 - 0.4 * smooth(t / 0.7)  # she squeezes in towards the column as she dissolves
+    slot_of = {cid: slots[j] for j, cid in enumerate(petal_ids)}
+    sq = 1 - 0.35 * smooth(t / 0.75)
+    m = CELL // 2
     out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
     o = out.load()
-    m = CELL // 2
-    for x, y in pts:
-        i = min(range(DRIFT_SEEDS), key=lambda s: (seeds[s][0] - x) ** 2 + (seeds[s][1] - y) ** 2)
-        a = start[i] + rng.uniform(-0.04, 0.04)
-        if t <= a:
-            col = px[x, y][:3]
-            if t > a - 0.09 and (x + y) % 2 == 0:  # about to go: flashes pale
-                col = LIGHTER[col] if col in LIGHTER else col
-            nx = round(m + (x - m) * sq)
-            if 0 <= nx < CELL:
-                o[nx, y] = col + (255,)
-    out = outline(out)
     pc = Canvas(CELL)
-    order = sorted(range(DRIFT_PETALS), key=lambda i: slots[i][0])  # back petals first
-    for i in order:
-        x0, y0 = seeds[i]
-        depth, sx, sy, sang, slen, sflut, _ = slots[i]
+    parts = []  # (depth, petal args) painted back petals first
+    for i, g in enumerate(groups):
+        cx, cy = cen[i]
         u = smooth((t - start[i]) / (1 - start[i] + 1e-6)) if t > start[i] else 0.0
-        if t <= start[i] and u == 0.0:
-            continue
-        ox, oy = (x0 - sx) * (1 - u), (y0 - sy) * (1 - u)
-        rot = -3.4 * (1 - u)  # spirals in: the offset turns round the slot as it closes
-        px_ = sx + ox * math.cos(rot) - oy * math.sin(rot)
-        py_ = sy + ox * math.sin(rot) + oy * math.cos(rot) - 5 * math.sin(math.pi * u)
-        px_, py_ = min(max(px_, 7), CELL - 8), min(max(py_, 7), CELL - 8)
-        fl = math.cos(math.acos(max(-1.0, min(1.0, sflut))) + 7 * (1 - u))
-        length = 3 + (slen - 3) * u
-        ward_petal(pc, px_, py_, sang + 4 * (1 - u), length, fl, swirl_color(depth, fl) if u > 0.5 else (PINK_L if i % 2 else WHITE))
-    for j in range(DRIFT_PETALS, DRIFT_SEEDS):  # motes: scattered off, spinning away and vanishing
-        x0, y0 = seeds[j]
-        u = (t - start[j]) / 0.5
-        if 0 <= u < 1:
-            a = j * 2.4
-            d = 6 + 20 * u
-            ward_petal(pc, x0 - 5 * u + math.cos(a) * d * 0.4, y0 - 10 * u + math.sin(a) * d * 0.5 + 4 * u * u,
-                       a + 5 * u, max(2.0, 5 - 4 * u), math.cos(6 * u + j), PINK_L if j % 2 else WHITE)
-    if t > 0.55:  # the swirl's knot and stragglers form as the petals arrive
-        swirl_extras(pc, 0, grow=smooth((t - 0.55) / 0.45), shed=False)
+        sx0, sy0 = m + (cx - m) * sq, cy  # where the chunk sits in the squeezed body
+        if i in slot_of:
+            depth_, sx, sy, sang, slen, sflut, _ = slot_of[i]
+            ox, oy = sx0 - sx, sy0 - sy
+            rot = -2.4 * math.sin(math.pi * u)
+            tx = sx + (ox * math.cos(rot) - oy * math.sin(rot)) * (1 - u)
+            ty = sy + (ox * math.sin(rot) + oy * math.cos(rot)) * (1 - u)
+        else:
+            tx, ty = sx0, sy0
+        # outward bulge: peeling off her outline, away from the middle, before it turns in
+        bx, by = cx - m, cy - (m + 4)
+        bl = math.hypot(bx, by) or 1.0
+        bulge = 11 * math.sin(math.pi * u) ** 1.2
+        tx += bx / bl * bulge
+        ty += by / bl * bulge - 3 * math.sin(math.pi * u)
+        if i not in slot_of:  # motes drift up and away
+            a = i * 2.4
+            tx += math.cos(a) * 10 * u - 5 * u
+            ty += -12 * u + 5 * u * u
+        shrink = 1 - 0.85 * smooth(u / 0.55)
+        keep = 1 - smooth((u - 0.12) / 0.55)  # share of the chunk's own pixels still drawn (dithered away)
+        for x, y in g:
+            nx, ny = m + (x - m) * sq, y
+            qx = round(tx + (nx - sx0) * shrink)
+            qy = round(ty + (ny - sy0) * shrink)
+            if u > 0 and BAYER[y % 4][x % 4] / 16 >= keep:
+                continue
+            if 2 <= qx < CELL - 2 and 2 <= qy < CELL - 2:
+                col = px[x, y][:3]
+                if u == 0 and t > start[i] - 0.1 and (x + y) % 2 == 0:  # about to go: flashes pale
+                    col = LIGHTER[col] if col in LIGHTER else col
+                o[qx, qy] = col + (255,)
+        if i in slot_of and u > 0.04:
+            depth_, sx, sy, sang, slen, sflut, _ = slot_of[i]
+            fl = math.cos(math.acos(max(-1.0, min(1.0, sflut))) + 7 * (1 - u))
+            length = 2.5 + (slen - 2.5) * smooth(u / 0.8)
+            col = swirl_color(depth_, fl) if u > 0.6 else (PINK_L if i % 2 else WHITE)
+            parts.append((depth_, min(max(tx, 7), CELL - 8), min(max(ty, 7), CELL - 8), sang + 4 * (1 - u), length, fl, col))
+        elif i not in slot_of:
+            um = (t - start[i]) / min(0.55, 0.97 - start[i])
+            if 0.04 < um < 0.7 + 0.3 * (i % 3) / 2:
+                a = i * 2.4
+                ward_petal(pc, min(max(tx, 8), CELL - 9), min(max(ty, 8), CELL - 9), a + 5 * um, max(2.0, 5 - 3 * um), math.cos(6 * um + i), PINK_L if i % 2 else WHITE)
+    out = outline(out)
+    for _, x, y, ang, length, fl, col in sorted(parts, key=lambda q: q[0]):
+        ward_petal(pc, x, y, ang, length, fl, col)
+    if t > 0.45:  # the swirl's knot and stragglers form as the petals arrive; the shed petals last
+        swirl_extras(pc, 0, grow=smooth((t - 0.45) / 0.55), shed=smooth((t - 0.8) / 0.2))
     out.alpha_composite(outline(pc.img))
     return out
 
 
 def drift_reform_frame(k: int) -> Image.Image:
-    """Reform (16 frames): the dissolve backwards, then a wink of white sparkles as she's whole again."""
-    img = drift_dissolve_frame(DRIFT_FRAMES - 1 - k)
-    n = DRIFT_FRAMES - 5  # the last five frames glint
+    """Reform (DISSOLVE_FRAMES): the dissolve backwards, then a wink of white sparkles as she's whole again."""
+    img = drift_dissolve_frame(DISSOLVE_FRAMES - 1 - k)
+    n = DISSOLVE_FRAMES - 6  # the last six frames glint
     if k >= n:
         c = Canvas(CELL)
         for i, (x, y) in enumerate(((34, 30), (62, 38), (44, 66), (66, 62), (30, 52), (60, 24))):
-            arm = (1, 2, 2, 1, 0)[k - n] if (i + k) % 2 == 0 else (0, 1, 1, 0, 0)[k - n]
+            arm = (1, 2, 2, 1, 0, 0)[k - n] if (i + k) % 2 == 0 else (0, 1, 1, 0, 0, 0)[k - n]
             twinkle(c, x, y, arm)
         img.alpha_composite(outline(c.img))
     return img
@@ -3860,8 +3921,8 @@ FX = {
     "snare_burst": lambda: strip([snare_burst_frame(k) for k in range(SNARE_BURST_FRAMES)]),
     "petal_pop": lambda: strip([petal_pop_frame(k) for k in range(POP_FRAMES)]),
     "sakura_drift": lambda: strip([drift_swirl_frame(k) for k in range(DRIFT_FRAMES)]),
-    "sakura_dissolve": lambda: strip([drift_dissolve_frame(k) for k in range(DRIFT_FRAMES)]),
-    "sakura_reform": lambda: strip([drift_reform_frame(k) for k in range(DRIFT_FRAMES)]),
+    "sakura_dissolve": lambda: strip([drift_dissolve_frame(k) for k in range(DISSOLVE_FRAMES)]),
+    "sakura_reform": lambda: strip([drift_reform_frame(k) for k in range(DISSOLVE_FRAMES)]),
     # Grapple Kunai (SpecialFx): the zip pose loop, the bite spark, chain links.
     "flicker_zip": lambda: strip([flicker_zip(i) for i in range(ZIP_FRAMES)]),
     "grapple_spark": lambda: strip([grapple_spark(k) for k in range(GRAPPLE_SPARK_FRAMES)]),

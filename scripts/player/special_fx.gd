@@ -232,7 +232,15 @@ const DISSOLVE_ART: Texture2D = preload(FX_DIR + "sakura_dissolve.png")
 const REFORM_ART: Texture2D = preload(FX_DIR + "sakura_reform.png")
 const DRIFT_FPS: float = 48.0
 const DRIFT_STRIP_FRAMES: int = 16
-const DISSOLVE_TIME: float = DRIFT_STRIP_FRAMES / DRIFT_FPS
+## The dissolve / reform strips (generate.py DISSOLVE_FRAMES) play at DISSOLVE_FPS; the swirl loops a whole number of
+## times between the two so it ends on its first frame, which is where the reform strip starts.
+const DISSOLVE_STRIP_FRAMES: int = 24
+const DISSOLVE_FPS: float = 60.0
+const DISSOLVE_TIME: float = DISSOLVE_STRIP_FRAMES / DISSOLVE_FPS
+## The last of the reform: the real sprite and her weapon fade in under the strip's closing sparkle, which fades out.
+const REFORM_FADE: float = 0.12
+## Anything that hides the owner's sprite fades it out under the pose over this long (the weapon too, both ways).
+const BODY_FADE_OUT: float = 0.1
 ## How much of her motion's slope (radians) the swirl leans with.
 const DRIFT_LEAN: float = 0.4
 ## Speed under which the swirl keeps its last heading.
@@ -362,6 +370,9 @@ var _reform_t: float = -1.0
 var _drift_at: Vector2 = Vector2.ZERO
 var _drift_flip: bool = false
 var _drift_lean: float = 0.0
+var _drift_len: float = 1.0
+## 1 = the owner's own sprite fully there; eases to 0 under a pose that replaces it.
+var _body_a: float = 1.0
 var _face_flip: bool = false
 ## Overdrive: seconds in (-1 = off), where he is drawn, afterimage positions (newest first) with their mirroring.
 var _od_t: float = -1.0
@@ -395,6 +406,7 @@ var _floor := Node2D.new()
 
 func _init() -> void:
 	top_level = true
+	process_priority = -100  # timers end before the Player reads them (no one-frame gap when a pose ends)
 	z_index = 1
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_floor.z_as_relative = false
@@ -707,14 +719,20 @@ func _sync_drift(p: Player) -> void:
 	var on: bool = slot != null and slot.is_drifting() and not p.dead
 	_drift_at = p.global_position + p.visual_offset
 	_face_flip = p.facing.x < 0.0
+	if on and _drift_t < 0.0:  # starts as she stands: facing her aim, upright
+		_drift_flip = _face_flip
+		_drift_lean = 0.0
 	if on and p.velocity.length() > DRIFT_MIN_SPEED:
 		_drift_flip = p.velocity.x < 0.0
 		_drift_lean = atan2(p.velocity.y, absf(p.velocity.x)) * DRIFT_LEAN * (-1.0 if _drift_flip else 1.0)
 	if _drift_t >= 0.0 and not on and not p.dead:  # gathers back with a little burst of petals
-		_reform_t = 0.0
+		# (cut short while still dissolving, the reform picks up at the same frame instead of jumping to the swirl)
+		_reform_t = maxf(0.0, DISSOLVE_TIME - _drift_t)
 		petal_pop(_drift_at)
 	if p.dead:
 		_reform_t = -1.0
+	if on:
+		_drift_len = slot.data.duration
 	_drift_t = slot.elapsed() if on else -1.0
 
 
@@ -724,7 +742,16 @@ func is_flaring() -> bool:
 
 
 func is_petals() -> bool:
-	return _drift_t >= 0.0 or _reform_t >= 0.0
+	return _drift_t >= 0.0 or (_reform_t >= 0.0 and _reform_t < DISSOLVE_TIME - REFORM_FADE)
+
+
+## How much of the owner's own sprite shows: fades out under a pose that replaces it, and back in under the end of a reform.
+func owner_alpha() -> float:
+	if hides_owner():  # (only the petals' first frame is her own idle frame; other poses / forms are other art)
+		return _body_a if is_petals() else 0.0
+	if _reform_t >= 0.0:
+		return clampf((_reform_t - (DISSOLVE_TIME - REFORM_FADE)) / REFORM_FADE * 2.0, 0.0, 1.0)
+	return 1.0
 
 
 func _sync_blaze(p: Player) -> void:
@@ -788,8 +815,12 @@ func _process(delta: float) -> void:
 			_morph_t = -1.0
 	if _reform_t >= 0.0:
 		_reform_t += delta
-		if _reform_t > DRIFT_STRIP_FRAMES / DRIFT_FPS:
+		if _reform_t > DISSOLVE_TIME:
 			_reform_t = -1.0
+	if hides_owner():
+		_body_a = maxf(0.0, _body_a - delta / BODY_FADE_OUT)
+	else:
+		_body_a = 1.0
 	if _sapling_fire_t >= 0.0:
 		_sapling_fire_t += delta
 		if _sapling_fire_t > SAPLING_FIRE_ART.get_width() / SAPLING_FIRE_ART.get_height() / SAPLING_FIRE_FPS:
@@ -1164,23 +1195,33 @@ func _draw_whirl() -> void:
 func _draw_drift() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	var cell: float = DRIFT_ART.get_height()
-	var frame: int = 0
-	var art: Texture2D = REFORM_ART
-	var flip: bool = _face_flip
-	if _drift_t >= DISSOLVE_TIME:  # the swirl, leaning with her motion
-		draw_set_transform(_drift_at, _drift_lean, Vector2(-1.0 if _drift_flip else 1.0, 1.0))
-		_draw_frame(DRIFT_ART, int(_drift_t * DRIFT_FPS) % DRIFT_STRIP_FRAMES, cell, Vector2.ZERO, px)
+	var face: float = -1.0 if _face_flip else 1.0
+	var heading: float = -1.0 if _drift_flip else 1.0
+	if _drift_t >= DISSOLVE_TIME:  # the swirl, leaning with her motion; whole loops, so it ends where the reform starts
+		var span: float = maxf(_drift_len - DISSOLVE_TIME, 0.1)
+		var loops: float = maxf(1.0, roundf(span * DRIFT_FPS / DRIFT_STRIP_FRAMES))
+		var phase: int = int(minf((_drift_t - DISSOLVE_TIME) / span, 1.0) * loops * DRIFT_STRIP_FRAMES)
+		draw_set_transform(_drift_at, _drift_lean, Vector2(heading, 1.0))
+		_draw_frame(DRIFT_ART, phase % DRIFT_STRIP_FRAMES, cell, Vector2.ZERO, px)
 		draw_set_transform(Vector2.ZERO)
 		return
-	if _drift_t >= 0.0:
-		art = DISSOLVE_ART
-		frame = int(_drift_t * DRIFT_FPS)
-	elif _reform_t >= 0.0:
-		frame = int(_reform_t * DRIFT_FPS)
+	var art: Texture2D = DISSOLVE_ART
+	var u: float = 0.0  # 0 = her as she stands, 1 = the swirl: turns to its heading and tilts with it on the way
+	var alpha: float = 1.0
+	var t: float = _drift_t
+	if _drift_t < 0.0:
+		if _reform_t < 0.0:
+			return
+		art = REFORM_ART
+		t = _reform_t
+		u = 1.0 - clampf(t / DISSOLVE_TIME, 0.0, 1.0)
+		alpha = 1.0 - clampf((t - (DISSOLVE_TIME - REFORM_FADE)) / REFORM_FADE, 0.0, 1.0)
 	else:
-		return
-	draw_set_transform(_drift_at, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
-	_draw_frame(art, mini(frame, DRIFT_STRIP_FRAMES - 1), cell, Vector2.ZERO, px)
+		u = clampf(t / DISSOLVE_TIME, 0.0, 1.0)
+	var e: float = smoothstep(0.3, 0.9, u)
+	var frame: int = mini(int(t * DISSOLVE_FPS), DISSOLVE_STRIP_FRAMES - 1)
+	draw_set_transform(_drift_at, _drift_lean * e, Vector2(lerpf(face, heading, e), 1.0))
+	_draw_frame(art, frame, cell, Vector2.ZERO, px, alpha)
 	draw_set_transform(Vector2.ZERO)
 
 
