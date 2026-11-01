@@ -130,6 +130,7 @@ func _start_host() -> void:
 ## Leave as host: shut the server down (clients see "Disconnected from server") and go back to the menu.
 func _on_host_leave(_restart: bool) -> void:
 	session.stop()
+	_announcer.stop()  # frees the discovery port now: the menu's browser binds it this very frame
 	_announcer.queue_free()
 	_announcer = null
 	_server_arena.queue_free()
