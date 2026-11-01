@@ -682,13 +682,15 @@ def sakura(step=None, t=0):
                (9 - wave(3, 2), 46), (12 - wave(2, 1.5), 38), (15 - wave(1, 1), 28), (19, 17)]), PINK)
     up.flat(L([(12, 17), (10 - wave(1, 0.5), 24)], 1), PINK_L)  # its sheen: one short lit streak, the rest is the part's own shading
     up.part(E((16, 5, 48, 37)), PINK)  # hair
-    up.part(RR(FACE, FACE_R), SKIN)  # face
+    # a soft, narrow jaw: the full-width brow tapers into a smaller rounded chin
+    up.part(lambda d, f: (d.rounded_rectangle((FACE[0], FACE[1], FACE[2], 29), FACE_R, f),
+                          d.ellipse((FACE[0] + 1, 19, FACE[2] - 1, FACE[3] - 1), f)), SKIN)
     # middle part: two curtains and two long side locks, mirrored about the face's centre line
     mid = (FACE[0] + FACE[2]) // 2
     curtain = [(mid, 10), (mid + 9, 9), (mid + 13, 14), (mid + 14, 23), (mid + 12, 23), (mid + 11, 19), (mid + 6, 15),
                (mid + 1, 14)]  # sweeps off the forehead
     drift = wave(2, 0.5)  # the side locks' ends drift with the breeze
-    lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16 - drift, 38), (mid + 12 - drift, 36)]
+    lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16 - drift, 40), (mid + 9 - drift, 37), (mid + 10, 29)]  # swings in over the cheek, narrowing the jaw
     for side in (1, -1):  # each curtain and its lock as one shape, so no line where the lock meets the curtain
         c_pts, l_pts = ([(mid + side * (x - mid), y) for x, y in pts] for pts in (curtain, lock))
         up.part(lambda d, f, c_pts=c_pts, l_pts=l_pts: (d.polygon(c_pts, f), d.polygon(l_pts, f)), PINK)  # shaded like the ponytail
@@ -703,8 +705,8 @@ def sakura(step=None, t=0):
             up.flat(R((x, 21, x + 3, 21)), OUTLINE)
             up.dot(x + out, 21, OUTLINE)
             up.dot(x + out + (1 if out > 0 else -1), 20, OUTLINE)
-    up.flat(R((BLUSH[0], BLUSH[2], BLUSH[0] + 2, BLUSH[2])), PINK)  # pink blush
-    up.flat(R((BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])), PINK)
+    up.flat(R((BLUSH[0] + 1, BLUSH[2], BLUSH[0] + 3, BLUSH[2])), PINK)  # pink blush, kept on the narrower cheeks
+    up.flat(R((BLUSH[1] - 3, BLUSH[2], BLUSH[1] - 2, BLUSH[2])), PINK)
     up.flat(R((MOUTH[0], MOUTH[1], MOUTH[0] + 1, MOUTH[1])), MAROON)  # small mouth
     return low, up
 
