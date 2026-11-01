@@ -21,7 +21,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 from palette import (BLUE, BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, PALETTE, PINK, PINK_L, RED,
-                     SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, WHITE, YELLOW)
+                     SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, VIOLET, VIOLET_D, VIOLET_L, WHITE, YELLOW)
 
 SIZE = 64
 IDLE_BOB = [0, 1, 2, 1]  # upper-body offset (px down) per idle frame; legs stay planted
@@ -5318,6 +5318,583 @@ def app_icon(style: str | None = None) -> Image.Image:
     art = ICON_STYLES[style or ICON_STYLE]()
     assert set(art.getdata()) <= set(PALETTE), "icon colour off palette"
     return art.resize((ICON_SIZE, ICON_SIZE), Image.NEAREST)
+
+
+# --- Shadow: shadow-magic ninja (character, Umbral Shuriken, Shadow Step / Gloom Hound / Shadow Bind FX) --------------
+# A hooded figure of dark violet with a void for a face and two glowing eyes. His hood ends in a long curled tip
+# (CROWNS shadow_crown) and a tattered cloak streams behind him; wisps of shadow rise off him (AURAS shadow_aura).
+EYE_GLOW = (PINK_L, WHITE)
+
+
+def shadow_eyes(c: Canvas) -> None:
+    """Two slanted glowing slits in the void of the face (X eyes when knocked out)."""
+    y = EYES_Y - 1
+    for i, x in enumerate(EYES_X):
+        if KO:
+            x_eye(c, x, EYES_Y, PINK_L)
+            continue
+        rows = ((x, x + 1), (x, x + 1, x + 2, x + 3), (x + 2, x + 3)) if i == 0 else \
+            ((x + 2, x + 3), (x, x + 1, x + 2, x + 3), (x, x + 1))  # slanting down towards the nose
+        for r, xs in enumerate(rows):
+            for px_ in xs:
+                c.dot(px_, y + r, PINK_L if r != 1 else WHITE)
+        c.dot(x + (0 if i else 3), y + 1, PINK)  # the outer tip cools
+        for hx, hy in ((x - 1 + 5 * (1 - i), y + 2), (x + 1, y - 1), (x + 2, y + 3)):  # a faint glow round the slit
+            c.dot(hx, hy, VIOLET)
+
+
+def shadow(step=None, t=0):
+    """Shadow: a hooded shadow-magic ninja. A tall curled hood tip (drawn above the art box: CROWNS shadow_crown), a face
+    that is only a void with two glowing slits for eyes, a dark violet cloak torn into streamers that stream behind him,
+    dark gloves, a lilac sash with a glowing rune on the chest and a glowing gem at the belt. Wisps rise off him
+    (shadow_aura)."""
+    low = Canvas()
+    for x, dy in legs(low, VIOLET_D, SHADOW, step):
+        low.flat(R((x, 49 + dy, x + 5, 49 + dy)), VIOLET)  # leg wrap
+        low.flat(R((x, 52 + dy, x + 5, 52 + dy)), VIOLET)
+        low.dot(x + 1, 46 + dy, VIOLET)  # fold
+        low.dot(x + 4, 55 + dy, VIOLET_L)  # boot sheen
+    up = Canvas()
+    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
+    sw = SWAY[t % 4]
+    # cloak: torn streamers trailing behind him (left), the longest in the wind
+    up.part(P([(22, 34), (14 - wave(0, 1), 37), (9 - wave(1, 1.5), 44 + sw), (5 - wave(2, 2), 51), (9 - wave(1, 1), 51),
+               (8 - wave(2, 1.5), 58), (13 - wave(2, 1), 55), (14 - wave(1, 1), 60), (18 - wave(1, 1), 54),
+               (21, 50)]), VIOLET_D)
+    up.flat(L([(18, 38), (11 - wave(1, 1.5), 46 + sw)], 1), VIOLET)  # a lit fold
+    up.flat(L([(16, 47), (10 - wave(2, 1.5), 55)], 1), VIOLET)
+    arm(up, ARM_X[0], VIOLET_D, SHADOW)
+    up.flat(R((ARM_X[0], 41, ARM_X[0] + 5, 41)), VIOLET)  # cuff
+    up.part(RR(BODY, 3), VIOLET_D)
+    up.flat(L([(23, 34), (41, 46)], 2), VIOLET)  # sash across the chest
+    up.flat(L([(23, 34), (40, 45)], 1), VIOLET_L)  # its lit edge
+    up.flat(L([(33, 38), (32, 40), (33, 42)], 1), PINK_L)  # a glowing crescent rune
+    up.dot(34, 40, WHITE)
+    up.flat(R((20, 46, 44, 47)), SHADOW)  # belt
+    up.flat(R((31, 46, 33, 47)), PINK)  # gem
+    up.dot(32, 46, WHITE)
+    up.flat(R((21, 33, 43, 34)), VIOLET)  # raised collar
+    up.dot(24, 37, VIOLET)  # cloth sheen
+    up.dot(24, 38, VIOLET)
+    arm(up, ARM_X[1], VIOLET_D, SHADOW)
+    up.flat(R((ARM_X[1], 41, ARM_X[1] + 5, 41)), VIOLET)
+    up.dot(ARM_X[1] + 2, 44, PINK_L)  # a spark of magic in the fingertips
+    # the hood: a lilac outer shell with a drape down the back
+    up.part(lambda d, f: (d.ellipse((16, 6, 48, 37), f), d.polygon(
+        [(16, 20), (12, 29 + wave(1, 1)), (15, 28), (14, 36), (19, 32), (21, 39), (24, 31), (24, 20)], f)), VIOLET)
+    up.flat(L([(22, 9), (31, 7), (38, 8)], 1), VIOLET_L)  # sheen
+    up.flat(L([(17, 22), (16, 27)], 1), VIOLET_L)
+    up.part(RR(FACE, FACE_R), VIOLET_D)  # the hood's opening
+    up.flat(RR((FACE[0] + 1, FACE[1] + 3, FACE[2] - 1, FACE[3] - 1), FACE_R - 2), OUTLINE)  # and the void in it
+    up.part(P([(FACE[0], 14), (FACE[2] + 1, 14), (FACE[2] + 1, 18), (43, 19), (39, 21), (35, 19), (31, 21), (27, 19),
+               (FACE[0], 18)]), VIOLET_D, shade=False)  # the hood's brow, a V over the eyes
+    up.flat(L([(FACE[0] + 2, 14), (FACE[2] - 2, 14)], 1), VIOLET_L)  # its lit rim
+    shadow_eyes(up)
+    if not KO:
+        up.flat(L([(35, 31), (38, 31)], 1), VIOLET_D)  # a sliver of a grin
+        up.dot(39, 30, VIOLET_D)
+    return low, up
+
+
+def shadow_crown(t: int, dy: int) -> Canvas:
+    """The hood's tip: a long point rising above the head and curling back, its end tattering into a wisp that sways."""
+    c = Canvas(CELL)
+    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
+    at = lambda pts: [(PAD + x, PAD + UPPER_DY + dy + y) for x, y in pts]
+    c.part(P(at([(34, 12), (33, 5), (29, -1), (22, -7), (13, -11 + wave(1, 1)), (4 - wave(2, 1), -10), (-2 - wave(2, 2), -7),
+                 (6 - wave(2, 1), -6), (13, -4), (19, 0), (22, 6), (21, 12)])), VIOLET)
+    c.flat(L(at([(31, 6), (28, 0), (22, -5), (13, -9 + wave(1, 1))]), 1), VIOLET_L)  # lit edge
+    spark = at([(-1, -7), (3, -9), (1, -8), (5, -9)])[t % 4]
+    sdot(c, spark[0], spark[1], PINK_L)
+    return c
+
+
+SHADOW_WISPS = ((9, 38), (20, 28), (50, 34), (55, 22), (13, 20), (52, 48), (8, 52))
+
+
+def shadow_aura(i: int) -> Canvas:
+    """Wisps of shadow drifting up off him (behind him): thin curling tendrils rising 3 px a tick, 12 px apart, so one
+    leaving the top is replaced by the next (period 4); they thin out and darken towards the top."""
+    c = Canvas()
+    for x, y0 in SHADOW_WISPS:
+        for k in range(0, 5):
+            y = y0 + k * 12 - 3 * i
+            if y < 5 or y > 57:
+                continue
+            h = (y - 5) / 52.0  # 0 at the top, 1 at the bottom
+            col = VIOLET if h > 0.45 else VIOLET_D
+            pts = [(x + round(math.sin((y + j + x) * 0.5) * 2), y + j) for j in range(0, 6 if h > 0.3 else 4)]
+            c.flat(L(pts, 1), col)
+            if h > 0.55:
+                sdot(c, pts[0][0], pts[0][1] - 1, VIOLET_L)
+    return c
+
+
+# --- Umbral Shuriken (weapon) and its star ---
+def star_points(cx, cy, r, ang, inner=0.35):
+    pts = []
+    for k in range(8):
+        rr = r if k % 2 == 0 else r * inner
+        a = ang + k * math.pi / 4
+        pts.append((cx + math.cos(a) * rr, cy + math.sin(a) * rr))
+    return pts
+
+
+def shadow_star(c: Canvas, cx: float, cy: float, r: float, ang: float) -> None:
+    c.part(P(star_points(cx, cy, r, ang)), VIOLET)
+    c.flat(E((cx - 1, cy - 1, cx + 1, cy + 1)), PINK_L)
+    c.dot(round(cx), round(cy), WHITE)
+
+
+def umbral_shuriken(c: Canvas, t: int = 0) -> None:
+    """The held weapon: a spinning star of shadow hovering over the hand, a trailing wisp behind it (t = frame of the
+    held loop: a quarter turn per frame)."""
+    c.part(P([(4, 12), (9, 11), (12, 12), (10, 14), (5, 14)]), VIOLET_D)  # the hand-bound wrap it spins over
+    c.flat(R((6, 12, 8, 12)), PINK_L)
+    shadow_star(c, 20, 12, 8, t * math.pi / 8)
+    for k in range(3):  # wisps off the star
+        sdot(c, 12 - k * 2, 9 + k + t % 2, VIOLET)
+    c.dot(30 + t % 2, 12, VIOLET_L)
+
+
+def shadow_star_shot(c: Canvas, f: int) -> None:  # the thrown star, a quarter turn between frames
+    m = PROJ // 2
+    shadow_star(c, m, m, 6, f * math.pi / 4)
+    c.dot(m - 8 + f, m, VIOLET_D)  # a trailing wisp
+    c.dot(m - 7, m + 1 - f, VIOLET)
+
+
+ICONS["shadow_step"] = lambda c: (c.flat(E((0, 6, 12, 12)), VIOLET_D), c.flat(E((2, 7, 10, 11)), VIOLET),
+                                  c.flat(R((3, 8, 4, 9)), PINK_L), c.flat(R((8, 8, 9, 9)), PINK_L),
+                                  c.flat(P([(4, 0), (8, 0), (8, 3), (10, 3), (6, 7), (2, 3), (4, 3)]), VIOLET_L),
+                                  c.flat(L([(6, 1), (6, 4)], 1), WHITE))
+ICONS["gloom_hound"] = lambda c: (c.flat(P([(1, 4), (3, 0), (5, 3), (9, 3), (11, 0), (12, 5), (11, 11), (2, 11)]),
+                                         VIOLET),
+                                  c.flat(P([(3, 8), (9, 8), (9, 10), (3, 10)]), VIOLET_D),
+                                  c.flat(R((3, 5, 4, 6)), PINK_L), c.flat(R((8, 5, 9, 6)), PINK_L),
+                                  c.dot(4, 5, WHITE), c.dot(9, 5, WHITE), c.flat(R((5, 9, 5, 10)), WHITE),
+                                  c.flat(R((7, 9, 7, 10)), WHITE))
+ICONS["shadow_bind"] = lambda c: (c.flat(L([(0, 11), (5, 9), (8, 5), (12, 1)], 2), VIOLET),
+                                  c.flat(L([(0, 11), (5, 9), (8, 5), (12, 1)], 1), VIOLET_L),
+                                  c.flat(E((0, 8, 4, 12)), VIOLET_D), c.flat(R((1, 9, 1, 10)), PINK_L),
+                                  c.flat(R((3, 9, 3, 10)), PINK_L),
+                                  c.flat(P([(8, 0), (12, 0), (12, 4), (10, 2)]), VIOLET_D),
+                                  c.flat(L([(9, 3), (11, 1)], 1), PINK_L))
+
+CHARACTERS["shadow"] = shadow
+CROWNS["shadow"] = shadow_crown
+AURAS["shadow"] = shadow_aura
+WEAPONS["shadow_shuriken"] = umbral_shuriken
+WEAPON_ANIMS["shadow_shuriken"] = umbral_shuriken
+PROJECTILES["shadow_shuriken"] = shadow_star_shot
+
+
+# --- Shadow FX (SpecialFx plays them from synced state) ---------------------------------------------------------------
+SINK_FRAMES = 10
+PUDDLE_LOOP = 8
+BURST_FRAMES = 14
+HOUND_RISE_FRAMES = 12
+HOUND_RUN_FRAMES = 8
+HOUND_BITE_FRAMES = 6
+HOUND_MELT_FRAMES = 12
+BIND_TILE = 16
+BIND_PERIOD = 14
+BIND_FRAMES = 4
+BIND_HEAD_FRAMES = 4
+BIND_WRAP_FRAMES = 8
+BIND_HIT_FRAMES = 8
+SH_FEET = PAD + 57  # row of his soles in a CELL frame (his body's centre column is CELL // 2)
+
+
+def sdot2(c: Canvas, x: int, y: int, color) -> None:
+    """A dot kept 2 px off the frame edge (so the outline pass stays inside the frame)."""
+    if 2 <= x < c.img.width - 2 and 2 <= y < c.img.height - 2:
+        c.dot(x, y, color)
+
+
+def dither_out(img: Image.Image, frac: float, flip: bool = False) -> Image.Image:
+    """Clears the pixels whose Bayer threshold is below `frac` (hard alpha, no blending)."""
+    out = img.copy()
+    px = out.load()
+    for y in range(out.height):
+        for x in range(out.width):
+            t = BAYER[y % 4][(x + (2 if flip else 0)) % 4] / 16
+            if px[x, y][3] and t < frac:
+                px[x, y] = (0, 0, 0, 0)
+    return out
+
+
+@functools.lru_cache(maxsize=None)
+def shadow_idle() -> Image.Image:
+    """His first idle frame without the wisps (CELL px): the body the sink / rise strips squash into the floor."""
+    return frames(shadow, None, shadow_crown)[0]
+
+
+def puddle_shape(c: Canvas, cx: float, cy: float, rx: float, k: float = 0.0, eyes: bool = True, seed: int = 3) -> None:
+    """A dark puddle seen from above-ish (ellipse 0.4 as tall as wide) with a ragged edge, a lilac rim light on its upper
+    edge, a void in the middle and (optionally) two glowing eyes looking up out of it. `k` (0..1) turns the ripples."""
+    if rx < 2:
+        return
+    ry = max(1.5, rx * 0.4)
+    rng = random.Random(seed)
+    n = 18
+    pts = []
+    for i in range(n):
+        a = math.tau * i / n
+        j = 1.0 + (0.14 * math.sin(a * 3 + math.tau * k) + rng.uniform(-0.05, 0.05)) * (1 if i % 2 else 0.5)
+        pts.append((cx + math.cos(a) * rx * j, cy + math.sin(a) * ry * j))
+    c.flat(P(pts), VIOLET_D)
+    c.flat(lambda d, f: d.ellipse((cx - rx * 0.8, cy - ry * 0.8, cx + rx * 0.8, cy + ry * 0.8), f), OUTLINE)
+    top = [(cx + math.cos(a) * rx * 0.92, cy + math.sin(a) * ry * 0.92) for a in (math.pi + 0.5 + 0.12 * i for i in range(14))]
+    c.flat(L([(round(x), round(y)) for x, y in top], 1), VIOLET)
+    if rx > 10:  # a ring of ripples turning with k
+        for i in range(5):
+            a = math.tau * (i / 5 + k)
+            sdot2(c, round(cx + math.cos(a) * rx * 0.62), round(cy + math.sin(a) * ry * 0.62), VIOLET)
+    if eyes and rx >= 9:
+        e = max(2, round(rx * 0.17))
+        for sx in (-1, 1):
+            ex, ey = round(cx + sx * rx * 0.28), round(cy)
+            c.flat(R((ex - 1, ey - 1, ex + 1, ey)), PINK_L)
+            c.dot(ex, ey - 1, WHITE)
+            c.dot(ex - sx * 2, ey - 1 - (e > 3), PINK)
+
+
+def shadow_puddle_frame(k: int, kind: str = "loop") -> Image.Image:
+    """The floor puddle he moves as (96 px, centred on his feet): 'in' grows from a dot as he sinks, 'loop' (period 8)
+    ripples with its eyes blinking now and then and wisps curling off the rim, 'out' shrinks as he rises."""
+    c = Canvas(CELL)
+    m = CELL // 2
+    R0 = 18
+    if kind == "in":
+        u = (k + 1) / SINK_FRAMES
+        rx = R0 * math.sin(u * math.pi / 2)
+    elif kind == "out":
+        u = k / (SINK_FRAMES - 1)
+        rx = R0 * math.cos(u * math.pi / 2) ** 1.5
+    else:
+        rx = R0 + (0.8 if k % 4 < 2 else -0.4)
+    phase = k / PUDDLE_LOOP
+    blink = kind == "loop" and k % PUDDLE_LOOP == 5
+    puddle_shape(c, m, m, rx, phase, eyes=not blink)
+    if kind == "loop":
+        for i in range(4):  # wisps curling off the rim, one per quarter turn
+            a = math.tau * (i / 4 + phase / 4) + 0.4
+            x, y = m + math.cos(a) * rx * 0.95, m + math.sin(a) * rx * 0.38
+            rise = (phase * 4 + i) % 1.0
+            pts = [(round(x + math.sin(j * 0.9 + i) * 1.5), round(y - rise * 7 - j)) for j in range(4)]
+            c.flat(L(pts, 1), VIOLET)
+        # a ripple expanding off the rim, dithered away as it goes
+        r2 = rx * (1.0 + 0.3 * phase)
+        for i in range(0, 40):
+            a = math.tau * i / 40
+            if (i + k) % 3 == 0:
+                sdot2(c, round(m + math.cos(a) * r2), round(m + math.sin(a) * r2 * 0.4), VIOLET_D)
+    return outline(c.img)
+
+
+def shadow_sink_frame(k: int) -> Image.Image:
+    """He sinks into his own shadow (CELL px, drawn over him): the body squashes down towards his feet, widening, shedding
+    pixels to a dither, tendrils of shadow pulling him down and drops flying up (the puddle grows under him: puddle_in)."""
+    u = k / (SINK_FRAMES - 1)
+    src = shadow_idle()
+    box = src.getbbox()
+    body = src.crop((box[0], box[1], box[2], box[3]))
+    body = body.resize((round(body.width * (1 + 0.12 * u)), round(body.height * (1 - 0.35 * u))), Image.NEAREST)
+    out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    sunk = round(u ** 1.2 * (body.height + 4))  # how far down into the floor he has gone
+    out.alpha_composite(body, (CELL // 2 - body.width // 2, SH_FEET + 3 - body.height + sunk))
+    for y in range(SH_FEET + 3, CELL):  # below the floor line he is gone
+        for x in range(CELL):
+            out.putpixel((x, y), (0, 0, 0, 0))
+    out = dither_out(out, max(0.0, u - 0.25) * 0.9, flip=k % 2 == 1)
+    c = Canvas(CELL)
+    c.img.alpha_composite(out)
+    c.px = c.img.load()
+    rng = random.Random(40 + k)
+    cx = CELL // 2
+    for i in range(4):  # drops thrown up as he goes in
+        ang = rng.uniform(-2.6, -0.5)
+        r = 6 + u * rng.uniform(10, 22)
+        x, y = cx + math.cos(ang) * r * 1.4, SH_FEET - 2 + math.sin(ang) * r * (0.9 - 0.3 * u)
+        if k > 0:
+            sdot2(c, round(x), round(y), (VIOLET, VIOLET_L, PINK_L)[i % 3])
+    if 0 < k < SINK_FRAMES - 1:  # tendrils reaching up out of the floor to pull him in
+        for i, dx in enumerate((-9, 0, 9)):
+            top = SH_FEET - 8 - (1 - u) * 14 - i % 2 * 4
+            pts = [(cx + dx + round(math.sin(j * 0.8 + i + k) * 1.5), round(SH_FEET - j)) for j in range(0, round(SH_FEET - top))]
+            if len(pts) > 1:
+                c.flat(L(pts, 1), VIOLET)
+                sdot2(c, pts[-1][0], pts[-1][1], VIOLET_L)
+    return outline(c.img)
+
+
+def shadow_burst_frame(k: int, floor: bool = False) -> Image.Image:
+    """Emerging (128 px frames, centred on his feet): a ring of shadow spikes erupts round him out to the blast's reach
+    (step_radius 80 world px = 53 art px), with a pink-white flash at the centre, then they collapse into drifting wisps.
+    `floor`: the dark scorch + ring on the floor under the players."""
+    n = 128
+    m = n // 2
+    c = Canvas(n)
+    u = k / (BURST_FRAMES - 1)
+    reach = 52 * math.sin(min(1.0, u * 2.2) * math.pi / 2)
+    squash = 0.5
+    if floor:
+        r = reach * 0.95
+        fade = max(0.0, 1.0 - u * 1.15)
+        if r > 3 and fade > 0:
+            c.flat(E((m - r, m - r * squash, m + r, m + r * squash)), VIOLET_D)
+            r2 = r * 0.82 * (0.4 + 0.6 * fade)
+            c.flat(E((m - r2, m - r2 * squash, m + r2, m + r2 * squash)), OUTLINE)
+            ringr = r
+            c.flat(lambda d, f: d.ellipse((m - ringr, m - ringr * squash, m + ringr, m + ringr * squash), outline=f, width=1),
+                   VIOLET_L if u < 0.5 else VIOLET)
+        return dither_out(outline(c.img), max(0.0, u - 0.5) * 1.6)
+    rng = random.Random(11)
+    count = 14
+    for i in range(count):
+        a = math.tau * i / count + rng.uniform(-0.12, 0.12)
+        life = 1 - max(0.0, (u - 0.35) / 0.65)  # spikes shrink away after the peak
+        h = (14 + rng.uniform(0, 22)) * life * min(1.0, u * 5)
+        r = reach * rng.uniform(0.8, 1.0)
+        x, y = m + math.cos(a) * r, m + math.sin(a) * r * squash
+        if h >= 2:
+            lean = rng.choice((-1, 0, 1))
+            c.part(P([(x - 2, y), (x + 2, y), (x + 1 + lean * 0.5, y - h * 0.55), (x + lean * 2, y - h)]),
+                   VIOLET_D if i % 2 else VIOLET)
+            c.dot(round(x + lean * 2), round(y - h), PINK_L)
+    if u < 0.55:  # the flash where he stands
+        fr = round(10 * math.sin(u / 0.55 * math.pi))
+        if fr >= 1:
+            c.flat(E((m - fr, m - fr * 0.7, m + fr, m + fr * 0.7)), VIOLET_L)
+            c.flat(E((m - fr * 0.5, m - fr * 0.35, m + fr * 0.5, m + fr * 0.35)), WHITE)
+    for i in range(10):  # wisps drifting up as it fades
+        if u > 0.3:
+            a = rng.uniform(0, math.tau)
+            x, y = m + math.cos(a) * reach * rng.uniform(0.3, 1.0), m + math.sin(a) * reach * squash * 0.8
+            y -= (u - 0.3) * rng.uniform(14, 34)
+            sdot2(c, round(x), round(y), rng.choice((VIOLET, VIOLET_L, PINK_L, VIOLET)))
+    return outline(c.img)
+
+
+# --- Gloom Hound ---
+HOUND_GROUND = 50  # row of its paws, drawn on a 96 px canvas in 64 px coordinates, then cropped to HOUND_CELL
+HOUND_CELL = 80
+HOUND_BOX = (-8, -10, 72, 70)  # the crop: its paws land on row 60 of 80, its centre column on 40
+
+
+def hound_body(c: Canvas, phase: float, jaw: float = 0.0, lunge: float = 0.0, reveal: float = 1.0, wisp_k: float = 0.0) -> None:
+    """A shadow hound facing right (64 px coordinates): a lean violet body with a deep chest and tucked waist, a jagged
+    mane down its spine, a long snout with a glowing eye and a jaw that opens (`jaw` 0..1), swept-back ears, bent legs on
+    a run cycle (`phase` radians), a long wisp-tail and smoke streaming off its back. `reveal` < 1 hides everything above
+    that fraction of its height (rising out of the floor)."""
+    g = HOUND_GROUND
+    bob = -round(abs(math.sin(phase)) * 1.5) if phase else 0
+    hx = round(lunge * 4)
+    for i in range(5):  # smoke streaming off the back, behind everything
+        sdot2(c, 11 - i * 2 - round(wisp_k * 2), g - 24 + i * 2 + round(math.sin(phase * 0.5 + i * 1.3) * 2) + bob,
+              VIOLET_D if i % 2 else VIOLET)
+    tw = round(math.sin(phase) * 2)
+    c.flat(L([(15, g - 21 + bob), (9, g - 26 + bob), (4, g - 33 + tw), (6, g - 40 + tw)], 2), VIOLET_D)  # the tail wisp
+    c.flat(L([(6, g - 39 + tw), (8, g - 43 + tw)], 1), VIOLET)
+    sdot2(c, 8, g - 44 + tw, PINK_L)
+
+    def leg(hip: tuple, ph: float, back: bool, col) -> None:
+        swing, lift = math.sin(ph), max(0.0, math.cos(ph))
+        paw = (round(hip[0] + swing * 6), round(g - lift * 5))
+        knee = (round(hip[0] + (-3 if back else 3) + swing * 2), round((hip[1] + g) / 2 - lift * 2))
+        c.part(L([hip, knee, paw], 3), col)
+        c.flat(R((paw[0] - 1, paw[1], paw[0] + 3, paw[1])), VIOLET)  # paw
+    hips = ((20, g - 17 + bob), (40 + hx, g - 15 + bob))
+    far = phase + math.pi
+    leg((24, g - 16 + bob), far, True, SHADOW)  # the far legs, darker
+    leg((44 + hx, g - 14 + bob), far + 0.9, False, SHADOW)
+    # body: deep chest, tucked waist, a round haunch
+    c.part(P([(13, g - 22 + bob), (20, g - 28 + bob), (31, g - 30 + bob), (40, g - 32 + bob), (47 + hx, g - 29 + bob),
+              (48 + hx, g - 17 + bob), (41 + hx, g - 11 + bob), (33, g - 15 + bob), (24, g - 14 + bob), (15, g - 15 + bob)]), VIOLET_D)
+    c.part(E((12, g - 26 + bob, 27, g - 12 + bob)), VIOLET_D)
+    c.flat(L([(17, g - 27 + bob), (31, g - 29 + bob), (40, g - 31 + bob)], 1), VIOLET)  # lit back
+    for i in range(6):  # jagged mane down the spine
+        x = 18 + i * 5 + (hx if i > 3 else 0)
+        c.part(P([(x, g - 28 - i // 3 + bob), (x + 4, g - 29 - i // 3 + bob), (x + 1, g - 35 - i % 2 * 2 + bob)]), VIOLET)
+    leg(hips[0], phase, True, VIOLET_D)  # the near legs
+    leg(hips[1], phase + 0.9, False, VIOLET_D)
+    # head: long snout, swept-back ears, jaw
+    hy = g - 27 + bob
+    for ex, ey, ew in ((45, -6, 0), (50, -7, 1)):  # ears swept back
+        c.part(P([(ex + hx + 4, hy - 4 + ew), (ex + hx - 2, hy + ey - 9), (ex + hx + 1, hy - 4 + ew)]), VIOLET)
+    c.part(P([(46 + hx, hy - 5), (55 + hx, hy - 5), (64 + hx, hy + 1), (62 + hx, hy + 4), (55 + hx, hy + 5), (47 + hx, hy + 7)]),
+           VIOLET_D)
+    jd = round(jaw * 7)
+    c.part(P([(48 + hx, hy + 6), (60 + hx, hy + 4 + jd), (63 + hx, hy + 4 + jd), (54 + hx, hy + 10 + jd)]), VIOLET_D)
+    if jaw > 0.2:  # teeth
+        for tx in (55, 58, 61):
+            c.dot(tx + hx, hy + 5, WHITE)
+            c.dot(tx + hx - 1, hy + 4 + jd - 1, WHITE)
+    c.flat(R((53 + hx, hy - 3, 57 + hx, hy - 2)), PINK_L)  # the eye, an angry slit
+    c.dot(55 + hx, hy - 3, WHITE)
+    c.dot(52 + hx, hy - 4, PINK)
+    c.dot(63 + hx, hy + 1, VIOLET_L)  # nose
+    if reveal < 1.0:  # rising out of the floor: nothing above the reveal line
+        cut = round(g - 48 * reveal)
+        for y in range(0, cut):
+            for x in range(c.size):
+                c.px[x, y] = (0, 0, 0, 0)
+
+
+def floor_clip(dst: Canvas, src: Canvas, down: int) -> None:
+    """Lays `src` on `dst` pushed `down` px into the floor: whatever falls below the paws' row is not drawn."""
+    dst.img.alpha_composite(src.img.crop((0, 0, 96, HOUND_GROUND + 2 - down)), (0, down)) if down < HOUND_GROUND + 2 else None
+    dst.px = dst.img.load()
+
+
+def hound_frame(kind: str, k: int) -> Image.Image:
+    c = Canvas(96)
+    g = HOUND_GROUND
+    if kind == "run":
+        hound_body(c, math.tau * k / HOUND_RUN_FRAMES, wisp_k=k % 2)
+    elif kind == "bite":
+        t = k / (HOUND_BITE_FRAMES - 1)
+        open_ = math.sin(min(1.0, t * 1.6) * math.pi)
+        hound_body(c, 0.9, jaw=open_, lunge=math.sin(t * math.pi))
+    elif kind == "rise":
+        u = (k + 1) / HOUND_RISE_FRAMES
+        # the puddle it comes out of, then the beast pushing up through it (what is below the floor line is not drawn)
+        puddle_shape(c, 30, g + 1, 22 * min(1.0, u * 2.2), 0.3, eyes=False, seed=5)
+        body = Canvas(96)
+        hound_body(body, 0.0, wisp_k=k % 2)
+        floor_clip(c, body, round((1 - min(1.0, u * 1.2)) ** 1.5 * 46))
+        rng = random.Random(70 + k)
+        for _ in range(4):
+            sdot2(c, round(30 + rng.uniform(-20, 20)), round(g - rng.uniform(0, 8 + 20 * u)), rng.choice((VIOLET, VIOLET_L)))
+    else:  # melt: sinks back into the puddle, dithering away
+        u = k / (HOUND_MELT_FRAMES - 1)
+        puddle_shape(c, 30, g + 1, 22 * (1 - u * u) + 3, 0.1 * k, eyes=False, seed=5)
+        body = Canvas(96)
+        hound_body(body, 0.0)
+        body.img = dither_out(body.img, u * 0.7, flip=k % 2 == 1)
+        floor_clip(c, body, round(u ** 1.3 * 46))
+    return outline(c.img).crop(HOUND_BOX)
+
+
+# --- Shadow Bind ---
+def bind_line_frame(k: int) -> Image.Image:
+    """One 16 px tile of the shadow stretched along the floor (SpecialFx tiles it BIND_PERIOD px apart along the line, cropped
+    to length, never stretched): a dark band with a ragged lilac edge and pink glints running along it (4 frames, 4 px each)."""
+    c = Canvas(BIND_TILE)
+    sh = 4 * k
+    f = lambda x: (x - 1 - sh) % BIND_PERIOD  # pattern coordinate, period BIND_PERIOD
+    for x in range(1, BIND_TILE - 1):
+        p = f(x)
+        top = 4 + (1 if p in (2, 3, 9) else 0) - (1 if p in (6, 7, 12) else 0)
+        bot = 11 - (1 if p in (1, 8) else 0) + (1 if p in (5, 13) else 0)
+        for y in range(top, bot + 1):
+            c.dot(x, y, VIOLET_D)
+        c.dot(x, top, VIOLET)
+        c.dot(x, bot, OUTLINE)
+        if p == 3:
+            c.dot(x, top, VIOLET_L)
+        if p in (4, 5):  # a glint running along
+            c.dot(x, 7 + (p - 4), PINK_L)
+        if p == 10:
+            c.dot(x, 8, VIOLET)
+        if p in (0, 7):  # wisp off the edge
+            c.dot(x, top - 1, VIOLET_D)
+    return c.img
+
+
+def bind_head_frame(k: int) -> Image.Image:
+    """The head of the stretching shadow (24 px, pointing right, centred on its tip): a wedge with two glowing eyes and
+    tendrils whipping behind it."""
+    c = Canvas(24)
+    w = [0, 1, 0, -1][k]
+    c.part(P([(3, 12 + w), (8, 6), (17, 8), (21, 12), (17, 16), (8, 17)]), VIOLET_D)
+    c.flat(L([(8, 7), (16, 9)], 1), VIOLET)
+    c.flat(R((14, 10, 16, 11)), PINK_L)
+    c.dot(15, 10, WHITE)
+    c.flat(R((14, 14, 16, 14)), PINK)
+    for i, dy in enumerate((-3, 0, 3)):  # whipping tendrils off the back
+        c.flat(L([(4, 12 + dy), (2 + (k + i) % 2, 12 + dy * 2 + w)], 1), VIOLET)
+    return outline(c.img)
+
+
+def bind_wrap_frame(k: int) -> Image.Image:
+    """Dark tendrils coiled round the paralysed fighter (CELL px, over him, period 8): three strands spiralling up his body
+    from the floor, a violet glow flicker and pink sparks where they bite."""
+    c = Canvas(CELL)
+    cx = CELL // 2
+    ph = math.tau * k / BIND_WRAP_FRAMES
+    for s in range(3):
+        pts = []
+        for j in range(0, 36):
+            y = SH_FEET - j
+            a = ph + s * math.tau / 3 + j * 0.28
+            pts.append((round(cx + math.sin(a) * (12 - j * 0.1)), y))
+        for i in range(len(pts) - 1):
+            front = math.cos(ph + s * math.tau / 3 + i * 0.28) > 0
+            c.flat(L([pts[i], pts[i + 1]], 2 if front else 1), VIOLET_D if front else OUTLINE)
+            if front:
+                c.dot(pts[i][0] - 1, pts[i][1], VIOLET)
+        sdot2(c, pts[-1][0], pts[-1][1] - 1, PINK_L)
+    for i in range(3):  # drips of shadow rising
+        sdot2(c, cx + round(math.sin(ph * 2 + i * 2.1) * 14), SH_FEET - 8 - (k * 5 + i * 11) % 36, VIOLET_L if i % 2 else PINK)
+    return outline(c.img)
+
+
+def bind_floor_frame(k: int) -> Image.Image:
+    """The shadow pooled under the paralysed fighter, reaching out in tendrils (96 px, on the floor, period 8)."""
+    c = Canvas(CELL)
+    m = CELL // 2
+    ph = k / BIND_WRAP_FRAMES
+    puddle_shape(c, m, m, 17, ph, eyes=False, seed=9)
+    for i in range(6):
+        a = math.tau * i / 6 + 0.3
+        ln = 7 + (3 if (i + k) % 2 else 0)
+        pts = [(round(m + math.cos(a) * (15 + j) * 1.0), round(m + math.sin(a) * (15 + j) * 0.4 + math.sin(j + k) * 0.7))
+               for j in range(ln)]
+        c.flat(L(pts, 1), VIOLET)
+        sdot2(c, pts[-1][0], pts[-1][1], VIOLET_L)
+    return outline(c.img)
+
+
+def bind_hit_frame(k: int) -> Image.Image:
+    """Where the shadow catches someone (64 px, centred on them): a ring of dark spikes snaps shut round them with a flash."""
+    c = Canvas(64)
+    m = 32
+    u = k / (BIND_HIT_FRAMES - 1)
+    r = 19 * (1 - u) ** 1.4 + 6
+    for i in range(10):
+        a = math.tau * i / 10
+        x, y = m + math.cos(a) * r, m + 6 + math.sin(a) * r * 0.55
+        h = 12 * math.sin(min(1.0, u * 1.5) * math.pi) + 2
+        c.part(P([(x - 2, y), (x + 2, y), (x, y - h)]), VIOLET_D if i % 2 else VIOLET)
+        if h > 6:
+            c.dot(round(x), round(y - h), PINK_L)
+    if u < 0.5:
+        fr = round(9 * math.sin(u * 2 * math.pi))
+        if fr >= 1:
+            c.flat(E((m - fr, m - fr * 0.8, m + fr, m + fr * 0.8)), VIOLET_L)
+            c.flat(E((m - fr * 0.5, m - fr * 0.4, m + fr * 0.5, m + fr * 0.4)), WHITE)
+    return dither_out(outline(c.img), max(0.0, u - 0.6) * 2.0)
+
+
+FX.update({
+    "shadow_sink": lambda: strip([shadow_sink_frame(k) for k in range(SINK_FRAMES)]),
+    "shadow_puddle_in": lambda: strip([shadow_puddle_frame(k, "in") for k in range(SINK_FRAMES)]),
+    "shadow_puddle": lambda: strip([shadow_puddle_frame(k, "loop") for k in range(PUDDLE_LOOP)]),
+    "shadow_puddle_out": lambda: strip([shadow_puddle_frame(k, "out") for k in range(SINK_FRAMES)]),
+    "shadow_burst": lambda: strip([shadow_burst_frame(k) for k in range(BURST_FRAMES)]),
+    "shadow_burst_floor": lambda: strip([shadow_burst_frame(k, True) for k in range(BURST_FRAMES)]),
+    "hound_rise": lambda: strip([hound_frame("rise", k) for k in range(HOUND_RISE_FRAMES)]),
+    "hound_run": lambda: strip([hound_frame("run", k) for k in range(HOUND_RUN_FRAMES)]),
+    "hound_bite": lambda: strip([hound_frame("bite", k) for k in range(HOUND_BITE_FRAMES)]),
+    "hound_melt": lambda: strip([hound_frame("melt", k) for k in range(HOUND_MELT_FRAMES)]),
+    "bind_line": lambda: strip([bind_line_frame(k) for k in range(BIND_FRAMES)]),
+    "bind_head": lambda: strip([bind_head_frame(k) for k in range(BIND_HEAD_FRAMES)]),
+    "bind_wrap": lambda: strip([bind_wrap_frame(k) for k in range(BIND_WRAP_FRAMES)]),
+    "bind_floor": lambda: strip([bind_floor_frame(k) for k in range(BIND_WRAP_FRAMES)]),
+    "bind_hit": lambda: strip([bind_hit_frame(k) for k in range(BIND_HIT_FRAMES)]),
+})
 
 
 def main() -> None:

@@ -15,6 +15,7 @@ enum StateField {
 	HP, ARMOR, ENERGY, ENERGY_ACCUM, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
 	CHARACTER, SKILL_IDS, SKILL_COOLDOWNS, SKILL_ACTIVE, SKILL_DIRECTIONS, SKILL_ANCHORS, SKILL_WEAPON_COOLDOWNS,
 	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ, SLOW_REMAINING, SLOW_FACTOR,
+	STUN_REMAINING,
 	COUNT,
 }
 
@@ -51,6 +52,11 @@ const NOVA_SEQ_OFFSET: int = 1 << 30
 const SAPLING_SEQ_OFFSET: int = 1 << 22
 ## Storm Cloud lightning strikes are keyed too.
 const STORM_SEQ_OFFSET: int = 1 << 29
+## Shadow Step emergence strikes and Gloom Hound bites are keyed too (above 32 bits, clear of the offsets above).
+const STEP_SEQ_OFFSET: int = 1 << 31
+const HOUND_SEQ_OFFSET: int = 1 << 32
+## The Gloom Hound's body radius against the feet-level walls.
+const HOUND_RADIUS: float = 14.0
 ## Shadow clones weave side to side as they run.
 const CLONE_WOBBLE_PX: float = 26.0
 const CLONE_WOBBLE_SPEED: float = 4.0
@@ -276,6 +282,11 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var sapling_before: Array[float] = []
 	var storm: CharacterSkill = active_skill(SkillData.Kind.STORM)
 	var storm_before: float = storm.elapsed() if storm != null else 0.0
+	var step_was: CharacterSkill = active_skill(SkillData.Kind.STEP)
+	var hound_before: float = -1.0
+	var hound_was: CharacterSkill = active_skill(SkillData.Kind.HOUND)
+	if hound_was != null:
+		hound_before = hound_was.elapsed()
 	for slot: CharacterSkill in skills:
 		sapling_before.append(slot.elapsed() if slot.is_active() else -1.0)
 		slot.tick(delta)
@@ -283,6 +294,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		for i: int in skills.size():
 			if sapling_before[i] >= 0.0 and skills[i].sapling_shot_due(sapling_before[i]):
 				_sapling_shoot(skills[i], input.seq)
+	_shadow_tick(step_was, hound_was, hound_before, input.seq, delta, replay)
 	if storm != null and not replay and storm.storm_tick_due(storm_before):
 		var sd: SkillData = storm.data
 		projectiles.strike(player_id, input.seq + STORM_SEQ_OFFSET, storm.anchor, sd.storm_radius, sd.storm_damage,
@@ -310,7 +322,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if erupting != null and not erupting.is_active() and not replay:
 		_erupt(erupting, input.seq)
 	for i: int in Constants.SKILL_SLOTS:
-		if pressed[i] and not _prev_skills[i] and swing == null:  # no other special mid-swing
+		if pressed[i] and not _prev_skills[i] and swing == null and not stats.is_stunned():  # no other special mid-swing
 			_activate(skills[i], input, replay)
 	_prev_skills = pressed
 
@@ -318,9 +330,11 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var whirl: CharacterSkill = active_skill(SkillData.Kind.WHIRL)
 	var drift: CharacterSkill = active_skill(SkillData.Kind.DRIFT)
 	var overdrive: CharacterSkill = active_skill(SkillData.Kind.OVERDRIVE)
+	var stepping: CharacterSkill = active_skill(SkillData.Kind.STEP)
 	var planting: CharacterSkill = active_skill(SkillData.Kind.PILLAR)  # just pressed counts
 	var flaring: CharacterSkill = active_skill(SkillData.Kind.NOVA)
-	var rooted: bool = (planting != null and planting.pillar_winding()) or (flaring != null and flaring.nova_charging())
+	var rooted: bool = (planting != null and planting.pillar_winding()) or (flaring != null and flaring.nova_charging()) \
+		or stats.is_stunned()
 	if swing == null:
 		swing = active_skill(SkillData.Kind.SWING)  # just pressed
 	if swing != null:  # in the air: placed along the arc, over whatever is in between
@@ -343,6 +357,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			speed *= whirl.data.whirl_speed_scale
 		if overdrive != null:
 			speed *= overdrive.data.overdrive_speed_scale
+		if stepping != null:  # a puddle gliding on its own way until the stick says otherwise
+			speed *= stepping.data.step_speed_scale
 		var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
 		if smoke != null and is_hidden():
 			speed *= smoke.data.smoke_speed_scale
@@ -351,6 +367,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			speed *= drift.data.drift_speed_scale
 			if steer.length() < Constants.INPUT_DEADZONE:
 				steer = drift.direction
+		elif stepping != null and steer.length() < Constants.INPUT_DEADZONE:
+			steer = stepping.direction
 		velocity = MovementSim.step_velocity(velocity, steer, mover if mover != null else skills[0], speed, delta)
 		move_and_slide()
 	_sync_shields()
@@ -367,7 +385,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		if _windup_left <= 0.0:
 			_windup_left = -1.0
 			_release_shot(_windup_seq, _windup_weapon)
-	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null and not rooted:  # both hands on the chain
+	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null and stepping == null and not rooted:  # both hands on the chain
 		_try_fire(input.seq, replay)
 
 
@@ -402,6 +420,10 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			slot.anchor = eruption_spot(slot.direction, slot.data)
 		SkillData.Kind.STORM:
 			slot.anchor = storm_spot(slot.direction, slot.data)
+		SkillData.Kind.HOUND:
+			slot.anchor = hound_spot(slot.direction, slot.data)
+		SkillData.Kind.BIND:
+			slot.direction *= bind_length(slot.direction, slot.data)
 		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
@@ -449,6 +471,112 @@ func _sapling_shoot(slot: CharacterSkill, seq: int) -> void:
 	var key: int = seq + SAPLING_SEQ_OFFSET
 	projectiles.fire_shot(player_id, key, muzzle, dir, d.sapling_weapon, match_seed)
 	shot_fired.emit(self, key, muzzle, dir, d.sapling_weapon.id)
+
+
+# --- Shadow: Shadow Step, Gloom Hound, Shadow Bind --------------------------------------------------------------
+
+## Per step: a Shadow Step that just ended strikes where he emerges; a hound moves and bites; a bind stretches and may catch
+## someone. All authoritative-ish and non-replay (the hound moves on predicted peers too, snapshots correct it).
+func _shadow_tick(step_was: CharacterSkill, hound_was: CharacterSkill, hound_before: float, seq: int, delta: float,
+		replay: bool) -> void:
+	if replay or projectiles == null:
+		return
+	if step_was != null and not step_was.is_active():
+		var d: SkillData = step_was.data
+		projectiles.strike(player_id, seq + STEP_SEQ_OFFSET, global_position, d.step_radius, d.step_damage,
+			d.step_knockback)
+	if hound_was != null and hound_was.is_active():
+		_hound_step(hound_was, hound_before, seq, delta)
+	var binding: CharacterSkill = active_skill(SkillData.Kind.BIND)
+	if binding != null:
+		_bind_step(binding)
+
+
+## Where a hound called along `dir` rises: `hound_distance` ahead in the feet-level walls' space (like the clones), pulled back
+## off the first wall by its margin and radius.
+func hound_spot(dir: Vector2, d: SkillData) -> Vector2:
+	_feet_ray.from = global_position
+	_feet_ray.to = global_position + dir * d.hound_distance
+	var hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(_feet_ray)
+	if hit.is_empty():
+		return _feet_ray.to
+	return hit.position + hit.normal * (HOUND_RADIUS + d.hound_wall_margin)
+
+
+## The nearest enemy the hound can see from `from` within `sight` (not smoked or stepping, not dead), or null.
+func hound_target(from: Vector2, sight: float) -> Player:
+	var best: Player = null
+	var best_sq: float = sight * sight
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	for p: Player in projectiles.targets:
+		if p == self or p.dead or p.is_hidden():
+			continue
+		var d_sq: float = from.distance_squared_to(p.global_position)
+		if d_sq < best_sq and AutoAim.has_line_of_sight(space, _sight_query, from, p.global_position):
+			best = p
+			best_sq = d_sq
+	return best
+
+
+## The hound runs at the nearest visible enemy (stopping at walls) and bites whoever it touches when a bite falls due.
+func _hound_step(slot: CharacterSkill, before: float, seq: int, delta: float) -> void:
+	var d: SkillData = slot.data
+	if slot.elapsed() < d.hound_rise_time:
+		return
+	var target: Player = hound_target(slot.anchor, d.hound_sight)
+	if target != null:
+		var to: Vector2 = target.global_position - slot.anchor
+		var dir: Vector2 = to.normalized()
+		slot.direction = dir
+		var move: float = minf(d.hound_speed * delta, maxf(0.0, to.length() - d.hound_bite_radius * 0.85))
+		_feet_ray.from = slot.anchor
+		_feet_ray.to = slot.anchor + dir * (move + HOUND_RADIUS)
+		var hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(_feet_ray)
+		slot.anchor += dir * (maxf(0.0, hit.position.distance_to(slot.anchor) - HOUND_RADIUS) if not hit.is_empty() else move)
+	var interval: float = d.hound_bite_interval
+	var bites: int = floori((slot.elapsed() - d.hound_rise_time + CharacterSkill.WHIRL_EPSILON) / interval)
+	var bites_before: int = floori((before - d.hound_rise_time + CharacterSkill.WHIRL_EPSILON) / interval)
+	if (before >= d.hound_rise_time and bites > bites_before) or before < d.hound_rise_time:  # the first bite is on rising
+		projectiles.strike(player_id, seq + HOUND_SEQ_OFFSET, slot.anchor, d.hound_bite_radius, d.hound_damage,
+			d.hound_knockback)
+
+
+## How long the bind's line is, in units of the aim vector (the aim is a unit vector): up to `bind_range`, short of a wall.
+func bind_length(dir: Vector2, d: SkillData) -> float:
+	_feet_ray.from = global_position
+	_feet_ray.to = global_position + dir * d.bind_range
+	var hit: Dictionary = get_world_2d().direct_space_state.intersect_ray(_feet_ray)
+	if hit.is_empty():
+		return d.bind_range
+	return maxf(0.0, hit.position.distance_to(global_position) - Constants.PLAYER_RADIUS)
+
+
+## The shadow's head advances; the first enemy within its width (authority only) is stunned and the line ends on them.
+func _bind_step(slot: CharacterSkill) -> void:
+	var d: SkillData = slot.data
+	if slot.active_remaining <= d.bind_stun + CharacterSkill.WHIRL_EPSILON or not projectiles.authoritative:
+		return  # already caught someone (tether time left), or only the server decides
+	var head: float = slot.bind_head()
+	var along: Vector2 = slot.direction.normalized()
+	var best: Player = null
+	var best_at: float = INF
+	for p: Player in projectiles.targets:
+		if p == self or p.dead or not p.can_be_hit():
+			continue
+		var rel: Vector2 = p.global_position - slot.anchor
+		var at: float = rel.dot(along)
+		if at < 0.0 or at > head + Constants.PLAYER_RADIUS or absf(rel.cross(along)) > d.bind_width * 0.5 + Constants.PLAYER_RADIUS:
+			continue
+		if at < best_at:
+			best = p
+			best_at = at
+	if best != null:
+		best.stats.apply_stun(d.bind_stun)
+		best.velocity = Vector2.ZERO
+		slot.direction = along * minf(best_at, slot.direction.length())
+		slot.active_remaining = d.bind_stun
+	elif head >= slot.direction.length():
+		slot.active_remaining = 0.0
 
 
 ## The Blaze Run trail burns whoever stands within `trail_radius` of its line on every `trail_tick` (no self-damage).
@@ -534,7 +662,7 @@ func ward() -> ShieldWall:
 
 ## Inside your own smoke or drifting as petals: enemy auto-aim and bots can't lock on.
 func is_hidden() -> bool:
-	if active_skill(SkillData.Kind.DRIFT) != null:
+	if active_skill(SkillData.Kind.DRIFT) != null or active_skill(SkillData.Kind.STEP) != null:
 		return true
 	var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
 	return smoke != null and global_position.distance_to(smoke.anchor) <= smoke.data.smoke_radius
@@ -621,7 +749,8 @@ func held_weapon() -> WeaponState:
 
 ## Dash goes where you're moving (else where you face); the barrier goes where you aim.
 func _skill_direction(data: SkillData, input: InputFrame) -> Vector2:
-	var moves: bool = data.kind == SkillData.Kind.DASH or data.kind == SkillData.Kind.DRIFT
+	var moves: bool = data.kind == SkillData.Kind.DASH or data.kind == SkillData.Kind.DRIFT \
+		or data.kind == SkillData.Kind.STEP
 	if moves and input.move_vec.length() > Constants.INPUT_DEADZONE:
 		return input.move_vec
 	if input.aim_vec.length_squared() > 0.0:
@@ -732,8 +861,8 @@ func _die(killer_id: int) -> void:
 	respawn_timer = Constants.RESPAWN_DELAY
 	velocity = Vector2.ZERO
 	for slot: CharacterSkill in skills:
-		if slot.data.kind == SkillData.Kind.SAPLING:
-			slot.active_remaining = 0.0  # the tree goes with her
+		if slot.data.kind == SkillData.Kind.SAPLING or slot.data.kind == SkillData.Kind.HOUND:
+			slot.active_remaining = 0.0  # the tree (or the hound) goes with her
 	_set_dead(true)
 	died.emit(self, killer_id)
 
@@ -825,6 +954,7 @@ func capture_state() -> Array:
 	s[StateField.LAST_INPUT_SEQ] = last_input_seq
 	s[StateField.SLOW_REMAINING] = stats.slow_remaining
 	s[StateField.SLOW_FACTOR] = stats.slow_factor
+	s[StateField.STUN_REMAINING] = stats.stun_remaining
 	return s
 
 
@@ -873,6 +1003,7 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	last_input_seq = s[StateField.LAST_INPUT_SEQ]
 	stats.slow_remaining = s[StateField.SLOW_REMAINING]
 	stats.slow_factor = s[StateField.SLOW_FACTOR]
+	stats.stun_remaining = s[StateField.STUN_REMAINING]
 	_set_dead(s[StateField.DEAD])
 	_sync_shields()
 	return true
@@ -886,7 +1017,7 @@ func _draw() -> void:
 
 func _draw_overlay() -> void:
 	if held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null \
-			and active_skill(SkillData.Kind.PILLAR) == null and not _special_fx.is_petals() and not _special_fx.is_flaring():  # the staff is in the spin / plant pose; petals hide it
+			and active_skill(SkillData.Kind.PILLAR) == null and not _special_fx.is_petals() and not _special_fx.is_flaring() and not _special_fx.is_stepping():  # the staff is in the spin / plant pose; petals hide it
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)

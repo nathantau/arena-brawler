@@ -30,8 +30,15 @@ extends Resource
 ## STORM: a thundercloud at a spot ahead along the aim (short of walls) for `duration`: every `storm_interval` a bolt strikes
 ## each enemy within `storm_radius` of the spot that it can see.
 ## OVERDRIVE: super speed for `duration`: move speed x`overdrive_speed_scale`, steerable and still able to fire, no i-frames; weapon cooldowns tick x`overdrive_fire_scale` faster.
+## STEP (Shadow): sinks into his own shadow for `duration` (untargetable, unhittable, can't fire), moves as a puddle x`step_speed_scale`
+## faster (walls still stop him), then rises: enemies within `step_radius` of where he emerges take `step_damage`.
+## HOUND (Shadow, Gloom Hound): a shadow beast rises `hound_distance` ahead along the aim and, for `duration`, chases the nearest visible enemy
+## at `hound_speed`, biting (`hound_damage`) whoever it touches every `hound_bite_interval`. Not hittable, not auto-aimed.
+## BIND (Shadow): his shadow stretches along the floor in the aim direction at `bind_speed` (stopped by walls, up to `bind_range`);
+## the first enemy it reaches is stunned (can't move, fire or use specials) for `bind_stun`.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19,
+		STEP = 30, HOUND = 31, BIND = 32 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -168,6 +175,32 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var trail_radius: float = 22.0
 @export var trail_damage: int = 6
 @export var trail_tick: float = 0.3
+
+@export_group("Step")
+@export var step_speed_scale: float = 1.5
+@export var step_radius: float = 80.0
+@export var step_damage: int = 24
+@export var step_knockback: float = 200.0
+
+@export_group("Hound")
+## How far ahead along the aim it rises (pulled back off a wall).
+@export var hound_distance: float = 130.0
+@export var hound_wall_margin: float = 12.0
+@export var hound_speed: float = 250.0
+## How far it can see an enemy to chase, and how close it must be to bite.
+@export var hound_sight: float = 520.0
+@export var hound_bite_radius: float = 34.0
+@export var hound_bite_interval: float = 0.6
+@export var hound_damage: int = 11
+@export var hound_knockback: float = 120.0
+## It rises (and can't bite) for this long first.
+@export var hound_rise_time: float = 0.45
+
+@export_group("Bind")
+@export var bind_range: float = 330.0
+@export var bind_speed: float = 700.0
+@export var bind_width: float = 22.0
+@export var bind_stun: float = 1.0
 
 @export_group("Transform")
 ## Sheet laid out like a character's (idle, hit, walk); drawn `form_scale` x the usual size.

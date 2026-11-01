@@ -19,6 +19,7 @@ var dmg: Dictionary = {}
 var kills: Dictionary = {}
 var n_per: int = 4
 var base_seed: int = 1
+var kit_rotates: bool = true  # off in specials mode: each row tests one special (fighters with several signature specials otherwise rotate)
 var prev_hp: Array[int] = [0, 0]
 
 
@@ -76,6 +77,7 @@ func _initialize() -> void:
 			args[kv[0]] = kv[1]
 	n_per = int(args.get("n", "4"))
 	base_seed = int(args.get("seed", "1"))
+	kit_rotates = String(args.get("mode", "fighters")) != "specials"
 	_build_jobs(String(args.get("mode", "fighters")), String(args.get("only", "")))
 	if args.has("slice"):
 		var ab: PackedStringArray = String(args["slice"]).split("/")
@@ -158,7 +160,9 @@ func _next() -> void:
 	for k: int in 2:
 		var cfg: Array = job[k]
 		var id: int = 10 + k
-		var p: Player = arena.add_player(id, k, SimBot.new(arena, base_seed * 7919 + job_idx * 13 + id), true)
+		var bot := SimBot.new(arena, base_seed * 7919 + job_idx * 13 + id)
+		bot.rotates_kit = kit_rotates
+		var p: Player = arena.add_player(id, k, bot, true)
 		p.set_character(arena.characters.get_character(cfg[0]))
 		p.set_skill(1, SkillCatalog.shared().get_skill(cfg[1]))
 		p.set_weapon(arena.catalog.get_weapon(cfg[2]))

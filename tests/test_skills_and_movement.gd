@@ -19,7 +19,7 @@ func before_all() -> void:
 
 
 func test_catalog_and_skills() -> void:
-	assert_eq(characters.ordered.size(), 5, "Gunnar and Warden are benched")
+	assert_eq(characters.ordered.size(), 6, "Gunnar and Warden are benched")
 	assert_not_null(characters.get_character(&"warden"), "benched characters still load by id")
 	for c: CharacterData in characters.ordered:
 		assert_not_null(c.sprite_sheet, c.id)
@@ -35,7 +35,8 @@ func test_catalog_and_skills() -> void:
 	assert_eq(characters.next_after(characters.ordered.back().id), characters.ordered[0], "wraps")
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
-			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst", &"cherry_sapling", &"storm_cloud", &"overdrive"]:
+			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst", &"cherry_sapling", &"storm_cloud", &"overdrive",
+			&"shadow_step", &"gloom_hound", &"shadow_bind"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
