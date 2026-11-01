@@ -15,6 +15,7 @@ var _announcer: LanDiscovery
 func _ready() -> void:
 	InputSetup.ensure_actions()
 	UiStyle.install()
+	UiStyle.install_scaling(get_window())
 	session = NetSession.new()
 	session.name = "Session"
 	add_child(session)

@@ -12,8 +12,10 @@ const SLICE: int = 6
 const SLICE_BOTTOM: int = 10
 const BOLD_WEIGHT: float = 700.0
 
-## Canvas is 720 units tall; on a phone in landscape that's ~400 pt, so 1 unit ~ 0.56 pt.
-## SMALL (18) ~ 10 pt is the floor for anything you need to read mid-fight.
+## The UI is authored on a 720-unit-tall canvas (project stretch base), but on a phone that would be ~0.54 pt per
+## unit (18-unit text = 9.7 pt). `install_scaling` raises the window's content_scale_factor so the canvas is only
+## ~PT_PER_UNIT-sized: a phone canvas is ~670 units tall, 1 unit ~ 0.58 pt (TINY 16 ~ 9.3 pt, SMALL 18 ~ 10.4 pt, BODY 22 ~ 12.8 pt,
+## a 76-unit button ~ 44 pt). The arena camera divides its zoom by the same factor, so the world view is unchanged.
 const SIZE_TINY: int = 16
 const SIZE_SMALL: int = 18
 const SIZE_BODY: int = 22
@@ -21,8 +23,8 @@ const SIZE_HEADING: int = 30
 const SIZE_TITLE: int = 56
 const SIZE_HUGE: int = 120
 const TEXT_OUTLINE: int = 6
-## Thumb-sized buttons: ~44 pt on a phone is ~78 canvas units; 72 is the compromise that still fits a stack of four.
-const TOUCH_MIN_H: float = 72.0
+## Thumb-sized buttons: 76 units ~ 44 pt at PT_PER_UNIT.
+const TOUCH_MIN_H: float = 76.0
 
 ## Palette (tools/sprites/palette.py).
 const C_OUTLINE: Color = Color8(27, 26, 46)
@@ -39,14 +41,48 @@ const C_TEAL: Color = Color8(47, 158, 147)
 const C_TEAL_L: Color = Color8(126, 224, 207)
 const C_DIM: Color = Color(0.95, 0.94, 0.9, 0.6)
 
+## Points per canvas unit the UI should land on on phones, and the largest scale we apply.
+const PT_PER_UNIT: float = 0.58
+const MAX_UI_SCALE: float = 1.8
+const BASE_HEIGHT: float = 720.0
+## `--pixel-ratio=3`: pretend the screen has this many pixels per point (desktop previews of a phone).
+const RATIO_FLAG: String = "--pixel-ratio="
+
 ## Minimum gap to the screen edge; mobile adds the device's safe-area insets on top.
 const MIN_EDGE: float = 16.0
 ## `--notch`: fake an iPhone 16 Pro's landscape insets (62/62/21 pt) on desktop for layout checks.
 const NOTCH_FLAG: String = "--notch"
 const NOTCH_INSETS: Vector4 = Vector4(111, 0, 111, 38)
 
+## Current content scale (1 on desktop); the arena camera zooms by CAMERA_ZOOM / this.
+static var ui_scale: float = 1.0
 static var _bold: FontVariation
 static var _textures: Dictionary[String, Texture2D] = {}
+
+
+## Content scale for a window `win_h` pixels tall on a screen with `ratio` pixels per point: 1 for anything big
+## (desktop, tablets), up to MAX_UI_SCALE for small phones.
+static func scale_for(win_h: float, ratio: float) -> float:
+	var canvas_h: float = (win_h / maxf(ratio, 1.0)) / PT_PER_UNIT
+	return clampf(BASE_HEIGHT / maxf(canvas_h, 1.0), 1.0, MAX_UI_SCALE)
+
+
+## Sizes the UI for the device: sets `win.content_scale_factor` (now and on every resize). Phones always; desktop only
+## with `--touch` or `--pixel-ratio=N`, so a normal desktop window keeps the plain 720-unit canvas.
+static func install_scaling(win: Window) -> void:
+	var ratio: float = DisplayServer.screen_get_scale() if OS.has_feature("mobile") or OS.get_cmdline_user_args().has("--touch") else 1.0
+	var forced := false
+	for a: String in OS.get_cmdline_user_args():
+		if a.begins_with(RATIO_FLAG):
+			ratio = a.trim_prefix(RATIO_FLAG).to_float()
+			forced = true
+	if not (forced or OS.has_feature("mobile") or OS.get_cmdline_user_args().has("--touch")):
+		return
+	var apply := func() -> void:
+		ui_scale = scale_for(float(win.size.y), ratio)
+		win.content_scale_factor = ui_scale
+	apply.call()
+	win.size_changed.connect(apply)
 
 
 static func bold() -> Font:

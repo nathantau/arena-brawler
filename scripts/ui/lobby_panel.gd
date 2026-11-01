@@ -10,16 +10,16 @@ const SPACING: int = 10
 const BUTTON_MIN_SIZE: Vector2 = Vector2(190, UiStyle.TOUCH_MIN_H)
 const READY_MIN_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
 const LEAVE_MIN_SIZE: Vector2 = Vector2(140, UiStyle.TOUCH_MIN_H)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 222)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 174)
 ## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
 ## the cell's body box, so they all stand in the same spot.
-const FIGHTER_ART_SCALE: float = 2.0
-const FIGHTER_ART_SIZE: Vector2 = Vector2(136, 150)
+const FIGHTER_ART_SCALE: float = 1.5
+const FIGHTER_ART_SIZE: Vector2 = Vector2(120, 96)
 ## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
-const SKILL_ROW_SIZE: Vector2 = Vector2(320, 62)  # 7 rows (5 own + Dash + Barrier) fit above READY on a phone
+const SKILL_ROW_SIZE: Vector2 = Vector2(320, 64)  # 7 rows (5 own + Dash + Barrier) fit above READY on a phone
 const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
-const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 128)
-const WEAPON_ART_SCALE: float = 2.0
+const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 124)
+const WEAPON_ART_SCALE: float = 1.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 
 var arena: Arena
@@ -30,12 +30,13 @@ var _join_hint: Label
 var _mode_button: Button
 var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
-var _weapon_row: HBoxContainer
+var _weapon_row: BoxContainer
 var _fighter_scroller: HScroller
 var _weapon_scroller: HScroller
 var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
-var _special_row: VBoxContainer
+var _special_row: BoxContainer
+var _special_scroller: HScroller
 var _special_cards: Dictionary[StringName, Button] = {}
 ## The "1" / "2" slot badge on each special row.
 var _special_badges: Dictionary[StringName, Label] = {}
@@ -78,23 +79,17 @@ func _ready() -> void:
 	_arena_button.pressed.connect(func() -> void:
 		arena.arena_requested.emit((arena.match_state.arena_index + 1) % ArenaLayouts.count()))
 
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(scroll)
-	var steps := VBoxContainer.new()
-	steps.add_theme_constant_override("separation", SPACING)
-	steps.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(steps)
-
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", SPACING * 2)
-	steps.add_child(top)
-	var fighters := VBoxContainer.new()
-	fighters.add_theme_constant_override("separation", SPACING)
-	fighters.custom_minimum_size.x = 0.0
-	fighters.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # pushes the specials column to the right edge
-	top.add_child(fighters)
+	top.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(top)
+	# Each column scrolls vertically on its own when it doesn't fit (drag it; tap selects).
+	var left := HScroller.new(true)
+	left.fade_color = COLOR_BG
+	left.content.add_theme_constant_override("separation", SPACING)
+	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # pushes the specials column to the right edge
+	top.add_child(left)
+	var fighters: BoxContainer = left.content
 	_label(fighters, &"HeaderLabel").text = "1 · Choose your fighter"
 	# Scrolls sideways once there are more fighters than fit (drag the row; tap selects).
 	_fighter_scroller = _scroller(fighters)
@@ -117,9 +112,12 @@ func _ready() -> void:
 	specials.add_theme_constant_override("separation", SPACING)
 	top.add_child(specials)
 	_label(specials, &"HeaderLabel").text = "3 · Choose 2 specials"
-	_special_row = VBoxContainer.new()
+	_special_scroller = HScroller.new(true)
+	_special_scroller.fade_color = COLOR_BG
+	_special_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	specials.add_child(_special_scroller)
+	_special_row = _special_scroller.content
 	_special_row.add_theme_constant_override("separation", SPACING / 2)
-	specials.add_child(_special_row)
 
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", SPACING)
@@ -201,7 +199,7 @@ func _refresh() -> void:
 			tag = "picking"
 		var you: String = " (you)" if p == me else ""
 		var row: Label = _label(_rows, &"Label")
-		row.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		row.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
 		row.add_theme_color_override("font_color", p.display_color)
 		row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
 
@@ -231,7 +229,7 @@ func _build_weapon_cards(c: CharacterData) -> void:
 	for sk: SkillData in SkillCatalog.shared().specials_for(c):
 		var card: Button = _skill_row(sk, "%s · %ds" % [sk.blurb, roundi(sk.cooldown)])
 		var sid: StringName = sk.id
-		card.pressed.connect(func() -> void: _on_special_pressed(sid))
+		_special_scroller.on_tap(card, func() -> void: _on_special_pressed(sid))
 		_special_cards[sid] = card
 		var badge: Label = _label(card, &"HeaderLabel")
 		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING * 2)

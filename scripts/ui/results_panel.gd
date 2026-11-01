@@ -73,6 +73,7 @@ func _refresh() -> void:
 	else:
 		_title.text = "%s WINS" % arena.player_name(st.winner_id).to_upper()
 		_title.add_theme_color_override("font_color", UiStyle.C_WHITE)
+	_footer.text = "Back to the loading room in %d" % ceili(st.time_left)
 	for child: Node in _rows.get_children():
 		child.queue_free()
 	var place: int = 1
