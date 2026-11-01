@@ -20,6 +20,7 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
+import arena_decor
 from palette import (BLUE, BROWN, DARKER, GREEN, GREEN_D, GREEN_L, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, PALETTE, PINK,
                      PINK_L, RED, SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, VIOLET, VIOLET_D, VIOLET_L, WHITE,
                      YELLOW)
@@ -1273,38 +1274,40 @@ def ball_cart(balls):
     return draw
 
 
-# Pit: stone arena floor, stone block walls, wooden crates.
+# Pit: poured concrete floor (slab joints, stains, cracks come from arena_decor), cinder-block walls, wooden crates.
 def pit_floor(variant: int):
     c = tile_canvas(SHADOW)
-    for v in (0, 16):
-        c.flat(R((0, v, TILE - 1, v)), OUTLINE)
-    off = 8 if variant else 0
-    for y0 in (0, 16):
-        x = (off + (8 if y0 else 0)) % 16
-        c.flat(R((x, y0, x, y0 + 15)), OUTLINE)
-        c.flat(R((x + 16, y0, x + 16, y0 + 15)), OUTLINE)
-    for x, y in ((5, 5), (20, 10), (11, 22), (27, 27)) if variant else ((9, 3), (25, 20), (3, 19)):
-        c.dot(x, y, NAVY)
+    for x, y in ((5, 5), (20, 10), (11, 22), (27, 27), (2, 14)) if variant else ((9, 3), (25, 20), (3, 19), (16, 12)):
+        c.dot(x, y, NAVY)  # aggregate
+    for x, y in ((14, 8), (6, 26), (29, 15)) if variant else ((22, 5), (10, 17), (27, 29)):
+        c.dot(x, y, STEEL_D)  # pebbles
+    if variant:
+        c.flat(L([(18, 24), (21, 26), (20, 29)], 1), OUTLINE)  # hairline crack
     return crop_tile(c)
 
 
 def pit_wall_top():
     c = tile_canvas(STEEL_D)
-    for y in (0, 11, 22):
-        c.flat(R((0, y, TILE - 1, y)), SHADOW)
-        x = 8 if y == 11 else 0
-        c.flat(R((x, y, x, y + 10)), SHADOW)
-        c.flat(R((x + 16, y, x + 16, y + 10)), SHADOW)
-    c.flat(R((2, 2, 6, 2)), STEEL)
-    c.flat(R((19, 13, 23, 13)), STEEL)
+    for y in (0, 16):
+        c.flat(R((0, y, TILE - 1, y)), SHADOW)  # courses of cinder block
+    for y, x in ((0, 10), (16, 26)):
+        c.flat(R((x, y, x, y + 15)), SHADOW)
+        c.flat(R((x - 16 if x > 16 else x + 16, y, x - 16 if x > 16 else x + 16, y + 15)), SHADOW)
+    for y0 in (1, 17):
+        c.flat(R((0, y0, TILE - 1, y0)), STEEL)  # lit top edge of each block
+    for x, y in ((4, 6), (21, 8), (15, 24), (28, 27)):
+        c.flat(R((x, y, x + 2, y)), SHADOW)  # pits
+    c.dot(6, 11, OUTLINE)
+    c.dot(24, 28, OUTLINE)
     return crop_tile(c)
 
 
 def pit_wall_face():
     c = tile_canvas(SHADOW)
     c.flat(R((0, TILE - FACE_H, TILE - 1, TILE - FACE_H)), STEEL)
+    c.flat(R((0, TILE - FACE_H + 1, TILE - 1, TILE - FACE_H + 1)), STEEL_D)  # lit lip
     for x in (0, 16):
-        c.flat(R((x + 4, TILE - FACE_H + 1, x + 4, TILE - 1)), OUTLINE)
+        c.flat(R((x + 4, TILE - FACE_H + 2, x + 4, TILE - 7)), OUTLINE)
     c.flat(R((0, TILE - 6, TILE - 1, TILE - 6)), OUTLINE)
     c.flat(R((0, TILE - 1, TILE - 1, TILE - 1)), OUTLINE)
     return crop_tile(c)
@@ -1420,6 +1423,26 @@ def gym_decal() -> Image.Image:
 
 
 DECALS = {"gym": gym_decal}
+
+
+def arena_reference(rows, sheet: Image.Image) -> Image.Image:
+    """The plain tiled arena (floor, shadow rows, walls; no decals) as ArenaFloor draws it, for arena_decor."""
+    ref = Image.new("RGB", (len(rows[0]) * TILE, len(rows) * TILE))
+    for y, row in enumerate(rows):
+        for x, c in enumerate(row):
+            below_wall = y + 1 >= len(rows) or rows[y + 1][x] == "#"
+            if c == "#":
+                i = 3 if below_wall else 4
+            elif y > 0 and rows[y - 1][x] == "#":
+                i = 2
+            else:
+                i = 1 if (x * 7 + y * 13) % 5 == 0 else 0
+            ref.paste(sheet.crop((i * TILE, 0, (i + 1) * TILE, TILE)).convert("RGB"), (x * TILE, y * TILE))
+    return ref
+
+
+# theme -> (layout const in arena_layouts.gd, builder in arena_decor.py): decal + wall overlay
+ARENA_DECOR = {"pit": ("PIT", arena_decor.pit), "foundry": ("FOUNDRY", arena_decor.foundry)}
 
 
 def pickup_art() -> dict[str, Image.Image]:
@@ -6717,6 +6740,12 @@ def main() -> None:
         img = decal()
         check(img, img.width)
         img.save(ARENA_OUT / f"{name}_decal.png")
+    for name, (const, build) in ARENA_DECOR.items():
+        rows = arena_decor.load_layout(const)
+        deco = build(rows, arena_reference(rows, theme_sheet(*THEMES[name])))
+        for img in (deco.floor, deco.over):
+            check(img, img.width, edges=False)
+        deco.save(ARENA_OUT, name)
     for name, img in pickup_art().items():
         check(img, img.width)
         img.save(ARENA_OUT / f"{name}.png")

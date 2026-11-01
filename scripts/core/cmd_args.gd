@@ -11,7 +11,7 @@ extends RefCounted
 ##   --notch                          fake an iPhone's safe-area insets on desktop (UI layout checks)
 ##   --mode duel|ffa                  (server / offline) starting match mode, default ffa
 ##   --time-limit S                   (server / offline) match length in seconds (dev/testing)
-##   --arena N                        (server / offline) starting arena index (ArenaLayouts.NAMES)
+##   --arena N                        (server / offline) starting arena index (ArenaLayouts.NAMES); omitted = random
 ##   --character ID                   (client / offline) pick a character, e.g. warden
 ##   --weapon ID                      (client / offline) pick a starting weapon, e.g. sword
 ##   --special ID                     (client / offline) pick the special-button skill, e.g. great_ape
@@ -27,7 +27,8 @@ var autopilot: bool = false
 var net_debug: bool = false
 var match_mode: MatchRules.Mode = MatchRules.Mode.FFA
 var time_limit: float = Constants.MATCH_TIME_LIMIT
-var arena_index: int = 0
+## -1 = not given: the server / offline lobby picks a random arena (see pick_arena).
+var arena_index: int = -1
 var character: StringName = &""
 var weapon: StringName = &""
 var special: StringName = &""
@@ -82,6 +83,11 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				i += 1
 		i += 1
 	return a
+
+
+## The arena a new lobby opens with: the explicit --arena, else a random one from `rng`.
+func pick_arena(rng: RandomNumberGenerator) -> int:
+	return arena_index if arena_index >= 0 else rng.randi_range(0, ArenaLayouts.count() - 1)
 
 
 ## "host[:port]" -> [host, port]. Missing/invalid port falls back to DEFAULT_PORT.

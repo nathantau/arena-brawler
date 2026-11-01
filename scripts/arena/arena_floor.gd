@@ -16,6 +16,8 @@ const FLOOR_B_EVERY: int = 5
 var tiles: Texture2D
 
 var _decal: Texture2D
+## Optional dressing drawn over the walls (pipes, lamps, props), see tools/sprites/arena_decor.py.
+var _overlay: Texture2D
 var _rows: Array[String] = []
 var _size: Vector2 = Vector2.ZERO
 
@@ -30,6 +32,8 @@ func setup(map: ArenaMap, theme: StringName) -> void:
 	tiles = load(ART_DIR + "%s_tiles.png" % theme)
 	var decal_path: String = ART_DIR + "%s_decal.png" % theme
 	_decal = load(decal_path) if ResourceLoader.exists(decal_path) else null
+	var overlay_path: String = ART_DIR + "%s_overlay.png" % theme
+	_overlay = load(overlay_path) if ResourceLoader.exists(overlay_path) else null
 	queue_redraw()
 
 
@@ -46,7 +50,7 @@ static func tile_at(rows: Array[String], x: int, y: int) -> Tile:
 	return Tile.FLOOR_B if (x * 7 + y * 13) % FLOOR_B_EVERY == 0 else Tile.FLOOR_A
 
 
-## Floors, then the decal over them, then walls on top.
+## Floors, then the decal over them, then walls, then the wall overlay.
 func _draw() -> void:
 	if tiles == null:
 		return
@@ -54,6 +58,8 @@ func _draw() -> void:
 	if _decal != null:
 		draw_texture_rect(_decal, Rect2(Vector2.ZERO, _size), false)
 	_draw_cells(true)
+	if _overlay != null:
+		draw_texture_rect(_overlay, Rect2(Vector2.ZERO, _size), false)
 
 
 func _draw_cells(walls: bool) -> void:
