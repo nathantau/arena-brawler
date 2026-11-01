@@ -1,4 +1,4 @@
-"""Shared 24-colour palette for all generated sprites (RGB), plus shade/highlight ramps."""
+"""Shared 37-colour palette for all generated sprites (RGB), plus shade/highlight ramps."""
 
 OUTLINE = (27, 26, 46)
 SHADOW = (58, 58, 92)
@@ -24,11 +24,25 @@ VIOLET_L = (168, 128, 224)
 GREEN = (98, 152, 64)  # moss / leaves (Eden)
 GREEN_L = (172, 210, 104)
 GREEN_D = (54, 98, 62)
+OLIVE_D = (74, 84, 40)  # earthy wanderer ramps (Eden's redesign): olive dress, cream linen, chestnut hair, walnut mask, ochre trim
+OLIVE = (112, 124, 56)
+OLIVE_L = (156, 164, 84)
+CREAM_D = (206, 188, 150)
+CREAM = (240, 228, 196)
+CHESTNUT_D = (92, 48, 32)
+CHESTNUT = (142, 76, 42)
+CHESTNUT_L = (196, 124, 66)
+WALNUT_D = (46, 30, 30)
+WALNUT = (80, 52, 44)
+WALNUT_L = (178, 130, 92)
+OCHRE_D = (156, 104, 44)
+OCHRE = (212, 156, 56)
 
 PALETTE = [OUTLINE, SHADOW, STEEL_D, STEEL, WHITE, SKIN_D, SKIN, RED,
            ORANGE, YELLOW, MAROON, TEAL, TEAL_L, BLUE, NAVY, BROWN, PINK, PINK_L, VIOLET_D, VIOLET, VIOLET_L,
-           GREEN, GREEN_L, GREEN_D]
-assert len(set(PALETTE)) == 24
+           GREEN, GREEN_L, GREEN_D, OLIVE_D, OLIVE, OLIVE_L, CREAM_D, CREAM, CHESTNUT_D, CHESTNUT, CHESTNUT_L,
+           WALNUT_D, WALNUT, WALNUT_L, OCHRE_D, OCHRE]
+assert len(set(PALETTE)) == 37
 
 # Shade (bottom/right edges of a part) and highlight (top/left edges; also the 2nd hit-flash frame).
 DARKER = {
@@ -37,6 +51,9 @@ DARKER = {
     TEAL: NAVY, TEAL_L: TEAL, BLUE: NAVY, NAVY: SHADOW, BROWN: MAROON, PINK: MAROON, PINK_L: PINK,
     VIOLET_D: OUTLINE, VIOLET: VIOLET_D, VIOLET_L: VIOLET,
     GREEN: GREEN_D, GREEN_L: GREEN, GREEN_D: SHADOW,
+    OLIVE_L: OLIVE, OLIVE: OLIVE_D, OLIVE_D: SHADOW, CREAM: CREAM_D, CREAM_D: SKIN_D, CHESTNUT_L: CHESTNUT,
+    CHESTNUT: CHESTNUT_D, CHESTNUT_D: OUTLINE, WALNUT_L: WALNUT, WALNUT: WALNUT_D, WALNUT_D: OUTLINE,
+    OCHRE: OCHRE_D, OCHRE_D: BROWN,
 }
 LIGHTER = {
     OUTLINE: SHADOW, SHADOW: STEEL_D, STEEL_D: STEEL, STEEL: WHITE, WHITE: WHITE,
@@ -44,6 +61,9 @@ LIGHTER = {
     TEAL: TEAL_L, TEAL_L: WHITE, BLUE: STEEL, NAVY: BLUE, BROWN: SKIN_D, PINK: PINK_L, PINK_L: WHITE,
     VIOLET_D: VIOLET, VIOLET: VIOLET_L, VIOLET_L: PINK_L,
     GREEN: GREEN_L, GREEN_L: YELLOW, GREEN_D: GREEN,
+    OLIVE_D: OLIVE, OLIVE: OLIVE_L, OLIVE_L: GREEN_L, CREAM_D: CREAM, CREAM: WHITE, CHESTNUT_D: CHESTNUT,
+    CHESTNUT: CHESTNUT_L, CHESTNUT_L: SKIN_D, WALNUT_D: WALNUT, WALNUT: WALNUT_L, WALNUT_L: SKIN_D,
+    OCHRE_D: OCHRE, OCHRE: YELLOW,
 }
 for ramp in (DARKER, LIGHTER):
     assert set(ramp) == set(PALETTE) and set(ramp.values()) <= set(PALETTE)
