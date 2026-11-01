@@ -22,3 +22,14 @@ func test_fit_size_shrinks_to_width() -> void:
 	assert_lt(s, UiStyle.SIZE_BODY)
 	assert_lte(UiStyle.text_width(text, s), full * 0.7)
 	assert_eq(UiStyle.fit_size(text, 1.0, UiStyle.SIZE_BODY, 12), 12)  # never below the floor
+
+
+func test_ui_scale_only_for_phone_sized_screens() -> void:
+	assert_eq(UiStyle.scale_for(1440.0, 2.0), 1.0)  # a desktop window: plain 720-unit canvas
+	assert_eq(UiStyle.scale_for(1640.0, 2.0), 1.0)  # iPad
+	var phone: float = UiStyle.scale_for(1170.0, 3.0)  # iPhone 14 landscape
+	assert_gt(phone, 1.0)
+	assert_lte(phone, UiStyle.MAX_UI_SCALE)
+	assert_gt(UiStyle.scale_for(750.0, 2.0), 1.0)  # iPhone SE
+	# Phone canvas stays tall enough for the loading room: 720 / scale units.
+	assert_gt(720.0 / phone, 500.0)

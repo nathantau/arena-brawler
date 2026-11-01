@@ -331,7 +331,7 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	p.is_local = true
 
 	camera = Camera2D.new()
-	camera.zoom = Vector2.ONE * Constants.CAMERA_ZOOM
+	camera.zoom = Vector2.ONE * _zoom()
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = Constants.CAMERA_SMOOTHING
 	# Follow in step with the sim (the target moves in _physics_process), so the player doesn't shake on screen.
@@ -384,8 +384,13 @@ static func clamp_camera(target: Vector2, view: Vector2, bounds: Rect2) -> Vecto
 	return out
 
 
+## The UI's content scale shrinks the canvas on phones; dividing it out keeps the same slice of arena in view.
+func _zoom() -> float:
+	return Constants.CAMERA_ZOOM / UiStyle.ui_scale
+
+
 func _camera_view() -> Vector2:
-	return get_viewport().get_visible_rect().size / Constants.CAMERA_ZOOM
+	return get_viewport().get_visible_rect().size / _zoom()
 
 
 func add_shake(amount: float) -> void:
@@ -552,6 +557,7 @@ func _physics_process(delta: float) -> void:
 		match_state.time_left = maxf(0.0, match_state.time_left - delta)
 	if camera != null and local_player != null and not local_player.dead:
 		_look = _look.lerp(local_player.facing * Constants.CAMERA_LOOKAHEAD, 1.0 - exp(-CAMERA_LOOK_EASE * delta))
+		camera.zoom = Vector2.ONE * _zoom()
 		camera.global_position = clamp_camera(local_player.global_position + _look, _camera_view(),
 			Rect2(Vector2.ZERO, map.size))
 
