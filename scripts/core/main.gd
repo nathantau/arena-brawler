@@ -19,6 +19,10 @@ func _ready() -> void:
 	add_child(session)
 	session.client_disconnected.connect(_on_client_disconnected)
 
+	GameSettings.ensure_loaded()
+	if DisplayServer.get_name() != "headless":
+		_add_audio()
+
 	args = CmdArgs.parse(OS.get_cmdline_user_args())
 	# Render at the sim rate: on 120 Hz phones, frames between sim ticks made moving sprites judder.
 	Engine.max_fps = Constants.PHYSICS_FPS
@@ -32,6 +36,28 @@ func _ready() -> void:
 		_start_offline()
 	else:
 		_show_menu("")
+
+
+## Menu music + a click on every button (including ones built later, via node_added). Both keep working while paused.
+func _add_audio() -> void:
+	add_child(Music.new())
+	var ui_sfx := Sfx.new()
+	ui_sfx.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(ui_sfx)
+	get_tree().node_added.connect(func(n: Node) -> void:
+		if n is BaseButton:
+			(n as BaseButton).pressed.connect(func() -> void: ui_sfx.play(&"ui_click")))
+
+
+## Backgrounding the app (home button, call, lock) pauses an offline match instead of letting bots keep fighting.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_APPLICATION_PAUSED and what != NOTIFICATION_APPLICATION_FOCUS_OUT:
+		return
+	if _offline_arena == null or not is_instance_valid(_offline_arena):
+		return
+	for pm: Node in _offline_arena.find_children("*", "PauseMenu", true, false):
+		if (pm as PauseMenu).button.visible:
+			(pm as PauseMenu).open()
 
 
 func _start_server() -> void:
@@ -156,6 +182,8 @@ func _show_menu(status: String) -> void:
 
 
 func _hide_menu() -> void:
+	if not args.autopilot:
+		SettingsPanel.show_howto_once(self)
 	if _menu != null:
 		ScreenFade.play(self)
 		_menu.visible = false

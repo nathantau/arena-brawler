@@ -12,6 +12,18 @@ const FALLOFF_DB: float = -24.0
 const PITCH_JITTER: float = 0.06
 const MASTER_DB: float = -6.0
 
+## Sound for a special's activation, by kind. Dash-like moves share one; every kind has a sound.
+const SKILL_SOUNDS: Dictionary[int, StringName] = {
+	SkillData.Kind.SHIELD: &"shield", SkillData.Kind.WARD: &"shield",
+	SkillData.Kind.TRANSFORM: &"transform",
+	SkillData.Kind.SMOKE: &"smoke", SkillData.Kind.DRIFT: &"smoke",
+	SkillData.Kind.VOLLEY: &"volley", SkillData.Kind.STORM: &"volley",
+	SkillData.Kind.CLONES: &"summon", SkillData.Kind.SAPLING: &"summon",
+	SkillData.Kind.ERUPTION: &"eruption", SkillData.Kind.NOVA: &"eruption",
+	SkillData.Kind.SNARE: &"trap", SkillData.Kind.PILLAR: &"trap",
+	SkillData.Kind.OVERDRIVE: &"boost",
+}
+
 enum Wave { SINE, SQUARE, SAW, NOISE }
 ## Recipe fields: duration s, start Hz, end Hz, wave, noise mix 0..1, noise smoothing 0..1
 ## (higher = duller), attack s, decay rate (1/s), volume 0..1.
@@ -37,6 +49,13 @@ const RECIPES: Dictionary[StringName, Array] = {
 	&"transform": [0.6, 110.0, 55.0, Wave.SAW, 0.6, 0.7, 0.02, 4.0, 0.6],
 	&"countdown": [0.12, 660.0, 660.0, Wave.SQUARE, 0.0, 0.0, 0.003, 16.0, 0.35],
 	&"go": [0.4, 880.0, 1320.0, Wave.SQUARE, 0.0, 0.0, 0.003, 6.0, 0.4],
+	&"ui_click": [0.05, 1000.0, 1500.0, Wave.SQUARE, 0.0, 0.0, 0.001, 60.0, 0.25],
+	&"smoke": [0.5, 400.0, 150.0, Wave.NOISE, 1.0, 0.85, 0.05, 6.0, 0.4],
+	&"volley": [0.25, 700.0, 1100.0, Wave.SQUARE, 0.3, 0.3, 0.002, 14.0, 0.35],
+	&"summon": [0.45, 300.0, 700.0, Wave.SINE, 0.2, 0.5, 0.03, 6.0, 0.45],
+	&"eruption": [0.6, 120.0, 50.0, Wave.SAW, 0.8, 0.8, 0.005, 5.0, 0.7],
+	&"trap": [0.2, 800.0, 300.0, Wave.SQUARE, 0.5, 0.3, 0.001, 22.0, 0.4],
+	&"boost": [0.5, 200.0, 1000.0, Wave.SAW, 0.3, 0.3, 0.02, 5.0, 0.4],
 	&"results": [0.6, 520.0, 780.0, Wave.SINE, 0.0, 0.0, 0.01, 4.0, 0.4],
 }
 
@@ -57,12 +76,19 @@ func _ready() -> void:
 		_voices.append(v)
 
 
+static func skill_sound(kind: int) -> StringName:
+	return SKILL_SOUNDS.get(kind, &"dash")
+
+
 ## Plays `id`, quieter the farther `at` is from the listener. INF = non-positional.
 func play(id: StringName, at: Vector2 = Vector2.INF) -> void:
 	var stream: AudioStreamWAV = _streams.get(id)
 	if stream == null:
 		return
-	var db: float = MASTER_DB
+	GameSettings.ensure_loaded()
+	if GameSettings.sfx <= 0.0:
+		return
+	var db: float = MASTER_DB + GameSettings.to_db(GameSettings.sfx)
 	if at != Vector2.INF and listener != null and is_instance_valid(listener):
 		var d: float = listener.global_position.distance_to(at)
 		if d > FALLOFF_DISTANCE:

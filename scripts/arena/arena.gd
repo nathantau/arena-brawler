@@ -396,7 +396,7 @@ func _fx_explosion(at: Vector2, radius: float, color: Color, slam: bool, art: bo
 		var d: float = local_player.global_position.distance_to(at)
 		add_shake(SHAKE_EXPLOSION * clampf(1.0 - d / SHAKE_EXPLOSION_RANGE, 0.0, 1.0))
 		if d < HAPTIC_EXPLOSION_RANGE:
-			Input.vibrate_handheld(Constants.HAPTIC_EXPLOSION_MS)
+			GameSettings.vibrate(Constants.HAPTIC_EXPLOSION_MS)
 
 
 func _fx_hit(victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
@@ -418,7 +418,7 @@ func _fx_kill(killer_id: int, victim_id: int) -> void:
 			PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 2.0)
 		sfx.play(&"death", victim.global_position)
 	if local_player != null and killer_id == local_player.player_id:
-		Input.vibrate_handheld(Constants.HAPTIC_KILL_MS)
+		GameSettings.vibrate(Constants.HAPTIC_KILL_MS)
 
 
 func _on_skill_used(user: Player, skill: SkillData) -> void:
@@ -426,13 +426,9 @@ func _on_skill_used(user: Player, skill: SkillData) -> void:
 		return
 	effects.burst(user.global_position, user.display_color, BURST_SKILL_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE,
 		PARTICLE_LIFE)
+	sfx.play(Sfx.skill_sound(skill.kind), user.global_position)
 	match skill.kind:
-		SkillData.Kind.DASH, SkillData.Kind.GRAPPLE, SkillData.Kind.SWING, SkillData.Kind.WHIRL, SkillData.Kind.PILLAR, SkillData.Kind.NOVA, SkillData.Kind.STORM:
-			sfx.play(&"dash", user.global_position)
-		SkillData.Kind.SHIELD, SkillData.Kind.WARD:
-			sfx.play(&"shield", user.global_position)
 		SkillData.Kind.TRANSFORM:
-			sfx.play(&"transform", user.global_position)
 			effects.burst(user.global_position, Color.WHITE, BURST_EXPLOSION_COUNT, BURST_DEATH_SPEED,
 				PARTICLE_SIZE * 2.0, PARTICLE_LIFE * 2.0)
 			if user == local_player:
