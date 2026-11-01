@@ -79,6 +79,7 @@ func _run(a: SkillData, b: SkillData, mode: int) -> void:
 			me.stats.stun_remaining = 1.0
 		if mode == 2 and f == 20:
 			me.stats.invulnerable_time = 0.0
+			me.stats.spawn_protect = 0.0
 			me.take_hit(10000, false, Vector2.ZERO, 2)
 			assert_true(me.dead, label)
 			assert_false(_busy(), "%s: dying ends every ability" % label)
@@ -86,6 +87,7 @@ func _run(a: SkillData, b: SkillData, mode: int) -> void:
 			me._special_fx._process(DT)
 			me.respawn(_spot())
 			me.stats.invulnerable_time = 0.0
+			me.stats.spawn_protect = 0.0  # (its blink would show as a not-opaque sprite)
 			break
 		if f > 20 and not _busy():
 			break

@@ -58,6 +58,11 @@ const RECOIL_KICK: float = 40.0
 const HAPTIC_DEATH_MS: int = 90
 const FIGHT_BANNER_TIME: float = 0.9
 const STREAK_NAMES: Array[String] = ["", "", "DOUBLE KILL", "TRIPLE KILL", "RAMPAGE", "UNSTOPPABLE"]
+const SHAKE_SPAWN: float = 0.12
+const PICKUP_COLOR: Color = Color(0.4, 1.0, 0.9)
+const PICKUP_LABEL_LIFT: float = 30.0
+const BURST_PICKUP_COUNT: int = 14
+const BURST_PICKUP_SPREAD: float = 1.6
 const SHAKE_EXPLOSION: float = 0.6
 const SHAKE_EXPLOSION_RANGE: float = 500.0
 const HAPTIC_EXPLOSION_RANGE: float = 200.0
@@ -86,6 +91,7 @@ var local_player: Player
 var host_address: String = ""
 var projectiles: ProjectilePool
 var crates: CrateField
+var pickups: PickupField
 var layout_index: int = -1
 ## Runs the match (null on clients, where the server does); match_state is always set.
 var referee: MatchController
@@ -128,6 +134,8 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 	projectiles.z_index = PROJECTILE_Z
 	crates = CrateField.new()
 	crates.name = "Crates"
+	pickups = PickupField.new()
+	pickups.name = "Pickups"
 	if mode == Mode.CLIENT:
 		match_state = MatchState.new()
 	else:
@@ -158,6 +166,7 @@ func _ready() -> void:
 	_floor.z_index = FLOOR_Z
 	add_child(_floor)
 	add_child(crates)
+	add_child(pickups)
 	add_child(projectiles)
 	projectiles.player_hit.connect(_on_projectile_hit)
 	_load_layout(match_state.arena_index)
@@ -173,6 +182,7 @@ func _load_layout(index: int) -> void:
 	_build_walls()
 	_floor.setup(map, ArenaLayouts.THEMES[index])
 	crates.setup(map, _floor.tiles)
+	pickups.setup(map)
 	projectiles.clear()
 	for p: Player in players:
 		p.arena_bounds = play_area()
@@ -202,6 +212,7 @@ func add_player(id: int, color_index: int, ctrl: PlayerController,
 	p.died.connect(_on_player_died)
 	p.shot_fired.connect(_on_player_shot)
 	p.skill_used.connect(_on_skill_used)
+	p.spawned.connect(_fx_spawn)
 	p.healed.connect(func(user: Player, amount: int) -> void:
 		if effects != null:
 			effects.heal_number(user.global_position + user.visual_offset - Vector2(0.0, Constants.HEAL_NUMBER_RISE), amount))
@@ -419,9 +430,38 @@ func _attach_effects() -> void:
 	hit_landed.connect(_fx_hit)
 	match_updated.connect(_on_match_updated)
 	kill_registered.connect(_fx_kill)
+	pickups.collected.connect(_fx_pickup_taken)
+	pickups.respawned.connect(_fx_pickup_back)
 	crates.destroyed.connect(func(at: Vector2) -> void:
 		effects.burst(at, CRATE_DEBRIS_COLOR, BURST_CRATE_COUNT, BURST_DEATH_SPEED, PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 1.5)
 		sfx.play(&"crate", at))
+
+
+## Spawn pop: a ring and sparkles on the floor, a rising shimmer and a chime.
+func _fx_spawn(who: Player) -> void:
+	if effects == null:
+		return
+	var feet: Vector2 = who.global_position + Vector2(0.0, Player.FOOT_RING_Y)
+	effects.spawn_pop(feet, who.display_color)
+	sfx.play(&"spawn", who.global_position)
+	if who == local_player:
+		add_shake(SHAKE_SPAWN)
+
+
+func _fx_pickup_taken(_index: int, at: Vector2, collector_id: int) -> void:
+	effects.burst(at, PICKUP_COLOR, BURST_PICKUP_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE, PARTICLE_LIFE * 1.5,
+		Vector2.UP, BURST_PICKUP_SPREAD)
+	effects.label_number(at + Vector2(0.0, -PICKUP_LABEL_LIFT), "+%d" % Constants.ENERGY_PICKUP_AMOUNT, PICKUP_COLOR)
+	var mine: bool = local_player != null and collector_id == local_player.player_id
+	sfx.play(&"pickup", at)
+	if mine:
+		GameSettings.vibrate(Constants.HAPTIC_HIT_MS)
+
+
+func _fx_pickup_back(_index: int, at: Vector2) -> void:
+	effects.burst(at, PICKUP_COLOR, BURST_PICKUP_COUNT / 2, BURST_HIT_SPEED * 0.5, PARTICLE_SIZE, PARTICLE_LIFE,
+		Vector2.UP, BURST_PICKUP_SPREAD)
+	sfx.play(&"pickup_ready", at)
 
 
 func _fx_shot(owner_id: int, origin: Vector2, facing: Vector2, w: WeaponData) -> void:
@@ -544,9 +584,12 @@ func _tick_heartbeat(delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	pickups.tick(delta)
 	if mode != Mode.CLIENT:
 		referee.tick(delta, _human_ids, _bot_ids, scores)
 		_tick_respawns(delta)
+		if not match_state.inputs_locked():
+			pickups.collect(players)
 	elif match_state.phase != MatchState.Phase.LOBBY:
 		# Display only; the server sends the real value on every phase change.
 		match_state.time_left = maxf(0.0, match_state.time_left - delta)
@@ -574,6 +617,7 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 			projectiles.clear()
 			if mode != Mode.CLIENT:
 				crates.reset()
+				pickups.reset()
 				_place_participants()
 		MatchState.Phase.RESULTS:
 			projectiles.clear()

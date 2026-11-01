@@ -133,6 +133,11 @@ func on_crates(hp: PackedInt32Array) -> void:
 		arena.crates.apply_array(hp)
 
 
+func on_pickups(state: PackedVector2Array) -> void:
+	if arena != null:
+		arena.pickups.apply_array(state)
+
+
 func on_player_left(id: int) -> void:
 	if arena != null:
 		arena.remove_player(id)
