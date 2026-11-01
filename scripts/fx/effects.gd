@@ -22,6 +22,7 @@ const NUMBER_CRIT_FONT_SIZE: int = 26
 const NUMBER_SPREAD_PX: float = 10.0
 const COLOR_NUMBER: Color = Color(1, 1, 1)
 const COLOR_NUMBER_CRIT: Color = UiStyle.C_YELLOW
+const COLOR_NUMBER_HEAL: Color = Color8(150, 224, 96)
 const BEAM_TIME: float = 0.07
 const BEAM_CORE_COLOR: Color = Color(1, 1, 1, 0.9)
 const BEAM_CORE_SCALE: float = 0.4
@@ -64,6 +65,7 @@ class DamageNumber:
 	var pos: Vector2 = Vector2.ZERO
 	var text: String = ""
 	var crit: bool = false
+	var heal: bool = false
 
 
 class Wisp:
@@ -103,6 +105,8 @@ class Ring:
 	var pos: Vector2 = Vector2.ZERO
 	var radius: float = 0.0
 	var art: Texture2D
+	## Art px from the strip's centre to the radius (BLAST_ART_RADIUS for the fireball).
+	var art_radius: float = BLAST_ART_RADIUS
 
 
 var _particles: Array[Particle] = []
@@ -167,6 +171,15 @@ func damage_number(at: Vector2, amount: int, crit: bool) -> void:
 	n.pos = at + Vector2(_rng.randf_range(-NUMBER_SPREAD_PX, NUMBER_SPREAD_PX), -NUMBER_SPREAD_PX)
 	n.text = str(amount)
 	n.crit = crit
+	n.heal = false
+
+
+## A small green "+N" where something was healed.
+func heal_number(at: Vector2, amount: int) -> void:
+	damage_number(at, amount, false)
+	var n: DamageNumber = _numbers[(_nc + _numbers.size() - 1) % _numbers.size()]
+	n.text = "+%d" % amount
+	n.heal = true
 
 
 func beam(from: Vector2, to: Vector2, color: Color, width: float) -> void:
@@ -219,6 +232,15 @@ func blast(at: Vector2, radius: float, slam: bool) -> void:
 	r.pos = at
 	r.radius = radius
 	r.art = SLAM_ART if slam else BLAST_ART
+	r.art_radius = BLAST_ART_RADIUS
+
+
+## A weapon's own burst strip (WeaponData.burst_art), scaled so `art_radius` art px reach `radius`.
+func burst_strip(at: Vector2, radius: float, art: Texture2D, art_radius: float) -> void:
+	blast(at, radius, false)
+	var r: Ring = _rings[(_rc + _rings.size() - 1) % _rings.size()]
+	r.art = art
+	r.art_radius = art_radius
 
 
 func _process(delta: float) -> void:
@@ -269,7 +291,7 @@ func _draw() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for r: Ring in _rings:
 		if r.life > 0.0 and r.art != SLAM_ART:
-			_draw_strip(self, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / BLAST_ART_RADIUS, Color.WHITE)
+			_draw_strip(self, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / r.art_radius, Color.WHITE)
 	for s: Swing in _swings:
 		if s.life <= 0.0:
 			continue
@@ -292,7 +314,7 @@ func _draw() -> void:
 	for n: DamageNumber in _numbers:
 		if n.life <= 0.0:
 			continue
-		var nc: Color = COLOR_NUMBER_CRIT if n.crit else COLOR_NUMBER
+		var nc: Color = COLOR_NUMBER_HEAL if n.heal else COLOR_NUMBER_CRIT if n.crit else COLOR_NUMBER
 		nc.a = clampf(n.life / NUMBER_TIME * 2.0, 0.0, 1.0)
 		var font_size: int = NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE
 		var w: float = UiStyle.text_width(n.text, font_size, true)
@@ -302,7 +324,7 @@ func _draw() -> void:
 func _draw_slams() -> void:
 	for r: Ring in _rings:
 		if r.life > 0.0 and r.art == SLAM_ART:
-			_draw_strip(_ground, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / BLAST_ART_RADIUS, Color.WHITE)
+			_draw_strip(_ground, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / r.art_radius, Color.WHITE)
 
 
 ## Frame `t` (0..1) of a strip of square frames, centred on `at`, rotated and scaled, drawn on `ci`.

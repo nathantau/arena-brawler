@@ -13,7 +13,7 @@ Characters are drawn in code by `tools/sprites/generate.py` (Pillow, project ven
 
 - **Original art only** (CLAUDE.md rule). Public-domain myth/folklore figures are fine; never copy a
   specific game/anime design, costume or signature item. Name the inspiration loosely, then make it ours.
-- 64x64 frame, facing **right**, palette colours only (`palette.py`, 18 colours — do not add colours
+- 64x64 frame, facing **right**, palette colours only (`palette.py`, 21 colours: Eden added the greens — do not add colours
   without asking), hard alpha, nothing touching the frame edge. `check()` enforces this.
 - House style (keep characters consistent):
   - Chibi: head ~ half the height, stubby `legs()`; upper body is composited `UPPER_DY` px down.

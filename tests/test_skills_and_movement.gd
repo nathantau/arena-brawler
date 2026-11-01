@@ -19,7 +19,7 @@ func before_all() -> void:
 
 
 func test_catalog_and_skills() -> void:
-	assert_eq(characters.ordered.size(), 6, "Gunnar and Warden are benched")
+	assert_eq(characters.ordered.size(), 7, "Gunnar and Warden are benched")
 	assert_not_null(characters.get_character(&"warden"), "benched characters still load by id")
 	for c: CharacterData in characters.ordered:
 		assert_not_null(c.sprite_sheet, c.id)
@@ -36,7 +36,7 @@ func test_catalog_and_skills() -> void:
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
 			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst", &"cherry_sapling", &"storm_cloud", &"overdrive",
-			&"shadow_step", &"gloom_hound", &"shadow_bind"]:
+			&"shadow_step", &"gloom_hound", &"shadow_bind", &"bark_skin", &"verdant_bloom", &"leaf_gust"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
@@ -1884,3 +1884,204 @@ func test_grapple_bite_grants_iframes_but_a_miss_does_not() -> void:
 	await wait_physics_frames(2)
 	_press_special(q, Vector2.LEFT)  # nothing within range that way
 	assert_almost_eq(q.stats.invulnerable_time, 0.0, 0.001, "a miss grants nothing")
+
+
+# --- Eden: Bark Skin, Verdant Bloom, Leaf Gust ---------------------------------------
+
+func _eden(world: Node2D, pool: ProjectilePool, special: StringName, id: int = 1, at: Vector2 = Vector2(300, 300)) -> Player:
+	var p := Player.new()
+	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
+		characters.get_character(&"eden"))
+	world.add_child(p)
+	p.set_skill(1, skills.get_skill(special))
+	p.global_position = at
+	if pool != null:
+		pool.targets.append(p)
+	return p
+
+
+func test_eden_specials_are_hers_and_numbers_sane() -> void:
+	var eden: CharacterData = characters.get_character(&"eden")
+	assert_true(characters.ordered.has(eden))
+	assert_eq(eden.signature_skill.id, &"bark_skin")
+	assert_eq(eden.signature_weapon.id, &"eden_sling")
+	assert_gt(eden.signature_weapon.splash_radius, 0.0, "a splash weapon")
+	assert_not_null(eden.signature_weapon.burst_art)
+	var ids: Array[StringName] = []
+	for sk: SkillData in skills.specials_for(eden):
+		ids.append(sk.id)
+	for id: StringName in [&"bark_skin", &"verdant_bloom", &"leaf_gust"]:
+		assert_has(ids, id)
+		var d: SkillData = skills.get_skill(id)
+		assert_lte(d.blurb.length(), 20)
+		for c: CharacterData in characters.ordered:
+			assert_eq(c.can_use_skill(d), c.id == &"eden", "%s / %s" % [id, c.id])
+	assert_eq(int(SkillData.Kind.BARK_SKIN), 20)
+	assert_eq(int(SkillData.Kind.BLOOM), 21)
+	assert_eq(int(SkillData.Kind.GUST), 22)
+
+
+func test_bark_skin_scales_incoming_damage_and_refills_armor_only_while_on() -> void:
+	var w: Array = _whirl_world()
+	var d: SkillData = skills.get_skill(&"bark_skin")
+	var p: Player = _eden(w[0], w[1], &"bark_skin")
+	await wait_physics_frames(2)
+	p.stats.armor = 0
+	assert_eq(p.take_hit(40, false, Vector2.ZERO, 2), 40, "full damage before the bark")
+	assert_eq(p.stats.hp, p.stats.max_hp - 40)
+	p.stats.hp = p.stats.max_hp
+	p.stats.armor = 0
+	_press_special(p, Vector2.RIGHT)
+	assert_true(p.skills[1].is_barked())
+	assert_eq(p.stats.armor, p.stats.max_armor, "armor refilled on the press")
+	p.stats.armor = 0
+	assert_eq(p.take_hit(40, false, Vector2.ZERO, 2), roundi(40 * d.bark_damage_scale), "scaled while it lasts")
+	assert_eq(p.take_hit(1, false, Vector2.ZERO, 2), 1, "never rounds to nothing")
+	_idle(p, ceili(d.duration / DT) + 5)
+	assert_false(p.skills[1].is_active())
+	p.stats.hp = p.stats.max_hp
+	p.stats.armor = 0
+	assert_eq(p.take_hit(40, false, Vector2.ZERO, 2), 40, "full damage again")
+	assert_gt(d.cooldown, d.duration)
+
+
+func _bloom_setup() -> Array:
+	var w: Array = _whirl_world()
+	var d: SkillData = skills.get_skill(&"verdant_bloom")
+	var p: Player = _eden(w[0], w[1], &"verdant_bloom", 1, Vector2(300, 300))
+	var other: Player = _eden(w[0], w[1], &"verdant_bloom", 2, Vector2(300, 300))  # stands in the patch too
+	return [w[0], w[1], p, other, d]
+
+
+func test_verdant_bloom_heals_only_its_owner_and_only_inside() -> void:
+	var s: Array = _bloom_setup()
+	var p: Player = s[2]
+	var other: Player = s[3]
+	var d: SkillData = s[4]
+	await wait_physics_frames(2)
+	p.stats.hp = 50
+	other.stats.hp = 50
+	_press_special(p, Vector2.RIGHT)
+	assert_eq(p.skills[1].anchor, Vector2(300, 300 + Player.FOOT_RING_Y), "patch at her feet")
+	_idle(p, floori(d.bloom_interval / DT) - 3)
+	assert_eq(p.stats.hp, 50, "nothing before the first interval")
+	_idle(p, 6)
+	assert_eq(p.stats.hp, 50 + d.bloom_heal, "first heal")
+	assert_eq(other.stats.hp, 50, "the other one standing in it gets nothing")
+	_idle(p, floori(d.bloom_interval / DT))
+	assert_eq(p.stats.hp, 50 + 2 * d.bloom_heal, "one heal per interval")
+	# stepping out: no more healing while she is outside the radius
+	p.global_position += Vector2(d.bloom_radius + 40.0, 0.0)
+	var hp_out: int = p.stats.hp
+	_idle(p, floori(d.bloom_interval / DT) * 3)
+	assert_eq(p.stats.hp, hp_out, "outside the patch")
+	# back in; healing is capped at max hp and ends with the patch
+	p.global_position = Vector2(300, 300)
+	p.stats.hp = p.stats.max_hp - 1
+	_idle(p, floori(d.bloom_interval / DT) + 2)
+	assert_eq(p.stats.hp, p.stats.max_hp, "never past the max")
+	_idle(p, ceili(d.duration / DT) + 5)
+	assert_false(p.skills[1].is_active())
+	p.stats.hp = 10
+	_idle(p, 120)
+	assert_eq(p.stats.hp, 10, "the patch is gone")
+
+
+func test_verdant_bloom_is_server_side_only_and_not_for_the_dead() -> void:
+	var s: Array = _bloom_setup()
+	var p: Player = s[2]
+	var pool: ProjectilePool = s[1]
+	var d: SkillData = s[4]
+	await wait_physics_frames(2)
+	pool.authoritative = false
+	p.stats.hp = 50
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, floori(d.bloom_interval / DT) + 3)
+	assert_eq(p.stats.hp, 50, "a client's pool heals nobody")
+	assert_eq(p.stats.heal(5), 0 if p.stats.is_dead() else 5)
+	p.stats.hp = 0
+	assert_eq(p.stats.heal(5), 0, "no healing the dead")
+
+
+func _gust_setup() -> Array:
+	var w: Array = _whirl_world()
+	var d: SkillData = skills.get_skill(&"leaf_gust")
+	var p: Player = _eden(w[0], w[1], &"leaf_gust")
+	var inside: Player = _eden(w[0], w[1], &"leaf_gust", 2, Vector2(300 + d.gust_range * 0.6, 300))
+	var beside: Player = _eden(w[0], w[1], &"leaf_gust", 3, Vector2(300 + 20, 300 + d.gust_range * 0.8))  # outside the angle
+	var far: Player = _eden(w[0], w[1], &"leaf_gust", 4, Vector2(300 + d.gust_range + 60.0, 300))
+	return [w[0], w[1], p, inside, beside, far, d]
+
+
+func test_leaf_gust_pushes_and_hurts_only_enemies_in_the_cone() -> void:
+	var s: Array = _gust_setup()
+	var p: Player = s[2]
+	var d: SkillData = s[6]
+	await wait_physics_frames(2)
+	var hits: Array = _hits(s[1])
+	for q: Player in [s[3], s[4], s[5]]:
+		q.stats.armor = 0
+	_press_special(p, Vector2.RIGHT)
+	assert_eq(hits, [[2, d.gust_damage]], "one victim, once")
+	assert_gt(s[3].velocity.x, d.gust_knockback * 0.9, "thrown away from her, hard")
+	assert_eq(s[4].stats.hp, s[4].stats.max_hp, "outside the angle")
+	assert_eq(s[5].stats.hp, s[5].stats.max_hp, "out of range")
+	assert_eq(p.stats.hp, p.stats.max_hp, "not herself")
+	_idle(p, 20)
+	assert_eq(hits.size(), 1, "the hit lands on the press only")
+
+
+func test_leaf_gust_destroys_enemy_shots_in_the_cone_but_not_her_own() -> void:
+	var s: Array = _gust_setup()
+	var p: Player = s[2]
+	var pool: ProjectilePool = s[1]
+	await wait_physics_frames(2)
+	var gun: WeaponData = WeaponCatalog.load_all().get_weapon(&"pistol")
+	pool.fire_shot(2, 5, Vector2(300 + 90, 300), Vector2.LEFT, gun, 3)  # an enemy shot inside the cone
+	pool.fire_shot(2, 6, Vector2(300 + 90, 300 + 120), Vector2.LEFT, gun, 3)  # outside the cone
+	pool.fire_shot(1, 7, Vector2(300 + 90, 300), Vector2.RIGHT, gun, 3)  # hers
+	assert_eq(pool.active_count(), 3)
+	_press_special(p, Vector2.RIGHT)
+	assert_eq(pool.active_count(), 2, "only the enemy shot in the cone is gone")
+	for slot: ProjectilePool.Slot in pool.debug_slots():
+		if slot.active:
+			assert_ne(slot.shot_seq, 5)
+	# a shot flying into the cone while it lasts dies too
+	pool.fire_shot(2, 8, Vector2(300 + 120, 300), Vector2.LEFT, gun, 3)
+	var before: int = pool.active_count()
+	_idle(p, 3)
+	assert_lt(pool.active_count(), before, "shots that enter the cone are destroyed")
+	assert_true(skills.get_skill(&"leaf_gust").cooldown > 0.0)
+
+
+func test_bots_only_cast_edens_specials_when_they_help() -> void:
+	var w: Array = _whirl_world()
+	var bot := BotBrain.new(null, 1)
+	var gust: Player = _eden(w[0], w[1], &"leaf_gust")
+	assert_true(bot.special_useful(gust, 100.0))
+	assert_false(bot.special_useful(gust, 400.0), "out of the cone's reach")
+	var bloom: Player = _eden(w[0], w[1], &"verdant_bloom", 2)
+	assert_false(bot.special_useful(bloom, 100.0), "unhurt")
+	bloom.stats.hp = 40
+	assert_true(bot.special_useful(bloom, 100.0))
+	var bark: Player = _eden(w[0], w[1], &"bark_skin", 3)
+	assert_true(bot.special_useful(bark, 200.0))
+	assert_false(bot.special_useful(bark, 900.0), "no fight yet")
+
+
+func test_bloom_heal_is_announced_from_the_synced_hp_inside_the_moss() -> void:
+	var s: Array = _bloom_setup()
+	var p: Player = s[2]
+	await wait_physics_frames(2)
+	var got: Array[int] = []
+	p.healed.connect(func(_u: Player, amount: int) -> void: got.append(amount))
+	p.stats.hp = 50
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, 2)
+	p._special_fx.sync(p)  # a sync inside the moss...
+	p.stats.hp = 53  # ...then the server's heal arrives
+	p._special_fx.sync(p)
+	assert_eq(got, [3], "a +3 for the 3 hp it healed")
+	p.stats.hp = 40  # damage is not a heal
+	p._special_fx.sync(p)
+	assert_eq(got.size(), 1)

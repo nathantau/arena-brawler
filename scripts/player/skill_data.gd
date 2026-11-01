@@ -36,8 +36,12 @@ extends Resource
 ## at `hound_speed`, biting (`hound_damage`) whoever it touches every `hound_bite_interval`. Not hittable, not auto-aimed.
 ## BIND (Shadow): his shadow stretches along the floor in the aim direction at `bind_speed` (stopped by walls, up to `bind_range`);
 ## the first enemy it reaches is stunned (can't move, fire or use specials) for `bind_stun`.
+## BARK_SKIN: bark plates for `duration`: damage taken x`bark_damage_scale`, armor refilled on the press.
+## BLOOM: a moss patch at your feet for `duration`: every `bloom_interval` you heal `bloom_heal` while you stand within `bloom_radius` of it (only you).
+## GUST: a cone of leaves along the aim: enemies within `gust_range` and `gust_half_angle_deg` take `gust_damage` and are thrown
+## `gust_knockback` away; enemy projectiles in the cone are destroyed (for the whole `duration`).
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19,
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19, BARK_SKIN = 20, BLOOM = 21, GUST = 22,
 		STEP = 30, HOUND = 31, BIND = 32 }
 
 @export var id: StringName = &""
@@ -130,6 +134,25 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var overdrive_speed_scale: float = 1.9
 ## Weapon cooldowns tick this much faster while it runs (energy still limits the fire rate).
 @export var overdrive_fire_scale: float = 1.0
+
+
+@export_group("Bark Skin")
+## Incoming damage is multiplied by this while the bark is on; armor is refilled to full when it goes on.
+@export_range(0.0, 1.0) var bark_damage_scale: float = 0.5
+
+
+@export_group("Bloom")
+@export var bloom_radius: float = 52.0
+@export var bloom_heal: int = 3
+## Seconds between heals (the first falls one interval after the press).
+@export var bloom_interval: float = 0.5
+
+
+@export_group("Gust")
+@export var gust_range: float = 150.0
+@export var gust_half_angle_deg: float = 36.0
+@export var gust_damage: int = 8
+@export var gust_knockback: float = 560.0
 
 
 @export_group("Nova")

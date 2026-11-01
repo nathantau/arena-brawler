@@ -67,6 +67,15 @@ func apply_damage(amount: int) -> int:
 	return absorbed + to_hp
 
 
+## Restores hp (never past the max, nothing for the dead). Returns how much was healed.
+func heal(amount: int) -> int:
+	if amount <= 0 or is_dead():
+		return 0
+	var gained: int = mini(max_hp - hp, amount)
+	hp += gained
+	return gained
+
+
 func tick(delta: float) -> void:
 	invulnerable_time = maxf(0.0, invulnerable_time - delta)
 	slow_remaining = maxf(0.0, slow_remaining - delta)

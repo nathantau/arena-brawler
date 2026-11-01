@@ -237,6 +237,29 @@ const DISSOLVE_TIME: float = DRIFT_STRIP_FRAMES / DRIFT_FPS
 const DRIFT_LEAN: float = 0.4
 ## Speed under which the swirl keeps its last heading.
 const DRIFT_MIN_SPEED: float = 20.0
+## Eden's specials (all from synced skill state): Bark Skin plates slam onto her (96 px cells like her sheet), loop while it
+## lasts and shed over the last strip's length; Verdant Bloom's moss patch grows, loops and wilts on the floor layer, with
+## healing motes over her while she stands in it; Leaf Gust is a cone of leaves along the aim (frames GUST_SIZE px, the
+## apex GUST_ORIGIN_X art px in, half way down), drawn from the active time.
+const BARK_ART: Texture2D = preload(FX_DIR + "eden_bark.png")
+const BARK_ON_ART: Texture2D = preload(FX_DIR + "eden_bark_on.png")
+const BARK_OFF_ART: Texture2D = preload(FX_DIR + "eden_bark_off.png")
+const BARK_FPS: float = 12.0
+const BARK_STRIP_FPS: float = 30.0
+const MOSS_GROW_ART: Texture2D = preload(FX_DIR + "eden_moss_grow.png")
+const MOSS_ART: Texture2D = preload(FX_DIR + "eden_moss.png")
+const MOSS_WILT_ART: Texture2D = preload(FX_DIR + "eden_moss_wilt.png")
+const HEAL_ART: Texture2D = preload(FX_DIR + "eden_heal.png")
+## Art px from the patch's centre to its edge (generate.py MOSS_R): scaled to the skill's radius.
+const MOSS_ART_RADIUS: float = 35.0
+const MOSS_FPS: float = 8.0
+const MOSS_STRIP_FPS: float = 24.0
+const HEAL_FPS: float = 12.0
+const GUST_ART: Texture2D = preload(FX_DIR + "eden_gust.png")
+const GUST_SIZE: float = 128.0
+const GUST_ORIGIN_X: float = 8.0
+## Art px the cone reaches (generate.py GUST_R): scaled to the skill's range.
+const GUST_ART_RANGE: float = 100.0
 ## Bolt's Overdrive (from synced skill state on every peer): a crack of lightning when it starts, a crackling loop over
 ## him while it lasts, electric afterimages dragged behind (under him) and arcs popping off him while he moves, and a
 ## fizzle when it ends. All 96 px sheet cells except the 128 px crack and the 48 px spark.
@@ -353,6 +376,17 @@ var _storm: CharacterSkill
 var _storm_spot: Vector2 = Vector2.ZERO
 var _storm_ticks: int = 0
 var _bolts: Array[Poof] = []
+## Eden: the slots while Bark Skin / Verdant Bloom / Leaf Gust last (null = not), where she is drawn, and whether she
+## stands in her moss.
+var _bark: CharacterSkill
+var _bloom: CharacterSkill
+var _gust: CharacterSkill
+var _eden_at: Vector2 = Vector2.ZERO
+var _in_moss: bool = false
+var _last_hp: int = -1
+var _in_moss_was: bool = false
+## Her hp went up inside her own moss by this much (Player forwards it as `healed`).
+signal healed(amount: int)
 
 
 ## Marks on the floor (the cloud's shadow, a strike's scorch) draw here: above the arena floor, under the players.
@@ -428,6 +462,7 @@ func sync(p: Player) -> void:
 	_sync_overdrive(p)
 	_sync_sapling(p)
 	_sync_storm(p)
+	_sync_eden(p)
 	_sync_shadow(p)
 	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
 	if slow > _snare_left + SNARE_NEW_MARGIN:  # a snare landed (or was refreshed): petals burst
@@ -470,6 +505,84 @@ func sync(p: Player) -> void:
 	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD else null
 	queue_redraw()
 	_floor.queue_redraw()
+
+
+func _sync_eden(p: Player) -> void:
+	var bark: CharacterSkill = _slot(p, SkillData.Kind.BARK_SKIN)
+	_bark = bark if bark != null and bark.is_barked() and not p.dead else null
+	var bloom: CharacterSkill = _slot(p, SkillData.Kind.BLOOM)
+	_bloom = bloom if bloom != null and bloom.is_active() and not p.dead else null
+	var gust: CharacterSkill = _slot(p, SkillData.Kind.GUST)
+	_gust = gust if gust != null and gust.is_gusting() and not p.dead else null
+	_eden_at = p.global_position + p.visual_offset
+	var hp: int = p.stats.hp
+	if _in_moss_was and hp > _last_hp and _last_hp >= 0:
+		healed.emit(hp - _last_hp)
+	_last_hp = hp
+	_in_moss = _bloom != null and (p.global_position + Vector2(0.0, Player.FOOT_RING_Y)).distance_to(_bloom.anchor) \
+		<= _bloom.data.bloom_radius
+	_in_moss_was = _in_moss
+
+
+## The plates over her: slam on, loop, shed over the last strip's length.
+func _draw_bark() -> void:
+	if _bark == null:
+		return
+	var t: float = _bark.elapsed()
+	var art: Texture2D = BARK_ART
+	var frame: int = int(t * BARK_FPS)
+	var on_time: float = BARK_ON_ART.get_width() / BARK_ON_ART.get_height() / BARK_STRIP_FPS
+	var off_time: float = BARK_OFF_ART.get_width() / BARK_OFF_ART.get_height() / BARK_STRIP_FPS
+	if t < on_time:
+		art = BARK_ON_ART
+		frame = int(t * BARK_STRIP_FPS)
+	elif _bark.active_remaining < off_time:
+		art = BARK_OFF_ART
+		frame = int((off_time - _bark.active_remaining) * BARK_STRIP_FPS)
+	var n: int = art.get_width() / art.get_height()
+	_draw_frame(art, mini(frame, n - 1) if art != BARK_ART else frame % n, art.get_height(), _eden_at, Constants.SPRITE_SCALE)
+
+
+## The cone of leaves, over the whole `duration`, apex on her.
+func _draw_gust() -> void:
+	if _gust == null:
+		return
+	var n: int = GUST_ART.get_width() / GUST_ART.get_height()
+	var frame: int = mini(int(_gust.elapsed() / _gust.data.duration * n), n - 1)
+	var k: float = _gust.data.gust_range / (GUST_ART_RANGE * Constants.SPRITE_SCALE)
+	var px: float = Constants.SPRITE_SCALE * k
+	draw_set_transform(_eden_at, _gust.direction.angle(), Vector2.ONE)
+	_draw_frame(GUST_ART, frame, GUST_SIZE, Vector2((GUST_SIZE * 0.5 - GUST_ORIGIN_X) * px, 0.0), px)
+	draw_set_transform(Vector2.ZERO)
+
+
+## Healing motes over her while she stands in the moss.
+func _draw_heal() -> void:
+	if not _in_moss:
+		return
+	var n: int = HEAL_ART.get_width() / HEAL_ART.get_height()
+	_draw_frame(HEAL_ART, int(_time * HEAL_FPS) % n, HEAL_ART.get_height(), _eden_at, Constants.SPRITE_SCALE)
+
+
+## The moss patch on the floor: grows, loops (sprouts swaying), wilts over the last strip's length.
+func _draw_moss() -> void:
+	if _bloom == null:
+		return
+	var t: float = _bloom.elapsed()
+	var art: Texture2D = MOSS_ART
+	var frame: int = int(t * MOSS_FPS)
+	var grow_time: float = MOSS_GROW_ART.get_width() / MOSS_GROW_ART.get_height() / MOSS_STRIP_FPS
+	var wilt_time: float = MOSS_WILT_ART.get_width() / MOSS_WILT_ART.get_height() / MOSS_STRIP_FPS
+	if t < grow_time:
+		art = MOSS_GROW_ART
+		frame = int(t * MOSS_STRIP_FPS)
+	elif _bloom.active_remaining < wilt_time:
+		art = MOSS_WILT_ART
+		frame = int((wilt_time - _bloom.active_remaining) * MOSS_STRIP_FPS)
+	var n: int = art.get_width() / art.get_height()
+	var k: float = _bloom.data.bloom_radius / (MOSS_ART_RADIUS * Constants.SPRITE_SCALE)
+	_draw_frame(art, mini(frame, n - 1) if art != MOSS_ART else frame % n, art.get_height(), _bloom.anchor,
+		Constants.SPRITE_SCALE * k, 1.0, _floor)
 
 
 ## The tree is drawn from the synced skill time (grow, idle loop, wilt over the last strip's length); a flourish
@@ -809,6 +922,9 @@ func _draw() -> void:
 	_draw_swing()
 	_draw_drift()
 	_draw_overdrive()
+	_draw_bark()
+	_draw_heal()
+	_draw_gust()
 	_draw_snare()
 	_draw_sapling()
 	_draw_blaze()
@@ -857,6 +973,7 @@ func _draw_floor() -> void:
 		_floor.draw_circle(_ward_at, _ward_radius, Color(WARD_GLOW, WARD_GLOW_ALPHA * glow))
 		_floor.draw_arc(_ward_at, _ward_radius, 0.0, TAU, 48, Color(WARD_GLOW, WARD_RING_ALPHA * glow), 2.0)
 	_draw_overdrive_floor()
+	_draw_moss()
 	_draw_shadow_floor()
 	for pf: Poof in _poofs:
 		if pf.on_floor:

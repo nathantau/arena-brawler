@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/character_data.gd" id="1_cd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/eden.png" id="2_sheet"]
+[ext_resource type="Resource" path="res://data/weapons/eden_sling.tres" id="3_sig"]
+[ext_resource type="Resource" path="res://data/skills/bark_skin.tres" id="5_skill"]
+
+[resource]
+script = ExtResource("1_cd")
+sprite_sheet = ExtResource("2_sheet")
+signature_weapon = ExtResource("3_sig")
+signature_skill = ExtResource("5_skill")
+weapon_tags = Array[StringName]([&"eden", &"heavy", &"explosive"])
+id = &"eden"
+display_name = "Eden"
+max_hp = 120
+max_armor = 50
+max_energy = 200
+move_speed = 260.0

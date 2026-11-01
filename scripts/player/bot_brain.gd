@@ -65,8 +65,22 @@ func get_input(player: Player, delta: float) -> InputFrame:
 		_frame.fire = true
 		# Skills are edge-triggered: a one-frame press now and then.
 		_frame.skill = rng.randf() < Constants.BOT_SKILL_CHANCE_PER_SEC * delta
-		_frame.special = rng.randf() < Constants.BOT_SPECIAL_CHANCE_PER_SEC * delta
+		_frame.special = rng.randf() < Constants.BOT_SPECIAL_CHANCE_PER_SEC * delta and special_useful(player, dist)
 	return _frame
+
+
+## Whether pressing the special now would do anything: Leaf Gust only helps with an enemy in its cone's reach, Verdant
+## Bloom only when hurt, Bark Skin only when a fight is on; everything else is always fine.
+func special_useful(player: Player, enemy_dist: float) -> bool:
+	var sd: SkillData = player.skills[1].data
+	match sd.kind:
+		SkillData.Kind.GUST:
+			return enemy_dist <= sd.gust_range * Constants.BOT_GUST_REACH_SCALE
+		SkillData.Kind.BLOOM:
+			return player.stats.hp < player.stats.max_hp * Constants.BOT_BLOOM_HP_FRACTION
+		SkillData.Kind.BARK_SKIN:
+			return enemy_dist <= Constants.BOT_BARK_ENGAGE_DISTANCE
+	return true
 
 
 ## Where to shoot: the nearest visible non-bot enemy, or one of its shadow clones (bots fall for

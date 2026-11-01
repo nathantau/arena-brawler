@@ -67,6 +67,10 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var blast: bool = false
 ## A blast that also destroys enemy projectiles within its radius (Flint's Flare Burst).
 @export var destroys_shots: bool = false
+## Own burst strip (square frames, assets/fx) played instead of the fireball, `burst_art_radius` art px from its centre to
+## where the splash ends (so it is scaled to the splash radius).
+@export var burst_art: Texture2D
+@export var burst_art_radius: float = 31.0
 
 @export_group("Bounce")
 ## Wall bounces before the projectile stops. Bouncing projectiles explode on players or
