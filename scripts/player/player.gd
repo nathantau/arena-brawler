@@ -330,6 +330,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if frozen:
 		# Keep edge state current so a button held through the countdown doesn't fire on release.
 		_prev_skills = pressed
+		_end_abilities(swing)
 		velocity = Vector2.ZERO
 		_sync_shields()
 		return
@@ -337,7 +338,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if erupting != null and not erupting.is_active() and not replay:
 		_erupt(erupting, input.seq)
 	for i: int in Constants.SKILL_SLOTS:
-		if pressed[i] and not _prev_skills[i] and swing == null and not stats.is_stunned():  # no other special mid-swing
+		if pressed[i] and not _prev_skills[i] and not skill_locked(i) and not stats.is_stunned():  # one ability at a time
 			_activate(skills[i], input, replay)
 	_prev_skills = pressed
 
@@ -411,6 +412,25 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			_release_shot(_windup_seq, _windup_weapon)
 	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null and stepping == null and not rooted:  # both hands on the chain
 		_try_fire(input.seq, replay)
+
+
+## Countdown / results freeze the player: whatever he was doing ends here. A swing lands where it was going (not mid-air,
+## possibly over a wall) and a burning-trail dash finishes at the end of its line.
+func _end_abilities(swing: CharacterSkill) -> void:
+	if swing != null:
+		global_position = swing.anchor + swing.direction
+	for slot: CharacterSkill in skills:
+		if slot.data.kind == SkillData.Kind.TRAIL and slot.trail_dashing(0.0):
+			global_position = slot.anchor + slot.direction
+		slot.active_remaining = 0.0
+
+
+## True while the other slot is in a phase that blocks this one (see CharacterSkill.blocks_other): the press is ignored.
+func skill_locked(slot: int) -> bool:
+	for i: int in skills.size():
+		if i != slot and skills[i].blocks_other():
+			return true
+	return false
 
 
 func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
@@ -913,10 +933,6 @@ func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int) ->
 func _die(killer_id: int) -> void:
 	respawn_timer = Constants.RESPAWN_DELAY
 	velocity = Vector2.ZERO
-	for slot: CharacterSkill in skills:
-		if slot.data.kind == SkillData.Kind.SAPLING or slot.data.kind == SkillData.Kind.HOUND \
-				or slot.data.kind == SkillData.Kind.BLOOM or slot.data.kind == SkillData.Kind.BARK_SKIN:
-			slot.active_remaining = 0.0  # the tree, hound, moss patch and bark go with her
 	_set_dead(true)
 	died.emit(self, killer_id)
 
@@ -945,6 +961,9 @@ func _set_dead(value: bool) -> void:
 		return
 	dead = value
 	_windup_left = -1.0
+	if value:  # every ability ends with the player (a dead / sat-out player isn't ticked, so it would hang there)
+		for slot: CharacterSkill in skills:
+			slot.active_remaining = 0.0
 	# A real death (sitting out has no respawn timer) leaves the fall animation behind; on every peer.
 	if value and respawn_timer > 0.0 and is_inside_tree():
 		_spawn_corpse()
@@ -1070,7 +1089,8 @@ func _draw() -> void:
 
 
 func _draw_overlay() -> void:
-	if held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null \
+	var body_hidden: bool = _special_fx.hides_owner() or _special_fx.is_swinging()  # morph, grapple zip, swing pose...: no gun floating alone
+	if not body_hidden and held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null \
 			and active_skill(SkillData.Kind.PILLAR) == null and not _special_fx.is_petals() and not _special_fx.is_flaring() and not _special_fx.is_stepping():  # the staff is in the spin / plant pose; petals hide it
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()

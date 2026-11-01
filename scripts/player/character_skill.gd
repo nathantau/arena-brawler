@@ -54,6 +54,23 @@ func is_active() -> bool:
 	return active_remaining > 0.0
 
 
+## One ability at a time: true while this slot is a phase that changes the player's own state/animation (transform, dash, swing, grapple
+## pull, whirl, drift, step, pillar plant, nova, overdrive, bark, gust cast, trail's dash part), so the other slot can't be used.
+## Things left in the world that run on their own (storm, sapling, smoke, clones, bloom, hound, the burning trail, a marked eruption,
+## the barrier / ward, a bind's tether, instant volleys) never block.
+func blocks_other() -> bool:
+	if not is_active():
+		return false
+	match data.kind:
+		SkillData.Kind.DASH, SkillData.Kind.TRANSFORM, SkillData.Kind.SWING, SkillData.Kind.GRAPPLE, SkillData.Kind.WHIRL, \
+		SkillData.Kind.DRIFT, SkillData.Kind.STEP, SkillData.Kind.PILLAR, SkillData.Kind.NOVA, SkillData.Kind.OVERDRIVE, \
+		SkillData.Kind.BARK_SKIN, SkillData.Kind.GUST:
+			return true
+		SkillData.Kind.TRAIL:
+			return elapsed() < data.trail_dash_time
+	return false
+
+
 func is_ready() -> bool:
 	return cooldown_remaining <= 0.0 and not is_active()
 

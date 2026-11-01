@@ -230,8 +230,8 @@ func _draw() -> void:
 
 	# The two specials, with cooldown sweeps
 	if player != null and is_instance_valid(player):
-		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.skills[0], skill_held)
-		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.skills[1], special_held)
+		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.skills[0], skill_held, player.skill_locked(0))
+		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.skills[1], special_held, player.skill_locked(1))
 		for i: int in 2:
 			if _pulse[i] > 0.0:
 				var k: float = 1.0 - _pulse[i] / READY_PULSE_TIME
@@ -240,10 +240,14 @@ func _draw() -> void:
 				draw_arc(c, r, 0.0, TAU, SEGMENTS, Color(COLOR_READY, COLOR_READY.a * (1.0 - k)), 4.0)
 
 
-func _skill_button(c: Vector2, radius: float, scale_px: float, sk: CharacterSkill, held: bool) -> void:
+func _skill_button(c: Vector2, radius: float, scale_px: float, sk: CharacterSkill, held: bool, locked: bool = false) -> void:
 	_round(c, "round", scale_px, held)
 	UiStyle.draw_icon(self, sk.data.icon, c + _drop(held), scale_px)
-	if sk.is_active():
+	if locked:  # the other special is mid-use: greyed out with a padlock, presses are ignored
+		draw_circle(c, radius * 0.9, Color(0.1, 0.1, 0.14, 0.7))
+		draw_arc(c, radius * 0.22, PI, TAU, 12, UiStyle.C_WHITE, 4.0)
+		draw_rect(Rect2(c + Vector2(-radius * 0.3, -radius * 0.02), Vector2(radius * 0.6, radius * 0.45)), UiStyle.C_WHITE)
+	elif sk.is_active():
 		draw_arc(c, radius - 2.0, 0.0, TAU, SEGMENTS, UiStyle.C_TEAL_L, 4.0)
 	elif not sk.is_ready():
 		draw_arc(c, radius * 0.45, -PI * 0.5, -PI * 0.5 + TAU * sk.cooldown_fraction(), SEGMENTS,
