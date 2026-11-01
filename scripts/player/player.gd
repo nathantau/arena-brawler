@@ -141,7 +141,12 @@ var _sprite := AnimatedSprite2D.new()
 ## Godspeed (Bolt): true while any of his abilities is active and for GODSPEED_LINGER after; he wears the powered-up sheet.
 ## Derived from the synced skill state, so every peer shows it.
 const GODSPEED_LINGER: float = 0.5
+## The power-up and power-down take this long (seconds), through the sheet's in-between looks (CharacterData.stage_frames).
+const GODSPEED_RISE: float = 0.3
+const GODSPEED_FALL: float = 0.25
 var godspeed: bool = false
+## 0 = normal .. 1 = fully powered up: eases up while godspeed is on and back down after it.
+var god_level: float = 0.0
 var _god_linger: float = 0.0
 ## Drawn after the sprite: the gun when it's in front of the body, and health bars.
 var _overlay := Node2D.new()
@@ -258,6 +263,16 @@ static func godspeed_linger(left: float, active: bool, delta: float) -> float:
 	return GODSPEED_LINGER if active else maxf(0.0, left - delta)
 
 
+## One step of the power-up level.
+static func god_level_step(level: float, on: bool, delta: float) -> float:
+	return clampf(level + (delta / GODSPEED_RISE if on else -delta / GODSPEED_FALL), 0.0, 1.0)
+
+
+## The sheet stage for a power-up level: 0 normal .. CharacterData.POWER_STAGES (full godspeed).
+static func god_stage(level: float) -> int:
+	return mini(ceili(level * CharacterData.POWER_STAGES), CharacterData.POWER_STAGES)
+
+
 func _any_skill_active() -> bool:
 	for slot: CharacterSkill in skills:
 		if slot.is_active():
@@ -269,6 +284,7 @@ func _process(delta: float) -> void:
 	_hit_flash = maxf(0.0, _hit_flash - delta)
 	_god_linger = godspeed_linger(_god_linger, _any_skill_active() and not dead, delta)
 	godspeed = character.has_godspeed() and _god_linger > 0.0 and not dead
+	god_level = 0.0 if dead or not character.has_godspeed() else god_level_step(god_level, godspeed, delta)
 	_recoil = maxf(0.0, _recoil - delta)
 	visual_offset *= exp(-Constants.CORRECTION_DECAY * delta)
 	_attack_anim = maxf(0.0, _attack_anim - delta)
@@ -280,8 +296,7 @@ func _process(delta: float) -> void:
 	elif velocity.length() > Constants.SPRITE_WALK_MIN_SPEED:
 		anim = &"walk"
 	var tf: CharacterSkill = form()
-	var frames: SpriteFrames = tf.data.form_frames() if tf != null else \
-		(character.godspeed_frames() if godspeed else character.sprite_frames())
+	var frames: SpriteFrames = tf.data.form_frames() if tf != null else character.stage_frames(god_stage(god_level))
 	if anim == &"attack" and not frames.has_animation(anim):  # the form ended mid-swing
 		_attack_anim = 0.0
 		anim = &"idle"

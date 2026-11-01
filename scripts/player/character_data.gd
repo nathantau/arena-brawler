@@ -22,11 +22,16 @@ extends Resource
 @export var sprite_sheet: Texture2D
 ## Optional second sheet with the same layout, worn while the character is powered up (Bolt's godspeed: Player.godspeed).
 @export var godspeed_sheet: Texture2D
+## The in-between looks of the power-up (stages 1..POWER_STAGES - 1), same layout: hair brightening and rising, glow growing.
+@export var power_sheets: Array[Texture2D] = []
 
 
 var _portraits: Array[AtlasTexture] = []
 var _sprite_frames: SpriteFrames
 var _godspeed_frames: SpriteFrames
+var _power_frames: Dictionary = {}
+## Power-up stages: 0 = normal ... POWER_STAGES = fully powered up (godspeed_sheet).
+const POWER_STAGES: int = 4
 
 
 
@@ -78,6 +83,19 @@ func godspeed_frames() -> SpriteFrames:
 	if _godspeed_frames == null:
 		_godspeed_frames = frames_from_sheet(godspeed_sheet)
 	return _godspeed_frames
+
+
+## Animations for power-up stage `stage` (0 normal .. POWER_STAGES godspeed); a stage without a sheet shows the normal one.
+func stage_frames(stage: int) -> SpriteFrames:
+	if stage <= 0 or not has_godspeed():
+		return sprite_frames()
+	if stage >= POWER_STAGES:
+		return godspeed_frames()
+	if stage - 1 >= power_sheets.size():
+		return sprite_frames()
+	if not _power_frames.has(stage):
+		_power_frames[stage] = frames_from_sheet(power_sheets[stage - 1])
+	return _power_frames[stage]
 
 
 static func frames_from_sheet(sheet: Texture2D) -> SpriteFrames:

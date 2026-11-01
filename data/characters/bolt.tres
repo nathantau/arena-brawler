@@ -3,6 +3,9 @@
 [ext_resource type="Script" path="res://scripts/player/character_data.gd" id="1_cd"]
 [ext_resource type="Texture2D" path="res://assets/sprites/bolt.png" id="2_sheet"]
 [ext_resource type="Texture2D" path="res://assets/sprites/bolt_godspeed.png" id="2_god"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bolt_power1.png" id="2_p1"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bolt_power2.png" id="2_p2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bolt_power3.png" id="2_p3"]
 [ext_resource type="Resource" path="res://data/weapons/bolt_zapper.tres" id="3_sig"]
 [ext_resource type="Resource" path="res://data/skills/overdrive.tres" id="5_skill"]
 
@@ -10,6 +13,7 @@
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
 godspeed_sheet = ExtResource("2_god")
+power_sheets = Array[Texture2D]([ExtResource("2_p1"), ExtResource("2_p2"), ExtResource("2_p3")])
 signature_weapon = ExtResource("3_sig")
 signature_skill = ExtResource("5_skill")
 weapon_tags = Array[StringName]([&"bolt", &"light", &"arcane"])

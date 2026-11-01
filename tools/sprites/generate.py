@@ -3958,6 +3958,10 @@ BOLT_PART_X = 35  # the centre parting
 BOLT_QUILLS = [(145, 11, 3.2), (165, 13, 3.4), (-172, 14, 3.6), (-150, 16, 3.8), (-128, 17, 3.8), (-105, 18, 4.0),
                (-82, 18, 4.0), (-58, 16, 3.8), (-36, 14, 3.6), (-14, 11, 3.3)]
 BOLT_HEAD_C, BOLT_HEAD_R = (32.5, 21.0), (15.5, 14.0)
+## The power-up goes through five looks (sheets bolt, bolt_power1..3, bolt_godspeed): 0 normal, 4 full godspeed. Per stage: quill length
+## scale, hair colour (brown -> gold -> yellow).
+BOLT_STAGE_Q = (0.0, 0.3, 0.6, 0.85, 1.0)
+BOLT_STAGE_COL = (BROWN, ORANGE, YELLOW, YELLOW, YELLOW)
 
 
 def _bolt_stripe(c: Canvas, x: int, y0: int, y1: int) -> None:
@@ -3967,20 +3971,21 @@ def _bolt_stripe(c: Canvas, x: int, y0: int, y1: int) -> None:
     c.dot(x, y1, DARKER[BOLT_STRIPE])
 
 
-def bolt_quill(t: int, i: int) -> tuple:
-    """Quill i at tick t: (root, unit direction, length, half width, tip), art coordinates. Each quill's length jitters by a pixel on
-    its own beat, so the hair feels charged."""
+def bolt_quill(t: int, i: int, q: float = 1.0) -> tuple:
+    """Quill i at tick t, grown to `q` of its length: (root, unit direction, length, half width, tip), art coordinates. Each full-size
+    quill's length jitters by a pixel on its own beat, so the hair feels charged."""
     ang, ln, w = BOLT_QUILLS[i]
     a = math.radians(ang)
     ca, sa = math.cos(a), math.sin(a)
-    ln += SWAY[(t + 3 * i) % 4]
+    ln = ln * q + (SWAY[(t + 3 * i) % 4] if q > 0.8 else 0)
+    w *= 0.55 + 0.45 * q
     root = (BOLT_HEAD_C[0] + BOLT_HEAD_R[0] * 0.95 * ca, BOLT_HEAD_C[1] + BOLT_HEAD_R[1] * 0.95 * sa)
     return root, (ca, sa), ln, w, (root[0] + ca * ln, root[1] + sa * ln)
 
 
-def bolt_spike_tips(t: int) -> list:
+def bolt_spike_tips(t: int, stage: int = 4) -> list:
     """Where the quills end (art coordinates), for the arcs that jump between them."""
-    return [bolt_quill(t, i)[4] for i in range(len(BOLT_QUILLS))]
+    return [bolt_quill(t, i, BOLT_STAGE_Q[stage])[4] for i in range(len(BOLT_QUILLS))]
 
 
 def _line_hit(a, b, c, d):
@@ -3994,23 +3999,27 @@ def _line_hit(a, b, c, d):
     return (a[0] + r[0] * u, a[1] + r[1] * u) if 0 <= u <= 1 and 0 <= v <= 1 else None
 
 
-def bolt_spikes(t: int) -> Canvas:
-    """Godspeed hair outside the dome (a CELL canvas in art coordinates + PAD, no body bob): the quills as one yellow mass (no
-    outline cutting through it; the silhouette's own outline makes the notches), each with a small white-hot wedge at its root
-    and an orange tip, and a short crease where two neighbours part."""
+def bolt_spikes(t: int, stage: int = 4) -> Canvas:
+    """Godspeed hair outside the dome (a CELL canvas in art coordinates + PAD, no body bob): the quills as one mass (no outline
+    cutting through it; the silhouette's own outline makes the notches), each with a small white-hot wedge at its root and an orange
+    tip, and a short crease where two neighbours part. Earlier power-up stages: shorter, gold, plainer."""
     c = Canvas(CELL)
     q = []
     for i in range(len(BOLT_QUILLS)):
-        (rx, ry), (ca, sa), ln, w, tip = bolt_quill(t, i)
+        (rx, ry), (ca, sa), ln, w, tip = bolt_quill(t, i, BOLT_STAGE_Q[stage])
         pt = lambda f, sd, rx=rx, ry=ry, ca=ca, sa=sa, ln=ln, w=w: (
             rx + ca * ln * f - sa * w * (1 - f) * sd + PAD, ry + sa * ln * f + ca * w * (1 - f) * sd + PAD)
         q.append((pt, (tip[0] + PAD, tip[1] + PAD), (ca, sa)))
+    base = ORANGE if stage == 1 else YELLOW
     for pt, end, _d in q:
-        c.flat(P([pt(0, -1), pt(0, 1), end]), YELLOW)
-    for pt, end, _d in q:
-        c.flat(P([pt(0.58, -1), pt(0.58, 1), end]), ORANGE)  # cooler tip
-        c.flat(P([pt(0.06, -0.5), pt(0.06, 0.5), pt(0.26, 0.3), pt(0.26, -0.3)]), WHITE)  # a small white-hot wedge at the root
-    for k in range(len(q) - 1):  # a 3 px crease down from the bottom of each notch
+        c.flat(P([pt(0, -1), pt(0, 1), end]), base)
+    if stage >= 2:
+        for pt, end, _d in q:
+            c.flat(P([pt(0.58, -1), pt(0.58, 1), end]), ORANGE)  # cooler tip
+    if stage >= 3:
+        for pt, end, _d in q:
+            c.flat(P([pt(0.06, -0.5), pt(0.06, 0.5), pt(0.26, 0.3), pt(0.26, -0.3)]), WHITE)  # a small white-hot wedge at the root
+    for k in range(len(q) - 1 if stage >= 3 else 0):  # a 3 px crease down from the bottom of each notch
         (pa, ea, da), (pb, eb, db) = q[k], q[k + 1]
         hit = _line_hit(pa(0, 1), ea, pb(0, -1), eb)
         if hit:
@@ -4020,10 +4029,10 @@ def bolt_spikes(t: int) -> Canvas:
     return c
 
 
-def bolt_crown(t: int, dy: int) -> Image.Image:
-    """The godspeed spikes as a CELL image bobbing with the head, drawn behind the body."""
+def bolt_crown(t: int, dy: int, stage: int = 4) -> Image.Image:
+    """The quills as a CELL image bobbing with the head, drawn behind the body."""
     out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
-    out.alpha_composite(bolt_spikes(t).img, (0, UPPER_DY + dy))
+    out.alpha_composite(bolt_spikes(t, stage).img, (0, UPPER_DY + dy))
     return out
 
 
@@ -4044,9 +4053,9 @@ def _bolt_eyes_godspeed(c: Canvas, t: int) -> None:
     c.flat(L([(40, 22), (46, 20)], 1), OUTLINE)
 
 
-def bolt_parts(step=None, t: int = 0, god: bool = False):
+def bolt_parts(step=None, t: int = 0, stage: int = 0):
     """(legs, upper body) canvases facing right: maroon track suit with gold stripes, brown hair parted in the middle
-    (godspeed: yellow, spiking up from the part). `step` = walk frame (arms swing against the legs), `t` = tick (hair sways,
+    (stage 4 = godspeed: yellow, bristling out of the head; 1-3 = the power-up in between). `step` = walk frame (arms swing against the legs), `t` = tick (hair sways,
     the zip pull, jacket folds, hem, sleeves and trouser creases move a frame behind, godspeed crackle flickers)."""
     suit, stripe, acc = BOLT_SUIT, BOLT_STRIPE, BOLT_ACCENT
     lit, dark = LIGHTER[suit], DARKER[suit]
@@ -4139,28 +4148,32 @@ def bolt_parts(step=None, t: int = 0, god: bool = False):
     up.dot(30, 41, DARKER[stripe])
     arm(up, ax[1], suit, SKIN)
     sleeve(ax[1], 4, swing[1])
-    # hair: one dome in both looks (godspeed adds the spikes on top and the nape flame behind)
-    col = YELLOW if god else BROWN
-    up.part(lambda d, f: d.ellipse(BOLT_HEAD, f), col, shade=not god)
-    if god:
-        up.img.alpha_composite(bolt_spikes(t).img.crop((PAD, PAD, PAD + SIZE, PAD + SIZE)))
+    # hair: one dome in every look (the quills bristle out of it as the power-up grows)
+    col = BOLT_STAGE_COL[stage]
+    up.part(lambda d, f: d.ellipse(BOLT_HEAD, f), col, shade=stage <= 1)
+    if stage >= 1:
+        up.img.alpha_composite(bolt_spikes(t, stage).img.crop((PAD, PAD, PAD + SIZE, PAD + SIZE)))
         up.px = up.img.load()
+    if stage >= 2:
         up.flat(lambda d, f: d.arc(BOLT_HEAD, 100, 175, f), ORANGE)
-    else:
+    if stage <= 1:
         up.flat(L([(BOLT_PART_X, 8), (BOLT_PART_X, 14)], 1), DARKER[col])  # the parting
         up.flat(L([(BOLT_PART_X - 1, 9), (BOLT_PART_X - 1, 13)], 1), LIGHTER[col])  # lit hair beside it
         up.flat(L([(24, 10), (30, 8)], 1), LIGHTER[col])
         up.flat(L([(41, 8), (45, 11)], 1), LIGHTER[col])
     up.part(RR(FACE, FACE_R), SKIN)
-    if god:  # no cream rim round the face's top-left edge (the auto highlight of SKIN is white)
+    if stage >= 3:  # no cream rim round the face's top-left edge (the auto highlight of SKIN is white)
         for fy in range(FACE[1], FACE[3] + 1):
             for fx in range(FACE[0], FACE[2] + 1):
                 if up.px[fx, fy][:3] == WHITE:
                     up.px[fx, fy] = SKIN + (255,)
     up.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)  # chin shade
-    if god:  # all of it stands up and away: a low flat hairline (a tiny peak), a strip of forehead above the brows
-        up.part(P([(21, 15), (49, 15), (49, 16), (38, 16), (35, 17), (32, 16), (21, 16)]), col, shade=False)
-        for yy in range(13, 19):  # no outline seam where the band sits on the yellow hair
+    s = SWAY[(t - 1) % 4]  # the curtains' ends drift a frame behind the bob
+    if stage >= 3:  # all of it stands up and away: a jagged anime fringe of small points high on the forehead, some forehead left bare
+        teeth = [(21, 14), (49, 14), (49, 15), (47, 15), (46, 18), (44, 15), (43, 18), (41, 15), (40, 18), (38, 15), (37, 18),
+                 (35, 15), (34, 18), (32, 15), (31, 18), (29, 15), (28, 18), (26, 15), (25, 18), (23, 15), (21, 15)]
+        up.part(P(teeth), col, shade=False)
+        for yy in range(13, 19):  # no outline seam where the fringe sits on the yellow hair
             for xx in range(17, 53):
                 if up.px[xx, yy][:3] == OUTLINE and (
                         (up.px[xx - 1, yy][:3] == YELLOW and up.px[xx + 1, yy][:3] == YELLOW)
@@ -4168,26 +4181,32 @@ def bolt_parts(step=None, t: int = 0, god: bool = False):
                     up.px[xx, yy] = YELLOW + (255,)
         up.dot(37, 19, SKIN_D)  # a furrow between the brows
         up.dot(37, 20, SKIN_D)
-    else:
-        s = SWAY[(t - 1) % 4]  # the curtains' ends drift a frame behind the bob
-        left = [(21, 15), (34, 15), (33, 17), (29, 20), (26 + s, 23), (24 + s, 25), (21, 22)]
-        right = [(37, 15), (49, 15), (49, 24), (46 + s, 23), (44, 20), (41, 18), (38, 16)]
+    else:  # the curtains lift and shorten as the power-up starts
+        if stage == 0:
+            left = [(21, 15), (34, 15), (33, 17), (29, 20), (26 + s, 23), (24 + s, 25), (21, 22)]
+            right = [(37, 15), (49, 15), (49, 24), (46 + s, 23), (44, 20), (41, 18), (38, 16)]
+        elif stage == 1:
+            left = [(21, 15), (34, 15), (33, 17), (29, 19), (26 + s, 21), (24 + s, 22), (21, 20)]
+            right = [(37, 15), (49, 15), (49, 21), (46 + s, 21), (44, 19), (41, 17), (38, 16)]
+        else:
+            left = [(21, 15), (34, 15), (32, 16), (28, 17), (24 + s, 18), (21, 17)]
+            right = [(37, 15), (49, 15), (49, 18), (45, 17), (41, 16), (38, 16)]
         up.part(P(left), col, shade=False)
         up.part(P(right), col, shade=False)
         for x in range(21, 50):  # no seam where the curtains meet the hair mass
             if up.px[x, 14][:3] == OUTLINE and up.px[x, 13][3] and up.px[x, 13][:3] != OUTLINE:
                 up.px[x, 14] = up.px[x, 13]
-    if not god:  # the parting reads down onto the forehead
+    if stage <= 1:  # the parting reads down onto the forehead
         up.dot(BOLT_PART_X, 14, DARKER[col])
         up.dot(BOLT_PART_X, 15, OUTLINE)
-    if god:
+    if stage >= 2:
         _bolt_eyes_godspeed(up, t)
     else:
-        big_eyes(up, EYES_Y, EYES_X, BROWN)
+        big_eyes(up, EYES_Y, EYES_X, TEAL_L if stage == 1 else BROWN)  # the iris starts to glow
     face(up, BLUSH, None)
     if KO:
         up.flat(L([(36, 31), (40, 31)], 1), MAROON)
-    elif god:  # a confident open grin
+    elif stage >= 2:  # a confident open grin
         up.flat(R((36, 29, 41, 31)), MAROON)
         up.flat(R((36, 29, 41, 29)), WHITE)
         up.dot(35, 28, OUTLINE)
@@ -4200,7 +4219,7 @@ def bolt_parts(step=None, t: int = 0, god: bool = False):
 BOLT_ARC_SEEDS = 9000
 
 
-def bolt_glow(f: Image.Image, k: int, reach: int = 7) -> Image.Image:
+def bolt_glow(f: Image.Image, k: int, reach: int = 7, dens: float = 0.7) -> Image.Image:
     """Godspeed's glow behind him: ordered-dither layers (yellow near, orange far) thinning out with distance, shimmering
     a pixel from frame to frame. Never touches the first px outside his outline or the frame's edge."""
     w, h = f.size
@@ -4219,19 +4238,19 @@ def bolt_glow(f: Image.Image, k: int, reach: int = 7) -> Image.Image:
             d = dist[y][x]
             if d in (0, 99) or d < 2:
                 continue
-            p = max(0.0, 1 - (d - 1) / reach) * 0.7
+            p = max(0.0, 1 - (d - 1) / reach) * dens
             if BAYER[(y + k) % 4][(x + 2 * k) % 4] / 16 < p:
                 op[x, y] = (YELLOW if d <= 3 else ORANGE) + (255,)
     return out
 
 
-def bolt_wrap_bolts(rng, k: int) -> tuple:
+def bolt_wrap_bolts(rng, k: int, count=None) -> tuple:
     """Two or three thin yellow bolts coiling round his body, Flash-style (CELL canvases): each is one jagged line orbiting him, its
     back half (sin > 0 is the front, nearer the viewer) on the first canvas, drawn before his body so it disappears behind him, its
     front half on the second, drawn over him. New heights and angles every frame, advancing round him as k grows."""
     back, front = Canvas(CELL), Canvas(CELL)
     cx = 48
-    for i in range(rng.choice((2, 3, 3))):
+    for i in range(count if count is not None else rng.choice((2, 3, 3))):
         way = 1 if i % 2 == 0 else -1
         base = i * 2.1 + k * 0.6 * way + rng.uniform(-0.3, 0.3)
         y0 = (rng.uniform(55, 60), rng.uniform(66, 72), rng.uniform(36, 46))[i]  # torso, legs, round the head (hidden by it)
@@ -4255,18 +4274,18 @@ def bolt_wrap_bolts(rng, k: int) -> tuple:
     return back, front
 
 
-def bolt_godspeed_fx(f: Image.Image, k: int, tips=None) -> Image.Image:
+def bolt_godspeed_fx(f: Image.Image, k: int, tips=None, stage: int = 4) -> Image.Image:
     """An outlined godspeed frame with its glow behind, thin yellow bolts coiling round him (back halves behind the body, front
     halves over it, never over his head) and short arcs jumping between quill tips; new ones every frame, seeded by `k`."""
     w, h = f.size
     px = f.load()
     rng = random.Random(BOLT_ARC_SEEDS + k * 37)
-    back, front = bolt_wrap_bolts(rng, k)
+    back, front = bolt_wrap_bolts(rng, k, (0, 0, 1, 2, None)[stage])
     c = Canvas(CELL)
-    for _ in range(2 if tips else 0):  # arcs jump between neighbouring quill tips, a different pair each frame
+    for _ in range(2 if tips and stage >= 4 else 0):  # arcs jump between neighbouring quill tips, a different pair each frame
         j = rng.randrange(len(tips) - 1)
         zap_arc(c, zap_zig(rng, tips[j], tips[j + 1], 3, 2.2), YELLOW, WHITE, tip=WHITE)
-    out = bolt_glow(f, k)
+    out = bolt_glow(f, k, (0, 3, 5, 6, 7)[stage], (0, 0.4, 0.55, 0.65, 0.7)[stage])
     for lay in (back, front, c):  # bolts stay clear of the frame's edge; those in front and the tip arcs never cross his head or hair
         for y in range(h):
             for x in range(w):
@@ -4280,18 +4299,21 @@ def bolt_godspeed_fx(f: Image.Image, k: int, tips=None) -> Image.Image:
 
 
 @functools.lru_cache(maxsize=None)
-def bolt_sheet(god: bool) -> tuple:
-    """The sheet's CELL frames: 4 idle, 2 hit, 8 walk, 8 death. Godspeed's deaths are the normal ones (the power drops as he falls)."""
+def bolt_sheet(stage: int) -> tuple:
+    """The sheet's CELL frames: 4 idle, 2 hit, 8 walk, 8 death, for power-up stage 0 (normal) .. 4 (godspeed). Every stage's deaths are
+    the normal ones (the power drops as he falls)."""
     def raw(step, t, dy) -> Image.Image:
-        low, up = bolt_parts(step, t, god)
-        f = bolt_crown(t, dy) if god else Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        low, up = bolt_parts(step, t, stage)
+        f = bolt_crown(t, dy, stage) if stage else Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
         f.alpha_composite(low.img, (PAD, PAD))
         f.alpha_composite(up.img, (PAD, PAD + UPPER_DY + dy))
         return f
 
     def done(img: Image.Image, k: int, t=None, dy: int = 0) -> Image.Image:
-        tips = [(x + PAD, y + PAD + UPPER_DY + dy) for x, y in bolt_spike_tips(t)] if t is not None else None
-        return bolt_godspeed_fx(img, k, tips) if god else img
+        if not stage:
+            return img
+        tips = [(x + PAD, y + PAD + UPPER_DY + dy) for x, y in bolt_spike_tips(t, stage)] if t is not None else None
+        return bolt_godspeed_fx(img, k, tips, stage)
 
     idle = [done(outline(raw(None, i, dy)), i, i, dy) for i, dy in enumerate(IDLE_BOB)]
     walk = [done(outline(raw(i, i, dy)), 4 + i, i, dy) for i, dy in enumerate(WALK_BOB)]
@@ -4302,11 +4324,11 @@ def bolt_sheet(god: bool) -> tuple:
 
 
 def bolt_deaths() -> list:
-    return death_frames(lambda step, t: bolt_parts(step, t, False))
+    return death_frames(lambda step, t: bolt_parts(step, t, 0))
 
 
-SHEETS["bolt"] = lambda: list(bolt_sheet(False))
-SHEETS["bolt_godspeed"] = lambda: list(bolt_sheet(True))
+for _stage, _name in enumerate(("bolt", "bolt_power1", "bolt_power2", "bolt_power3", "bolt_godspeed")):
+    SHEETS[_name] = (lambda st: lambda: list(bolt_sheet(st)))(_stage)
 
 
 # --- Arc Zapper (weapon) and its bolt ---
@@ -4363,7 +4385,7 @@ def overdrive_frame(k: int) -> Image.Image:
 
 @functools.lru_cache(maxsize=None)
 def bolt_walk_frames() -> tuple:
-    return bolt_sheet(False)[6:14]
+    return bolt_sheet(0)[6:14]
 
 
 def bolt_ghost_frame(k: int) -> Image.Image:
@@ -4395,7 +4417,7 @@ def bolt_crack_frame(k: int) -> Image.Image:
     c = Canvas(n)
     rng = random.Random(77)
     reach = (0.6, 1, 1, 1, 1, 1, 0.9)[k] if k < 7 else 0
-    width = (1, 2, 4, 4, 3, 2, 1)[k] if k < 7 else 0
+    width = (1, 2, 3, 3, 2, 1, 1)[k] if k < 7 else 0
     if reach:
         end = (foot[0], 4 + (foot[1] - 4) * reach)
         pts = zap_zig(rng, (m + 4, 4), end, 8, 5)
@@ -4438,8 +4460,8 @@ def bolt_fizzle_frame(k: int) -> Image.Image:
     for j in range(3):  # smoke puffs
         if k >= 2 + j:
             age = k - 2 - j
-            px_, py_ = 36 + j * 12, 40 - age * 2
-            r = 2 + min(age, 3)
+            px_, py_ = 34 + j * 14, 66 - age * 2
+            r = 1 + min(age, 2)
             c.flat(E((px_ - r, py_ - r, px_ + r, py_ + r)), STEEL if age < 4 else STEEL_D)
     for _ in range(6):  # last sparks, dropping
         x, y = round(48 + rng.uniform(-24, 24)), round(40 + rng.uniform(-10, 14) + k * 2.2)
@@ -4475,33 +4497,35 @@ def _clear_edge(img: Image.Image, m: int = 2) -> Image.Image:
 
 
 def bolt_flash_frame(k: int) -> Image.Image:
-    """Godspeed switching on (CELL px, centred on him, over him): a white flash at his heart and a column of light up through
-    his head as the hair spikes up, a ring of rays racing out, then crackling arcs and sparks."""
+    """Godspeed switching on (CELL px, centred on him, over him): a flash of light at his chest and a thin column up past his head as the
+    power gathers, a ring of rays racing out from the chest, then crackling arcs and sparks. Small enough that the hair rising through its
+    stages still shows."""
     c = Canvas(CELL)
     rng = random.Random(400 + k)
-    cx, cy = 48, 46
-    w = (6, 5, 4, 3, 2, 1, 0, 0, 0, 0)[k]  # the column of light narrows
+    cx, cy = 48, 58
+    w = (1, 2, 2, 1, 1, 0, 0, 0, 0, 0)[k]  # the column of light swells in, then narrows
     if w:
-        c.flat(R((cx - w, 14, cx + w, cy + 22)), YELLOW)
-        c.flat(R((cx - w // 2, 14, cx + w // 2, cy + 22)), WHITE)
-    r = (17, 14, 10, 6, 3, 0, 0, 0, 0, 0)[k]
+        c.flat(R((cx - w, 18, cx + w, cy + 14)), YELLOW)
+        c.flat(R((cx - w // 2, 18, cx + w // 2, cy + 14)), WHITE)
+    r = (3, 8, 8, 6, 4, 2, 0, 0, 0, 0)[k]
     if r:
         c.flat(E((cx - r, cy - r, cx + r, cy + r)), WHITE)
     rr = 8 + k * 4  # a ring on the floor and one round his chest
-    c.flat(lambda d, f: d.ellipse((cx - rr, cy + 22 - rr * 0.35, cx + rr, cy + 22 + rr * 0.35), outline=f, width=2 if k < 6 else 1),
+    c.flat(lambda d, f: d.ellipse((cx - rr, cy + 14 - rr * 0.35, cx + rr, cy + 14 + rr * 0.35), outline=f, width=2 if k < 6 else 1),
            YELLOW if k < 7 else ORANGE)
-    if k < 8:
-        c.flat(lambda d, f: d.ellipse((cx - rr * 0.8, cy - rr * 0.9, cx + rr * 0.8, cy + rr * 0.9), outline=f, width=1),
-               WHITE if k < 3 else YELLOW)
     for i in range(10):  # rays
         a = math.tau * i / 10 + 0.2
-        r0, r1 = 9 + k * 3, 16 + k * 4.5
+        r0, r1 = 9 + k * 3, 14 + k * 4.5
         if k < 8:
             c.flat(L([(cx + math.cos(a) * r0, cy + math.sin(a) * r0 * 1.1), (cx + math.cos(a) * r1, cy + math.sin(a) * r1 * 1.1)], 1),
                    (WHITE, WHITE, YELLOW, YELLOW, YELLOW, ORANGE, ORANGE, ORANGE)[k])
     if 1 <= k <= 8:
-        roots = [(cx + math.cos(a) * 14, cy + math.sin(a) * 18) for a in (rng.uniform(0, math.tau) for _ in range(10))]
-        arcs_from(c, rng, roots, (cx, cy), 4, (8, 18), forks=0.5, glow=YELLOW, tip=WHITE, jit=2.4)
+        roots = [(cx + math.cos(a) * 14, cy + math.sin(a) * 14) for a in (rng.uniform(0, math.tau) for _ in range(10))]
+        arcs_from(c, rng, roots, (cx, cy), 3, (8, 16), forks=0.4, glow=YELLOW, tip=WHITE, jit=2.4)
+    for y in range(8, 56):  # never over his head or hair: they are the show
+        for x in range(30, 67):
+            if abs(x - 48) < 20 and c.px[x, y][3] and not (cx - 2 <= x <= cx + 2):
+                c.px[x, y] = (0, 0, 0, 0)
     return _clear_edge(c.img)
 
 
@@ -4515,7 +4539,7 @@ def bolt_down_frame(k: int) -> Image.Image:
     for y in range(3, CELL - 3):
         for x in range(3, CELL - 3):
             d = math.hypot((x - 48) / rx, (y - 46) / ry)
-            if 0.7 < d < 1.0 and BAYER[y % 4][x % 4] / 16 < (1 - u) * 0.55:
+            if 0.7 < d < 1.0 and BAYER[y % 4][x % 4] / 16 < (1 - u) * 0.55 * min(1.0, (k + 1) / 3):
                 c.dot(x, y, YELLOW if d < 0.85 else ORANGE)
     if k < 6:
         roots = [(48 + math.cos(a) * 12, 46 + math.sin(a) * 16) for a in (rng.uniform(0, math.tau) for _ in range(8))]

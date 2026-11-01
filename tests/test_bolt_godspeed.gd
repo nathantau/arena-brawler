@@ -71,3 +71,51 @@ func test_godspeed_ends_on_death_and_never_for_others() -> void:
 	other.skills[0].active_remaining = 1.0
 	other._process(DT)
 	assert_false(other.godspeed, "only fighters with a powered-up sheet")
+
+
+func test_power_level_eases_up_and_down_through_the_stages() -> void:
+	var level: float = 0.0
+	var seen: Array[int] = []
+	for i: int in 40:  # rising: every in-between stage is shown, none skipped
+		level = Player.god_level_step(level, true, DT)
+		var st: int = Player.god_stage(level)
+		if seen.is_empty() or seen[-1] != st:
+			seen.append(st)
+	assert_eq(seen, [1, 2, 3, 4] as Array[int], "0.3 s rise passes stages 1, 2, 3 then full")
+	assert_eq(level, 1.0)
+	seen.clear()
+	for i: int in 40:
+		level = Player.god_level_step(level, false, DT)
+		var st: int = Player.god_stage(level)
+		if seen.is_empty() or seen[-1] != st:
+			seen.append(st)
+	assert_eq(seen, [4, 3, 2, 1, 0] as Array[int], "and back down again")
+	assert_eq(level, 0.0)
+	assert_eq(Player.god_stage(0.0), 0)
+
+
+func test_bolt_has_a_sheet_for_every_in_between_stage() -> void:
+	var bolt: CharacterData = characters.get_character(&"bolt")
+	assert_eq(bolt.power_sheets.size(), CharacterData.POWER_STAGES - 1)
+	for st: int in range(CharacterData.POWER_STAGES + 1):
+		assert_eq(bolt.stage_frames(st).get_frame_count(&"walk"), bolt.sprite_frames().get_frame_count(&"walk"), "stage %d" % st)
+	assert_eq(bolt.stage_frames(0), bolt.sprite_frames())
+	assert_eq(bolt.stage_frames(CharacterData.POWER_STAGES), bolt.godspeed_frames())
+	assert_ne(bolt.stage_frames(2), bolt.stage_frames(3))
+	assert_eq(characters.get_character(&"shadow").stage_frames(3), characters.get_character(&"shadow").sprite_frames(), "others stay normal")
+
+
+func test_godspeed_swap_is_gradual_on_a_player() -> void:
+	var p: Player = _bolt()
+	p.skills[0].active_remaining = 5.0
+	p._process(DT)
+	assert_true(p.god_level > 0.0 and p.god_level < 0.1, "starts rising, not a jump")
+	assert_ne(p._sprite.sprite_frames, p.character.godspeed_frames(), "not yet full godspeed after one frame")
+	for i: int in 30:
+		p._process(DT)
+	assert_eq(p._sprite.sprite_frames, p.character.godspeed_frames())
+	p.skills[0].active_remaining = 0.0
+	for i: int in int(Player.GODSPEED_LINGER / DT) + 40:
+		p._process(DT)
+	assert_eq(p._sprite.sprite_frames, p.character.sprite_frames(), "back to normal after the linger and the fall")
+	assert_eq(p.god_level, 0.0)

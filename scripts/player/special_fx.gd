@@ -672,9 +672,15 @@ func _sync_overdrive(p: Player) -> void:
 	elif not on and _od_t >= 0.0 and not p.dead:
 		_poof(_od_at, OD_FIZZLE_ART, OD_FIZZLE_TIME)
 	_od_t = slot.elapsed() if on else -1.0
-	if not on:
-		_od_ghosts.clear()
-		_od_flips.clear()
+	if not on:  # the afterimages drain away one by one instead of vanishing
+		_od_ghost_clock += get_process_delta_time()
+		if _od_ghost_clock >= OD_GHOST_STEP and not _od_ghosts.is_empty():
+			_od_ghost_clock = 0.0
+			_od_ghosts.pop_back()
+			_od_flips.pop_back()
+		if p.dead:
+			_od_ghosts.clear()
+			_od_flips.clear()
 		return
 	var moving: bool = p.velocity.length() > OD_MIN_SPEED
 	if moving:
