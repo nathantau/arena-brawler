@@ -4453,13 +4453,14 @@ def eden(step=None, t=0, pose=None, sway=None, flare=None):
     up.flat(L([(40, 9), (44, 11)], 1), CHESTNUT_L)
 
     def hair_and_mask():
-        up.part(P([(35, 7), (28, 9), (23, 15), (22, 24), (24, 22), (26, 17), (30, 14), (34, 13)]), CHESTNUT,
+        up.part(P([(35, 7), (28, 9), (23, 15), (22, 24), (24, 22), (26, 17), (30, 14), (34, 13)]), CHESTNUT_D,
+                shade=False, line=False)  # the fringe is the deepest chestnut where it meets the mask
+        up.part(P([(35, 7), (42, 9), (47, 15), (48, 24), (46, 22), (44, 17), (40, 14), (36, 13)]), CHESTNUT_D,
                 shade=False, line=False)
-        up.part(P([(35, 7), (42, 9), (47, 15), (48, 24), (46, 22), (44, 17), (40, 14), (36, 13)]), CHESTNUT,
-                shade=False, line=False)
-        up.flat(L([(33, 8), (28, 11), (25, 16)], 1), CHESTNUT_L)
-        up.flat(L([(37, 8), (42, 11), (46, 16)], 1), CHESTNUT_L)
+        up.flat(L([(33, 8), (28, 11), (25, 16)], 1), CHESTNUT)
+        up.flat(L([(37, 8), (42, 11), (46, 16)], 1), CHESTNUT)
         up.part(P(EDEN_MASK), WALNUT)  # carved walnut domino mask, outlined
+        up.flat(L([(23, 19), (26, 16), (32, 15), (36, 17), (39, 17), (43, 15), (48, 16), (50, 19)], 1), WALNUT_L)  # lit rim
         for line in (((24, 19), (28, 17), (34, 17), (36, 18)), ((41, 17), (46, 17), (50, 19)), ((26, 22), (26, 25)),
                      ((49, 22), (48, 25))):  # lighter wood-grain lines
             up.flat(L(list(line), 1), WALNUT_L)
@@ -4657,9 +4658,9 @@ def eden_burst_frame(k: int) -> Image.Image:
 # --- Bark Skin FX (96 px cells like her sheet, drawn over her) ---
 # Plates: (polygon in sheet-art coordinates, name)
 BARK_PLATES = (
-    ("chest", "rr", (19, 38, 45, 51)),  # hugs the torso box (BODY)
-    ("lshoulder", "rr", (14, 39, 22, 50)),  # the small arms, front and back
-    ("rshoulder", "rr", (42, 39, 50, 50)),
+    ("chest", "rr", (20, 40, 44, 50)),  # hugs her corset and waist
+    ("lshoulder", "rr", (14, 37, 22, 47)),  # the puff sleeves and hands, front and back
+    ("rshoulder", "rr", (42, 37, 50, 47)),
 )
 BARK_CELL = 96
 
@@ -4704,8 +4705,8 @@ def bark_frame(k: int, n: int, mode: str) -> Image.Image:
             c.flat(R((tx - 3, ty, tx + 2, ty)), GREEN)  # moss on top
             c.dot(tx, ty - 1, GREEN_L)
     if mode == "loop" or (mode == "on" and u > 0.6):  # sprouts growing out of the plates
-        for sx, sy, col in ((25, 38, GREEN_L), (40, 38, GREEN), (32, 38, GREEN_L), (17, 39, GREEN)):
-            draw_leaf(c, sx + PAD, sy + PAD, -1.57 + (0.5 if sx > 32 else -0.5) + s * 0.12, 5, 1.8, col, shade=False)
+        for sx, sy, col in ((25, 40, GREEN_L), (40, 40, GREEN), (32, 40, GREEN_L), (17, 38, GREEN)):  # kept below her chin
+            draw_leaf(c, sx + PAD, sy + PAD, -1.57 + (0.5 if sx > 32 else -0.5) + s * 0.12, 4, 1.8, col, shade=False)
     if mode == "off":
         for i in range(9):  # chunks fall and spores rise
             a = rng.uniform(0, math.tau)
