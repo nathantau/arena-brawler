@@ -3983,17 +3983,40 @@ def bolt_spike_tips(t: int) -> list:
     return [bolt_quill(t, i)[4] for i in range(len(BOLT_QUILLS))]
 
 
+def _line_hit(a, b, c, d):
+    """Where segments a-b and c-d cross (None if they don't)."""
+    r, q = (b[0] - a[0], b[1] - a[1]), (d[0] - c[0], d[1] - c[1])
+    den = r[0] * q[1] - r[1] * q[0]
+    if abs(den) < 1e-9:
+        return None
+    u = ((c[0] - a[0]) * q[1] - (c[1] - a[1]) * q[0]) / den
+    v = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den
+    return (a[0] + r[0] * u, a[1] + r[1] * u) if 0 <= u <= 1 and 0 <= v <= 1 else None
+
+
 def bolt_spikes(t: int) -> Canvas:
-    """Godspeed hair outside the dome (a CELL canvas in art coordinates + PAD, no body bob): the quills, each a yellow cone with a
-    white-hot root and an orange tip, outlining the ones it overlaps."""
+    """Godspeed hair outside the dome (a CELL canvas in art coordinates + PAD, no body bob): the quills as one yellow mass (no
+    outline cutting through it; the silhouette's own outline makes the notches), each with a small white-hot wedge at its root
+    and an orange tip, and a short crease where two neighbours part."""
     c = Canvas(CELL)
+    q = []
     for i in range(len(BOLT_QUILLS)):
         (rx, ry), (ca, sa), ln, w, tip = bolt_quill(t, i)
-        pt = lambda f, sd: (rx + ca * ln * f - sa * w * (1 - f) * sd + PAD, ry + sa * ln * f + ca * w * (1 - f) * sd + PAD)
-        end = (tip[0] + PAD, tip[1] + PAD)
-        c.part(P([pt(0, -1), pt(0, 1), end]), YELLOW, shade=False)
-        c.flat(P([pt(0.06, -0.5), pt(0.06, 0.5), pt(0.26, 0.3), pt(0.26, -0.3)]), WHITE)  # a small white-hot wedge at the root
+        pt = lambda f, sd, rx=rx, ry=ry, ca=ca, sa=sa, ln=ln, w=w: (
+            rx + ca * ln * f - sa * w * (1 - f) * sd + PAD, ry + sa * ln * f + ca * w * (1 - f) * sd + PAD)
+        q.append((pt, (tip[0] + PAD, tip[1] + PAD), (ca, sa)))
+    for pt, end, _d in q:
+        c.flat(P([pt(0, -1), pt(0, 1), end]), YELLOW)
+    for pt, end, _d in q:
         c.flat(P([pt(0.58, -1), pt(0.58, 1), end]), ORANGE)  # cooler tip
+        c.flat(P([pt(0.06, -0.5), pt(0.06, 0.5), pt(0.26, 0.3), pt(0.26, -0.3)]), WHITE)  # a small white-hot wedge at the root
+    for k in range(len(q) - 1):  # a 3 px crease down from the bottom of each notch
+        (pa, ea, da), (pb, eb, db) = q[k], q[k + 1]
+        hit = _line_hit(pa(0, 1), ea, pb(0, -1), eb)
+        if hit:
+            bx, by = da[0] + db[0], da[1] + db[1]
+            n = math.hypot(bx, by) or 1.0
+            c.flat(L([hit, (hit[0] - bx / n * 3, hit[1] - by / n * 3)], 1), OUTLINE)
     return c
 
 
@@ -4129,19 +4152,25 @@ def bolt_parts(step=None, t: int = 0, god: bool = False):
         up.flat(L([(24, 10), (30, 8)], 1), LIGHTER[col])
         up.flat(L([(41, 8), (45, 11)], 1), LIGHTER[col])
     up.part(RR(FACE, FACE_R), SKIN)
+    if god:  # no cream rim round the face's top-left edge (the auto highlight of SKIN is white)
+        for fy in range(FACE[1], FACE[3] + 1):
+            for fx in range(FACE[0], FACE[2] + 1):
+                if up.px[fx, fy][:3] == WHITE:
+                    up.px[fx, fy] = SKIN + (255,)
     up.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)  # chin shade
-    s = SWAY[(t - 1) % 4]  # the curtains' ends drift a frame behind the bob
-    if god:  # short curtains with ragged ends
-        left = [(21, 15), (34, 15), (33, 17), (29, 20), (27 + s, 20), (24 + s, 22), (22, 19)]
-        right = [(37, 15), (49, 15), (49, 22), (47 + s, 20), (45 + s, 22), (42, 19), (39, 17)]
-    else:  # short curtains
+    if god:  # all of it stands up and away: no fringe, the forehead shows down to the brows
+        up.flat(L([(32, 16), (38, 16)], 1), SKIN_D)  # the hairline's soft shade
+        up.dot(37, 19, SKIN_D)  # a furrow between the brows
+        up.dot(37, 20, SKIN_D)
+    else:
+        s = SWAY[(t - 1) % 4]  # the curtains' ends drift a frame behind the bob
         left = [(21, 15), (34, 15), (33, 17), (29, 20), (26 + s, 23), (24 + s, 25), (21, 22)]
         right = [(37, 15), (49, 15), (49, 24), (46 + s, 23), (44, 20), (41, 18), (38, 16)]
-    up.part(P(left), col, shade=False)
-    up.part(P(right), col, shade=False)
-    for x in range(21, 50):  # no seam where the curtains meet the hair mass
-        if up.px[x, 14][:3] == OUTLINE and up.px[x, 13][3] and up.px[x, 13][:3] != OUTLINE:
-            up.px[x, 14] = up.px[x, 13]
+        up.part(P(left), col, shade=False)
+        up.part(P(right), col, shade=False)
+        for x in range(21, 50):  # no seam where the curtains meet the hair mass
+            if up.px[x, 14][:3] == OUTLINE and up.px[x, 13][3] and up.px[x, 13][:3] != OUTLINE:
+                up.px[x, 14] = up.px[x, 13]
     if not god:  # the parting reads down onto the forehead
         up.dot(BOLT_PART_X, 14, DARKER[col])
         up.dot(BOLT_PART_X, 15, OUTLINE)
