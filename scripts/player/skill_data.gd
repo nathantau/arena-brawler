@@ -5,7 +5,7 @@ extends Resource
 ## pick a special is decided by tags (CharacterData.weapon_tags); a character's own id as the
 ## only tag makes it that character's signature.
 
-## DASH: burst of speed with i-frames. SHIELD: a barrier in front that blocks enemy shots.
+## DASH: burst of speed with i-frames. SHIELD: a barrier in front that blocks enemy shots (with `shield_reflect`, it sends them back as the owner's).
 ## TRANSFORM: a stronger form for a while
 ## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
 ## SMOKE: a cloud where you stand; inside it
@@ -55,6 +55,8 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 ## Length of the deployed barrier and how far in front of the player it appears.
 @export var shield_width: float = 110.0
 @export var shield_distance: float = 44.0
+## Enemy shots that hit the barrier bounce back off it and become the owner's (like the Arc Blade).
+@export var shield_reflect: bool = false
 
 @export_group("Grapple")
 ## How far the kunai flies, how fast the chain pulls you, and how long it takes to bite before the pull starts.

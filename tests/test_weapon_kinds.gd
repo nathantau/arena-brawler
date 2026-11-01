@@ -455,3 +455,20 @@ func test_aim_at_close_targets_shoots_towards_them() -> void:
 		assert_gt(target.normalized().dot(p.facing), 0.0, "shoots towards %s, never away" % target)
 		# right between the hands the best is straight up / down from one, a hand's width off: still a hit
 		assert_lt(absf(from_hand.cross(p.facing)), Constants.PLAYER_RADIUS + w.projectile_radius, "and hits it")
+
+
+func test_barrier_reflects_enemy_shots_back_as_the_owners() -> void:
+	var warden: Player = _player(SHOOTER, Vector2(100, 300), &"warden")
+	var target: Player = _player(TARGET, Vector2(400, 300))
+	warden.set_skill(1, SkillCatalog.shared().get_skill(&"barrier"))
+	assert_true(SkillCatalog.shared().get_skill(&"barrier").shield_reflect)
+	warden.skills[1].try_activate(Vector2.RIGHT, warden.global_position, warden.stats)
+	warden._shield.sync(warden.skills[1], false)
+	await wait_physics_frames(2)
+	pool.fire_shot(TARGET, 1, target.global_position + Vector2(-30, 0), Vector2.LEFT, _w(&"pistol"), SEED)
+	var bullet: ProjectilePool.Slot = _active()[0]
+	await wait_physics_frames(40)
+	assert_eq(bullet.attacker_id, SHOOTER, "now the barrier owner's")
+	assert_eq(bullet.owner_id, TARGET, "pellet key kept for hit events")
+	assert_eq(warden.stats.armor, warden.stats.max_armor, "the owner takes nothing")
+	assert_lt(target.stats.armor, target.stats.max_armor, "it came back and hit the shooter")

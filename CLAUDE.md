@@ -533,3 +533,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   | Flint | Ember Palm dmg 4 -> 5; Eruption radius 80 -> 100; Flare Burst dmg 32 -> 36, radius 120 -> 140, cd 7 -> 6.5; Blaze Run trail dmg 10 -> 13, cd 6.5 -> 6 |
   | Sakura | Snare dmg 20 -> 24; Sapling petal 6 -> 8, cd 10 -> 9; Ward 3.3 -> 4 s, radius 69 -> 78, cd 9 -> 8; Drift 1.0 -> 1.2 s, cd 6.5 -> 5.5 |
   | Apex | Cloud Staff dmg 24 -> 26, reach 110 -> 120, knockback 260 -> 180; Ape fists 36 -> 46, ape speed 0.9 -> 1.0; Sky Pillar 30 -> 36 dmg, width 36 -> 44; Storm 13 -> 15; Whirl 8 -> 10 dmg, radius 70 -> 80 |
+  Follow-up (same branch, after rebase on main): **Barrier now reflects** (`SkillData.shield_reflect`, `ShieldWall.reflects`, `ProjectilePool._reflect`): enemy shots
+  that hit it bounce off and become the owner's (pellet key kept, like the Arc Blade; beams/melee unaffected; blurb "Reflects shots"). Test in `test_weapon_kinds.gd`.
+  Rolled back part of the Sakura buffs: Snare 24 -> 22, Sapling petal 8 -> 7 and cooldown 9 -> 9.5 (Ward and Drift buffs kept). Apex still lagged in the sim
+  (melee bias): Great Ape fists 46 -> 52 and cooldown 15 -> 13, Cloud Staff 26 -> 28. Final fighters sim (48 games each, seed 3): Bolt 55, Shade 52, Flint 47, Sakura 62, Apex 36 win%
+  (seeds 1/2 gave Sakura 46/41, Apex 14/36 before the Apex buff; the sim is noisy, +-10).
