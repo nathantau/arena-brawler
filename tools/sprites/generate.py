@@ -3854,6 +3854,8 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
 CROWNS = {"flicker": flicker_topknot, "flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
+HITS = {}  # per-character hit frames: fn(idle frame 0) -> 2 frames (default: white flash, then one step lighter)
+DEATHS = {}  # per-character death frames: fn() -> 8 CELL frames (default: death_frames)
 KO_CROWNS = {"flicker"}  # crowns that stay on a knocked-out body (Flint's flame goes out)
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Fists go up over his head, then smash down in front on frame 3 (the hit lands then:
@@ -4183,81 +4185,253 @@ def draw_leaf(c: Canvas, x, y, ang, ln, w, col, shade=True, rib=None) -> None:
         c.flat(L([(round(x), round(y)), (round(x + math.cos(ang) * ln * 0.8), round(y + math.sin(ang) * ln * 0.8))], 1), rib)
 
 
+def _eden_arm(c: Canvas, x: int, sleeve, hand, ay: int) -> None:
+    """Eden's small arm; `ay` swings it up/down (walk)."""
+    c.part(lambda d, f: d.rounded_rectangle((x, 36 + ay, x + 5, 44 + ay), 2, f), sleeve)
+    c.part(E((x, 42 + ay, x + 5, 47 + ay)), hand)
+
+
+def _eden_pouch(c: Canvas, x: int, y: int, flap=GREEN) -> None:
+    c.part(RR((x, y, x + 5, y + 5), 1), BROWN)
+    c.flat(R((x, y, x + 5, y + 1)), flap)
+    c.dot(x + 2, y + 3, YELLOW)
+
+
 def eden(step=None, t=0):
-    """Eden: a sturdy earth warden. Brown hair cut in a bob with a leafy crown (drawn above the art box: CROWNS
-    eden_crown) and two vine sprigs hanging behind her that sway, a moss-green tunic under a bark chest plate and a
-    stone pauldron, bark bracers, mossy boots with stone greaves."""
+    """Eden (redesign C, "Verdant Warden"): a leaf-shaped wooden mask over the top of her face (glowing amber eyes in
+    dark holes, a midrib and veins, pointed side tips that flick), an auburn bob, a fan of leaves above the art box
+    (CROWNS eden_crown) with a loose leaf that drifts off, a bark-plate cuirass with a stone core and an amber flaw,
+    one big leaf cape over her right shoulder, a mossy mantle at the other, stone cuff + greaves, a woven belt with a
+    pouch and a gourd that swing as she walks. Secondary motion: waves are sines over the loop (4 frames idle, 8
+    walk) with a lag per part, so the cape hem, hair ends, gourd and pouch follow through; idle breathes, the eyes
+    shimmer and blink on the last frame; walking swings the arms against the legs."""
+    n = 8 if step is not None else 4
+    wv = lambda lag=0, amp=1.0, harm=1: round(amp * math.sin(math.tau * harm * (t - lag) / n))
     low = Canvas()
-    for x, dy in legs(low, GREEN_D, BROWN, step):
-        low.flat(R((x, 49 + dy, x + 5, 49 + dy)), STEEL_D)  # stone greave bands
-        low.flat(R((x, 50 + dy, x + 5, 50 + dy)), SHADOW)
-        low.flat(R((x + 1, 53 + dy, x + 4, 53 + dy)), GREEN)  # moss on the boot
-        low.dot(x + 2, 52 + dy, GREEN_L)
-        low.dot(x + 4, 47 + dy, GREEN)  # moss specks on the thigh
+    for x, dy in legs(low, GREEN, BROWN, step):
+        low.flat(R((x, 50 + dy, x + 5, 50 + dy)), GREEN_D)  # leg wraps: stone greave band, moss
+        low.part(R((x - 1, 51 + dy, x + 6, 52 + dy)), STEEL_D)  # stone greaves
+        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), STEEL)
+        low.dot(x + 4, 49 + dy, GREEN_L)
+        low.flat(R((x + 4, 55 + dy, x + 6, 55 + dy)), STEEL)  # stone toe cap
     up = Canvas()
-    s = SWAY[t % 4]
-    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
-    # two vine sprigs hanging behind the head, each ending in a leaf, swaying in the breeze
-    for x0, ln, lag in ((17, 15, 1), (21, 11, 2)):
-        pts = [(x0, 24), (x0 - 2 - wave(lag, 0.7), 30 + s), (x0 - 3 - wave(lag + 1, 1.2), 36 + s),
-               (x0 - 2 - wave(lag + 2, 1.5), 24 + ln + s)]
-        up.flat(L(pts, 1), GREEN_D)
-        draw_leaf(up, pts[-1][0], pts[-1][1], math.pi / 2 + 0.35 - wave(lag + 2, 0.2), 7, 2.5, GREEN)
-    arm(up, ARM_X[0], GREEN_D, SKIN)
-    up.flat(R((ARM_X[0], 40, ARM_X[0] + 5, 41)), BROWN)  # bark bracer
-    up.part(RR(BODY, 3), GREEN)  # tunic
-    up.part(P([(22, 34), (42, 34), (40, 45), (24, 45)]), BROWN)  # bark chest plate
-    for x, y0, y1 in ((26, 36, 41), (30, 35, 43), (35, 36, 42), (39, 37, 41)):  # grain
-        up.flat(L([(x, y0), (x, y1)], 1), MAROON)
-    up.flat(R((24, 35, 40, 35)), SKIN_D)  # lit top edge
-    up.part(E((29, 38, 35, 43)), STEEL_D)  # stone medallion
-    up.dot(31, 39, STEEL)
-    up.dot(33, 42, GREEN)
-    up.flat(R((20, 46, 44, 47)), GREEN_D)  # vine belt
-    up.dot(25, 46, GREEN_L)
-    up.dot(38, 47, GREEN_L)
-    arm(up, ARM_X[1], GREEN_D, SKIN)
-    up.flat(R((ARM_X[1], 40, ARM_X[1] + 5, 41)), BROWN)
-    up.part(E((38, 31, 50, 41)), STEEL_D)  # stone pauldron
-    up.flat(L([(41, 33), (46, 33)], 1), STEEL)
-    up.flat(R((41, 31, 46, 32)), GREEN)  # moss growing on top
-    up.dot(43, 30, GREEN_L)
-    up.dot(48, 37, SHADOW)
-    # hair: a bob, a bit square, with leaf clips; brown with a lit top
+    walking = step is not None
+    ay = wv(0, 1.0) if walking else 0  # arms swing against each other
+    breath = (0, 0, 1, 1)[t % 4] if not walking else 0  # a visible breath: chest, mantle and shoulders lift 1 px
+    # back arm: long wooden vambrace with grooves
+    _eden_arm(up, ARM_X[0], BROWN, SKIN, ay)
+    up.part(R((ARM_X[0], 39 + ay, ARM_X[0] + 5, 43 + ay)), BROWN)
+    up.flat(L([(ARM_X[0] + 1, 39 + ay), (ARM_X[0] + 1, 43 + ay)], 1), MAROON)
+    up.flat(L([(ARM_X[0] + 3, 39 + ay), (ARM_X[0] + 3, 43 + ay)], 1), MAROON)
+    up.part(RR(BODY, 3), GREEN_D)
+    # bark cuirass: overlapping plates, grain, a stone core with an amber flaw that glints
+    for i, (x0, x1, y0) in enumerate(((22, 42, 34), (23, 41, 38), (24, 40, 42))):
+        up.part(R((x0, y0, x1, y0 + 3)), BROWN)
+        up.flat(R((x0 + 1, y0, x1 - 1, y0)), SKIN_D)
+        up.flat(R((x0 + 3 + i * 3, y0 + 1, x0 + 3 + i * 3, y0 + 2)), MAROON)
+        up.flat(R((x1 - 4 - i * 2, y0 + 1, x1 - 4 - i * 2, y0 + 2)), MAROON)
+    up.part(E((30, 36 - breath, 35, 41 - breath)), STEEL_D)
+    up.dot(31, 37 - breath, STEEL)
+    up.dot(33, 40 - breath, (YELLOW, ORANGE, ORANGE, ORANGE)[t % 4])  # amber glints
+    # woven belt, buckle
+    up.part(R((20, 45, 44, 46)), BROWN, line=False)
+    for x in range(21, 44, 2):
+        up.dot(x, 45 + (x // 2) % 2, SKIN_D)
+    up.part(RR((30, 44, 35, 47), 1), YELLOW)
+    up.dot(32, 45, ORANGE)
+    # pouch + gourd swing from the belt (follow-through: the gourd lags the pouch)
+    gx = wv(1, 1.0)
+    px = -wv(2, 1.0) if walking else -gx
+    gy = 1 if gx else 0
+    up.flat(L([(23, 46), (23 + px, 48)], 1), BROWN)
+    _eden_pouch(up, 21 + px, 47 + (1 if px else 0))
+    up.flat(L([(40, 46), (39 + gx, 47 + gy)], 1), GREEN_D)
+    up.part(E((37 + gx, 47 + gy, 42 + gx, 53 + gy)), SKIN_D)  # gourd canteen
+    up.flat(R((39 + gx, 46 + gy, 40 + gx, 47 + gy)), BROWN)
+    up.dot(38 + gx, 49 + gy, YELLOW)
+    # big leaf cape over the right shoulder (asymmetry); its hem lags the body in waves
+    a, b, c_ = wv(1, 1.3), wv(2, 2.0), wv(2, 1.0)
+    sag = 1 if (not walking and t % 4 == 1) else 0
+    cape = [(36, 31), (49, 33), (53 + a, 41), (50 + b, 49 + c_ + sag), (44, 47), (40, 40)]
+    up.part(P(cape), GREEN)
+    up.flat(L([(40, 34), (50 + b, 47 + c_)], 1), GREEN_D)  # midrib
+    for y in (37, 41, 45):
+        up.flat(L([(44, y - 1), (48 + a, y - 2)], 1), GREEN_L)
+    draw_leaf(up, 47 + b, 47 + c_ + sag, math.pi / 2 + 0.5 + 0.12 * b, 5, 2.0, GREEN_D, shade=False)  # hem tip
+    # front arm + stone cuff
+    _eden_arm(up, ARM_X[1], GREEN_D, SKIN, -ay)
+    up.part(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 42 - ay)), STEEL_D)
+    up.flat(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 40 - ay)), STEEL)
+    # small mossy mantle at the other shoulder
+    up.part(E((16, 31 - breath, 28, 40 - breath)), GREEN_D)
+    for x, col, lag in ((18, GREEN, 3), (21, GREEN_L, 2), (24, GREEN, 1)):
+        draw_leaf(up, x, 35 - breath, math.pi / 2 + 0.1 + 0.12 * wv(lag, 1.0), 6, 2.5, col)
+    # hair: A's bob in warm brown (shaded by the brown ramp: lit top left, maroon underside) with strand highlights,
+    # a centre part, loose locks and bangs over the mask's brow; ends and locks bounce a beat behind the head
+    lag_y = wv(1, 1.0)
+    lag_x = wv(2, 1.0)
     up.part(RR((15, 6, 48, 36), 9), BROWN)
-    up.flat(L([(22, 9), (32, 7)], 1), SKIN_D)  # crown sheen
-    up.flat(L([(18, 16), (17, 26)], 1), SKIN_D)
+    up.part(P([(15, 26), (19, 26), (19, 36 + lag_y), (16, 37 + lag_y)]), BROWN, shade=False)  # swinging ends
+    for pts in (((34, 7), (26, 8), (19, 13), (17, 22)), ((34, 7), (42, 8), (47, 12)), ((30, 7), (23, 10), (18, 17)),
+                ((38, 7), (44, 9))):  # strands fanning from the part
+        up.flat(L(list(pts), 1), SKIN_D)
+    for pts in (((32, 8), (24, 12), (19, 20)), ((36, 8), (45, 11))):
+        up.flat(L(list(pts), 1), MAROON)
+    up.flat(L([(34, 6), (34, 10)], 1), MAROON)  # the part
+    up.flat(L([(16, 28), (16, 34 + lag_y)], 1), MAROON)
     up.part(RR(FACE, FACE_R), SKIN)
-    # scalloped fringe stopping above the eyes
-    up.part(lambda d, f: [d.ellipse((x - 3, 12, x + 3, 19), f) for x in range(24, 48, 4)], BROWN, shade=False)
-    # side locks framing the face, tucked behind a leaf clip
-    up.part(P([(FACE[0] - 1, 17), (FACE[0] + 3, 17), (FACE[0] + 2, 30), (FACE[0] - 2, 33), (FACE[0] - 4, 26)]), BROWN, shade=False)
-    draw_leaf(up, 20, 14, -0.4 - wave(1, 0.1), 9, 2.5, GREEN_L)  # leaf clip with a little flower
-    up.flat(E((17, 12, 21, 16)), ORANGE)
-    up.dot(19, 14, YELLOW)
-    big_eyes(up, EYES_Y, EYES_X, GREEN, h=6)
-    if not KO:
-        for x, out in ((31, -1), (41, 4)):  # lashes flicking out at the outer corners
-            up.dot(x + out, 21, OUTLINE)
-            up.dot(x + out + (1 if out > 0 else -1), 20, OUTLINE)
-    for x in (33, 35, 43, 45):  # freckles
-        up.dot(x, 28, SKIN_D)
-    face(up, BLUSH, MOUTH)
+    up.part(P([(FACE[0] - 1, 17), (FACE[0] + 3, 17), (FACE[0] + 2, 30), (FACE[0] - 2, 34 + lag_y),
+               (FACE[0] - 4, 26)]), BROWN, shade=False)
+    up.flat(L([(FACE[0] - 1, 19), (FACE[0], 29)], 1), SKIN_D)  # lock highlight
+    up.flat(L([(15, 30), (13 - lag_x, 36 + lag_y), (14 - lag_x, 39 + lag_y)], 1), BROWN)  # loose locks flicking out
+    up.flat(L([(18, 33), (17 - lag_x, 38 + lag_y)], 1), BROWN)
+    # leaf mask: pointed leaf shape sweeping out at the sides (tips flick), midrib + veins
+    f = wv(2, 1.0)
+    mask = [(20, 21 + f), (24, 14), (36, 11), (47, 14), (51, 20 - f), (49, 26), (46, 29), (41, 29), (39, 27), (36, 27),
+            (34, 29), (27, 29), (22, 27)]
+    up.part(P(mask), GREEN)
+    up.flat(L([(36, 11), (36, 17)], 1), GREEN_D)
+    up.flat(L([(36, 14), (28, 17)], 1), GREEN_D)
+    up.flat(L([(36, 14), (45, 17)], 1), GREEN_D)
+    up.flat(L([(28, 14), (24, 17)], 1), GREEN_L)
+    up.flat(L([(22, 21 + f), (24, 24)], 1), GREEN_D)
+    up.flat(L([(49, 21 - f), (47, 24)], 1), GREEN_D)
+    up.dot(36, 10, GREEN_L)
+    # bangs: a scalloped fringe over the mask's brow (swaying a little), with a lit rim
+    bx = wv(1, 1.0) // 1
+    up.part(lambda d, f: [d.ellipse((x - 3, 9, x + 3, 15 + (i % 2)), f) for i, x in enumerate(range(24, 48, 4))], BROWN)
+    for x in range(25, 47, 4):
+        up.dot(x + bx % 2, 11, SKIN_D)
+    # glowing eyes in dark holes: shimmer every beat, a half-lid on the idle's last frame
+    up.flat(E((29, 20, 36, 28)), OUTLINE)
+    up.flat(E((39, 20, 46, 28)), OUTLINE)
+    blink = not walking and t % 4 == 3
+    glow = (YELLOW, ORANGE, YELLOW, ORANGE)[t % 4]
+    for x in EYES_X:
+        if KO:
+            x_eye(up, x, EYES_Y + 1, ORANGE)
+        elif blink:  # a subtle half-lid: only the lower glow row shows
+            up.flat(R((x, EYES_Y + 1, x + 3, EYES_Y + 5)), OUTLINE)
+            up.flat(R((x, EYES_Y + 4, x + 3, EYES_Y + 4)), ORANGE)
+        else:
+            up.flat(R((x, EYES_Y + 1, x + 3, EYES_Y + 5)), OUTLINE)
+            up.flat(R((x, EYES_Y + 3, x + 3, EYES_Y + 4)), glow)
+            up.flat(R((x + (t % 2), EYES_Y + 1, x + (t % 2) + 1, EYES_Y + 2)), WHITE)  # glint wanders
+    for x in (33, 43):  # freckles
+        up.dot(x, 32, SKIN_D)
+    up.flat(R((MOUTH[0], MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)
+    if walking:  # lean forward into the stride (rows above the belt shear right)
+        up.img = ImageChops.offset(lean(up.img, 44, 0.04), 0, WALK_BOB[step])  # and bob twice as hard as the legs'
+        up.px = up.img.load()
     return low, up
 
 
 def eden_crown(t: int, dy: int) -> Canvas:
-    """The leafy crown: a fan of leaves rising from the top of her hair (tips sway in the wind, the centre one lags
-    behind). A CELL canvas drawn behind the body; `dy` = the head's bob."""
+    """The leafy crown: a tall fan of five leaves rising from the top of her hair. Tips sway with follow-through (the
+    outer leaves a beat behind the centre), and a loose leaf breaks off and spirals down every cycle (alternating
+    sides). A CELL canvas drawn behind the body; `dy` = the head's bob."""
     c = Canvas(CELL)
     ox, oy = PAD, PAD + UPPER_DY + dy
     wave = lambda lag, amp: HAIR_FLOW[(t - lag) % 4] * amp
     for x, y, ang, ln, w, col, lag in (
-            (21, 12, -2.5, 11, 3.0, GREEN, 3), (43, 12, -0.64, 11, 3.0, GREEN, 3),
-            (25, 10, -2.0, 15, 3.8, GREEN, 2), (39, 10, -1.14, 15, 3.8, GREEN, 2),
-            (32, 9, -1.571, 19, 4.4, GREEN_L, 1)):
+            (25, 12, -2.55, 12, 3.2, GREEN_D, 3), (47, 12, -0.6, 12, 3.2, GREEN_D, 3),
+            (29, 9, -2.1, 16, 4.0, GREEN, 2), (43, 9, -1.04, 16, 4.0, GREEN, 2),
+            (36, 8, -1.571, 20, 4.4, GREEN_L, 1)):
         draw_leaf(c, ox + x, oy + y, ang + wave(lag, 0.07) * (1 if ang > -1.571 else -1), ln, w, col, rib=DARKER[col])
+    k = t % 4  # a loose leaf: leaves the outer left/right leaf's tip on frame 1, drifts down and out, gone by frame 0
+    if k:
+        side = -1 if (t // 4) % 2 == 0 else 1
+        lx = ox + 36 + side * (12 + 3 * k) + (2 if k == 2 else 0) * side
+        ly = oy + 2 + 6 * k
+        draw_leaf(c, lx, ly, math.pi / 2 + side * (0.4 + 0.9 * k), 5, 1.8, (GREEN_L, GREEN, GREEN_D, GREEN)[k], shade=False)
     return c
+
+
+## --- Eden's hit and death, which are hand-built (HITS / DEATHS, used by main()) instead of the generic flash / topple
+
+def _eden_raw(dy: int = 0, t: int = 0) -> Image.Image:
+    """Her idle frame (CELL px) before the outline pass."""
+    low, up = eden(None, t)
+    f = eden_aura(t).img
+    f.alpha_composite(low.img)
+    f.alpha_composite(up.img, (0, UPPER_DY + dy))
+    out = eden_crown(t, dy).img
+    out.alpha_composite(f, (PAD, PAD))
+    return out
+
+
+def _squash(img: Image.Image, sx: float, sy: float, lift: int = 0) -> Image.Image:
+    """Scale a CELL image about its feet (bottom centre of the art), nearest neighbour."""
+    ground = img.getbbox()[3]
+    w, h = max(1, round(CELL * sx)), max(1, round(CELL * sy))
+    s = img.resize((w, h), Image.NEAREST)
+    out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    out.paste(s, (CELL // 2 - w // 2, round(ground - ground * sy) - lift), s)
+    return out
+
+
+def _eden_leaves(img: Image.Image, leaves, k: float, ground: int) -> Image.Image:
+    """Loose leaves flung from (x, y) with velocity (vx, vy) and spin: ballistic, fluttering, resting on the floor."""
+    c = Canvas(CELL)
+    c.img = img.copy()
+    c.px = c.img.load()
+    for x0, y0, vx, vy, spin, ln, col in leaves:
+        x = x0 + vx * k
+        y = y0 + vy * k + 0.9 * k * k + 1.2 * math.sin(k * 2.2 + spin)
+        landed = y >= ground - 2
+        y = min(y, ground - 2)
+        ang = spin + (0.4 * k if not landed else 0.3)
+        if 0 < x < CELL - 6 and y > 4:
+            draw_leaf(c, x, y, ang, ln, 1.9, col, shade=False)
+    return c.img
+
+
+EDEN_HIT_LEAVES = ((38, 40, -2.2, -3.2, 0.5, 5, GREEN_L), (60, 42, 2.4, -3.0, 2.0, 5, GREEN), (48, 24, 0.6, -4.2, 1.3, 4, GREEN_L))
+EDEN_DEATH_LEAVES = ((40, 44, -3.4, -4.6, 0.3, 6, GREEN_L), (58, 46, 3.2, -4.2, 2.2, 6, GREEN), (48, 20, -1.2, -5.4, 1.1, 5, GREEN_L),
+                     (36, 52, -4.2, -2.4, 2.8, 5, GREEN_D), (60, 52, 4.0, -2.8, 0.9, 5, GREEN_D), (50, 28, 2.0, -5.0, 1.7, 6, GREEN),
+                     (44, 34, -2.4, -3.6, 2.5, 4, GREEN_L), (54, 36, 1.4, -3.8, 0.2, 4, GREEN))
+
+
+def eden_hit_frames(idle0: Image.Image) -> list[Image.Image]:
+    """Hit flash (white, squashed wide and low as the blow lands, leaves knocked loose) then one step lighter,
+    stretching back up (leaves flying)."""
+    raw = _eden_raw()
+    ground = raw.getbbox()[3]
+    a = outline(_eden_leaves(_squash(raw, 1.1, 0.88), EDEN_HIT_LEAVES, 0.6, ground))
+    b = outline(_eden_leaves(_squash(raw, 0.96, 1.03), EDEN_HIT_LEAVES, 1.8, ground))
+    return [recolor(a, lambda _c: WHITE), recolor(b, LIGHTER.__getitem__)]
+
+
+def eden_death_frames() -> list[Image.Image]:
+    """8 CELL frames: white flash, pops up stretched, tips back, crumples (squash) as she hits the floor, bounces,
+    lies dizzy with leaves drifting down, then dissolves (dither) in a last whirl of leaves."""
+    global KO
+    KO = True
+    try:
+        raw = _eden_raw()
+    finally:
+        KO = False
+    ground = raw.getbbox()[3]
+
+    def pose(angle, sx=1.0, sy=1.0, lift=0, fade=0.0, k=None):
+        r = _squash(raw, sx, sy)
+        r = r.rotate(angle, Image.NEAREST, center=(CELL // 2, ground))
+        left, top, right, low_ = r.getbbox()
+        dx = (CELL - left - right) // 2 if angle else 0
+        dy = ground - low_ - lift
+        f = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        f.alpha_composite(r.crop((-dx, -dy, CELL - dx, CELL - dy)))
+        if k is not None:
+            f = _eden_leaves(f, EDEN_DEATH_LEAVES, k, ground)
+        for y in range(CELL):
+            for x in range(CELL):
+                if BAYER[y % 4][x % 4] / 16 < fade:
+                    f.putpixel((x, y), (0, 0, 0, 0))
+        return outline(f)
+
+    return [recolor(pose(0), lambda _c: WHITE), pose(0, 0.95, 1.03, 2, k=0.5), pose(30, 1.0, 1.0, 2, k=1.2),
+            pose(65, 1.12, 0.86, 0, k=2.0), pose(90, 1.04, 0.94, 3, k=2.8), pose(90, 1.08, 0.9, 0, k=3.6),
+            pose(90, 1.08, 0.9, 0, 0.45, k=4.4), pose(90, 1.08, 0.9, 0, 0.8, k=5.2)]
 
 
 def eden_aura(i: int) -> Canvas:
@@ -4590,6 +4764,8 @@ def gust_frame(k: int) -> Image.Image:
 CHARACTERS["eden"] = eden
 CROWNS["eden"] = eden_crown
 AURAS["eden"] = eden_aura
+HITS["eden"] = eden_hit_frames
+DEATHS["eden"] = eden_death_frames
 WEAPONS["eden_sling"] = seed_sling
 PROJECTILES["eden_sling"] = seed_pod_shot
 ICONS["bark_skin"] = lambda c: (c.flat(P([(2, 1), (10, 1), (11, 6), (6, 12), (1, 6)]), BROWN),
@@ -6356,7 +6532,9 @@ def main() -> None:
             fs = frames(build, AURAS.get(name), CROWNS[name])
         else:
             fs = [cell(f) for f in frames(build, AURAS.get(name))]
-        fs += death_frames(build, CROWNS.get(name) if name in KO_CROWNS else None)
+        if name in HITS:
+            fs[len(IDLE_BOB):len(IDLE_BOB) + 2] = HITS[name](fs[0])
+        fs += DEATHS[name]() if name in DEATHS else death_frames(build, CROWNS.get(name) if name in KO_CROWNS else None)
         fs += attack_frames(build, AURAS.get(name), ATTACKS.get(name, []))
         sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
         for i, f in enumerate(fs):
