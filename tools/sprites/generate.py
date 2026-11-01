@@ -1423,15 +1423,29 @@ DECALS = {"gym": gym_decal}
 
 
 def pickup_art() -> dict[str, Image.Image]:
-    """Shared pickup pad (32x32) and energy crystal (16x24)."""
+    """Shared pickup pad (32x32: a steel plate with a teal energy ring and a bolt mark) and energy crystal (16x24, faceted)."""
     pad = Canvas()
-    pad.part(E((2, 9, 29, 26)), STEEL_D)
-    pad.flat(E((7, 12, 24, 23)), SHADOW)
-    pad.flat(E((10, 14, 21, 21)), NAVY)
+    pad.part(E((2, 8, 29, 27)), STEEL_D)  # plate
+    pad.flat(E((4, 10, 27, 25)), STEEL)  # lit rim
+    pad.flat(E((5, 11, 26, 25)), STEEL_D)
+    pad.flat(E((6, 12, 25, 24)), TEAL)  # glowing channel
+    pad.flat(E((8, 13, 23, 23)), NAVY)  # well
+    pad.flat(E((10, 15, 21, 21)), SHADOW)
+    pad.flat(L([(7, 16), (10, 13)], 0), TEAL_L)  # light on the channel
+    pad.flat(L([(21, 13), (24, 16)], 0), TEAL_L)
+    pad.flat(P([(16, 15), (13, 19), (15, 19), (14, 22), (19, 18), (17, 18), (18, 15)]), TEAL)  # bolt mark
+    for x, y in ((4, 17), (27, 17), (9, 25), (22, 25)):  # rivets
+        pad.dot(x, y, WHITE)
     crystal = Canvas()
-    crystal.part(P([(8, 2), (13, 9), (8, 21), (3, 9)]), TEAL_L)
-    crystal.flat(L([(8, 3), (8, 19)], 1), WHITE)
-    crystal.flat(P([(9, 9), (12, 9), (8, 20)]), TEAL)
+    crystal.part(P([(8, 2), (13, 9), (13, 14), (8, 21), (3, 14), (3, 9)]), TEAL)
+    crystal.flat(P([(8, 3), (4, 9), (4, 14), (8, 20)]), TEAL_L)  # lit left facets
+    crystal.flat(P([(8, 3), (8, 20), (12, 14), (12, 9)]), TEAL)
+    crystal.flat(P([(8, 10), (12, 10), (12, 14), (8, 20)]), BLUE)  # shaded lower right
+    crystal.flat(L([(4, 9), (8, 10), (12, 9)], 0), WHITE)  # girdle
+    crystal.flat(L([(8, 3), (8, 10)], 0), WHITE)
+    crystal.flat(R((5, 6, 6, 8)), WHITE)  # glint
+    crystal.dot(10, 4, WHITE)
+    crystal.dot(11, 3, WHITE)
     return {"pad": outline(pad.img).crop((0, 0, 32, 32)), "energy": outline(crystal.img).crop((0, 0, 16, 24))}
 
 

@@ -11,6 +11,8 @@ var armor: int
 var energy: int
 var time_since_damage: float = 0.0
 var invulnerable_time: float = 0.0
+## Spawn protection: like invulnerable_time, but the first shot you fire ends it (Player._try_fire). Synced.
+var spawn_protect: float = 0.0
 ## Fractional armor regen carried between ticks.
 var regen_accum: float = 0.0
 ## Fractional energy regen carried between ticks.
@@ -39,6 +41,7 @@ func reset() -> void:
 	energy = max_energy
 	time_since_damage = Constants.ARMOR_REGEN_DELAY
 	invulnerable_time = 0.0
+	spawn_protect = 0.0
 	regen_accum = 0.0
 	energy_accum = 0.0
 	slow_remaining = 0.0
@@ -51,7 +54,7 @@ func is_dead() -> bool:
 
 
 func is_invulnerable() -> bool:
-	return invulnerable_time > 0.0
+	return invulnerable_time > 0.0 or spawn_protect > 0.0
 
 
 ## Returns the total damage actually dealt (armor + hp). 0 if blocked.
@@ -78,6 +81,7 @@ func heal(amount: int) -> int:
 
 func tick(delta: float) -> void:
 	invulnerable_time = maxf(0.0, invulnerable_time - delta)
+	spawn_protect = maxf(0.0, spawn_protect - delta)
 	slow_remaining = maxf(0.0, slow_remaining - delta)
 	stun_remaining = maxf(0.0, stun_remaining - delta)
 	if is_dead():

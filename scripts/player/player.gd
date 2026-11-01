@@ -10,6 +10,8 @@ signal shot_fired(shooter: Player, seq: int, origin: Vector2, facing: Vector2, w
 signal skill_used(user: Player, skill: SkillData)
 ## Verdant Bloom healed this player by `amount` (seen from the synced hp, so on every peer).
 signal healed(user: Player, amount: int)
+## Came back from dead / sitting out (every peer, from the synced dead flag): spawn pop FX.
+signal spawned(user: Player)
 
 ## Layout of capture_state() / apply_state() arrays sent in snapshots.
 enum StateField {
@@ -17,7 +19,7 @@ enum StateField {
 	HP, ARMOR, ENERGY, ENERGY_ACCUM, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
 	CHARACTER, SKILL_IDS, SKILL_COOLDOWNS, SKILL_ACTIVE, SKILL_DIRECTIONS, SKILL_ANCHORS, SKILL_WEAPON_COOLDOWNS,
 	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ, SLOW_REMAINING, SLOW_FACTOR,
-	STUN_REMAINING,
+	STUN_REMAINING, SPAWN_PROTECT,
 	COUNT,
 }
 
@@ -38,6 +40,12 @@ const MELEE_ANIM_TIME: float = 0.16
 const MELEE_REST_DEG: float = 35.0
 const THRUST_REACH: float = 0.35
 const INVULN_ALPHA: float = 0.45
+## Spawn protection look: flicker rate (Hz, doubled for the last SPAWN_WARN_TIME s), low alpha, shimmer rate, ground ring.
+const SPAWN_BLINK_HZ: float = 8.0
+const SPAWN_WARN_TIME: float = 0.4
+const SPAWN_ALPHA_LOW: float = 0.4
+const SPAWN_SHIMMER_HZ: float = 2.5
+const SPAWN_RING_COLOR: Color = Color(0.55, 0.9, 1.0)
 ## Volley shots get their own key space so they never collide with the same frame's normal shot.
 const VOLLEY_SEQ_OFFSET: int = 1 << 24
 ## Eruptions go off frames after the press, so they get theirs too (a volley can be fired the frame one goes off).
@@ -267,7 +275,15 @@ func _process(delta: float) -> void:
 	_sprite.flip_h = facing.x < 0.0
 	_special_fx.sync(self)
 	_sprite.modulate.a = 0.0 if _special_fx.hides_owner() or _special_fx.is_swinging() else \
-		INVULN_ALPHA if stats.is_invulnerable() or is_hidden() else 1.0
+		INVULN_ALPHA if stats.invulnerable_time > 0.0 or is_hidden() else 1.0
+	_sprite.modulate = Color(1, 1, 1, _sprite.modulate.a)
+	if stats.spawn_protect > 0.0 and _sprite.modulate.a > 0.0:
+		# Spawn protection: flickers (faster as it runs out) with a cool shimmer sweeping through the tint.
+		var phase: float = Time.get_ticks_msec() * 0.001
+		var blink: float = SPAWN_BLINK_HZ * (2.0 if stats.spawn_protect < SPAWN_WARN_TIME else 1.0)
+		var shimmer: float = 0.5 + 0.5 * sin(phase * TAU * SPAWN_SHIMMER_HZ)
+		_sprite.modulate = Color(1.0 + 0.3 * shimmer, 1.0 + 0.3 * shimmer, 1.0 + 0.5 * shimmer,
+			SPAWN_ALPHA_LOW if fmod(phase * blink, 1.0) < 0.5 else 1.0)
 	queue_redraw()
 	_overlay.queue_redraw()
 
@@ -279,6 +295,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if dead:
 		return
 	stats.tick(delta)
+	if stats.is_stunned():
+		_interrupt_channels()
 	# Caught before the tick so the frame it runs out still puts him exactly on the landing spot.
 	var swing: CharacterSkill = active_skill(SkillData.Kind.SWING)
 	var erupting: CharacterSkill = active_skill(SkillData.Kind.ERUPTION)
@@ -412,6 +430,24 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			_release_shot(_windup_seq, _windup_weapon)
 	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null and stepping == null and not rooted:  # both hands on the chain
 		_try_fire(input.seq, replay)
+
+
+## A stun cuts channelled self-abilities short (Staff Whirl, Petal Drift, Shadow Step): they end cleanly, cooldown stays, and a
+## stepping Shadow surfaces on free floor without his strike. Runs in the shared sim, so prediction and replay agree.
+func _interrupt_channels() -> void:
+	for slot: CharacterSkill in skills:
+		if not slot.is_active():
+			continue
+		match slot.data.kind:
+			SkillData.Kind.WHIRL:
+				slot.active_remaining = 0.0
+			SkillData.Kind.DRIFT:
+				slot.active_remaining = 0.0
+				stats.invulnerable_time = 0.0
+			SkillData.Kind.STEP:
+				slot.active_remaining = 0.0
+				stats.invulnerable_time = 0.0
+				_surface()
 
 
 ## Countdown / results freeze the player: whatever he was doing ends here. A swing lands where it was going (not mid-air,
@@ -830,7 +866,10 @@ func _skill_direction(data: SkillData, input: InputFrame) -> Vector2:
 
 func _try_fire(seq: int, replay: bool) -> void:
 	var weapon: WeaponState = held_weapon()
-	if _windup_left >= 0.0 or not weapon.try_fire(stats) or replay:
+	if _windup_left >= 0.0 or not weapon.try_fire(stats):
+		return
+	stats.spawn_protect = 0.0  # shooting ends spawn protection (replay too: prediction must match the server)
+	if replay:
 		return
 	play_recoil()
 	if weapon.data.windup > 0.0:  # the attack animation winds up; the hit lands when it comes down
@@ -941,7 +980,7 @@ func respawn(at: Vector2) -> void:
 	global_position = at
 	velocity = Vector2.ZERO
 	stats.reset()
-	stats.invulnerable_time = Constants.RESPAWN_IFRAME_TIME
+	stats.spawn_protect = Constants.RESPAWN_IFRAME_TIME
 	for slot: CharacterSkill in skills:
 		slot.reset()
 	_reset_weapon()
@@ -970,6 +1009,8 @@ func _set_dead(value: bool) -> void:
 	visible = not value
 	_shape.set_deferred("disabled", value)
 	_sync_shields()
+	if not value and is_inside_tree():
+		spawned.emit(self)
 
 
 ## Plays the current sheet's (form's, if transformed) "die" animation where we fell, then frees itself.
@@ -1028,6 +1069,7 @@ func capture_state() -> Array:
 	s[StateField.SLOW_REMAINING] = stats.slow_remaining
 	s[StateField.SLOW_FACTOR] = stats.slow_factor
 	s[StateField.STUN_REMAINING] = stats.stun_remaining
+	s[StateField.SPAWN_PROTECT] = stats.spawn_protect
 	return s
 
 
@@ -1077,6 +1119,7 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	stats.slow_remaining = s[StateField.SLOW_REMAINING]
 	stats.slow_factor = s[StateField.SLOW_FACTOR]
 	stats.stun_remaining = s[StateField.STUN_REMAINING]
+	stats.spawn_protect = s[StateField.SPAWN_PROTECT]
 	_set_dead(s[StateField.DEAD])
 	_sync_shields()
 	return true
@@ -1086,6 +1129,11 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 func _draw() -> void:
 	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
 	draw_circle(Vector2.ZERO, Constants.PLAYER_RADIUS, SHADOW_COLOR)
+	if stats.spawn_protect > 0.0:  # a pulsing ring on the floor round the protected player
+		var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * SPAWN_SHIMMER_HZ)
+		var ring_color: Color = SPAWN_RING_COLOR
+		ring_color.a = 0.5 + 0.4 * pulse
+		draw_arc(Vector2.ZERO, Constants.PLAYER_RADIUS * (1.35 + 0.15 * pulse), 0.0, TAU, 32, ring_color, 3.0)
 
 
 func _draw_overlay() -> void:

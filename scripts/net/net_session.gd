@@ -139,6 +139,12 @@ func rpc_crates(hp: PackedInt32Array) -> void:
 
 
 @rpc("authority", "call_remote", "reliable", CH_EVENTS)
+func rpc_pickups(state: PackedVector2Array) -> void:
+	if client != null:
+		client.on_pickups(state)
+
+
+@rpc("authority", "call_remote", "reliable", CH_EVENTS)
 func rpc_player_left(id: int) -> void:
 	if client != null:
 		client.on_player_left(id)

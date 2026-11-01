@@ -39,7 +39,12 @@ const PLAYER_MAX_ENERGY: int = 200
 const ARMOR_REGEN_DELAY: float = 3.0
 const ARMOR_REGEN_PER_SEC: float = 25.0
 const RESPAWN_DELAY: float = 2.0
-const RESPAWN_IFRAME_TIME: float = 1.0
+## Spawn protection (server-side, synced): untouchable this long after (re)spawning, or until the first shot.
+const RESPAWN_IFRAME_TIME: float = 1.5
+## Energy pickups ("E" in a layout): +amount, back after PICKUP_RESPAWN s, picked up within PICKUP_RADIUS px.
+const ENERGY_PICKUP_AMOUNT: int = 80
+const PICKUP_RESPAWN: float = 12.0
+const PICKUP_RADIUS: float = 34.0
 ## Weapon shots spend energy; it refills at this rate.
 const ENERGY_REGEN_PER_SEC: float = 60.0
 ## A snare slows move speed to a fraction for a while (PlayerStats.slow_*): one at a time, a new one refreshes it.

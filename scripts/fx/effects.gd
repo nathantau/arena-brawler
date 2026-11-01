@@ -49,6 +49,13 @@ const SLASH_ART_RADIUS: float = 46.0
 ## Melee slams (floor cracks, dust) are drawn on this absolute z: above the floor (Arena.FLOOR_Z), under players
 ## and their weapons.
 const GROUND_Z: int = -1
+const SPAWN_RING_TIME: float = 0.55
+const SPAWN_RING_RADIUS: float = 62.0
+const SPAWN_RING_SQUASH: float = 0.5
+const SPAWN_SPARKLES: int = 12
+const SPAWN_SPARKLE_SPEED: float = 260.0
+const SPAWN_SPARKLE_LIFE: float = 0.6
+const PARTICLE_SPARKLE: float = 4.0
 ## Hit marker: four ticks around the victim that spread out and shrink; bigger and gold on crits and kills.
 const MARKER_POOL: int = 8
 const MARKER_TIME: float = 0.18
@@ -79,6 +86,8 @@ class DamageNumber:
 	var text: String = ""
 	var crit: bool = false
 	var heal: bool = false
+	var tinted: bool = false
+	var color: Color = Color.WHITE
 
 
 class Marker:
@@ -126,6 +135,8 @@ class Ring:
 	var art: Texture2D
 	## Art px from the strip's centre to the radius (BLAST_ART_RADIUS for the fireball).
 	var art_radius: float = BLAST_ART_RADIUS
+	## art == null: a plain expanding floor ring in this colour (spawn pop).
+	var color: Color = Color.WHITE
 
 
 var _particles: Array[Particle] = []
@@ -224,6 +235,30 @@ func damage_number(at: Vector2, amount: int, crit: bool) -> void:
 	n.text = str(amount)
 	n.crit = crit
 	n.heal = false
+	n.tinted = false
+
+
+## A floating label in `color` (pickup "+80").
+func label_number(at: Vector2, text: String, color: Color) -> void:
+	damage_number(at, 0, false)
+	var n: DamageNumber = _numbers[(_nc + _numbers.size() - 1) % _numbers.size()]
+	n.text = text
+	n.color = color
+	n.tinted = true
+
+
+## Respawn pop on the floor at `feet`: a ring swelling out, sparkles flying up and a few motes in the player's colour.
+func spawn_pop(feet: Vector2, color: Color) -> void:
+	var r: Ring = _rings[_rc]
+	_rc = (_rc + 1) % _rings.size()
+	r.duration = SPAWN_RING_TIME
+	r.life = r.duration
+	r.pos = feet
+	r.radius = SPAWN_RING_RADIUS
+	r.art = null
+	r.color = color
+	burst(feet, Color.WHITE, SPAWN_SPARKLES, SPAWN_SPARKLE_SPEED, PARTICLE_SPARKLE, SPAWN_SPARKLE_LIFE, Vector2.UP, 2.4)
+	burst(feet, color.lightened(0.4), SPAWN_SPARKLES, SPAWN_SPARKLE_SPEED * 0.6, PARTICLE_SPARKLE, SPAWN_SPARKLE_LIFE)
 
 
 ## A small green "+N" where something was healed.
@@ -344,7 +379,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for r: Ring in _rings:
-		if r.life > 0.0 and r.art != SLAM_ART:
+		if r.life > 0.0 and r.art != SLAM_ART and r.art != null:
 			_draw_strip(self, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / r.art_radius, Color.WHITE)
 	for s: Swing in _swings:
 		if s.life <= 0.0:
@@ -370,7 +405,7 @@ func _draw() -> void:
 	for n: DamageNumber in _numbers:
 		if n.life <= 0.0:
 			continue
-		var nc: Color = COLOR_NUMBER_HEAL if n.heal else COLOR_NUMBER_CRIT if n.crit else COLOR_NUMBER
+		var nc: Color = n.color if n.tinted else COLOR_NUMBER_HEAL if n.heal else COLOR_NUMBER_CRIT if n.crit else COLOR_NUMBER
 		nc.a = clampf(n.life / NUMBER_TIME * 2.0, 0.0, 1.0)
 		var font_size: int = NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE
 		var age: float = NUMBER_TIME - n.life
@@ -381,6 +416,18 @@ func _draw() -> void:
 
 
 func _draw_slams() -> void:
+	for r: Ring in _rings:
+		if r.life > 0.0 and r.art == null:
+			var k: float = 1.0 - r.life / r.duration
+			var c: Color = r.color
+			c.a = (1.0 - k) * 0.9
+			var rad: float = r.radius * (1.0 - pow(1.0 - k, 2.0))
+			_ground.draw_set_transform(r.pos, 0.0, Vector2(1.0, SPAWN_RING_SQUASH))
+			_ground.draw_arc(Vector2.ZERO, rad, 0.0, TAU, 40, c, 4.0 * (1.0 - k) + 1.0)
+			c = Color.WHITE
+			c.a = (1.0 - k) * 0.5
+			_ground.draw_arc(Vector2.ZERO, rad * 0.65, 0.0, TAU, 40, c, 2.0)
+			_ground.draw_set_transform(Vector2.ZERO)
 	for r: Ring in _rings:
 		if r.life > 0.0 and r.art == SLAM_ART:
 			_draw_strip(_ground, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / r.art_radius, Color.WHITE)
