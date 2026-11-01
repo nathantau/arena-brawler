@@ -462,10 +462,78 @@ def gh() -> None:
     out.convert("RGB").save(OUT_DIR / "shadow_gh.png")
 
 
+# --- I: G (smooth rounded hood, soft body) with a gold chain, no bandana, a small smirk -------------------------------------
+def small_smirk(up: Canvas) -> None:
+    up.flat(L([(36, 31), (38, 32), (40, 30)], 1), OUTLINE)  # short, lopsided
+    up.dot(41, 29, SKIN_D)
+    up.flat(R((g.BLUSH[0], 29, g.BLUSH[0] + 1, 29)), ORANGE)
+    up.flat(R((45, 29, 46, 29)), ORANGE)
+
+
+def variant_i():
+    low = Canvas()
+    grin_shadow(low)
+    wisps(low, ((16, 57), (49, 57)))
+    jogger_legs(low, SHADOW, YELLOW, stripe=YELLOW)
+    up = Canvas()
+    pocket_hoodie(up, YELLOW)
+    for x in (g.ARM_X[0], g.ARM_X[1]):  # ribbed sleeve cuffs
+        up.flat(R((x, 41, x + 5, 42)), BLACK)
+        up.flat(R((x, 41, x + 5, 41)), STEEL_D)
+    up.flat(L([(22, 36), (21, 43)], 1), STEEL_D)  # a soft fold or two
+    up.flat(L([(40, 37), (41, 42)], 1), BLACK)
+    # gold chain with a small pendant, and a lit link
+    up.flat(L([(23, 33), (25, 38), (30, 41), (35, 41), (40, 38), (42, 33)], 1), YELLOW)
+    up.dot(25, 38, WHITE)
+    up.flat(R((31, 42, 33, 44)), YELLOW)
+    up.dot(31, 42, WHITE)
+    up.flat(R((32, 44, 32, 44)), ORANGE)
+    # the hood: a smooth round shell with a soft round drape behind, no peak
+    up.part(lambda d, f: (d.ellipse((14, 4, 50, 38), f), d.ellipse((10, 17, 30, 40), f)), SHADOW)
+    up.flat(L([(20, 9), (30, 5), (40, 6), (46, 10)], 1), STEEL_D)  # lit crown
+    up.flat(L([(13, 25), (12, 31), (15, 36)], 1), STEEL_D)  # lit drape
+    up.flat(L([(15, 15), (13, 21)], 1), STEEL_D)
+    up.flat(RR((FACE[0] - 3, FACE[1] - 4, FACE[2] + 2, FACE[3] + 1), FACE_R + 3), STEEL_D)  # lit lip
+    up.flat(RR((FACE[0] - 2, FACE[1] - 3, FACE[2] + 1, FACE[3] + 1), FACE_R + 2), BLACK)  # opening
+    face_base(up)
+    up.part(P([(23, 25), (23, 16), (26, 13), (26, 7), (30, 12), (33, 5), (36, 13), (40, 8), (41, 14), (45, 12), (46, 17),
+               (45, 22), (43, 18), (41, 20), (38, 18), (34, 20), (30, 18), (26, 20), (25, 27)]), OUTLINE, shade=False)
+    up.flat(L([(26, 9), (27, 11)], 1), STEEL_D)
+    up.flat(L([(33, 7), (34, 10)], 1), STEEL_D)
+    up.flat(L([(40, 10), (40, 12)], 1), STEEL_D)
+    up.flat(L([(29, 14), (33, 16)], 1), SHADOW)
+    up.part(P([(23, 24), (21, 31), (25, 29)]), OUTLINE, shade=False)
+    violet_eyes(up)
+    brows(up, 0)
+    small_smirk(up)
+    up.flat(R((21, 30, 22, 31)), YELLOW)  # gold stud
+    up.dot(21, 30, WHITE)
+    return low, up
+
+
+def gi() -> None:
+    panels, games = [], []
+    for label, build in (("G", variant_g), ("I", variant_i)):
+        im = idle_frame(build)
+        bg = Image.new("RGBA", (g.CELL * 7, g.CELL * 7), (60, 56, 52, 255))
+        bg.alpha_composite(nn(im, 7))
+        panels.append(labelled(bg, label))
+        games.append(labelled(ingame(im), f"{label} in game"))
+    out = Image.new("RGBA", (panels[0].width * 2 + 24, panels[0].height + sum(x.height for x in games) + 40), (24, 24, 32, 255))
+    out.alpha_composite(panels[0], (8, 8))
+    out.alpha_composite(panels[1], (16 + panels[0].width, 8))
+    y = panels[0].height + 16
+    for gm in games:
+        out.alpha_composite(gm, (8, y))
+        y += gm.height + 8
+    out.convert("RGB").save(OUT_DIR / "shadow_gi.png")
+
+
 EXTRA = (("G", variant_g, "E with a real hoodie: hood up over messy hair, violet eyes, tongue out"),
          ("G2", variant_g2, "G with the bandana pulled up over his mouth"),
          ("H", variant_h, "baggy hoodie, grey hood with a lit rim, violet eyes, tongue out"),
-         ("H2", variant_h2, "H with the bandana pulled up over his mouth"))
+         ("H2", variant_h2, "H with the bandana pulled up over his mouth"),
+         ("I", variant_i, "G with a gold chain instead of the bandana, smaller smirk, smooth hood"))
 
 
 def sheet_for(letter: str, build, blurb: str) -> Image.Image:
@@ -481,6 +549,7 @@ def sheet_for(letter: str, build, blurb: str) -> Image.Image:
 
 def extras() -> None:
     gh()
+    gi()
     for letter, build, blurb in EXTRA:
         sheet_for(letter, build, blurb).convert("RGB").save(OUT_DIR / f"shadow_{letter.lower()}.png")
     pair = [("E", variant_e, "E"), ("G", variant_g, "G (hoodie, violet eyes)")]
