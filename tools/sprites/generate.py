@@ -1354,7 +1354,7 @@ def ape_puff(img, cx, cy, r, dense, k):
     rr = int(r * 1.5) + 2
     for y in range(cy - rr, cy + rr + 1):
         for x in range(cx - rr, cx + rr + 1):
-            if not (0 <= x < CELL and 0 <= y < CELL):
+            if not (0 <= x < img.width and 0 <= y < img.height):
                 continue
             dx, dy = x - cx, y - cy
             if dy < 0:
@@ -2638,13 +2638,16 @@ def dust_frame(k: int) -> Image.Image:
     return outline(c.img)
 
 
+APE_MORPH_CELL = 132  # the morph strip's cells: big enough for the ape (and his clouds) at x1.35, so the hand-off to the real sprite is seamless
+
+
 def ape_morph(t: float, scale: float) -> Image.Image:
     """An in-between creature, `t` of the way from Wukong to the Great Ape, drawn crisp at `scale` x (a CELL
     frame centred like a scaled sprite): every body part's shape is interpolated between the two designs
     (legs thicken and splay, the torso swells into a hunched back, arms and fists sprout, the head pushes
     forward, the circlet tilts), and fur / face / eyes switch to the ape's halfway."""
-    c = Canvas(CELL)
-    k = CELL / 2
+    c = Canvas(APE_MORPH_CELL)
+    k = APE_MORPH_CELL / 2
 
     def pt(p0, p1, dy=0):  # interpolate a point (art px) and map it into the scaled cell
         return (k + (p0[0] + (p1[0] - p0[0]) * t - 32) * scale, k + (p0[1] + (p1[1] - p0[1]) * t + dy - 32) * scale)
@@ -2686,8 +2689,8 @@ def ape_morph(t: float, scale: float) -> Image.Image:
         gr = min(1.0, max(0.0, (t - 0.04 * j) / 0.6))  # this puff's growth
         if gr > 0:
             push = (1 - gr) * 10
-            cx = CELL / 2 + (x - CELL / 2 + (push if x > CELL / 2 else -push)) * scale
-            cy = CELL / 2 + (y - CELL / 2) * scale
+            cx = k + (x - CELL / 2 + (push if x > CELL / 2 else -push)) * scale
+            cy = k + (y - CELL / 2) * scale
             ape_puff(c.img, round(cx), round(cy), max(1, round(r * gr * scale)), dense, j)
     if t < 0.45:  # pheasant feathers retract
         c.part(L(shrink([(25, 10), (16, 4), (6, 6)], 0.45), w(2, 2)), RED, shade=False)
@@ -2853,32 +2856,32 @@ def ape_morph(t: float, scale: float) -> Image.Image:
             c.flat(P(on_face([(x0, 26), (x0 + 2, 26), (x0 + 1, 29)], True)), WHITE)
     # the whole frame keeps a clear edge, even when the clouds outgrow the cell
     out = outline(c.img)
-    ImageDraw.Draw(out).rectangle((0, 0, CELL - 1, CELL - 1), outline=(0, 0, 0, 0))
+    ImageDraw.Draw(out).rectangle((0, 0, out.width - 1, out.height - 1), outline=(0, 0, 0, 0))
     return out
 
 
 def morph_frames(a: Image.Image, b: Image.Image, b_scale: float, between) -> list[Image.Image]:
     """Transformation from a character's frame `a` into its form `b` (drawn `b_scale` x in game), in full colour:
-    ten in-between creatures (`between(t, scale)`, e.g. ape_morph) that stretch, swell and grow, with gold sparks crackling. CELL-sized
+    ten in-between creatures (`between(t, scale)`, e.g. ape_morph) that stretch, swell and grow, with gold sparks crackling. cell-sized
     frames with the growth baked in, drawn at the normal sprite scale (SpecialFx) so pixels stay crisp."""
     rng = random.Random(7)
 
     def at(img, sc):  # img scaled (NEAREST) about the cell centre (cropped to the cell if it outgrows it)
         n = round(img.width * sc)
-        out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        out = Image.new("RGBA", (APE_MORPH_CELL, APE_MORPH_CELL), (0, 0, 0, 0))
         big = img.resize((n, n), Image.NEAREST)
-        o = (CELL - n) // 2
-        out.alpha_composite(big.crop((max(0, -o), max(0, -o), min(n, CELL - o), min(n, CELL - o))), (max(0, o), max(0, o)))
-        ImageDraw.Draw(out).rectangle((0, 0, CELL - 1, CELL - 1), outline=(0, 0, 0, 0))  # keep the frame edge clear
+        o = (APE_MORPH_CELL - n) // 2
+        out.alpha_composite(big.crop((max(0, -o), max(0, -o), min(n, APE_MORPH_CELL - o), min(n, APE_MORPH_CELL - o))), (max(0, o), max(0, o)))
+        ImageDraw.Draw(out).rectangle((0, 0, APE_MORPH_CELL - 1, APE_MORPH_CELL - 1), outline=(0, 0, 0, 0))  # keep the frame edge clear
         return out
 
     def sparks(img, n=5):  # short gold crackles inside the body
         px = img.load()
-        inside = [(x, y) for y in range(CELL) for x in range(CELL) if px[x, y][3]]
+        inside = [(x, y) for y in range(APE_MORPH_CELL) for x in range(APE_MORPH_CELL) if px[x, y][3]]
         for x, y in rng.sample(inside, n):
             dx, dy = rng.choice(((1, 0), (0, 1), (1, 1), (1, -1)))
             for j in range(3):
-                if 1 < x + dx * j < CELL - 2 and 1 < y + dy * j < CELL - 2:
+                if 1 < x + dx * j < APE_MORPH_CELL - 2 and 1 < y + dy * j < APE_MORPH_CELL - 2:
                     px[x + dx * j, y + dy * j] = YELLOW + (255,)
         return img
 
