@@ -743,8 +743,18 @@ def flint(step=None, t=0, heat=0.0):
     for side in (1, -1):  # lapels, open at the neck over his glowing chest
         suit.part(P([(32 + side * x, y) for x, y in ((4, 33), (1, 40), (7, 37), (8, 33))]), NAVY, shade=False)
     suit.flat(P([(29, 33), (32, 39), (35, 33)]), OUTLINE)  # the open collar (cut out below)
-    for y in (42, 45):
-        suit.dot(32, y, STEEL)  # buttons
+    suit.dot(32, 41, STEEL)  # button
+    suit.flat(L([(28, 33), (31, 38)], 1), STEEL_D)  # the left lapel's lit edge
+    suit.flat(L([(36, 38), (34, 34)], 1), SHADOW)  # the right one in shade
+    suit.flat(R((20, 43, 44, 44)), BROWN)  # belt: lit top, shaded lower, a molten buckle with a glint
+    suit.flat(R((20, 43, 44, 43)), SKIN_D)
+    suit.flat(R((20, 44, 44, 44)), MAROON)
+    suit.flat(R((30, 43, 34, 44)), YELLOW)
+    suit.flat(R((30, 44, 34, 44)), ORANGE)
+    suit.dot(30, 43, WHITE)
+    for pts, spark in ((((25, 36), (26, 38), (25, 40)), (26, 38)), (((40, 37), (39, 39), (41, 41)), (39, 39))):
+        suit.flat(L(list(pts), 1), ORANGE)  # cracks in the cloth where the heat shows through
+        suit.dot(spark[0], spark[1], YELLOW)
     burn = 0.1 + heat * 1.05
     sp = suit.img.load()
     for y in range(BODY[1], BODY[3] + 1):
