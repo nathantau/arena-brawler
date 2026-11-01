@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_lightning_beam.png" id="2_icon"]
+[ext_resource type="Resource" path="res://data/weapons/lightning_beam.tres" id="3_beam"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"lightning_beam"
+display_name = "Lightning Beam"
+kind = 40
+special = true
+blurb = "Channel a lightning beam"
+tags = Array[StringName]([&"bolt"])
+cooldown = 8.0
+duration = 1.2
+beam_weapon = ExtResource("3_beam")
+beam_speed_scale = 0.55

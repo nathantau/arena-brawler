@@ -71,6 +71,9 @@ const SURFACE_RINGS: int = 12
 const SURFACE_RING_STEP: float = 12.0
 const SURFACE_DIRECTIONS: int = 16
 const HOUND_SEQ_OFFSET: int = 1 << 32
+## Lightning Beam ticks and Thunder Strike bolts are keyed too (above 32 bits, clear of the offsets above).
+const BEAM_SEQ_OFFSET: int = 1 << 33
+const THUNDER_SEQ_OFFSET: int = 1 << 34
 ## The Gloom Hound's body radius against the feet-level walls.
 const HOUND_RADIUS: float = 14.0
 ## Shadow clones weave side to side as they run.
@@ -339,6 +342,9 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	# Caught before the tick so the frame it runs out still puts him exactly on the landing spot.
 	var swing: CharacterSkill = active_skill(SkillData.Kind.SWING)
 	var erupting: CharacterSkill = active_skill(SkillData.Kind.ERUPTION)
+	var thundering: CharacterSkill = active_skill(SkillData.Kind.THUNDER)
+	var beam_was: CharacterSkill = active_skill(SkillData.Kind.LIGHTNING)
+	var beam_before: float = beam_was.elapsed() if beam_was != null else 0.0
 	var burning: CharacterSkill = active_skill(SkillData.Kind.TRAIL)
 	var burn_before: float = burning.elapsed() if burning != null else 0.0
 	var pillar: CharacterSkill = active_skill(SkillData.Kind.PILLAR)
@@ -394,6 +400,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 
 	if erupting != null and not erupting.is_active() and not replay:
 		_erupt(erupting, input.seq)
+	if thundering != null and not thundering.is_active() and not replay:
+		_thunder(thundering, input.seq)
 	for i: int in Constants.SKILL_SLOTS:
 		if pressed[i] and not _prev_skills[i] and not skill_locked(i) and not stats.is_stunned():  # one ability at a time
 			_activate(skills[i], input, replay)
@@ -403,6 +411,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var whirl: CharacterSkill = active_skill(SkillData.Kind.WHIRL)
 	var drift: CharacterSkill = active_skill(SkillData.Kind.DRIFT)
 	var overdrive: CharacterSkill = active_skill(SkillData.Kind.OVERDRIVE)
+	var beaming: CharacterSkill = active_skill(SkillData.Kind.LIGHTNING)  # just pressed counts
 	var stepping: CharacterSkill = active_skill(SkillData.Kind.STEP)
 	var planting: CharacterSkill = active_skill(SkillData.Kind.PILLAR)  # just pressed counts
 	var flaring: CharacterSkill = active_skill(SkillData.Kind.NOVA)
@@ -430,6 +439,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			speed *= whirl.data.whirl_speed_scale
 		if overdrive != null:
 			speed *= overdrive.data.overdrive_speed_scale
+		if beaming != null:
+			speed *= beaming.data.beam_speed_scale
 		if stepping != null:  # a puddle gliding on its own way until the stick says otherwise
 			speed *= stepping.data.step_speed_scale
 		var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
@@ -462,12 +473,14 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	elif input.move_vec.length() > Constants.INPUT_DEADZONE:
 		facing = input.move_vec.normalized()
 
+	if beaming != null and not replay and beaming.beam_tick_due(beam_before):
+		_beam_tick(beaming, input.seq)
 	if _windup_left >= 0.0 and not replay:  # replays re-run inputs already counted: don't land it early
 		_windup_left -= delta
 		if _windup_left <= 0.0:
 			_windup_left = -1.0
 			_release_shot(_windup_seq, _windup_weapon)
-	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null and stepping == null and not rooted:  # both hands on the chain
+	if input.fire and not is_dashing() and grapple == null and whirl == null and drift == null and stepping == null and beaming == null and not rooted:  # both hands on the chain
 		_try_fire(input.seq, replay)
 
 
@@ -478,7 +491,7 @@ func _interrupt_channels() -> void:
 		if not slot.is_active():
 			continue
 		match slot.data.kind:
-			SkillData.Kind.WHIRL:
+			SkillData.Kind.WHIRL, SkillData.Kind.LIGHTNING:
 				slot.active_remaining = 0.0
 			SkillData.Kind.DRIFT:
 				slot.active_remaining = 0.0
@@ -543,6 +556,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			slot.anchor = eruption_spot(slot.direction, slot.data)
 		SkillData.Kind.STORM:
 			slot.anchor = storm_spot(slot.direction, slot.data)
+		SkillData.Kind.THUNDER:
+			slot.anchor = spot_ahead(slot.direction, slot.data.thunder_distance, slot.data.thunder_wall_margin)
 		SkillData.Kind.HOUND:
 			slot.anchor = hound_spot(slot.direction, slot.data)
 		SkillData.Kind.BIND:
@@ -735,6 +750,23 @@ func _erupt(slot: CharacterSkill, seq: int) -> void:
 	var key: int = seq + ERUPTION_SEQ_OFFSET
 	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.eruption_blast, match_seed)
 	shot_fired.emit(self, key, slot.anchor, slot.direction, slot.data.eruption_blast.id)
+
+
+## A Lightning Beam tick: the beam goes out from his hand along his aim (damage and the drawn bolt come from the same hitscan every
+## other beam uses; relayed to the other peers like any shot).
+func _beam_tick(slot: CharacterSkill, seq: int) -> void:
+	var w: WeaponData = slot.data.beam_weapon
+	var key: int = seq + BEAM_SEQ_OFFSET
+	var origin: Vector2 = shot_origin(w)
+	projectiles.fire_shot(player_id, key, origin, facing, w, match_seed)
+	shot_fired.emit(self, key, origin, facing, w.id)
+
+
+## The telegraph ran out: the bolt drops on the marked spot.
+func _thunder(slot: CharacterSkill, seq: int) -> void:
+	var key: int = seq + THUNDER_SEQ_OFFSET
+	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.thunder_blast, match_seed)
+	shot_fired.emit(self, key, slot.anchor, slot.direction, slot.data.thunder_blast.id)
 
 
 ## Where an eruption aimed along `dir` is marked: on the floor `eruption_distance` ahead, pulled back off the first

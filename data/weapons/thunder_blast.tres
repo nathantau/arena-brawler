@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"thunder_blast"
+display_name = "Thunder Strike"
+pickup = false
+damage = 38
+energy_cost = 0
+knockback = 200.0
+color = Color(0.96, 0.82, 0.34, 1)
+splash_radius = 72.0
+splash_edge_scale = 0.4
+blast = true
+held_art = false
+tags = Array[StringName]([&"bolt_thunder"])

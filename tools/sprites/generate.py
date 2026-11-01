@@ -4554,9 +4554,125 @@ def bolt_down_frame(k: int) -> Image.Image:
     return _clear_edge(c.img)
 
 
+# --- Thunder Strike (Bolt): a ring marks the spot, a bolt drops from the sky, the floor is scorched -----------------------------------
+THUNDER_R = 48  # the ring's radius in art px (thunder_blast.tres splash 72 / SPRITE_SCALE 1.5): SpecialFx.THUNDER_ART_RADIUS
+THUNDER_MARK_FRAMES = 8
+THUNDER_BOLT_FRAMES = 10
+THUNDER_BASE = 112  # thunder_bolt: the row the bolt hits the floor on (SpecialFx.THUNDER_BASE_Y), in a 128 px frame, impact on frame 2
+
+
+def thunder_mark_frame(k: int) -> Image.Image:
+    """The telegraph ring (112 px, centred on the spot, a loop of THUNDER_MARK_FRAMES): a dashed yellow ring turning round the blast's
+    reach with white dashes, a dithered glow inside, a crosshair and sparks jumping at the rim."""
+    n = 112
+    c = Canvas(n)
+    m = n // 2
+    rng = random.Random(600 + k)
+    for y in range(n):  # a faint dithered glow filling the ring
+        for x in range(n):
+            d = math.hypot(x - m, y - m) / THUNDER_R
+            if d < 0.92 and BAYER[y % 4][x % 4] / 16 < 0.02 + 0.03 * (1 - d) * (1 + math.sin(k * math.tau / THUNDER_MARK_FRAMES)):
+                c.dot(x, y, YELLOW)
+    segs = 24
+    for i in range(segs):  # dashes turning round the rim
+        a0 = math.tau * (i + 0.15) / segs + k * math.tau / THUNDER_MARK_FRAMES / segs * 2
+        a1 = math.tau * (i + 0.65) / segs + k * math.tau / THUNDER_MARK_FRAMES / segs * 2
+        pts = [(m + math.cos(a) * THUNDER_R, m + math.sin(a) * THUNDER_R) for a in (a0, (a0 + a1) / 2, a1)]
+        c.flat(L(pts, 1), WHITE if i % 6 == 0 else YELLOW)
+        pts2 = [(m + math.cos(a) * (THUNDER_R - 3), m + math.sin(a) * (THUNDER_R - 3)) for a in (a0, (a0 + a1) / 2, a1)]
+        c.flat(L(pts2, 1), ORANGE)
+    for a in (0, math.pi / 2, math.pi, 3 * math.pi / 2):  # a crosshair
+        c.flat(L([(m + math.cos(a) * 5, m + math.sin(a) * 5), (m + math.cos(a) * 12, m + math.sin(a) * 12)], 1), YELLOW)
+    c.dot(m, m, WHITE)
+    for _ in range(4):  # sparks at the rim
+        a, r = rng.uniform(0, math.tau), THUNDER_R + rng.uniform(-3, 3)
+        sdot(c, round(m + math.cos(a) * r), round(m + math.sin(a) * r), rng.choice((WHITE, YELLOW, YELLOW)))
+    return c.img
+
+
+def thunder_bolt_frame(k: int) -> Image.Image:
+    """The strike (128 px, bottom of the bolt at row THUNDER_BASE, centred across): the bolt races down (frame 0-1), lands with a
+    white flash (frame 2), thins out, rings of light race over the floor, then sparks fall away."""
+    n, m = 128, 64
+    c = Canvas(n)
+    rng = random.Random(700 + k * 11)
+    top, base = 3, THUNDER_BASE
+    reach = (0.35, 0.8, 1, 1, 1, 1, 0, 0, 0, 0)[k]
+    width = (1, 2, 5, 4, 3, 1, 0, 0, 0, 0)[k]
+    if reach:
+        end = (m, top + (base - top) * reach)
+        pts = zap_zig(rng, (m + 3, top), end, max(3, round(9 * reach)), 5)
+        c.flat(L(pts, width + 2), ORANGE)
+        c.flat(L(pts, width + 1), YELLOW)
+        c.flat(L(pts, max(1, width - 1)), WHITE)
+        for x, y in pts[1:-1:2]:
+            sdot(c, x, y, WHITE)
+        if k >= 2:  # forks
+            for j in (3, 6):
+                fx, fy = pts[j]
+                side = 1 if j == 3 else -1
+                zap_arc(c, zap_zig(rng, (fx, fy), (fx + side * rng.randint(10, 18), fy + rng.randint(6, 14)), 3, 3), YELLOW, tip=WHITE)
+    if 2 <= k <= 6:  # the flash at the foot and a ring racing out over the floor
+        r = (0, 0, 17, 12, 7, 3, 0)[k]
+        if r:
+            c.flat(E((m - r, base - r * 0.55, m + r, base + r * 0.55)), WHITE if k < 4 else YELLOW)
+        rr = 10 + (k - 2) * 9
+        c.flat(lambda d, f: d.ellipse((m - rr, base - rr * 0.35, m + rr, base + rr * 0.35), outline=f, width=2 if k < 5 else 1),
+               YELLOW if k < 5 else ORANGE)
+    for j in range(12 if k >= 2 else 0):  # sparks thrown out and falling
+        a = rng.uniform(-3.1, 0.0)
+        r = (k - 1) * rng.uniform(2.5, 6.5)
+        life = max(0.0, 1 - k / THUNDER_BOLT_FRAMES)
+        if r > 0 and rng.random() < life + 0.25:
+            sdot(c, round(m + math.cos(a) * r * 1.4), round(base + math.sin(a) * r * 0.9 + (k - 2) * 1.5), (WHITE, YELLOW, ORANGE)[j % 3])
+    return _clear_edge(c.img)
+
+
+def thunder_scorch_frame(k: int) -> Image.Image:
+    """The floor after the strike (112 px, centred on the spot, same timing as thunder_bolt: nothing before frame 2): a white flash
+    that cools to yellow and orange over a charred, cracked patch which dithers away."""
+    n = 112
+    m = n // 2
+    c = Canvas(n)
+    if k < 2:
+        return c.img
+    rng = random.Random(800)  # the same mark every frame, so it stays put
+    r0 = 26
+    pts = []
+    for i in range(14):
+        a = math.tau * i / 14
+        j = rng.uniform(0.7, 1.15)
+        pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.8))
+    heat = k - 2
+    if heat < 2:  # the flash
+        c.flat(E((m - 36, m - 28, m + 36, m + 28)), WHITE if heat == 0 else YELLOW)
+    c.flat(P(pts), SHADOW)
+    c.flat(P([(m + (x - m) * 0.62, m + (y - m) * 0.62) for x, y in pts]), OUTLINE)
+    for _ in range(7):  # cracks glowing then going cold
+        a = rng.uniform(0, math.tau)
+        ln = rng.uniform(r0 * 0.7, r0 * 1.5)
+        mid = (m + math.cos(a + rng.uniform(-0.3, 0.3)) * ln * 0.55, m + math.sin(a) * ln * 0.45)
+        end = (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.8)
+        c.flat(L([(m + math.cos(a) * 6, m + math.sin(a) * 5), mid, end], 1), (YELLOW, YELLOW, ORANGE, ORANGE, RED, MAROON, MAROON, SHADOW)[min(heat, 7)])
+    fade = max(0.0, (k - 5) / 5.0)  # the last frames dither away
+    img = c.img
+    px = img.load()
+    for y in range(n):
+        for x in range(n):
+            if BAYER[y % 4][x % 4] / 16 < fade:
+                px[x, y] = (0, 0, 0, 0)
+    return img
+
+
 WEAPONS["bolt_zapper"] = arc_zapper
 WEAPON_ANIMS["bolt_zapper"] = arc_zapper
 PROJECTILES["bolt_zapper"] = zap_shot
+ICONS["lightning_beam"] = lambda c: (c.flat(E((0, 3, 6, 9)), ORANGE), c.flat(E((1, 4, 5, 8)), YELLOW), c.flat(E((2, 5, 4, 7)), WHITE),
+                                     c.flat(L([(5, 6), (7, 3), (9, 9), (11, 5), (12, 6)], 2), YELLOW),
+                                     c.flat(L([(6, 6), (7, 4), (9, 8), (11, 5)], 1), WHITE), c.dot(12, 3, WHITE), c.dot(11, 9, YELLOW))
+ICONS["thunder_strike"] = lambda c: (c.flat(lambda d, f: d.ellipse((0, 8, 12, 12), outline=f, width=1), ORANGE),
+                                     c.flat(P([(8, 0), (3, 6), (6, 6), (4, 11), (10, 4), (7, 4), (10, 0)]), YELLOW),
+                                     c.flat(L([(8, 1), (4, 6)], 1), WHITE), c.dot(4, 10, WHITE))
 ICONS["overdrive"] = lambda c: (c.flat(L([(0, 3), (4, 3)], 1), TEAL_L), c.flat(L([(0, 7), (3, 7)], 1), TEAL_L),
                                 c.flat(L([(1, 10), (4, 10)], 1), TEAL_L),
                                 c.flat(P([(9, 0), (4, 7), (7, 7), (5, 12), (12, 4), (8, 4), (11, 0)]), YELLOW),
@@ -4565,6 +4681,9 @@ FX.update({
     "bolt_overdrive": lambda: strip([overdrive_frame(k) for k in range(OVERDRIVE_FRAMES)]),
     "bolt_flash": lambda: strip([bolt_flash_frame(k) for k in range(BOLT_FLASH_FRAMES)]),
     "bolt_down": lambda: strip([bolt_down_frame(k) for k in range(BOLT_DOWN_FRAMES)]),
+    "thunder_mark": lambda: strip([thunder_mark_frame(k) for k in range(THUNDER_MARK_FRAMES)]),
+    "thunder_bolt": lambda: strip([thunder_bolt_frame(k) for k in range(THUNDER_BOLT_FRAMES)]),
+    "thunder_scorch": lambda: strip([thunder_scorch_frame(k) for k in range(THUNDER_BOLT_FRAMES)]),
     "bolt_ghost": lambda: strip([bolt_ghost_frame(k) for k in range(BOLT_GHOST_FRAMES)]),
     "bolt_crack": lambda: strip([bolt_crack_frame(k) for k in range(BOLT_CRACK_FRAMES)]),
     "bolt_fizzle": lambda: strip([bolt_fizzle_frame(k) for k in range(BOLT_FIZZLE_FRAMES)]),

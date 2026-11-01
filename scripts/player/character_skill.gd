@@ -28,6 +28,8 @@ extends RefCounted
 ##   strikes where he emerges when it ends.
 ## - HOUND (Shadow): `anchor` = the hound's feet position (the Player moves it every step, so it is in the snapshot),
 ##   `direction` = its heading.
+## - LIGHTNING (Bolt): he channels a lightning beam for `duration`; a tick falls due every beam_weapon.fire_interval.
+## - THUNDER (Bolt): `anchor` = the marked spot (the Player places it against the walls); the bolt drops as it ends.
 ## - BIND (Shadow): the line runs from `anchor` along `direction` (the whole vector, cut short by a wall); the head travels at
 ##   `bind_speed`. When the Player (authority) finds a victim it shortens `direction` to the victim and leaves `bind_stun` of
 ##   tether; a miss ends the slot as the head reaches the end.
@@ -64,7 +66,7 @@ func blocks_other() -> bool:
 	match data.kind:
 		SkillData.Kind.DASH, SkillData.Kind.TRANSFORM, SkillData.Kind.SWING, SkillData.Kind.GRAPPLE, SkillData.Kind.WHIRL, \
 		SkillData.Kind.DRIFT, SkillData.Kind.STEP, SkillData.Kind.PILLAR, SkillData.Kind.NOVA, SkillData.Kind.OVERDRIVE, \
-		SkillData.Kind.BARK_SKIN, SkillData.Kind.GUST:
+		SkillData.Kind.BARK_SKIN, SkillData.Kind.GUST, SkillData.Kind.LIGHTNING:
 			return true
 		SkillData.Kind.TRAIL:
 			return elapsed() < data.trail_dash_time
@@ -105,6 +107,18 @@ func is_drifting() -> bool:
 
 func is_overdriving() -> bool:
 	return data.kind == SkillData.Kind.OVERDRIVE and is_active()
+
+
+func is_beaming() -> bool:
+	return data.kind == SkillData.Kind.LIGHTNING and is_active()
+
+
+## LIGHTNING: a beam tick falls due in the step that ticked from `before` (elapsed) to now.
+func beam_tick_due(before: float) -> bool:
+	if data.kind != SkillData.Kind.LIGHTNING or data.beam_weapon == null:
+		return false
+	var interval: float = data.beam_weapon.fire_interval
+	return floori((elapsed() + WHIRL_EPSILON) / interval) > floori((before + WHIRL_EPSILON) / interval)
 
 
 func is_barked() -> bool:

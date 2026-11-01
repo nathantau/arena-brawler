@@ -40,13 +40,17 @@ extends Resource
 ## BLOOM: a moss patch at your feet for `duration`: every `bloom_interval` you heal `bloom_heal` while you stand within `bloom_radius` of it (only you).
 ## GUST: a cone of leaves along the aim: enemies within `gust_range` and `gust_half_angle_deg` take `gust_damage` and are thrown
 ## `gust_knockback` away; enemy projectiles in the cone are destroyed (for the whole `duration`).
+## LIGHTNING (Bolt, Lightning Beam): for `duration` he channels `beam_weapon` (a held lightning beam) from his hand along his aim, a tick
+## every beam_weapon.fire_interval; he moves x`beam_speed_scale` and can't use his normal weapon meanwhile.
+## THUNDER (Bolt, Thunder Strike): marks a spot ahead along the aim (short of walls); when `duration` (the telegraph) runs out a lightning
+## bolt drops on it and `thunder_blast` goes off there.
 ## ONE ABILITY AT A TIME: while a slot is in a phase that changes the player himself (CharacterSkill.blocks_other: DASH, TRANSFORM, SWING,
-## GRAPPLE, WHIRL, DRIFT, STEP, PILLAR, NOVA, OVERDRIVE, BARK_SKIN, GUST and TRAIL's dash part) the other slot's press is ignored (no
+## GRAPPLE, WHIRL, DRIFT, STEP, PILLAR, NOVA, OVERDRIVE, BARK_SKIN, GUST, LIGHTNING and TRAIL's dash part) the other slot's press is ignored (no
 ## cooldown). Lingering things (SMOKE, CLONES, SHIELD, WARD, SAPLING, STORM, BLOOM, HOUND, BIND, ERUPTION's mark, the burning trail,
 ## volleys) never block. Death, sitting out and the countdown / results freeze end every active ability.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
 enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19, BARK_SKIN = 20, BLOOM = 21, GUST = 22,
-		STEP = 30, HOUND = 31, BIND = 32 }
+		STEP = 30, HOUND = 31, BIND = 32, LIGHTNING = 40, THUNDER = 41 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -228,6 +232,19 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var bind_speed: float = 700.0
 @export var bind_width: float = 22.0
 @export var bind_stun: float = 1.0
+
+@export_group("Lightning")
+## The beam fired every tick of the channel (a BEAM weapon: damage, fire_interval, range).
+@export var beam_weapon: WeaponData
+## Move speed multiplier while he channels it.
+@export var beam_speed_scale: float = 0.55
+
+@export_group("Thunder")
+## How far ahead along the aim the spot is marked (pulled back `thunder_wall_margin` off a wall in the way).
+@export var thunder_distance: float = 280.0
+@export var thunder_wall_margin: float = 8.0
+## The bolt's impact: a `blast` weapon (damage, splash radius + falloff, knockback).
+@export var thunder_blast: WeaponData
 
 @export_group("Transform")
 ## Sheet laid out like a character's (idle, hit, walk); drawn `form_scale` x the usual size.

@@ -268,6 +268,21 @@ const OD_GHOST_ART: Texture2D = preload(FX_DIR + "bolt_ghost.png")
 const OD_CRACK_ART: Texture2D = preload(FX_DIR + "bolt_crack.png")
 const OD_FIZZLE_ART: Texture2D = preload(FX_DIR + "bolt_fizzle.png")
 const OD_SPARK_ART: Texture2D = preload(FX_DIR + "bolt_spark.png")
+## Bolt's Thunder Strike: a ring marks the spot while the telegraph runs (floor layer), then a lightning bolt drops on it (the impact
+## lands on frame THUNDER_IMPACT_FRAME) and scorches the floor. Strips from generate.py (thunder_mark / thunder_bolt / thunder_scorch).
+const THUNDER_MARK_ART: Texture2D = preload(FX_DIR + "thunder_mark.png")
+const THUNDER_BOLT_ART: Texture2D = preload(FX_DIR + "thunder_bolt.png")
+const THUNDER_SCORCH_ART: Texture2D = preload(FX_DIR + "thunder_scorch.png")
+## The ring is drawn for this blast radius (world px: generate.py THUNDER_R art px x the sprite scale); other radii scale it.
+const THUNDER_ART_RADIUS: float = 72.0
+const THUNDER_MARK_FPS: float = 12.0
+const THUNDER_EASE_IN: float = 0.2
+## thunder_bolt: frames, fps and the row the bolt hits the floor on (generate.py THUNDER_BASE), impact on frame 2.
+const THUNDER_BOLT_FPS: float = 20.0
+const THUNDER_IMPACT_FRAME: float = 2.0
+const THUNDER_LEAD: float = THUNDER_IMPACT_FRAME / THUNDER_BOLT_FPS
+const THUNDER_BASE_Y: float = 112.0
+const THUNDER_BOLT_TIME: float = 0.5
 ## Godspeed (Player.godspeed, every peer): a flash of light and rays when it switches on, a thinning shell of glow when it ends.
 const GOD_FLASH_ART: Texture2D = preload(FX_DIR + "bolt_flash.png")
 const GOD_DOWN_ART: Texture2D = preload(FX_DIR + "bolt_down.png")
@@ -370,6 +385,9 @@ var _drift_lean: float = 0.0
 var _face_flip: bool = false
 ## Overdrive: seconds in (-1 = off), where he is drawn, afterimage positions (newest first) with their mirroring.
 var _god_was: bool = false
+var _thunder_started: bool = false
+## The Thunder Strike slot while its ring shows (else null).
+var _thunder_mark: CharacterSkill
 var _od_t: float = -1.0
 var _od_at: Vector2 = Vector2.ZERO
 var _od_ghosts: Array[Vector2] = []
@@ -467,6 +485,7 @@ func sync(p: Player) -> void:
 	_sync_drift(p)
 	_sync_overdrive(p)
 	_sync_godspeed(p)
+	_sync_thunder(p)
 	_sync_sapling(p)
 	_sync_storm(p)
 	_sync_eden(p)
@@ -652,6 +671,17 @@ func _bolt(at: Vector2, ground: Vector2) -> void:
 	_bolts.append(b)
 	_poof(ground, STORM_SPARK_ART, STORM_SPARK_TIME)
 	_poof(ground, STORM_SCORCH_ART, STORM_SPARK_TIME, 1.0, true)
+
+
+func _sync_thunder(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.THUNDER)
+	var on: bool = slot != null and slot.is_active() and not p.dead
+	if on and not _thunder_started and slot.active_remaining <= THUNDER_LEAD:  # the bolt drops
+		var lift: float = (THUNDER_BOLT_ART.get_height() * 0.5 - THUNDER_BASE_Y) * Constants.SPRITE_SCALE
+		_poof(slot.anchor + Vector2(0.0, lift), THUNDER_BOLT_ART, THUNDER_BOLT_TIME)
+		_poof(slot.anchor, THUNDER_SCORCH_ART, THUNDER_BOLT_TIME, slot.data.thunder_blast.splash_radius / THUNDER_ART_RADIUS, true)
+	_thunder_started = on and (_thunder_started or slot.active_remaining <= THUNDER_LEAD)
+	_thunder_mark = slot if on and slot.active_remaining > THUNDER_LEAD else null
 
 
 func _sync_godspeed(p: Player) -> void:
@@ -978,6 +1008,14 @@ func _draw_floor() -> void:
 			px * k * lerpf(0.9, 1.0, minf(ct / CRACK_EASE_IN, 1.0)), clampf(ct / CRACK_EASE_IN, 0.0, 1.0), _floor)
 	else:
 		_floor.modulate = Color.WHITE
+	if _thunder_mark != null:  # the ring on the floor, easing in and tightening as the bolt nears
+		var tt: float = _thunder_mark.elapsed()
+		var tk: float = _thunder_mark.data.thunder_blast.splash_radius / THUNDER_ART_RADIUS
+		var ease_in: float = clampf(tt / THUNDER_EASE_IN, 0.0, 1.0)
+		var near: float = clampf(tt / maxf(_thunder_mark.data.duration, 0.01), 0.0, 1.0)
+		_draw_frame(THUNDER_MARK_ART, int(tt * THUNDER_MARK_FPS) % (THUNDER_MARK_ART.get_width() / THUNDER_MARK_ART.get_height()),
+			THUNDER_MARK_ART.get_height(), _thunder_mark.anchor, px * tk * lerpf(1.15, 1.0, near) * lerpf(0.9, 1.0, ease_in),
+			ease_in, _floor)
 	if _whirl_t >= 0.0:
 		_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
 			WHIRL_RING_ART.get_height(), _whirl_at, px * _whirl_radius / WHIRL_ART_RADIUS,

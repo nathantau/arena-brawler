@@ -36,7 +36,7 @@ func test_catalog_and_skills() -> void:
 	var kinds: Array = []
 	for id: StringName in [&"dash", &"barrier", &"great_ape", &"smoke_bomb",
 			&"fan_of_blades", &"shadow_clones", &"blossom_ward", &"grapple_kunai", &"vine_swing", &"eruption", &"blossom_snare", &"staff_whirl", &"blaze_run", &"petal_drift", &"sky_pillar", &"flare_burst", &"cherry_sapling", &"storm_cloud", &"overdrive",
-			&"shadow_step", &"gloom_hound", &"shadow_bind", &"bark_skin", &"verdant_bloom", &"leaf_gust"]:
+			&"shadow_step", &"gloom_hound", &"shadow_bind", &"bark_skin", &"verdant_bloom", &"leaf_gust", &"lightning_beam", &"thunder_strike"]:
 		var sk: SkillData = skills.get_skill(id)
 		assert_not_null(sk, String(id))
 		assert_not_null(sk.icon, String(id))
