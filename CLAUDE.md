@@ -99,6 +99,12 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   then `godot --path . --headless --import`
 
 ## Status
+- **App polish** (2026-11-01): `GameSettings` (user://settings.cfg: music/SFX volume, vibration, howto_seen; all haptics go through `GameSettings.vibrate`),
+  `SettingsPanel` (modal on its own CanvasLayer; Settings button on the main menu and in the pause menu; controls guide shown once on a player's
+  first match), `Music` (synthesized 4-chord loop started by Main, honours the music slider, runs while paused), a click SFX on every button
+  (Main hooks `node_added`), `Sfx.skill_sound(kind)` so every special kind has a sound (new recipes: smoke, volley, summon, eruption, trap, boost),
+  an offline match auto-pauses when the app is backgrounded. Tests: `tests/test_settings.gd`. Not done: damage/accuracy stats on the results screen
+  (only kills/deaths are tracked), joystick-side / aim-assist options, a cancel button while "Connecting...".
 - [~] **M1 – implemented, needs a hands-on feel pass** (2026-10-28)
   - Done: floating joystick + FIRE (auto-aim, drag-to-aim measured from where the thumb lands, so an off-centre press still auto-aims) / DASH / SWAP touch buttons; WASD + mouse/J/Space/Q on desktop;
     auto-aim to nearest visible enemy (`AutoAim.visible_point`: sight from the shooter's hand to the target's centre or lower hitbox, since feet-based collision puts a player under a wall with its centre inside it; `Player.aim_at`: searches angles for the shot line from the hand that passes through the target; bots too); Pocket Blaster (free), Buzzsaw SMG, Scattercannon;

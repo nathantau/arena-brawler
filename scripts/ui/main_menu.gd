@@ -68,6 +68,11 @@ func _ready() -> void:
 	var host_row := _centered(_host)
 	box.add_child(host_row)
 	_hide_while_typing.append(host_row)
+	var settings := _button("Settings", Vector2(BUTTON_MIN_SIZE.x, FIELD_MIN_SIZE.y))
+	settings.pressed.connect(func() -> void: SettingsPanel.show_on(self))
+	var settings_row := _centered(settings)
+	box.add_child(settings_row)
+	_hide_while_typing.append(settings_row)
 	add_child(IntroSplash.new(backdrop, box))  # first-launch opening; skippable
 
 

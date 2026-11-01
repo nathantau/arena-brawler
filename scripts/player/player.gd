@@ -701,7 +701,7 @@ func play_recoil(skip: float = 0.0) -> void:
 func flash() -> void:
 	_hit_flash = Constants.HIT_FLASH_TIME
 	if is_local:
-		Input.vibrate_handheld(Constants.HAPTIC_HIT_MS)
+		GameSettings.vibrate(Constants.HAPTIC_HIT_MS)
 
 
 func can_be_hit() -> bool:
