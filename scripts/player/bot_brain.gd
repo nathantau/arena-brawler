@@ -88,8 +88,6 @@ var arena: Arena
 var rng := RandomNumberGenerator.new()
 ## Difficulty 0..1 (see top). Set after construction to change.
 var skill: float = SKILL_DEFAULT
-## Offline bots only fight humans; the sim tool lets them hunt each other.
-var hunts_bots: bool = false
 ## Total seconds spent stuck (asked to move, not moving), for logging.
 var stuck_time: float = 0.0
 ## Fighters with several signature specials (kinds from SkillData.Kind.STEP up, e.g. Shadow's) rotate between them: a random
@@ -506,7 +504,7 @@ func _pick_goal(player: Player, pos: Vector2) -> void:
 		var best: Variant = null
 		var best_d: float = INF
 		for p: Player in arena.players:
-			if p == player or p.dead or (p.controller is BotBrain and not hunts_bots):
+			if p == player or p.dead:
 				continue
 			var d: float = pos.distance_squared_to(p.global_position)
 			if d < best_d:
@@ -616,7 +614,7 @@ func _nearest_visible_enemy(player: Player) -> Variant:
 	var best_score: float = Constants.BOT_SIGHT_RANGE * Constants.BOT_SIGHT_RANGE
 	var best_player: Player = null
 	for p: Player in arena.players:
-		if p == player or p.dead or (p.controller is BotBrain and not hunts_bots):
+		if p == player or p.dead:
 			continue
 		var vit: float = float(p.stats.hp + p.stats.armor) / float(p.stats.max_hp + p.stats.max_armor)
 		var w: float = 1.0 - TARGET_WEAK_BIAS * (1.0 - vit)

@@ -118,3 +118,17 @@ func test_unstick_triggers_only_when_trying_to_move_and_not_moving() -> void:
 	var idle := BotBrain.new(null, 1)
 	for i: int in 60:
 		assert_false(idle.track_stuck(Vector2.ZERO, false, DT), "standing still on purpose is fine")
+
+
+func test_bot_can_target_another_bot() -> void:
+	var arena := Arena.new(Arena.Mode.OFFLINE)
+	add_child_autofree(arena)
+	var a := BotBrain.new(arena, 1)
+	var b := BotBrain.new(arena, 2)
+	var pa: Player = arena.add_player(1, 0, a, true)
+	var pb: Player = arena.add_player(2, 1, b, true)
+	pa.global_position = Vector2(300, 300)
+	pb.global_position = Vector2(400, 300)
+	await wait_physics_frames(2)
+	assert_ne(a._nearest_visible_enemy(pa), null, "FFA: a bot fights other bots")
+	assert_eq(a._target, pb)

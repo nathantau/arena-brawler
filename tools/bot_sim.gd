@@ -78,7 +78,6 @@ func _next() -> void:
 	for k: int in 2:
 		var c: CharacterData = chars[(idx * 2 + k) % chars.size()]
 		var bot := BotBrain.new(arena, base_seed * 7919 + idx * 13 + 10 + k)
-		bot.set("hunts_bots", true)
 		bot.set("rotates_kit", false)
 		if skill_arg >= 0.0:
 			bot.set("skill", skill_arg)

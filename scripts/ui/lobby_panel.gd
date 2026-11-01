@@ -76,6 +76,10 @@ func _ready() -> void:
 	_mode_button = _button(header, BUTTON_MIN_SIZE)
 	_mode_button.pressed.connect(_on_mode_pressed)
 	_arena_button = _button(header, BUTTON_MIN_SIZE)
+	# These two grow to fit their text: the arena name must never be clipped to "...".
+	for b: Button in [_mode_button, _arena_button]:
+		b.clip_text = false
+		b.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	_arena_button.pressed.connect(func() -> void:
 		arena.arena_requested.emit((arena.match_state.arena_index + 1) % ArenaLayouts.count()))
 
