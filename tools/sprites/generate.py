@@ -886,8 +886,12 @@ def wukong(step=None, t=0, swing=False):
     up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
     if not swing:
         arm(up, ARM_X[1], YELLOW, SKIN)
-    up.part(L([(25, 10), (16, 4), (6, 6 + s)], 2), RED, shade=False)  # pheasant feathers sway
-    up.part(L([(29, 9), (24, 3), (14 + s, 2)], 2), RED, shade=False)
+    # pheasant feathers sway: two tapered plumes, the longer one behind (lit top edge, shaded underside)
+    up.part(P([(26, 10), (17, 4), (6, 5 + s), (15, 8), (23, 12)]), RED, shade=False)
+    up.flat(L([(23, 8), (16, 5), (9, 5 + s)], 1), ORANGE)
+    up.flat(L([(22, 11), (16, 8)], 1), MAROON)
+    up.part(P([(30, 9), (25, 2), (15 + s, 1), (22, 6), (28, 11)]), RED, shade=False)
+    up.flat(L([(27, 5), (22, 3), (17 + s, 2)], 1), ORANGE)
     up.part(E((11, 17, 21, 28)), BROWN)  # ear
     up.flat(E((14, 20, 18, 25)), SKIN_D)
     for x in (24, 31, 38):
@@ -1025,12 +1029,12 @@ def wukong_clouds(i: int) -> Canvas:
     s = SWAY[i % 4]
     mass = ((9, 35 + s, 4), (13, 31, 5), (16, 38, 4), (8, 42 - s, 3), (19, 27 + s, 3))
     c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in mass], WHITE)
-    for k, (x, y) in enumerate(((14, 22), (12, 47), (18, 51), (10, 28), (16, 44))):
+    for k, (x, y) in enumerate(((14, 22), (16, 44))):
         phase = (i + k) % 4
         length = (6, 5, 4, 2)[phase]  # thins out as it drifts back
         x -= 2 * phase
         c.part(E((x - length, y - 1 - phase % 2, x + length, y + 1 - phase % 2)), WHITE, shade=False)
-    for k, (x, y) in enumerate(((7, 20), (22, 15), (12, 12))):
+    for k, (x, y) in enumerate(((7, 20), (22, 15))):
         phase = (i + k * 2) % 4
         r = (1, 2, 3, 2)[phase]
         c.part(E((x - r, y - 2 * phase - r, x + r, y - 2 * phase + r)), WHITE)
