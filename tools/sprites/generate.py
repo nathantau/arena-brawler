@@ -3893,6 +3893,7 @@ AURAS = {"wukong": wukong_clouds, "wukong_ape": ape_storm, "flint": flint_embers
 CROWNS = {"flicker": flicker_topknot, "flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
 HITS = {}  # per-character hit frames: fn(idle frame 0) -> 2 frames (default: white flash, then one step lighter)
 DEATHS = {}  # per-character death frames: fn() -> 8 CELL frames (default: death_frames)
+SHEETS = {}  # whole hand-built sheets (idle, hit, walk, death): fn() -> list of CELL frames, written after the loop in main()
 KO_CROWNS = {"flicker"}  # crowns that stay on a knocked-out body (Flint's flame goes out)
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Fists go up over his head, then smash down in front on frame 3 (the hit lands then:
@@ -3945,97 +3946,244 @@ def arcs_from(c: Canvas, rng, roots, centre, n, reach, forks=0.6, glow=TEAL_L, t
             zap_arc(c, zap_zig(rng, (fx, fy), e2, 2, 1.6), glow, tip=YELLOW)
 
 
-BOLT_ROOTS = ((19, 37), (46, 38), (17, 24), (47, 20), (23, 52), (41, 52), (26, 46), (40, 46), (32, 14), (30, 34))
-BOLT_SKIN_ROOTS = ((22, 40), (42, 40), (18, 41), (45, 41), (30, 36), (37, 43))
+# Bolt (redesigned 2026-11-01): a relaxed guy in a maroon retro track suit with brown centre-parted hair. Two sheets are built from
+# one figure: `bolt` (normal) and `bolt_godspeed` (yellow spikes up from the part, teal electric eyes, a dithered glow and lightning
+# that flickers from frame to frame). The game wears the godspeed sheet while any of his abilities is active (Player.godspeed).
+# Both share the same head shape; the hair mass sits on the 64 px body, the spikes above it on a CELL canvas behind.
+BOLT_SUIT, BOLT_STRIPE, BOLT_ACCENT = MAROON, YELLOW, RED
+BOLT_HEAD = (17, 7, 48, 35)  # the hair mass, the same in both looks
+BOLT_PART_X = 35  # the centre parting
+## Godspeed spikes: (centre x on the base, tip x, tip y, half width), base at y 16; plus a flame blown back off the nape.
+BOLT_SPIKES = [(23, 17, -3, 7), (29, 25, -10, 7), (35, 34, -14, 7), (41, 42, -10, 7), (46, 51, -3, 6)]
+BOLT_FLAME = [(22, 16), (5, 8), (25, 27)]
 
 
-def bolt_aura(i: int) -> Canvas:
-    """Static crackling off his body (behind him; in AURAS): three short arcs and a few loose sparks that jump to new
-    spots every tick, and every 4th tick one long flash with forks. Seeded by the tick, so each frame is fixed."""
-    c = Canvas()
-    rng = random.Random(7000 + i * 31)
-    arcs_from(c, rng, BOLT_ROOTS, (32, 34), 5, (9, 16))
-    if i % 4 == 3:  # the occasional bigger flash
-        arcs_from(c, rng, BOLT_ROOTS, (32, 34), 1, (19, 25), forks=1.0, glow=YELLOW, tip=WHITE, jit=3.0)
-    for _ in range(5):
-        a, r = rng.uniform(0, math.tau), rng.uniform(21, 28)
-        sdot(c, round(32 + math.cos(a) * r), round(34 + math.sin(a) * r * 0.9), rng.choice((WHITE, YELLOW, TEAL_L)))
+def _bolt_stripe(c: Canvas, x: int, y0: int, y1: int) -> None:
+    """A stripe that follows the form: lit head, base colour, shaded tail."""
+    c.flat(L([(x, y0), (x, y1)], 1), BOLT_STRIPE)
+    c.dot(x, y0, LIGHTER[BOLT_STRIPE])
+    c.dot(x, y1, DARKER[BOLT_STRIPE])
+
+
+def bolt_spikes(t: int) -> Canvas:
+    """Godspeed hair above the head (a CELL canvas in art coordinates + PAD, no body bob): a flame blown back off the nape
+    and five faceted spikes, each shaded on its right, their tips flickering with the tick. Spikes outline each other."""
+    c = Canvas(CELL)
+    at = lambda ps: [(x + PAD, y + PAD) for x, y in ps]
+    (bx, by), (fx, fy), (ex, ey) = BOLT_FLAME
+    fx -= HAIR_FLOW[t % 4]
+    fy += SWAY[t % 4]
+    c.part(P(at([(bx, by), (fx, fy), (ex, ey)])), YELLOW, shade=False)
+    c.flat(P(at([(fx, fy), (ex, ey), (bx + 2, by + 6)])), ORANGE)
+    for i, (xc, tx, ty, hw) in enumerate(BOLT_SPIKES):
+        tx += SWAY[(t + i) % 4]
+        c.part(P(at([(xc - hw, 16), (tx, ty), (xc + hw, 16)])), YELLOW, shade=False)
+        c.flat(P(at([(tx, ty + 2), (xc + hw, 16), (xc, 16)])), ORANGE)  # shaded right facet
+        c.flat(L(at([(tx - 1, ty + 4), (tx - 2, ty + 8)]), 1), WHITE)  # a glint on the lit side
     return c
 
 
-def bolt(step=None, t=0):
-    """Bolt: a lightning-quick runner. Swept-back yellow hair with a zig-zag lightning crest (drawn above the art box:
-    CROWNS bolt_crown), goggles pushed up on the brow, a blue runner's suit with a yellow lightning flash on the chest
-    and a belt, white gloves and boots with yellow cuffs, a cyan scarf streaming behind him. Small arcs crackle over
-    the suit and flicker from tick to tick (bolt_aura throws bigger ones off him)."""
+def bolt_crown(t: int, dy: int) -> Image.Image:
+    """The godspeed spikes as a CELL image bobbing with the head, drawn behind the body."""
+    out = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+    out.alpha_composite(bolt_spikes(t).img, (0, UPPER_DY + dy))
+    return out
+
+
+def _bolt_eyes_godspeed(c: Canvas, t: int) -> None:
+    """Rounded, intense eyes: dark rim, teal iris with a bright core, a white highlight, crackle at the corners."""
+    for x in EYES_X:
+        if KO:
+            x_eye(c, x, EYES_Y + 1)
+            continue
+        c.flat(lambda d, f, x=x: d.ellipse((x - 1, 22, x + 4, 27), f), OUTLINE)
+        c.flat(lambda d, f, x=x: d.ellipse((x, 23, x + 3, 26), f), TEAL)
+        c.flat(R((x + 1, 24, x + 2, 26)), TEAL_L)
+        c.flat(R((x, 23, x + 1, 23)), WHITE)  # bright highlight
+        c.dot(x + 1, 24, WHITE)
+        c.dot(x - 2 + t % 2, 25 - t % 2, TEAL_L)  # crackle at the corners, a different pixel each tick
+        c.dot(x + 5 - t % 2, 24 + t % 2, TEAL_L)
+    c.flat(L([(29, 20), (35, 22)], 1), OUTLINE)  # fierce brows
+    c.flat(L([(40, 22), (46, 20)], 1), OUTLINE)
+
+
+def bolt_parts(step=None, t: int = 0, god: bool = False):
+    """(legs, upper body) canvases facing right: maroon track suit with gold stripes, brown hair parted in the middle
+    (godspeed: yellow, spiking up from the part). `step` = walk frame (arms swing against the legs), `t` = tick (hair sways,
+    the zip pull swings, godspeed crackle flickers)."""
+    suit, stripe, acc = BOLT_SUIT, BOLT_STRIPE, BOLT_ACCENT
+    lit, dark = LIGHTER[suit], DARKER[suit]
     low = Canvas()
-    for x, dy in legs(low, NAVY, WHITE, step):
-        low.flat(R((x, 52 + dy, x + 5, 52 + dy)), YELLOW)  # boot cuff
-        low.dot(x + 3, 46 + dy, YELLOW)  # a lightning flash zig-zagging down the thigh
-        low.dot(x + 2, 47 + dy, YELLOW)
-        low.dot(x + 3, 48 + dy, YELLOW)
-        low.dot(x + 2, 49 + dy, WHITE)
-        low.flat(R((x + 5, 55 + dy, x + 6, 55 + dy)), YELLOW)  # toe cap
+    for x, dy in legs(low, suit, WHITE, step):
+        # only ~3 rows of trousers show under the jacket: a lit edge, a shaded side, a stripe, a bunched elastic cuff
+        low.flat(R((x, 49 + dy, x + 3, 52 + dy)), suit)
+        low.flat(L([(x, 49 + dy), (x, 51 + dy)], 1), lit)
+        low.flat(R((x + 4, 49 + dy, x + 5, 52 + dy)), dark)
+        _bolt_stripe(low, x + 3, 49 + dy, 52 + dy)
+        low.flat(R((x, 52 + dy, x + 2, 52 + dy)), dark)
+        # sneaker: toe cap, heel tab, strap, laces, sole
+        low.flat(R((x + 5, 55 + dy, x + 7, 56 + dy)), acc)
+        low.flat(R((x - 1, 55 + dy, x - 1, 56 + dy)), acc)
+        low.flat(L([(x + 1, 55 + dy), (x + 3, 54 + dy)], 1), acc)
+        low.dot(x + 4, 54 + dy, STEEL_D)
+        low.flat(R((x - 1, 57 + dy, x + 7, 57 + dy)), STEEL_D)
     up = Canvas()
-    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
-    # scarf, streaming behind him in the wind (wave)
-    up.part(P([(22, 35), (16 - wave(0, 1), 36), (11 - wave(1, 1.5), 39 + SWAY[t % 4]), (8 - wave(2, 2), 45),
-               (13 - wave(2, 1.5), 44), (17 - wave(1, 1), 42), (22, 40)]), TEAL_L)
-    up.flat(L([(18, 38), (12 - wave(1, 1.5), 42 + SWAY[t % 4])], 1), BLUE)  # its stripe
-    arm(up, ARM_X[0], BLUE, WHITE)
-    up.flat(R((ARM_X[0], 41, ARM_X[0] + 5, 41)), YELLOW)  # wrist band
-    up.part(RR(BODY, 3), BLUE)  # suit
-    up.flat(P([(36, 34), (29, 40), (33, 40), (30, 45), (39, 38), (35, 38), (38, 34)]), YELLOW)  # chest flash
-    up.flat(L([(36, 35), (31, 39)], 1), WHITE)  # its lit edge
-    up.flat(R((20, 46, 44, 47)), NAVY)  # belt
-    up.flat(R((31, 46, 34, 47)), YELLOW)  # buckle
-    up.flat(R((21, 33, 43, 33)), WHITE)  # high collar
-    up.dot(24, 36, STEEL)  # suit sheen
-    up.dot(24, 37, STEEL)
-    arm(up, ARM_X[1], BLUE, WHITE)
-    up.flat(R((ARM_X[1], 41, ARM_X[1] + 5, 41)), YELLOW)
-    # hair: the head's back is a spiky yellow mass swept back, ending in jagged points
-    up.part(lambda d, f: (d.ellipse((16, 6, 48, 37), f), d.polygon(
-        [(16, 20), (11, 28), (16, 27), (13, 35), (19, 31), (20, 38), (24, 31), (24, 20)], f)), YELLOW)
-    up.flat(L([(22, 9), (31, 7)], 1), WHITE)  # crown sheen
-    up.flat(L([(17, 22), (16, 27)], 1), WHITE)
-    up.part(RR(FACE, FACE_R), SKIN)  # face
-    # goggles pushed up on the brow: a strap round the head and two lenses
-    up.flat(R((18, 12, 48, 13)), NAVY)
-    for x in (26, 37):
-        up.part(RR((x, 8, x + 6, 14), 2), STEEL_D)
-        up.flat(R((x + 1, 10, x + 4, 12)), TEAL_L)
-        up.dot(x + 1, 10, WHITE)
-    # zig-zag fringe stopping above the eyes
-    up.part(P([(19, 15), (49, 15), (49, 19), (46, 17), (43, 20), (40, 17), (37, 20), (34, 17), (31, 20), (28, 17),
-               (25, 19), (22, 17), (19, 19)]), YELLOW, shade=False)
-    up.part(P([(FACE[2] - 1, 17), (51, 18), (52 + wave(2, 0.5), 28), (49, 25), (49, 27), (FACE[2], 24)]), YELLOW,
-            shade=False)  # a side lock
-    big_eyes(up, EYES_Y, EYES_X, TEAL_L, h=6)
-    face(up, BLUSH, MOUTH)
-    up.dot(MOUTH[0] + 2, MOUTH[1] - 1, MAROON)  # cocky grin
-    if not KO:
-        rng = random.Random(4100 + t * 17)  # tiny arcs crackling over the suit and the hair
-        arcs_from(up, rng, BOLT_SKIN_ROOTS, (32, 40), 3, (4, 8), forks=0, jit=1.5)
-        if t % 4 == 1:
-            sdot(up, 40 + rng.randint(-5, 6), 8 + rng.randint(0, 2), WHITE)
+    sw = WALK_LEGS[step][1][0] if step is not None else 0  # arms swing against the legs
+    ax = (ARM_X[0] + round(sw * 0.5), ARM_X[1] - round(sw * 0.5))
+
+    def sleeve(x: int, sx: int) -> None:
+        _bolt_stripe(up, x + sx, 37, 40)
+        up.flat(R((x + 1, 41, x + 4, 41)), dark)  # ribbed cuff
+        up.dot(x + 1, 41, lit)
+        up.flat(L([(x + 2, 38), (x + 3, 39)], 1), dark)  # crease at the elbow
+
+    arm(up, ax[0], suit, SKIN)
+    sleeve(ax[0], 1)
+    up.part(RR(BODY, 3), suit)  # jacket
+    up.flat(L([(21, 38), (21, 42)], 1), lit)  # lit left edge
+    up.flat(L([(29, 42), (27, 45)], 1), dark)  # folds running down from the chest
+    up.flat(L([(38, 41), (40, 45)], 1), dark)
+    up.flat(L([(23, 44), (26, 43)], 1), dark)  # pocket slit
+    up.flat(R((20, 46, 44, 47)), dark)  # ribbed hem
+    for x in range(22, 43, 2):
+        up.dot(x, 47, OUTLINE)
+    up.flat(R((21, 46, 30, 46)), suit)  # hem lit on the left
+    up.flat(R((26, 37, 40, 37)), stripe)  # gold-trimmed collar band under the chin
+    up.flat(R((24, 37, 25, 37)), LIGHTER[stripe])
+    up.flat(R((41, 37, 43, 37)), DARKER[stripe])
+    up.flat(R((28, 38, 38, 38)), dark)  # its lining
+    up.flat(L([(33, 38), (33, 46)], 1), STEEL)  # zip, and a pull tab that swings a little
+    up.flat(L([(34, 39), (34, 46)], 1), STEEL_D)
+    pull = (0, 0, 1, 0)[t % 4]
+    up.flat(R((32 + pull, 40, 34 + pull, 42)), WHITE)
+    up.flat(R((32 + pull, 42, 34 + pull, 42)), STEEL)
+    up.flat(P([(29, 39), (25, 42), (27, 42), (26, 45), (31, 41), (29, 41)]), stripe)  # gold bolt patch on the chest
+    up.flat(L([(29, 39), (26, 42)], 1), LIGHTER[stripe])
+    up.dot(26, 45, DARKER[stripe])
+    up.dot(30, 41, DARKER[stripe])
+    arm(up, ax[1], suit, SKIN)
+    sleeve(ax[1], 4)
+    # hair: one dome in both looks (godspeed adds the spikes on top and the nape flame behind)
+    col = YELLOW if god else BROWN
+    up.part(lambda d, f: d.ellipse(BOLT_HEAD, f), col, shade=not god)
+    if god:
+        up.img.alpha_composite(bolt_spikes(t).img.crop((PAD, PAD, PAD + SIZE, PAD + SIZE)))
+        up.px = up.img.load()
+        up.flat(lambda d, f: d.arc(BOLT_HEAD, 100, 175, f), ORANGE)
+    else:
+        up.flat(L([(BOLT_PART_X, 8), (BOLT_PART_X, 14)], 1), DARKER[col])  # the parting
+        up.flat(L([(BOLT_PART_X - 1, 9), (BOLT_PART_X - 1, 13)], 1), LIGHTER[col])  # lit hair beside it
+        up.flat(L([(24, 10), (30, 8)], 1), LIGHTER[col])
+        up.flat(L([(41, 8), (45, 11)], 1), LIGHTER[col])
+    up.part(RR(FACE, FACE_R), SKIN)
+    up.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)  # chin shade
+    s = SWAY[t % 4]  # the curtains' ends sway with the bob
+    if god:  # short curtains with ragged ends
+        left = [(21, 15), (34, 15), (33, 17), (29, 20), (27 + s, 20), (24 + s, 22), (22, 19)]
+        right = [(37, 15), (49, 15), (49, 22), (47 + s, 20), (45 + s, 22), (42, 19), (39, 17)]
+    else:  # short curtains
+        left = [(21, 15), (34, 15), (33, 17), (29, 20), (26 + s, 23), (24 + s, 25), (21, 22)]
+        right = [(37, 15), (49, 15), (49, 24), (46 + s, 23), (44, 20), (41, 18), (38, 16)]
+    up.part(P(left), col, shade=False)
+    up.part(P(right), col, shade=False)
+    for x in range(21, 50):  # no seam where the curtains meet the hair mass
+        if up.px[x, 14][:3] == OUTLINE and up.px[x, 13][3] and up.px[x, 13][:3] != OUTLINE:
+            up.px[x, 14] = up.px[x, 13]
+    if not god:  # the parting reads down onto the forehead
+        up.dot(BOLT_PART_X, 14, DARKER[col])
+        up.dot(BOLT_PART_X, 15, OUTLINE)
+    if god:
+        _bolt_eyes_godspeed(up, t)
+    else:
+        big_eyes(up, EYES_Y, EYES_X, BROWN)
+    face(up, BLUSH, None)
+    if KO:
+        up.flat(L([(36, 31), (40, 31)], 1), MAROON)
+    elif god:  # a confident open grin
+        up.flat(R((36, 29, 41, 31)), MAROON)
+        up.flat(R((36, 29, 41, 29)), WHITE)
+        up.dot(35, 28, OUTLINE)
+        up.dot(42, 28, OUTLINE)
+    else:  # a relaxed little smile
+        up.flat(L([(36, 30), (37, 31), (39, 31), (40, 30)], 1), MAROON)
     return low, up
 
 
-def bolt_crown(t: int, dy: int) -> Canvas:
-    """The lightning crest: three zig-zag spikes rising above the head (swept back, the tips sway with the wind), a
-    spark skipping along them. A CELL canvas drawn behind the body; `dy` = the head's bob."""
+BOLT_ARC_SEEDS = 9000
+
+
+def bolt_glow(f: Image.Image, k: int, reach: int = 7) -> Image.Image:
+    """Godspeed's glow behind him: ordered-dither layers (yellow near, orange far) thinning out with distance, shimmering
+    a pixel from frame to frame. Never touches the first px outside his outline or the frame's edge."""
+    w, h = f.size
+    px = f.load()
+    dist = [[0 if px[x, y][3] else 99 for x in range(w)] for y in range(h)]
+    for d in range(1, reach + 1):
+        for y in range(h):
+            for x in range(w):
+                if dist[y][x] == 99 and any(0 <= x + dx < w and 0 <= y + dy < h and dist[y + dy][x + dx] == d - 1
+                                            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                    dist[y][x] = d
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    op = out.load()
+    for y in range(2, h - 2):
+        for x in range(2, w - 2):
+            d = dist[y][x]
+            if d in (0, 99) or d < 2:
+                continue
+            p = max(0.0, 1 - (d - 1) / reach) * 0.7
+            if BAYER[(y + k) % 4][(x + 2 * k) % 4] / 16 < p:
+                op[x, y] = (YELLOW if d <= 3 else ORANGE) + (255,)
+    return out
+
+
+def bolt_godspeed_fx(f: Image.Image, k: int) -> Image.Image:
+    """An outlined godspeed frame with its glow behind and crisp yellow arcs jumping off his sides (new ones every frame,
+    seeded by `k`, so they flicker)."""
+    w, h = f.size
+    px = f.load()
+    roots = [(x, y) for y in range(24, 64) for x in range(1, w - 1) if px[x, y][3] and not all(
+        px[x + dx, y + dy][3] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
+    rng = random.Random(BOLT_ARC_SEEDS + k * 37)
     c = Canvas(CELL)
-    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
-    at = lambda pts: [(PAD + x, PAD + UPPER_DY + dy + y) for x, y in pts]
-    c.part(lambda d, f: (
-        d.polygon(at([(29, 10), (28, 1), (32, 2), (30 - wave(1, 1), -13), (40, 0), (36, 0), (38, 10)]), f),  # tall centre
-        d.polygon(at([(21, 11), (19, 4), (23, 5), (15 - wave(2, 1.5), -5), (28, 9)]), f),  # left, swept back
-        d.polygon(at([(39, 10), (41, 3), (45, 5), (49 - wave(1, 1), -3), (47, 9)]), f)), YELLOW)  # right
-    c.flat(L(at([(30, 9), (30, 3), (31, -4)]), 1), WHITE)  # lit edge of the tall spike
-    spark = at([(31, -9), (36, -2), (21, -2), (16, 3)])[t % 4]
-    sdot(c, spark[0], spark[1], WHITE)
-    return c
+    arcs_from(c, rng, rng.sample(roots, min(90, len(roots))), (48, 52), 6, (10, 20), forks=0.6, glow=YELLOW, tip=WHITE, jit=2.8)
+    out = bolt_glow(f, k)
+    out.alpha_composite(f)
+    for y in range(h):  # arcs stay clear of the frame's edge
+        for x in range(w):
+            if (x < 2 or y < 2 or x >= w - 2 or y >= h - 2) and c.px[x, y][3]:
+                c.px[x, y] = (0, 0, 0, 0)
+    out.alpha_composite(c.img)
+    return out
+
+
+@functools.lru_cache(maxsize=None)
+def bolt_sheet(god: bool) -> tuple:
+    """The sheet's CELL frames: 4 idle, 2 hit, 8 walk, 8 death. Godspeed's deaths are the normal ones (the power drops as he falls)."""
+    def raw(step, t, dy) -> Image.Image:
+        low, up = bolt_parts(step, t, god)
+        f = bolt_crown(t, dy) if god else Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
+        f.alpha_composite(low.img, (PAD, PAD))
+        f.alpha_composite(up.img, (PAD, PAD + UPPER_DY + dy))
+        return f
+
+    def done(img: Image.Image, k: int) -> Image.Image:
+        return bolt_godspeed_fx(img, k) if god else img
+
+    idle = [done(outline(raw(None, i, dy)), i) for i, dy in enumerate(IDLE_BOB)]
+    walk = [done(outline(raw(i, i, dy)), 4 + i) for i, dy in enumerate(WALK_BOB)]
+    r0 = raw(None, 0, 0)  # hit: squashed flat as the blow lands, then stretching back up
+    hit = [done(recolor(outline(_squash(r0, 1.1, 0.9)), lambda _c: WHITE), 12),
+           done(recolor(outline(_squash(r0, 0.97, 1.02)), LIGHTER.__getitem__), 13)]
+    return tuple(idle + hit + walk + bolt_deaths())
+
+
+def bolt_deaths() -> list:
+    return death_frames(lambda step, t: bolt_parts(step, t, False))
+
+
+SHEETS["bolt"] = lambda: list(bolt_sheet(False))
+SHEETS["bolt_godspeed"] = lambda: list(bolt_sheet(True))
 
 
 # --- Arc Zapper (weapon) and its bolt ---
@@ -4089,7 +4237,7 @@ def overdrive_frame(k: int) -> Image.Image:
 
 @functools.lru_cache(maxsize=None)
 def bolt_walk_frames() -> tuple:
-    return tuple(frames(bolt, None, bolt_crown)[6:])
+    return bolt_sheet(False)[6:14]
 
 
 def bolt_ghost_frame(k: int) -> Image.Image:
@@ -4186,9 +4334,73 @@ def bolt_spark_frame(k: int) -> Image.Image:
     return outline(c.img)
 
 
-CHARACTERS["bolt"] = bolt
-CROWNS["bolt"] = bolt_crown
-AURAS["bolt"] = bolt_aura
+BOLT_FLASH_FRAMES = 10
+BOLT_DOWN_FRAMES = 10
+
+
+def _clear_edge(img: Image.Image, m: int = 2) -> Image.Image:
+    """Wipes the frame's outer m px (long arcs and rays are clipped, not cut off at the very edge)."""
+    px = img.load()
+    for y in range(img.height):
+        for x in range(img.width):
+            if (x < m or y < m or x >= img.width - m or y >= img.height - m) and px[x, y][3]:
+                px[x, y] = (0, 0, 0, 0)
+    return img
+
+
+def bolt_flash_frame(k: int) -> Image.Image:
+    """Godspeed switching on (CELL px, centred on him, over him): a white flash at his heart and a column of light up through
+    his head as the hair spikes up, a ring of rays racing out, then crackling arcs and sparks."""
+    c = Canvas(CELL)
+    rng = random.Random(400 + k)
+    cx, cy = 48, 46
+    w = (6, 5, 4, 3, 2, 1, 0, 0, 0, 0)[k]  # the column of light narrows
+    if w:
+        c.flat(R((cx - w, 14, cx + w, cy + 22)), YELLOW)
+        c.flat(R((cx - w // 2, 14, cx + w // 2, cy + 22)), WHITE)
+    r = (17, 14, 10, 6, 3, 0, 0, 0, 0, 0)[k]
+    if r:
+        c.flat(E((cx - r, cy - r, cx + r, cy + r)), WHITE)
+    rr = 8 + k * 4  # a ring on the floor and one round his chest
+    c.flat(lambda d, f: d.ellipse((cx - rr, cy + 22 - rr * 0.35, cx + rr, cy + 22 + rr * 0.35), outline=f, width=2 if k < 6 else 1),
+           YELLOW if k < 7 else ORANGE)
+    if k < 8:
+        c.flat(lambda d, f: d.ellipse((cx - rr * 0.8, cy - rr * 0.9, cx + rr * 0.8, cy + rr * 0.9), outline=f, width=1),
+               WHITE if k < 3 else YELLOW)
+    for i in range(10):  # rays
+        a = math.tau * i / 10 + 0.2
+        r0, r1 = 9 + k * 3, 16 + k * 4.5
+        if k < 8:
+            c.flat(L([(cx + math.cos(a) * r0, cy + math.sin(a) * r0 * 1.1), (cx + math.cos(a) * r1, cy + math.sin(a) * r1 * 1.1)], 1),
+                   (WHITE, WHITE, YELLOW, YELLOW, YELLOW, ORANGE, ORANGE, ORANGE)[k])
+    if 1 <= k <= 8:
+        roots = [(cx + math.cos(a) * 14, cy + math.sin(a) * 18) for a in (rng.uniform(0, math.tau) for _ in range(10))]
+        arcs_from(c, rng, roots, (cx, cy), 4, (8, 18), forks=0.5, glow=YELLOW, tip=WHITE, jit=2.4)
+    return _clear_edge(c.img)
+
+
+def bolt_down_frame(k: int) -> Image.Image:
+    """Godspeed switching off (CELL px, centred on him, over him): the glow thins to a shell of dither that shrinks onto him,
+    a last arc gutters and loose sparks drop."""
+    c = Canvas(CELL)
+    rng = random.Random(500 + k)
+    u = k / (BOLT_DOWN_FRAMES - 1)
+    rx, ry = 26 - 8 * u, 34 - 10 * u
+    for y in range(3, CELL - 3):
+        for x in range(3, CELL - 3):
+            d = math.hypot((x - 48) / rx, (y - 46) / ry)
+            if 0.7 < d < 1.0 and BAYER[y % 4][x % 4] / 16 < (1 - u) * 0.55:
+                c.dot(x, y, YELLOW if d < 0.85 else ORANGE)
+    if k < 6:
+        roots = [(48 + math.cos(a) * 12, 46 + math.sin(a) * 16) for a in (rng.uniform(0, math.tau) for _ in range(8))]
+        arcs_from(c, rng, roots, (48, 46), 2, (6, 12), forks=0.0, glow=YELLOW, tip=WHITE, jit=2.0)
+    for _ in range(6):
+        x, y = round(48 + rng.uniform(-22, 22)), round(36 + rng.uniform(-10, 16) + k * 2.4)
+        if rng.random() < 1 - u + 0.1:
+            sdot(c, x, y, rng.choice((YELLOW, YELLOW, ORANGE, WHITE)))
+    return _clear_edge(c.img)
+
+
 WEAPONS["bolt_zapper"] = arc_zapper
 WEAPON_ANIMS["bolt_zapper"] = arc_zapper
 PROJECTILES["bolt_zapper"] = zap_shot
@@ -4198,6 +4410,8 @@ ICONS["overdrive"] = lambda c: (c.flat(L([(0, 3), (4, 3)], 1), TEAL_L), c.flat(L
                                 c.flat(L([(9, 1), (6, 5)], 1), WHITE))
 FX.update({
     "bolt_overdrive": lambda: strip([overdrive_frame(k) for k in range(OVERDRIVE_FRAMES)]),
+    "bolt_flash": lambda: strip([bolt_flash_frame(k) for k in range(BOLT_FLASH_FRAMES)]),
+    "bolt_down": lambda: strip([bolt_down_frame(k) for k in range(BOLT_DOWN_FRAMES)]),
     "bolt_ghost": lambda: strip([bolt_ghost_frame(k) for k in range(BOLT_GHOST_FRAMES)]),
     "bolt_crack": lambda: strip([bolt_crack_frame(k) for k in range(BOLT_CRACK_FRAMES)]),
     "bolt_fizzle": lambda: strip([bolt_fizzle_frame(k) for k in range(BOLT_FIZZLE_FRAMES)]),
@@ -6721,6 +6935,14 @@ def main() -> None:
             fs[len(IDLE_BOB):len(IDLE_BOB) + 2] = HITS[name](fs[0])
         fs += DEATHS[name]() if name in DEATHS else death_frames(build, CROWNS.get(name) if name in KO_CROWNS else None)
         fs += attack_frames(build, AURAS.get(name), ATTACKS.get(name, []))
+        sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
+        for i, f in enumerate(fs):
+            sheet.paste(f, (i * CELL, 0))
+        check(sheet, CELL)
+        sheet.save(OUT / f"{name}.png")
+        print(f"wrote {OUT / f'{name}.png'} ({len(fs)} frames)")
+    for name, make in SHEETS.items():
+        fs = make()
         sheet = Image.new("RGBA", (CELL * len(fs), CELL), (0, 0, 0, 0))
         for i, f in enumerate(fs):
             sheet.paste(f, (i * CELL, 0))

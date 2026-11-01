@@ -20,10 +20,13 @@ extends Resource
 @export var in_rotation: bool = true
 ## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames, then walk frames.
 @export var sprite_sheet: Texture2D
+## Optional second sheet with the same layout, worn while the character is powered up (Bolt's godspeed: Player.godspeed).
+@export var godspeed_sheet: Texture2D
 
 
 var _portraits: Array[AtlasTexture] = []
 var _sprite_frames: SpriteFrames
+var _godspeed_frames: SpriteFrames
 
 
 
@@ -64,6 +67,17 @@ func sprite_frames() -> SpriteFrames:
 	if _sprite_frames == null:
 		_sprite_frames = frames_from_sheet(sprite_sheet)
 	return _sprite_frames
+
+
+func has_godspeed() -> bool:
+	return godspeed_sheet != null
+
+
+## The powered-up sheet's animations (see sprite_frames); only when has_godspeed().
+func godspeed_frames() -> SpriteFrames:
+	if _godspeed_frames == null:
+		_godspeed_frames = frames_from_sheet(godspeed_sheet)
+	return _godspeed_frames
 
 
 static func frames_from_sheet(sheet: Texture2D) -> SpriteFrames:

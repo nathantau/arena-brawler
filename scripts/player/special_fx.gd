@@ -268,6 +268,11 @@ const OD_GHOST_ART: Texture2D = preload(FX_DIR + "bolt_ghost.png")
 const OD_CRACK_ART: Texture2D = preload(FX_DIR + "bolt_crack.png")
 const OD_FIZZLE_ART: Texture2D = preload(FX_DIR + "bolt_fizzle.png")
 const OD_SPARK_ART: Texture2D = preload(FX_DIR + "bolt_spark.png")
+## Godspeed (Player.godspeed, every peer): a flash of light and rays when it switches on, a thinning shell of glow when it ends.
+const GOD_FLASH_ART: Texture2D = preload(FX_DIR + "bolt_flash.png")
+const GOD_DOWN_ART: Texture2D = preload(FX_DIR + "bolt_down.png")
+const GOD_FLASH_TIME: float = 0.5
+const GOD_DOWN_TIME: float = 0.5
 const OD_FPS: float = 20.0
 const OD_CRACK_TIME: float = 0.47
 const OD_FIZZLE_TIME: float = 0.4
@@ -364,6 +369,7 @@ var _drift_flip: bool = false
 var _drift_lean: float = 0.0
 var _face_flip: bool = false
 ## Overdrive: seconds in (-1 = off), where he is drawn, afterimage positions (newest first) with their mirroring.
+var _god_was: bool = false
 var _od_t: float = -1.0
 var _od_at: Vector2 = Vector2.ZERO
 var _od_ghosts: Array[Vector2] = []
@@ -460,6 +466,7 @@ func sync(p: Player) -> void:
 	_sync_swing(p)
 	_sync_drift(p)
 	_sync_overdrive(p)
+	_sync_godspeed(p)
 	_sync_sapling(p)
 	_sync_storm(p)
 	_sync_eden(p)
@@ -645,6 +652,15 @@ func _bolt(at: Vector2, ground: Vector2) -> void:
 	_bolts.append(b)
 	_poof(ground, STORM_SPARK_ART, STORM_SPARK_TIME)
 	_poof(ground, STORM_SCORCH_ART, STORM_SPARK_TIME, 1.0, true)
+
+
+func _sync_godspeed(p: Player) -> void:
+	var at: Vector2 = p.global_position + p.visual_offset
+	if p.godspeed and not _god_was:
+		_poof(at, GOD_FLASH_ART, GOD_FLASH_TIME)
+	elif _god_was and not p.godspeed and not p.dead:
+		_poof(at, GOD_DOWN_ART, GOD_DOWN_TIME)
+	_god_was = p.godspeed
 
 
 func _sync_overdrive(p: Player) -> void:

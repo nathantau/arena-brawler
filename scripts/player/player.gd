@@ -138,6 +138,11 @@ var _windup_left: float = -1.0
 var _windup_seq: int = 0
 var _windup_weapon: WeaponData
 var _sprite := AnimatedSprite2D.new()
+## Godspeed (Bolt): true while any of his abilities is active and for GODSPEED_LINGER after; he wears the powered-up sheet.
+## Derived from the synced skill state, so every peer shows it.
+const GODSPEED_LINGER: float = 0.5
+var godspeed: bool = false
+var _god_linger: float = 0.0
 ## Drawn after the sprite: the gun when it's in front of the body, and health bars.
 var _overlay := Node2D.new()
 ## Smoke clouds and shadow clones (cosmetic, from the synced special state).
@@ -248,8 +253,22 @@ func _physics_process(delta: float) -> void:
 		input = controller.next_extra_input()
 
 
+## Time left on the godspeed linger: refilled while an ability is active, then running down.
+static func godspeed_linger(left: float, active: bool, delta: float) -> float:
+	return GODSPEED_LINGER if active else maxf(0.0, left - delta)
+
+
+func _any_skill_active() -> bool:
+	for slot: CharacterSkill in skills:
+		if slot.is_active():
+			return true
+	return false
+
+
 func _process(delta: float) -> void:
 	_hit_flash = maxf(0.0, _hit_flash - delta)
+	_god_linger = godspeed_linger(_god_linger, _any_skill_active() and not dead, delta)
+	godspeed = character.has_godspeed() and _god_linger > 0.0 and not dead
 	_recoil = maxf(0.0, _recoil - delta)
 	visual_offset *= exp(-Constants.CORRECTION_DECAY * delta)
 	_attack_anim = maxf(0.0, _attack_anim - delta)
@@ -261,14 +280,19 @@ func _process(delta: float) -> void:
 	elif velocity.length() > Constants.SPRITE_WALK_MIN_SPEED:
 		anim = &"walk"
 	var tf: CharacterSkill = form()
-	var frames: SpriteFrames = tf.data.form_frames() if tf != null else character.sprite_frames()
+	var frames: SpriteFrames = tf.data.form_frames() if tf != null else \
+		(character.godspeed_frames() if godspeed else character.sprite_frames())
 	if anim == &"attack" and not frames.has_animation(anim):  # the form ended mid-swing
 		_attack_anim = 0.0
 		anim = &"idle"
 	if _sprite.sprite_frames != frames:
 		_sprite.sprite_frames = frames
 		_sprite.scale = Vector2.ONE * Constants.SPRITE_SCALE * (tf.data.form_scale if tf != null else 1.0)
+		var kept_anim: StringName = _sprite.animation
+		var kept_frame: int = _sprite.frame
 		_sprite.play(anim)
+		if anim == kept_anim and kept_frame < frames.get_frame_count(anim):  # a godspeed swap keeps the bob going
+			_sprite.frame = kept_frame
 	if _sprite.animation != anim:
 		_sprite.play(anim)
 	_sprite.position = visual_offset
