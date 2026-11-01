@@ -194,9 +194,41 @@ func test_leaver_below_minimum_ends_match() -> void:
 	mc.set_ready(2, true)
 	_run(mc, Constants.MATCH_COUNTDOWN + 1.0, HUMANS, NO_BOTS, sb)
 	assert_eq(mc.state.phase, MatchState.Phase.PLAYING)
-	mc.remove_player(2, sb)
+	mc.remove_player(2, sb, [1] as Array[int])
 	assert_eq(mc.state.phase, MatchState.Phase.RESULTS)
 	assert_eq(mc.state.winner_id, 1)
+
+
+## Bots alone are no match: once the last human in it leaves, it ends instead of running for minutes with a spectator waiting.
+func test_match_ends_when_no_human_is_left_in_it() -> void:
+	var mc := MatchController.new()
+	var sb := ScoreBoard.new()
+	var humans: Array[int] = [1, 2, 3]
+	var bots: Array[int] = [10, 11]
+	mc.set_ready(1, true)
+	mc.set_ready(2, true)
+	mc.set_ready(3, true)
+	_run(mc, Constants.MATCH_COUNTDOWN + 1.0, humans, bots, sb)
+	assert_eq(mc.state.phase, MatchState.Phase.PLAYING)
+	assert_eq(mc.state.participants, [1, 2, 3, 10] as Array[int], "the fourth seat is a bot")
+	mc.remove_player(1, sb, [2, 3] as Array[int])
+	mc.remove_player(2, sb, [3] as Array[int])
+	assert_eq(mc.state.phase, MatchState.Phase.PLAYING, "a human is still in it")
+	mc.remove_player(3, sb, [] as Array[int])
+	assert_eq(mc.state.phase, MatchState.Phase.RESULTS)
+
+
+## A human who sits out (joined late) doesn't keep a bots-only match alive either.
+func test_match_ends_when_only_a_spectator_human_remains() -> void:
+	var mc := MatchController.new()
+	var sb := ScoreBoard.new()
+	var humans: Array[int] = [1, 2]
+	var bots: Array[int] = [10, 11]
+	mc.set_ready(1, true)
+	_run(mc, Constants.MATCH_COUNTDOWN + 1.0, [1] as Array[int], bots, sb)
+	assert_eq(mc.state.phase, MatchState.Phase.PLAYING)
+	mc.remove_player(1, sb, [2] as Array[int])  # 2 joined late and spectates
+	assert_eq(mc.state.phase, MatchState.Phase.RESULTS)
 
 
 func test_ready_ignored_outside_lobby() -> void:

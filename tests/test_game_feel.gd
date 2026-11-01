@@ -29,18 +29,25 @@ func test_touch_release_all_clears_every_held_input() -> void:
 	assert_eq(tc.move_vec, Vector2.ZERO)
 	# a finger can grab the stick again afterwards
 	tc._on_press(4, Vector2(100, 300))
-	tc._on_drag(4, Vector2(180, 300))
+	tc._on_drag(4, tc._joy_center() + Vector2(60, 0))
 	assert_gt(tc.move_vec.x, 0.5)
 
 
-func test_joystick_base_follows_a_drag_past_its_ring() -> void:
+func test_joystick_base_is_fixed_and_move_vec_is_relative_to_it() -> void:
 	var tc: TouchControls = autofree(TouchControls.new())
 	tc.size = Vector2(1000, 500)
-	tc._on_press(1, Vector2(100, 300))
-	tc._on_drag(1, Vector2(400, 300))
+	var c: Vector2 = tc._joy_center()
+	tc._on_press(1, Vector2(40, 200))  # off-centre press inside the zone
+	assert_eq(tc._joy_center(), c, "base does not move on press")
+	assert_lt(tc.move_vec.x, 0.0)
+	assert_lt(tc.move_vec.y, 0.0)
+	tc._on_drag(1, c + Vector2(TouchControls.JOY_RADIUS * 3.0, 0))
+	assert_eq(tc._joy_center(), c, "base does not move when dragged past the ring")
 	assert_almost_eq(tc.move_vec.x, 1.0, 0.01)
-	tc._on_drag(1, Vector2(400 - TouchControls.JOY_RADIUS, 300))
-	assert_lt(tc.move_vec.x, 0.01, "pulling back by one radius is neutral, not still full right")
+	tc._on_drag(1, c + Vector2(TouchControls.JOY_RADIUS * 0.5, 0))
+	assert_almost_eq(tc.move_vec.x, 0.5, 0.01)
+	tc._on_release(1)
+	assert_eq(tc.move_vec, Vector2.ZERO)
 
 
 func test_effects_clear_and_hud_transients() -> void:

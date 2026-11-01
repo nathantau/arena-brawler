@@ -1,7 +1,7 @@
 class_name TouchControls
 extends Control
 ## Multi-touch mobile controls inside the safe area, drawn with the pixel UI kit:
-## - joystick anywhere on the left part of the screen (base fixed where you touch until release)
+## - fixed joystick bottom-left (a touch anywhere on the left part of the screen steers the knob)
 ## - attack button (hold = fire with auto-aim; drag off-centre = manual aim)
 ## - two skill buttons, one per equipped special (skill icon, cooldown sweep + seconds)
 ## Touches that start on a visible `blockers` control (e.g. lobby buttons) are left to the GUI.
@@ -10,7 +10,8 @@ const JOYSTICK_ZONE_FRACTION: float = 0.45
 ## Art is drawn at whole-number scales: joy_base 40 px x4, round 33 px x4 / x3 / x2.
 const JOY_RADIUS: float = 80.0
 const JOY_SCALE: float = 4.0
-const JOY_IDLE_POS_FRACTION: Vector2 = Vector2(0.14, 0.7)
+## Joystick centre, from the bottom-left corner of the safe area.
+const JOY_MARGIN: Vector2 = Vector2(132, 108)
 const ATTACK_RADIUS: float = 66.0
 const ATTACK_SCALE: float = 4.0
 const ATTACK_MARGIN: Vector2 = Vector2(96, 92)
@@ -49,7 +50,6 @@ var special_held: bool = false
 var ready_sfx: Callable
 
 var _joy_finger: int = NO_FINGER
-var _joy_origin: Vector2 = Vector2.ZERO
 var _joy_pos: Vector2 = Vector2.ZERO
 var _attack_finger: int = NO_FINGER
 ## Where the attack finger landed: drag-aim is measured from here, so pressing off-centre doesn't aim.
@@ -104,6 +104,10 @@ func _attack_center() -> Vector2:
 	return size - ATTACK_MARGIN
 
 
+func _joy_center() -> Vector2:
+	return Vector2(JOY_MARGIN.x, size.y - JOY_MARGIN.y)
+
+
 func _skill_center() -> Vector2:
 	return _attack_center() + SKILL_OFFSET
 
@@ -156,21 +160,14 @@ func _on_press(finger: int, p: Vector2) -> void:
 		special_held = true
 	elif _joy_finger == NO_FINGER and p.x < size.x * JOYSTICK_ZONE_FRACTION:
 		_joy_finger = finger
-		_joy_origin = p
-		_joy_pos = p
-		move_vec = Vector2.ZERO
+		_on_drag(finger, p)
 	queue_redraw()
 
 
 func _on_drag(finger: int, p: Vector2) -> void:
 	if finger == _joy_finger:
-		# The knob is clamped to its ring; dragging past it pulls the base along, so reversing direction
-		# doesn't mean travelling back across the whole ring.
-		var beyond: Vector2 = p - _joy_origin
-		if beyond.length() > JOY_RADIUS:
-			_joy_origin = p - beyond.normalized() * JOY_RADIUS
-		var offset: Vector2 = (p - _joy_origin).limit_length(JOY_RADIUS)
-		_joy_pos = _joy_origin + offset
+		var offset: Vector2 = (p - _joy_center()).limit_length(JOY_RADIUS)
+		_joy_pos = _joy_center() + offset
 		move_vec = offset / JOY_RADIUS
 	elif finger == _attack_finger:
 		var drag: Vector2 = p - _attack_origin
@@ -215,7 +212,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	# Joystick
 	var active_joy: bool = _joy_finger != NO_FINGER
-	var base: Vector2 = _joy_origin if active_joy else size * JOY_IDLE_POS_FRACTION
+	var base: Vector2 = _joy_center()
 	var knob: Vector2 = _joy_pos if active_joy else base
 	var joy_tint := Color(1, 1, 1, 1.0 if active_joy else IDLE_ALPHA)
 	UiStyle.draw_icon(self, UiStyle.tex("joy_base"), base, JOY_SCALE, joy_tint)

@@ -154,6 +154,9 @@ const ENET_THROTTLE_ACCELERATION: int = 2
 const ENET_THROTTLE_DECELERATION: int = 0
 ## Network tick = PHYSICS_FPS / SNAPSHOT_INTERVAL_TICKS = 30 Hz.
 const SNAPSHOT_INTERVAL_TICKS: int = 2
+## A player's state is ~440 bytes and ENet's MTU is ~1392, so a snapshot goes out as one packet per this many players:
+## one packet for everybody (1.8 KB at 4 players) is fragmented, and losing any fragment loses the whole snapshot.
+const SNAPSHOT_PLAYERS_PER_PACKET: int = 2
 const INPUT_SEND_INTERVAL_TICKS: int = 2
 ## Each input packet re-sends this many recent frames so a few lost packets cost nothing.
 const INPUT_REDUNDANCY: int = 6

@@ -101,6 +101,9 @@ func _build_jobs(mode: String, only: String) -> void:
 	var cat: CharacterCatalog = CharacterCatalog.load_all()
 	var skills: SkillCatalog = SkillCatalog.shared()
 	var tmp := Arena.new()
+	# An Arena only parents its crates / pickups / projectiles in _ready: one freed without ever entering the tree leaks them
+	# (this was the "RID leaked" exit warning). The root is busy in _initialize, so it joins the tree a moment later.
+	root.add_child.call_deferred(tmp)
 	var defaults: Array = []
 	for c: CharacterData in cat.ordered:
 		defaults.append(_default(c))
@@ -118,7 +121,7 @@ func _build_jobs(mode: String, only: String) -> void:
 				if c.in_rotation and (only == "" or String(c.id) == only):
 					for w: WeaponData in tmp.weapons_for(c):
 						subjects.append([c.id, _default(c)[1], w.id])
-	tmp.free()
+	tmp.queue_free.call_deferred()
 	for s: Array in subjects:
 		for d: Array in defaults:
 			if d[0] == s[0] and mode != "specials" and mode != "weapons":

@@ -26,9 +26,9 @@ func _ready() -> void:
 	process_physics_priority = -10
 
 
-func start_server(arena: Arena, port: int, bot_count: int, debug: bool) -> Error:
+func start_server(arena: Arena, port: int, bot_count: int, debug: bool, max_clients: int = Constants.MAX_CLIENTS) -> Error:
 	server = NetServer.new(self, arena, debug)
-	return server.start(port, bot_count)
+	return server.start(port, bot_count, max_clients)
 
 
 func start_client(world_parent: Node, host: String, port: int, autopilot: bool, debug: bool,

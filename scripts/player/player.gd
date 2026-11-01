@@ -249,6 +249,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	if controller == null:  # a remote (interpolated) copy doesn't simulate: clear the same shots the server's gust did
+		var remote_gust: CharacterSkill = active_skill(SkillData.Kind.GUST)
+		if remote_gust != null and projectiles != null:
+			_gust(remote_gust, 0, false)
 	_hit_flash = maxf(0.0, _hit_flash - delta)
 	_recoil = maxf(0.0, _recoil - delta)
 	visual_offset *= exp(-Constants.CORRECTION_DECAY * delta)
@@ -293,6 +297,7 @@ func _process(delta: float) -> void:
 func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	last_input_seq = input.seq
 	if dead:
+		_prev_skills = [input.skill, input.special]  # a button held (or tapped) while dead must not fire on the respawn frame
 		return
 	stats.tick(delta)
 	if stats.is_stunned():
@@ -529,7 +534,8 @@ func _whirl(slot: CharacterSkill, seq: int, delta: float, replay: bool) -> void:
 
 
 ## The leaf gust: enemy shots in the cone are destroyed on every step it lasts (so ones flying into it die too); the hit
-## (damage + push) lands once, on the press. Replay changes nothing.
+## (damage + push) lands once, on the press. Replay changes nothing. Remote copies call it from `_process` (the
+## press isn't visible there, `gust_just_pressed` is false for them in practice, and the pool only damages when authoritative).
 func _gust(slot: CharacterSkill, seq: int, replay: bool) -> void:
 	if replay or projectiles == null:
 		return
@@ -572,7 +578,7 @@ func _sapling_shoot(slot: CharacterSkill, seq: int) -> void:
 # --- Shadow: Shadow Step, Gloom Hound, Shadow Bind --------------------------------------------------------------
 
 ## Per step: a Shadow Step that just ended strikes where he emerges; a hound moves and bites; a bind stretches and may catch
-## someone. All authoritative-ish and non-replay (the hound moves on predicted peers too, snapshots correct it).
+## someone. All authoritative-ish and non-replay (the hound only moves and bites on the authority; clients get it from snapshots).
 func _shadow_tick(step_was: CharacterSkill, hound_was: CharacterSkill, hound_before: float, seq: int, delta: float,
 		replay: bool) -> void:
 	if replay or projectiles == null:
@@ -617,8 +623,8 @@ func hound_target(from: Vector2, sight: float) -> Player:
 ## The hound runs at the nearest visible enemy (stopping at walls) and bites whoever it touches when a bite falls due.
 func _hound_step(slot: CharacterSkill, before: float, seq: int, delta: float) -> void:
 	var d: SkillData = slot.data
-	if slot.elapsed() < d.hound_rise_time:
-		return
+	if slot.elapsed() < d.hound_rise_time or not projectiles.authoritative:
+		return  # clients don't run the hound: it comes from snapshots (drawn smoothed), so prediction can't jitter it
 	var target: Player = hound_target(slot.anchor, d.hound_sight)
 	if target != null:
 		var to: Vector2 = target.global_position - slot.anchor

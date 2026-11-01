@@ -177,11 +177,22 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 
 def sleeve_detail(c: Canvas, x: int):
     """Shade's sleeve: a wrist wrap (lit top, shaded lower edge), a crease and a few weave pixels on the shaded side."""
+    c.flat(R((x, 39, x + 5, 39)), STEEL)  # steel vambrace: lit top, mid, shaded lower edge, a rivet
     c.flat(R((x, 40, x + 5, 40)), STEEL_D)
     c.flat(R((x, 41, x + 5, 41)), SHADOW)
+    c.dot(x + 1, 40, WHITE)
     c.flat(L([(x + 2, 37), (x + 2, 38)], 1), SHADOW)  # crease
     c.dot(x + 1, 38, BLUE)  # lit ridge beside it
     c.dot(x + 4, 39, SHADOW)
+
+
+def tassel(c: Canvas, pts, notch: bool = True) -> None:
+    """A 3 px band of red cloth along `pts`: shaded right column, a V notch cut in its tip."""
+    c.part(L(pts, 3), RED, shade=False)
+    c.flat(L([(x + 1, y) for x, y in pts], 1), MAROON)
+    x, y = pts[-1]
+    for dy in (0, 1) if notch else ():
+        c.px[x, y + dy] = (0, 0, 0, 0)
 
 
 def flicker(step=None, t=0, zip_=False):
@@ -196,10 +207,14 @@ def flicker(step=None, t=0, zip_=False):
         low.flat(L([(x + 1, 46 + dy), (x + 1, 48 + dy)], 1), BLUE)  # lit fold down the thigh's left
         low.flat(L([(x + 3, 47 + dy), (x + 3, 48 + dy)], 1), SHADOW)  # crease
         low.dot(x + 4, 50 + dy, SHADOW)  # weave on the shaded side
+        low.flat(R((x + 1, 47 + dy, x + 4, 47 + dy)), STEEL)  # steel knee plate: lit top, shaded lower, a glint
+        low.flat(R((x + 1, 48 + dy, x + 4, 48 + dy)), STEEL_D)
+        low.dot(x + 1, 47 + dy, WHITE)
     up = Canvas()
     wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
     arm(up, ARM_X[0], NAVY, SKIN)
     sleeve_detail(up, ARM_X[0])
+    up.part(RR((15, 34, 21, 38), 2), STEEL)  # back shoulder plate
     up.part(RR(BODY, 3), NAVY)  # fitted shroud
     up.part(P([(24, 36), (41, 36), (42, 40), (38, 44), (27, 44), (23, 40)]), STEEL)  # metal breastplate
     up.flat(L([(33, 37), (33, 43)], 1), STEEL_D)  # its centre ridge
@@ -214,6 +229,10 @@ def flicker(step=None, t=0, zip_=False):
     up.part(R((20, 45, 44, 46)), RED, shade=False, line=False)  # thin sash
     up.flat(R((20, 46, 44, 46)), MAROON)  # shaded lower half
     up.flat(R((21, 45, 24, 45)), ORANGE)  # lit left end
+    up.flat(R((31, 44, 34, 46)), STEEL)  # sash clasp: a steel plate with a glint and a shaded base
+    up.flat(R((31, 46, 34, 46)), STEEL_D)
+    up.dot(31, 44, WHITE)
+    up.dot(32, 45, SHADOW)
     for x in range(21, 44, 2):  # shroud under the sash, in shade: weave
         up.dot(x, 47, NAVY)
     # shroud folds: a dark crease with a lit ridge beside it, light from the top left
@@ -229,10 +248,11 @@ def flicker(step=None, t=0, zip_=False):
     else:
         arm(up, ARM_X[1], NAVY, SKIN)
         sleeve_detail(up, ARM_X[1])
-    # ribbon tails: two thin red streamers hanging from the topknot's tie, fluttering behind her head
-    for x0, lag in ((18, 1), (21, 2)) if not zip_ else ():
-        up.part(L([(x0, 10), (x0 - 7 - wave(lag, 1), 20), (x0 - 12 - wave(lag + 1, 2), 30),
-                   (x0 - 13 - wave(lag + 2, 2), 37)], 2), RED, shade=False)
+        up.part(RR((42, 34, 48, 38), 2), STEEL)  # front shoulder plate: lit top, a glint
+        up.flat(R((43, 34, 45, 34)), WHITE)
+    # ribbon tail: one band of red cloth hanging from the topknot's tie, fluttering behind her head
+    if not zip_:
+        tassel(up, [(17, 12), (13 - wave(1, 1), 20), (10 - wave(2, 1), 29), (9 - wave(3, 1), 37)])
     up.part(RR((14, 8, 20, 13), 2), RED)  # tie round the topknot's base, half hidden behind her hair
     # choppy bob: the head's hair ends in jagged points round the back of her neck
     up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
@@ -264,11 +284,10 @@ def flicker_topknot(t: int, dy: int) -> Canvas:
     c = Canvas(CELL)
     wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
     at = lambda pts: [(PAD + x, PAD + UPPER_DY + dy + y) for x, y in pts]  # art px -> cell px
-    c.part(P(at([(29, 9), (25 - wave(0, 1), -4), (19 - wave(0, 1), 3), (9 - wave(1, 1.5), -3), (12 - wave(1, 1), 7),
-                 (-2 - wave(2, 2), 5), (9 - wave(2, 1), 11), (-3 - wave(3, 2), 15), (10 - wave(2, 1), 16),
-                 (2 - wave(3, 1.5), 24), (19, 18)])), NAVY)
-    c.flat(L(at([(22, 6), (12 - wave(1, 1.5), 0)]), 1), BLUE)  # its sheen
-    c.flat(L(at([(15, 10), (2 - wave(2, 2), 9)]), 1), BLUE)
+    c.part(P(at([(30, 9), (27 - wave(0, 1), -5), (21, 3), (11 - wave(1, 1), -4), (15, 8), (3 - wave(2, 1), 3), (13, 14),
+                 (5 - wave(3, 1), 21), (19, 18)])), NAVY)
+    c.flat(L(at([(23, 2), (26 - wave(0, 1), -3)]), 1), BLUE)  # sheen on each tuft's lit edge
+    c.flat(L(at([(15, 5), (13 - wave(1, 1), -1)]), 1), BLUE)
     return c
 
 
@@ -297,11 +316,10 @@ def flicker_zip(i: int) -> Image.Image:
     bob = [0, 0, 1, 1, 0, 0, 1, 1][i]  # the whole body judders a px as the chain tugs
     rib = Canvas(CELL)
     y0 = PAD + UPPER_DY + 10
-    for k, (x0, dy) in enumerate(((PAD + 18, 0), (PAD + 20, 3))):
-        w = lambda lag: snap[(i + 2 * lag + 3 * k) % 8]
-        rib.part(L([(x0, y0 + dy), (x0 - 7, y0 + dy + 3 + w(0)), (x0 - 14, y0 + dy + 6 + w(1)),
-                    (x0 - 21, y0 + dy + 10 + w(2)), (x0 - 27, y0 + dy + 12 + w(3))], 2), RED, shade=False)
-        rib.flat(L([(x0 - 14, y0 + dy + 5 + w(1)), (x0 - 20, y0 + dy + 8 + w(2))], 1), ORANGE)  # lit stretch
+    w = lambda lag: snap[(i + 2 * lag) % 8] // 2  # one streaming tail, kinks a px at a time
+    x0 = PAD + 18
+    tassel(rib, [(x0, y0), (x0 - 7, y0 + 3 + w(0)), (x0 - 14, y0 + 5 + w(1)), (x0 - 21, y0 + 8 + w(2)),
+                 (x0 - 27, y0 + 9 + w(3))], notch=False)
     f.alpha_composite(rib.img)
     f.alpha_composite(low.img, (PAD - 2, PAD - 1))  # legs trail a little, toes off the floor
     f.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
@@ -634,31 +652,49 @@ def sakura(step=None, t=0):
     up.part(RR(BODY, 3), WHITE)  # kimono
     for x in range(BODY[0] + 2, BODY[2] - 1, 4):  # hem ripples, the folds rolling back
         up.dot(x + (t % 4), BODY[3] - 1, STEEL)
-    up.flat(L([(26, 33), (32, 40)], 1), RED)  # crossed collar
+    up.flat(L([(26, 33), (32, 40)], 1), RED)  # crossed collar over a pink under-collar
     up.flat(L([(38, 33), (32, 40)], 1), RED)
+    up.flat(L([(27, 33), (32, 39)], 1), PINK_L)
+    up.flat(L([(37, 33), (32, 39)], 1), PINK_L)
     for x, y in ((24, 36), (40, 37), (27, 46), (37, 47)):  # blossom pattern
         up.flat(R((x, y, x + 1, y + 1)), PINK_L)
+    for x in range(BODY[0] + 2, BODY[2] - 1, 3):  # hem trim: a band of pink blossoms along the bottom
+        up.flat(R((x, 47, x, 47)), PINK)
+    up.flat(R((BODY[0] + 1, 48, BODY[2] - 1, 48)), PINK_L)
+    for x, y0 in ((24, 44), (39, 45)):  # soft folds in the cloth, light from the top left
+        up.flat(L([(x, y0), (x, y0 + 2)], 1), STEEL)
     up.part(R((20, 40, 44, 44)), RED, line=False)  # obi
+    up.flat(R((20, 40, 44, 40)), ORANGE)  # its lit top edge
     up.flat(R((20, 42, 44, 42)), PINK)  # obi cord
+    for x in (23, 28, 36, 41):  # woven gold pattern
+        up.dot(x, 41, YELLOW)
+    for x in (25, 33, 39):
+        up.dot(x, 43, MAROON)
+    up.flat(R((31, 42, 33, 42)), PINK_L)  # the cord's knot
     up.part(E((ARM_X[1] + 1, 43, ARM_X[1] + 5, 47)), SKIN)  # front hand
     up.part(sleeve(ARM_X[1] - 1, ARM_X[1] + 6), WHITE)  # front sleeve
     up.flat(L([(ARM_X[1] - wave(3, 1), 44), (ARM_X[1] + 5 - wave(2, 1), 44)], 1), PINK_L)
+    for x in (ARM_X[0], ARM_X[1]):  # a blossom on each sleeve
+        up.flat(R((x + 2, 39, x + 3, 40)), PINK)
+        up.dot(x + 2, 39, PINK_L)
     # long ponytail from a high tie at the back of her head, flowing in the wind
     up.part(P([(19, 9), (12, 12), (8 - wave(0, 0.5), 20), (6 - wave(1, 1), 30), (6 - wave(2, 1.5), 40),
                (9 - wave(3, 2), 46), (12 - wave(2, 1.5), 38), (15 - wave(1, 1), 28), (19, 17)]), PINK)
-    up.flat(L([(13, 15), (10 - wave(1, 0.5), 24), (9 - wave(2, 1), 36)], 1), PINK_L)  # its sheen
+    up.flat(L([(12, 17), (10 - wave(1, 0.5), 24)], 1), PINK_L)  # its sheen: one short lit streak, the rest is the part's own shading
     up.part(E((16, 5, 48, 37)), PINK)  # hair
-    up.part(RR(FACE, FACE_R), SKIN)  # face
+    # a soft, narrow jaw: the full-width brow tapers into a smaller rounded chin
+    up.part(lambda d, f: (d.rounded_rectangle((FACE[0], FACE[1], FACE[2], 29), FACE_R, f),
+                          d.ellipse((FACE[0] + 1, 19, FACE[2] - 1, FACE[3] - 1), f)), SKIN)
     # middle part: two curtains and two long side locks, mirrored about the face's centre line
     mid = (FACE[0] + FACE[2]) // 2
     curtain = [(mid, 10), (mid + 9, 9), (mid + 13, 14), (mid + 14, 23), (mid + 12, 23), (mid + 11, 19), (mid + 6, 15),
                (mid + 1, 14)]  # sweeps off the forehead
     drift = wave(2, 0.5)  # the side locks' ends drift with the breeze
-    lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16 - drift, 38), (mid + 12 - drift, 36)]
+    lock = [(mid + 10, 16), (mid + 15, 16), (mid + 16 - drift, 40), (mid + 9 - drift, 37), (mid + 10, 29)]  # swings in over the cheek, narrowing the jaw
     for side in (1, -1):  # each curtain and its lock as one shape, so no line where the lock meets the curtain
         c_pts, l_pts = ([(mid + side * (x - mid), y) for x, y in pts] for pts in (curtain, lock))
         up.part(lambda d, f, c_pts=c_pts, l_pts=l_pts: (d.polygon(c_pts, f), d.polygon(l_pts, f)), PINK)  # shaded like the ponytail
-        up.flat(L([(mid + side * 6, 11), (mid + side * 11, 15), (mid + side * 13, 24 - drift * side)], 1), PINK_L)  # sheen
+        up.flat(L([(mid + side * 6, 11), (mid + side * 10, 14)], 1), PINK_L)  # sheen: short, light from the top
     up.flat(L([(mid, 8), (mid, 13)], 1), MAROON)  # the parting
     up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
                           ((19, 4), (22, 6), (21, 9), (17, 9), (16, 6))], PINK_L)  # cherry blossom tying the ponytail
@@ -669,8 +705,8 @@ def sakura(step=None, t=0):
             up.flat(R((x, 21, x + 3, 21)), OUTLINE)
             up.dot(x + out, 21, OUTLINE)
             up.dot(x + out + (1 if out > 0 else -1), 20, OUTLINE)
-    up.flat(R((BLUSH[0], BLUSH[2], BLUSH[0] + 2, BLUSH[2])), PINK)  # pink blush
-    up.flat(R((BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])), PINK)
+    up.flat(R((BLUSH[0] + 1, BLUSH[2], BLUSH[0] + 3, BLUSH[2])), PINK)  # pink blush, kept on the narrower cheeks
+    up.flat(R((BLUSH[1] - 3, BLUSH[2], BLUSH[1] - 2, BLUSH[2])), PINK)
     up.flat(R((MOUTH[0], MOUTH[1], MOUTH[0] + 1, MOUTH[1])), MAROON)  # small mouth
     return low, up
 
@@ -725,8 +761,18 @@ def flint(step=None, t=0, heat=0.0):
     for side in (1, -1):  # lapels, open at the neck over his glowing chest
         suit.part(P([(32 + side * x, y) for x, y in ((4, 33), (1, 40), (7, 37), (8, 33))]), NAVY, shade=False)
     suit.flat(P([(29, 33), (32, 39), (35, 33)]), OUTLINE)  # the open collar (cut out below)
-    for y in (42, 45):
-        suit.dot(32, y, STEEL)  # buttons
+    suit.dot(32, 41, STEEL)  # button
+    suit.flat(L([(28, 33), (31, 38)], 1), STEEL_D)  # the left lapel's lit edge
+    suit.flat(L([(36, 38), (34, 34)], 1), SHADOW)  # the right one in shade
+    suit.flat(R((20, 43, 44, 44)), BROWN)  # belt: lit top, shaded lower, a molten buckle with a glint
+    suit.flat(R((20, 43, 44, 43)), SKIN_D)
+    suit.flat(R((20, 44, 44, 44)), MAROON)
+    suit.flat(R((30, 43, 34, 44)), YELLOW)
+    suit.flat(R((30, 44, 34, 44)), ORANGE)
+    suit.dot(30, 43, WHITE)
+    for pts, spark in ((((25, 36), (26, 38), (25, 40)), (26, 38)), (((40, 37), (39, 39), (41, 41)), (39, 39))):
+        suit.flat(L(list(pts), 1), ORANGE)  # cracks in the cloth where the heat shows through
+        suit.dot(spark[0], spark[1], YELLOW)
     burn = 0.1 + heat * 1.05
     sp = suit.img.load()
     for y in range(BODY[1], BODY[3] + 1):
@@ -762,7 +808,6 @@ def flint(step=None, t=0, heat=0.0):
     mid_y = (HEAD[1] + HEAD[3]) // 2
     up.part(lambda d, f: (d.rounded_rectangle((HEAD[0], HEAD[1], HEAD[2], mid_y + 2), 4, f), d.ellipse(HEAD, f),
                           d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)
-    up.part(E((MOUTH[0] - 6, 26, MOUTH[0] + 6, 34)), YELLOW, line=False)  # hot glow around the mouth
     if hot and not KO:  # blazing eyes: white-hot with flame trailing back off them
         for x in EYES_X:
             up.flat(R((x, EYES_Y, x + 3, EYES_Y + 5)), YELLOW)  # same eye shape, lit from inside
@@ -770,12 +815,7 @@ def flint(step=None, t=0, heat=0.0):
             up.flat(L([(x + 1, EYES_Y - 1), (x - 1, EYES_Y - 3 - (t % 2))], 1), YELLOW)  # flame flicking up off it
     else:
         big_eyes(up, EYES_Y, EYES_X, YELLOW)
-    up.flat(R((BLUSH[0], BLUSH[2], BLUSH[0] + 1, BLUSH[2])), RED)  # blush
-    up.flat(R((BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])), RED)
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
-    # Tongues licking up from the forehead; orange rim so no red stripe runs across the face.
-    mid = (HEAD[0] + HEAD[2]) // 2
-    flame(up, mid - 13, mid + 13, FACE[1] + 5, 8, t + 2, tongues=5, line=False, rim=ORANGE)
     return low, up
 
 
@@ -788,31 +828,65 @@ def flint_burn(x: int, y: int) -> float:
 
 
 def flint_crown(t: int, dy: int, heat: float = 0.0) -> Canvas:
-    """Flint's head on fire: an upright flame rising off his head, its tongues flickering every tick, taller and
-    leaping with `heat`. A CELL canvas drawn behind the body before outlining (the face covers its base);
-    `dy` = the head's bob."""
+    """Flint's hair is fire: one continuous flame growing out of the top of his head, streaming a little backwards,
+    its tongues flickering every tick (taller and wilder with `heat`). Coloured by height above the head: white-hot /
+    yellow at the root, orange through the body, red at the tips, so there is no seam where it meets the head. A CELL
+    canvas drawn behind the body before outlining; `dy` = the head's bob."""
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
     mid = PAD + (HEAD[0] + HEAD[2]) // 2  # centred on the head
-    base = top + FACE[1] + 9
-    hw = 14  # as wide as the squared head's flat top, so the tufts sit along it like a crown
-    n = 6 + round(heat * 2)
-    sway = (-0.14, 0.1, 0.14, -0.1)  # the whole crown leans left and right as it flickers
-    flame(c, mid - hw, mid + hw, base, 27 + round(heat * 3), t, tongues=n, lean=sway[t % 4])  # tall outer tufts of uneven height
-    flame(c, mid - hw + 3, mid + hw - 3, base, 19 + round(heat * 6), t + 2, tongues=n - 2, line=False, rim=ORANGE, lean=-sway[t % 4])  # inner tufts, out of step, leaning the other way
+    ref = top + HEAD[1] + 1  # the head's top edge: the flame's root
+    sway = (-0.12, 0.08, 0.12, -0.08)[t % 4]
+    n = 7 + round(heat)
+    hs = [10, 16, 21, 24, 20, 14, 9, 7][:n]  # taller towards the back of the head (left), shorter at the front
+    mask = Image.new("L", (CELL, CELL), 0)
+    d = ImageDraw.Draw(mask)
+    d.rectangle((mid - 15, ref, mid + 15, ref + 10), 255)  # the root, wide as the head
+    for i, h0 in enumerate(hs):
+        x = mid - 15 + i * (30 / (n - 1))
+        h = h0 * (1 + 0.08 * heat) + (2 if (i * 7 + t) % 4 in (1, 2) else 0)  # tongues take turns to leap
+        tip = x - 0.28 * h + sway * h  # streaming back, swaying as it flickers
+        w = 9.0 - 0.3 * i
+        d.polygon([(x - w / 2, ref + 4), (x - w * 0.46 + (tip - x) * 0.4, ref - h * 0.5), (tip, ref - h),
+                   (x + w * 0.4 + (tip - x) * 0.55, ref - h * 0.45), (x + w / 2, ref + 4)], 255)
+    d.rectangle((0, ref - 5, mid - 16, CELL), 0)  # the flame grows from the head, it doesn't hang off its sides
+    d.rectangle((mid + 16, ref - 5, CELL, CELL), 0)
+    m = mask.load()
+    col_top = {}
+    for x in range(CELL):
+        for y in range(CELL):
+            if m[x, y]:
+                col_top[x] = y
+                break
+    for x, y0 in col_top.items():
+        span = max(1, ref - y0)
+        for y in range(y0, ref + 1):
+            if not m[x, y]:
+                continue
+            v = (ref - y) / span  # 0 at the root, 1 at the tip of this column
+            hot = 0.16 + 0.08 * heat
+            if v < hot and heat > 0.5:
+                col = WHITE
+            elif v < 0.34:
+                col = YELLOW
+            elif v < 0.66:
+                col = ORANGE
+            else:
+                col = RED
+            c.px[x, y] = col + (255,)
     for k in range(3):  # tips breaking off into small flame wisps that rise and shrink over 4 ticks
         ph = (t + k * 2) % 4
-        wx = mid - hw + 4 + k * (2 * hw - 8) // 2 + SWAY[(t + k) % 4] * 2
-        wy = top + 4 - 3 * ph - round(heat * 2)
+        wx = mid - 10 + k * 10 + SWAY[(t + k) % 4] * 2
+        wy = top + 6 - 3 * ph - round(heat * 2)
         r = (3, 2, 1, 0)[ph]
         if r:
             c.part(P([(wx - r, wy + r), (wx + SWAY[(t + k) % 4], wy - r - 1), (wx + r, wy + r), (wx, wy + r + 1)]),
-                   (YELLOW, ORANGE, RED)[min(ph, 2)], shade=False, line=False)
-    for k in range(3 + round(heat * 2)):  # tiny embers lifting off the tufts and dying out (period 4)
+                   (ORANGE, RED, RED)[min(ph, 2)], shade=False, line=False)
+    for k in range(3 + round(heat * 2)):  # tiny embers lifting off the tips and dying out (period 4)
         ph = (t + k) % 4
-        ex = mid - hw + 3 + (k * 11 + 5) % (2 * hw - 5) + SWAY[(t + k) % 4]
+        ex = mid - 12 + (k * 11 + 5) % 24 + SWAY[(t + k) % 4]
         c.dot(ex, top + 6 - 4 * ph - (k % 2) * 3 - round(heat * 3), (YELLOW, ORANGE, RED, MAROON)[ph])
-    return c
+    return fill_notches(c)  # no dark specks in the valleys between tongues
 
 
 def flint_embers(i: int, heat: float = 0.0) -> Canvas:
@@ -873,14 +947,33 @@ def wukong(step=None, t=0, swing=False):
     else:
         up.part(L([(21, 44), (11, 45), (6, 40), (7, 33), (11 + s, 31)], 3), BROWN)  # curly tail, tip wags
     arm(up, ARM_X[0], YELLOW, SKIN)
+    up.flat(R((ARM_X[0], 40, ARM_X[0] + 5, 41)), ORANGE)  # bracer
+    up.flat(R((ARM_X[0], 41, ARM_X[0] + 5, 41)), RED)
     up.part(RR(BODY, 3), YELLOW)  # golden armour
     up.flat(R((31, 36, 33, 44)), ORANGE)
+    for y in (39, 42):  # lames: the plate overlaps in bands, each with a shaded edge
+        up.flat(R((22, y, 30, y)), ORANGE)
+        up.flat(R((34, y, 42, y)), ORANGE)
+    for x in (23, 41):  # rivets
+        up.dot(x, 37, WHITE)
+        up.dot(x, 40, RED)
+    up.flat(R((22, 35, 24, 35)), WHITE)  # the plate's specular, top left
     up.part(R((20, 44, 44, 46)), RED, line=False)  # sash
+    up.flat(R((30, 44, 34, 46)), YELLOW)  # gold sash clasp
+    up.flat(R((31, 45, 33, 45)), ORANGE)
+    up.dot(30, 44, WHITE)
     up.part(P([(22, 45), (17, 52), (21, 52), (25, 46)]), RED)  # sash tail
     if not swing:
         arm(up, ARM_X[1], YELLOW, SKIN)
-    up.part(L([(25, 10), (16, 4), (6, 6 + s)], 2), RED, shade=False)  # pheasant feathers sway
-    up.part(L([(29, 9), (24, 3), (14 + s, 2)], 2), RED, shade=False)
+        up.flat(R((ARM_X[1], 40, ARM_X[1] + 5, 41)), ORANGE)  # bracer
+        up.flat(R((ARM_X[1], 41, ARM_X[1] + 5, 41)), RED)
+        up.dot(ARM_X[1] + 1, 40, YELLOW)
+    # pheasant feathers sway: two tapered plumes, the longer one behind (lit top edge, shaded underside)
+    up.part(P([(26, 10), (17, 4), (6, 5 + s), (15, 8), (23, 12)]), RED, shade=False)
+    up.flat(L([(23, 8), (16, 5), (9, 5 + s)], 1), ORANGE)
+    up.flat(L([(22, 11), (16, 8)], 1), MAROON)
+    up.part(P([(30, 9), (25, 2), (15 + s, 1), (22, 6), (28, 11)]), RED, shade=False)
+    up.flat(L([(27, 5), (22, 3), (17 + s, 2)], 1), ORANGE)
     up.part(E((11, 17, 21, 28)), BROWN)  # ear
     up.flat(E((14, 20, 18, 25)), SKIN_D)
     for x in (24, 31, 38):
@@ -1018,12 +1111,12 @@ def wukong_clouds(i: int) -> Canvas:
     s = SWAY[i % 4]
     mass = ((9, 35 + s, 4), (13, 31, 5), (16, 38, 4), (8, 42 - s, 3), (19, 27 + s, 3))
     c.part(lambda d, f: [d.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in mass], WHITE)
-    for k, (x, y) in enumerate(((14, 22), (12, 47), (18, 51), (10, 28), (16, 44))):
+    for k, (x, y) in enumerate(((14, 22), (16, 44))):
         phase = (i + k) % 4
         length = (6, 5, 4, 2)[phase]  # thins out as it drifts back
         x -= 2 * phase
         c.part(E((x - length, y - 1 - phase % 2, x + length, y + 1 - phase % 2)), WHITE, shade=False)
-    for k, (x, y) in enumerate(((7, 20), (22, 15), (12, 12))):
+    for k, (x, y) in enumerate(((7, 20), (22, 15))):
         phase = (i + k * 2) % 4
         r = (1, 2, 3, 2)[phase]
         c.part(E((x - r, y - 2 * phase - r, x + r, y - 2 * phase + r)), WHITE)
@@ -4849,6 +4942,25 @@ def outline(img: Image.Image) -> Image.Image:
     return out
 
 
+def fill_notches(c: Canvas, passes: int = 1) -> Canvas:
+    """Closes 1 px notches and pinholes in a canvas: a transparent pixel with 3+ opaque 4-neighbours takes the colour of
+    its top (else left) neighbour, so the final outline pass doesn't draw a dark speck inside a shape. Opt-in per
+    fighter (nothing calls it by default)."""
+    n = c.size
+    for _ in range(passes):
+        fills = []
+        for y in range(1, n - 1):
+            for x in range(1, n - 1):
+                if c.px[x, y][3]:
+                    continue
+                nb = [c.px[x, y - 1], c.px[x - 1, y], c.px[x + 1, y], c.px[x, y + 1]]
+                if sum(1 for q in nb if q[3]) >= 3:
+                    fills.append((x, y, next(q for q in nb if q[3])))
+        for x, y, q in fills:
+            c.px[x, y] = q
+    return c
+
+
 def recolor(img: Image.Image, fn) -> Image.Image:
     out = img.copy()
     px = out.load()
@@ -6016,6 +6128,8 @@ def shadow_legs(low: Canvas, step) -> None:
         low.flat(R((x - 1, 51 + dy, x + 6, 51 + dy)), SHADOW)
         low.flat(L([(x + 1, 47 + dy), (x + 1, 49 + dy)], 1), SHADOW)
         low.flat(L([(x + 5, 46 + dy), (x + 5, 50 + dy)], 1), YELLOW)
+        low.flat(L([(x - 1, 46 + dy), (x - 1, 49 + dy)], 1), STEEL_D)  # rim light down the lit side of the thigh
+        low.flat(R((x - 1, 52 + dy, x + 6, 52 + dy)), STEEL_D)  # ribbed cuff, lit
         low.part(RR((x - 2, 53 + dy, x + 8, 57 + dy), 2), SHADOW)
         low.flat(R((x - 1, 57 + dy, x + 7, 57 + dy)), YELLOW)
         low.flat(R((x + 4, 54 + dy, x + 7, 54 + dy)), WHITE)
@@ -6065,6 +6179,9 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
         up.part(E((x, 42, x + 5, 47)), SHADOW)
         up.flat(L([(x + 1, 43), (x + 3, 43)], 1), STEEL_D)
     arm(up, ARM_X[1] + a1, SHADOW, SHADOW)
+    for x in (ARM_X[0] + a0, ARM_X[1] + a1):  # sleeve creases: a lit ridge beside a dark fold
+        up.flat(L([(x + 1, 37), (x + 1, 39)], 1), STEEL_D)
+        up.flat(L([(x + 3, 38), (x + 4, 40)], 1), OUTLINE)
     for x in (ARM_X[0] + a0, ARM_X[1] + a1):  # ribbed sleeve cuffs
         up.flat(R((x, 41, x + 5, 42)), OUTLINE)
         up.flat(R((x, 41, x + 5, 41)), STEEL_D)
@@ -6078,6 +6195,8 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
     p = lag(2) - fly * 2
     up.flat(L([(23, 33), (25, 38 + round(c * 0.6)), (30, 41 + c), (35, 41 + c), (40, 38 + round(c * 0.6)), (42, 33)], 1), YELLOW)
     up.dot(25, 38 + round(c * 0.6), WHITE)
+    up.dot(36, 41 + c, WHITE)  # glints along the links
+    up.dot(40, 38 + round(c * 0.6), ORANGE)
     up.flat(L([(32, 41 + c), (32, 42 + p)], 1), YELLOW)
     up.flat(R((31, 42 + p, 33, 44 + p)), YELLOW)
     up.dot(31, 42 + p, WHITE)
@@ -6088,8 +6207,8 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
     dl = lag(2)
     hd.part(lambda d, f: (d.ellipse((14, 4, 50, 38), f), d.ellipse((10 + drape, 17 + dl, 30 + drape, 40 + dl), f)), SHADOW)
     hd.flat(L([(20, 9), (30, 5), (40, 6), (46, 10)], 1), STEEL_D)  # lit crown
+    hd.flat(L([(22, 8), (27, 6)], 1), STEEL)  # the rim light's brightest streak, top left
     hd.flat(L([(13 + drape, 25 + dl), (12 + drape, 31 + dl), (15 + drape, 36 + dl)], 1), STEEL_D)  # lit drape
-    hd.flat(L([(15, 15), (13, 21)], 1), STEEL_D)
     hd.flat(L([(18 + drape, 36 + dl), (23, 38)], 1), OUTLINE)  # fold where the drape meets the shoulder
     hd.flat(RR((FACE[0] - 3, FACE[1] - 4, FACE[2] + 2, FACE[3] + 1), FACE_R + 3), STEEL_D)  # lit lip of the opening
     hd.flat(RR((FACE[0] - 2, FACE[1] - 3, FACE[2] + 1, FACE[3] + 1), FACE_R + 2), OUTLINE)  # the opening, in shadow
@@ -6099,10 +6218,6 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
     ty = lag(2)  # the fringe's tips trail the bob
     hd.part(P([(23, 25), (23, 16), (26, 13), (26, 7 + ty), (30, 12), (33, 5 + ty), (36, 13), (40, 8 + ty), (41, 14), (45, 12 + ty),
                (46, 17), (45, 22), (43, 18), (41, 20), (38, 18), (34, 20), (30, 18), (26, 20), (25, 27)]), OUTLINE, shade=False)
-    hd.flat(L([(26, 9 + ty), (27, 11)], 1), STEEL_D)
-    hd.flat(L([(33, 7 + ty), (34, 10)], 1), STEEL_D)
-    hd.flat(L([(40, 10 + ty), (40, 12)], 1), STEEL_D)
-    hd.flat(L([(29, 14), (33, 16)], 1), SHADOW)
     hd.part(P([(23, 24), (21, 31), (25, 29)]), OUTLINE, shade=False)  # sideburn tuft
     for x in (30, 40):  # brows: the left one lifted, the right sly
         if KO:
@@ -6235,10 +6350,8 @@ def shadow_aura(i: int) -> Canvas:
                 continue
             h = (y - 5) / 52.0  # 0 at the top, 1 at the bottom
             col = VIOLET if h > 0.45 else VIOLET_D
-            pts = [(x + round(math.sin((y + j + x) * 0.5) * 2), y + j) for j in range(0, 6 if h > 0.3 else 4)]
-            c.flat(L(pts, 1), col)
-            if h > 0.55:
-                sdot(c, pts[0][0], pts[0][1] - 1, VIOLET_L)
+            pts = [(x + round(math.sin((y + j + x) * 0.3) * 1.2), y + j) for j in range(0, 6 if h > 0.3 else 4)]
+            c.flat(L(pts, 1), col)  # one unbroken wavy strand; no loose sparkle pixels above it
     return c
 
 

@@ -242,7 +242,7 @@ func remove_player(id: int) -> void:
 		local_player = null
 	p.queue_free()
 	if referee != null:
-		referee.remove_player(id, scores)
+		referee.remove_player(id, scores, _human_ids)
 	match_updated.emit()
 
 
