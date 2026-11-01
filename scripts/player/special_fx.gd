@@ -459,6 +459,7 @@ func sync(p: Player) -> void:
 	_sync_sapling(p)
 	_sync_storm(p)
 	_sync_eden(p)
+	_sync_shadow(p)
 	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
 	if slow > _snare_left + SNARE_NEW_MARGIN:  # a snare landed (or was refreshed): petals burst
 		_poof(p.global_position + p.visual_offset, SNARE_BURST_ART, SNARE_BURST_TIME)
@@ -807,7 +808,8 @@ static func _slot(p: Player, kind: SkillData.Kind) -> CharacterSkill:
 
 ## The owner's sprite is hidden while a morph or the grapple zip pose plays (Player).
 func hides_owner() -> bool:
-	return _morph_t >= 0.0 or _grapple != null or _whirl_t >= 0.0 or is_petals() or _pillar != null or _flare != null
+	return _morph_t >= 0.0 or _grapple != null or _whirl_t >= 0.0 or is_petals() or _pillar != null or _flare != null \
+		or _step != null
 
 
 ## The owner's sprite is hidden while the swing pose is drawn instead (Player).
@@ -867,6 +869,7 @@ func _start_morph(p: Player, back: bool) -> void:
 	var form: CharacterSkill = _slot(p, SkillData.Kind.TRANSFORM)
 	_morph_art = form.data.form_morph if form != null else null
 	if _morph_art == null:
+		_morph_t = -1.0
 		return
 	_morph_back = back
 	_morph_t = 0.0
@@ -917,6 +920,7 @@ func _draw() -> void:
 	_draw_sapling()
 	_draw_blaze()
 	_draw_storm()
+	_draw_shadow()
 	_draw_flourishes()
 	if _owner == null:
 		return
@@ -961,6 +965,7 @@ func _draw_floor() -> void:
 		_floor.draw_arc(_ward_at, _ward_radius, 0.0, TAU, 48, Color(WARD_GLOW, WARD_RING_ALPHA * glow), 2.0)
 	_draw_overdrive_floor()
 	_draw_moss()
+	_draw_shadow_floor()
 	for pf: Poof in _poofs:
 		if pf.on_floor:
 			var n: int = pf.art.get_width() / pf.art.get_height()
@@ -986,7 +991,7 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 
 ## Frame by frame from the character into the form (or back). The strip has the growth baked in.
 func _draw_morph() -> void:
-	if _morph_t < 0.0:
+	if _morph_t < 0.0 or _morph_art == null:  # (a swap away from the form mid-morph leaves no art to play)
 		return
 	var n: int = _morph_art.get_width() / _morph_art.get_height()
 	var k: int = mini(int(_morph_t / MORPH_TIME * n), n - 1)
@@ -1335,3 +1340,263 @@ func _draw_vine(top: Vector2, end: Vector2) -> void:
 		draw_texture_rect_region(VINE_ART, Rect2(-w * 0.5, 0.0, w, h), Rect2(0.0, 0.0, w, h))
 		draw_set_transform(Vector2.ZERO)
 	_draw_frame(VINE_TOP, 0, VINE_TOP.get_width(), top, px)
+
+
+# --- Shadow: Shadow Step, Gloom Hound, Shadow Bind (art: generate.py shadow_* / hound_* / bind_*) ----------------------------
+## Shadow Step: he sinks (SINK strip over him, puddle grows on the floor), travels as a puddle with eyes, rises (the sink strip
+## backwards) and a ring of spikes bursts where he emerges, out to `step_radius`.
+const SH_SINK_ART: Texture2D = preload(FX_DIR + "shadow_sink.png")
+const SH_PUDDLE_IN_ART: Texture2D = preload(FX_DIR + "shadow_puddle_in.png")
+const SH_PUDDLE_ART: Texture2D = preload(FX_DIR + "shadow_puddle.png")
+const SH_PUDDLE_OUT_ART: Texture2D = preload(FX_DIR + "shadow_puddle_out.png")
+const SH_BURST_ART: Texture2D = preload(FX_DIR + "shadow_burst.png")
+const SH_BURST_FLOOR_ART: Texture2D = preload(FX_DIR + "shadow_burst_floor.png")
+## Sink / rise take this long (10 frames, generate.py SINK_FRAMES); the puddle loop (8 frames) runs at SH_PUDDLE_FPS.
+const SH_SINK_TIME: float = 0.3
+const SH_PUDDLE_FPS: float = 16.0
+const SH_BURST_TIME: float = 0.6
+## The burst art's spikes reach this many art px (generate.py shadow_burst_frame): scaled to the strike radius.
+const SH_BURST_ART_RADIUS: float = 52.0
+## Gloom Hound: 80 px frames, its paws on row HOUND_FEET_ROW (generate.py HOUND_BOX), facing right (mirrored to face left).
+const HOUND_RISE_ART: Texture2D = preload(FX_DIR + "hound_rise.png")
+const HOUND_RUN_ART: Texture2D = preload(FX_DIR + "hound_run.png")
+const HOUND_BITE_ART: Texture2D = preload(FX_DIR + "hound_bite.png")
+const HOUND_MELT_ART: Texture2D = preload(FX_DIR + "hound_melt.png")
+const HOUND_FEET_ROW: float = 60.0
+const HOUND_RUN_FPS: float = 16.0
+const HOUND_BITE_TIME: float = 0.25
+const HOUND_MELT_TIME: float = 0.5
+## Drawn position chases the synced one at this rate (1/s) so interpolated remote players' hounds move smoothly.
+const HOUND_SMOOTH: float = 18.0
+const HOUND_MOVING_SPEED: float = 25.0
+## Shadow Bind: the line is tiled from 16 px tiles BIND_PERIOD art px apart (the tile's edge columns are empty), its head at the tip.
+const BIND_LINE_ART: Texture2D = preload(FX_DIR + "bind_line.png")
+const BIND_HEAD_ART: Texture2D = preload(FX_DIR + "bind_head.png")
+const BIND_WRAP_ART: Texture2D = preload(FX_DIR + "bind_wrap.png")
+const BIND_FLOOR_ART: Texture2D = preload(FX_DIR + "bind_floor.png")
+const BIND_HIT_ART: Texture2D = preload(FX_DIR + "bind_hit.png")
+const BIND_TILE: float = 16.0
+const BIND_PERIOD: float = 14.0
+const BIND_FPS: float = 16.0
+const BIND_HEAD_FPS: float = 12.0
+const BIND_WRAP_FPS: float = 16.0
+const BIND_HIT_TIME: float = 0.35
+## The line fades over its last seconds, and lingers this long after the slot ends (a miss ends it at once).
+const BIND_FADE: float = 0.2
+## A jump in the synced stun time bigger than this is a fresh hit.
+const STUN_NEW_MARGIN: float = 0.3
+
+var _step: CharacterSkill
+var _step_at: Vector2 = Vector2.ZERO
+var _step_flip: bool = false
+var _hound: CharacterSkill
+var _hound_pos: Vector2 = Vector2.ZERO
+var _hound_moving: bool = false
+var _hound_flip: bool = false
+var _hound_bites: int = 0
+var _hound_bite_t: float = -1.0
+var _bind: CharacterSkill
+## The bind's line as last seen (from, whole vector, head length) while the slot is on, and seconds it has lingered after.
+var _bind_from: Vector2 = Vector2.ZERO
+var _bind_vec: Vector2 = Vector2.ZERO
+var _bind_head: float = 0.0
+var _bind_gone: float = -1.0
+var _stun_left: float = 0.0
+var _stun_at: Vector2 = Vector2.ZERO
+
+
+func _sync_shadow(p: Player) -> void:
+	_sync_step(p)
+	_sync_hound(p)
+	_sync_bind(p)
+	var stun: float = 0.0 if p.dead else p.stats.stun_remaining
+	_stun_at = p.global_position + p.visual_offset
+	if stun > _stun_left + STUN_NEW_MARGIN:  # someone's shadow caught him
+		_poof(_stun_at + Vector2(0.0, Player.FOOT_RING_Y), BIND_HIT_ART, BIND_HIT_TIME)
+	_stun_left = stun
+
+
+## The owner's sprite and weapon are hidden while he is a puddle (Player).
+func is_stepping() -> bool:
+	return _step != null
+
+
+func _sync_step(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.STEP)
+	var on: bool = slot != null and slot.is_stepping() and not p.dead
+	_step_at = p.global_position + p.visual_offset
+	_step_flip = p.facing.x < 0.0
+	if _step != null and not on and not p.dead:  # he rises: spikes burst where he emerges
+		var feet: Vector2 = _step_at + Vector2(0.0, Player.FOOT_RING_Y)
+		var k: float = _step.data.step_radius / (SH_BURST_ART_RADIUS * Constants.SPRITE_SCALE)
+		_poof(feet, SH_BURST_ART, SH_BURST_TIME, k)
+		_poof(feet, SH_BURST_FLOOR_ART, SH_BURST_TIME, k, true)
+	_step = slot if on else null
+
+
+## The body sinking / rising over him (the puddle is on the floor layer).
+func _draw_step() -> void:
+	if _step == null:
+		return
+	var n: int = SH_SINK_ART.get_width() / SH_SINK_ART.get_height()
+	var frame: int = -1
+	if _step.elapsed() < SH_SINK_TIME:
+		frame = mini(int(_step.elapsed() / SH_SINK_TIME * n), n - 1)
+	elif _step.active_remaining < SH_SINK_TIME:  # the sink backwards
+		frame = n - 1 - mini(int((SH_SINK_TIME - _step.active_remaining) / SH_SINK_TIME * n), n - 1)
+	if frame < 0:
+		return
+	draw_set_transform(_step_at, 0.0, Vector2(-1.0 if _step_flip else 1.0, 1.0))
+	_draw_frame(SH_SINK_ART, frame, SH_SINK_ART.get_height(), Vector2.ZERO, Constants.SPRITE_SCALE)
+	draw_set_transform(Vector2.ZERO)
+
+
+func _draw_step_floor() -> void:
+	if _step == null:
+		return
+	var art: Texture2D = SH_PUDDLE_ART
+	var n: int = art.get_width() / art.get_height()
+	var frame: int = 0
+	if _step.elapsed() < SH_SINK_TIME:
+		art = SH_PUDDLE_IN_ART
+		n = art.get_width() / art.get_height()
+		frame = mini(int(_step.elapsed() / SH_SINK_TIME * n), n - 1)
+	elif _step.active_remaining < SH_SINK_TIME:
+		art = SH_PUDDLE_OUT_ART
+		n = art.get_width() / art.get_height()
+		frame = mini(int((SH_SINK_TIME - _step.active_remaining) / SH_SINK_TIME * n), n - 1)
+	else:
+		frame = int(_time * SH_PUDDLE_FPS) % n
+	_draw_frame(art, frame, art.get_height(), _step_at + Vector2(0.0, Player.FOOT_RING_Y), Constants.SPRITE_SCALE, 1.0, _floor)
+
+
+## The hound's position and heading come from the synced skill state (anchor = where it is, direction = which way it faces).
+func _sync_hound(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.HOUND)
+	var on: bool = slot != null and slot.is_active() and not p.dead
+	if not on:
+		_hound = null
+		_hound_bite_t = -1.0
+		return
+	var dt: float = get_process_delta_time()
+	if _hound == null:  # a new hound: it starts where it rises
+		_hound_pos = slot.anchor
+		_hound_bites = 0
+	var before: Vector2 = _hound_pos
+	_hound_pos = _hound_pos.lerp(slot.anchor, 1.0 - exp(-HOUND_SMOOTH * dt))
+	_hound_moving = dt > 0.0 and before.distance_to(_hound_pos) / dt > HOUND_MOVING_SPEED
+	if absf(slot.direction.x) > 0.05:
+		_hound_flip = slot.direction.x < 0.0
+	var data: SkillData = slot.data
+	var bites: int = floori((slot.elapsed() - data.hound_rise_time + CharacterSkill.WHIRL_EPSILON) / data.hound_bite_interval)
+	if _hound != null and bites > _hound_bites and slot.elapsed() > data.hound_rise_time:
+		_hound_bite_t = 0.0
+	_hound_bites = bites
+	if _hound_bite_t >= 0.0:
+		_hound_bite_t += dt
+		if _hound_bite_t > HOUND_BITE_TIME:
+			_hound_bite_t = -1.0
+	_hound = slot
+
+
+func _draw_hound() -> void:
+	if _hound == null:
+		return
+	var d: SkillData = _hound.data
+	var art: Texture2D = HOUND_RUN_ART
+	var frame: int = 0
+	var t: float = _hound.elapsed()
+	var n: int = art.get_width() / art.get_height()
+	if t < d.hound_rise_time:
+		art = HOUND_RISE_ART
+		n = art.get_width() / art.get_height()
+		frame = mini(int(t / d.hound_rise_time * n), n - 1)
+	elif _hound.active_remaining < HOUND_MELT_TIME:
+		art = HOUND_MELT_ART
+		n = art.get_width() / art.get_height()
+		frame = mini(int((HOUND_MELT_TIME - _hound.active_remaining) / HOUND_MELT_TIME * n), n - 1)
+	elif _hound_bite_t >= 0.0:
+		art = HOUND_BITE_ART
+		n = art.get_width() / art.get_height()
+		frame = mini(int(_hound_bite_t / HOUND_BITE_TIME * n), n - 1)
+	else:
+		frame = int(_time * HOUND_RUN_FPS) % n if _hound_moving else 0
+	var px: float = Constants.SPRITE_SCALE
+	var cell: float = art.get_height()
+	var feet: Vector2 = _hound_pos + Vector2(0.0, Player.FOOT_RING_Y)
+	var centre: Vector2 = feet - Vector2(0.0, (HOUND_FEET_ROW - cell * 0.5) * px)
+	draw_set_transform(centre, 0.0, Vector2(-1.0 if _hound_flip else 1.0, 1.0))
+	_draw_frame(art, frame, cell, Vector2.ZERO, px)
+	draw_set_transform(Vector2.ZERO)
+
+
+func _sync_bind(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.BIND)
+	var on: bool = slot != null and slot.is_binding() and not p.dead
+	if on:
+		_bind_from = slot.anchor + Vector2(0.0, Player.FOOT_RING_Y)
+		_bind_vec = slot.direction
+		_bind_head = slot.bind_head()
+		_bind_gone = -1.0
+	elif _bind != null and not p.dead:  # the line lingers a moment while it fades
+		_bind_gone = 0.0
+	if not on and _bind_gone >= 0.0:
+		_bind_gone += get_process_delta_time()
+		if _bind_gone > BIND_FADE or p.dead:
+			_bind_gone = -1.0
+	_bind = slot if on else null
+
+
+## The shadow stretching along the floor, cropped to its length (never stretched), and its head at the tip.
+func _draw_bind_floor() -> void:
+	var on: bool = _bind != null
+	if not on and _bind_gone < 0.0:
+		return
+	var alpha: float = 1.0 - _bind_gone / BIND_FADE
+	if on:
+		alpha = clampf(_bind.active_remaining / BIND_FADE, 0.0, 1.0)
+	var px: float = Constants.SPRITE_SCALE
+	var tint := Color(1, 1, 1, alpha)
+	var frame: int = int(_time * BIND_FPS) % (BIND_LINE_ART.get_width() / BIND_LINE_ART.get_height())
+	_floor.draw_set_transform(_bind_from, _bind_vec.angle(), Vector2.ONE)
+	var length: float = _bind_head / px
+	var x: float = 0.0
+	while x < length - 1.0:
+		var w: float = minf(BIND_TILE, length - x)
+		_floor.draw_texture_rect_region(BIND_LINE_ART, Rect2(Vector2(x, -BIND_TILE * 0.5) * px, Vector2(w, BIND_TILE) * px),
+			Rect2(frame * BIND_TILE, 0.0, w, BIND_TILE), tint)
+		x += BIND_PERIOD
+	var head_cell: float = BIND_HEAD_ART.get_height()
+	var head_frame: int = int(_time * BIND_HEAD_FPS) % (BIND_HEAD_ART.get_width() / BIND_HEAD_ART.get_height())
+	_floor.draw_texture_rect_region(BIND_HEAD_ART, Rect2(Vector2(length - head_cell * 0.5, -head_cell * 0.5) * px,
+		Vector2(head_cell, head_cell) * px), Rect2(head_frame * head_cell, 0.0, head_cell, head_cell), tint)
+	_floor.draw_set_transform(Vector2.ZERO)
+
+
+## Tendrils coiled round whoever is stunned (every peer, from the synced stun time).
+func _draw_stun() -> void:
+	if _stun_left <= 0.0:
+		return
+	var n: int = BIND_WRAP_ART.get_width() / BIND_WRAP_ART.get_height()
+	_draw_frame(BIND_WRAP_ART, int(_time * BIND_WRAP_FPS) % n, BIND_WRAP_ART.get_height(), _stun_at, Constants.SPRITE_SCALE,
+		clampf(_stun_left / BIND_FADE, 0.0, 1.0))
+
+
+func _draw_stun_floor() -> void:
+	if _stun_left <= 0.0:
+		return
+	var n: int = BIND_FLOOR_ART.get_width() / BIND_FLOOR_ART.get_height()
+	_draw_frame(BIND_FLOOR_ART, int(_time * BIND_WRAP_FPS) % n, BIND_FLOOR_ART.get_height(),
+		_stun_at + Vector2(0.0, Player.FOOT_RING_Y), Constants.SPRITE_SCALE, clampf(_stun_left / BIND_FADE, 0.0, 1.0), _floor)
+
+
+func _draw_shadow() -> void:
+	_draw_step()
+	_draw_hound()
+	_draw_stun()
+
+
+func _draw_shadow_floor() -> void:
+	_draw_step_floor()
+	_draw_bind_floor()
+	_draw_stun_floor()

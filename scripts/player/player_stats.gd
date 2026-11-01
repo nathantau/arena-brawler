@@ -18,6 +18,8 @@ var energy_accum: float = 0.0
 ## Snare: move speed is multiplied by slow_factor while slow_remaining > 0. Set only on the authority, synced.
 var slow_remaining: float = 0.0
 var slow_factor: float = 1.0
+## Stun (Shadow Bind): can't move, fire or use specials while > 0. Set only on the authority, synced.
+var stun_remaining: float = 0.0
 
 
 func _init(
@@ -41,6 +43,7 @@ func reset() -> void:
 	energy_accum = 0.0
 	slow_remaining = 0.0
 	slow_factor = 1.0
+	stun_remaining = 0.0
 
 
 func is_dead() -> bool:
@@ -76,6 +79,7 @@ func heal(amount: int) -> int:
 func tick(delta: float) -> void:
 	invulnerable_time = maxf(0.0, invulnerable_time - delta)
 	slow_remaining = maxf(0.0, slow_remaining - delta)
+	stun_remaining = maxf(0.0, stun_remaining - delta)
 	if is_dead():
 		return
 	if energy < max_energy:
@@ -102,6 +106,15 @@ func tick(delta: float) -> void:
 func apply_slow(time: float, factor: float) -> void:
 	slow_remaining = time
 	slow_factor = factor
+
+
+## A new stun never shortens the current one.
+func apply_stun(time: float) -> void:
+	stun_remaining = maxf(stun_remaining, time)
+
+
+func is_stunned() -> bool:
+	return stun_remaining > 0.0
 
 
 func speed_scale() -> float:

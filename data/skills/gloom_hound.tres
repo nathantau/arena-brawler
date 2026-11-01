@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_gloom_hound.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"gloom_hound"
+display_name = "Gloom Hound"
+kind = 31
+special = true
+blurb = "Summon a hound"
+tags = Array[StringName]([&"shadow"])
+cooldown = 12.0
+duration = 6.0
+hound_distance = 130.0
+hound_wall_margin = 12.0
+hound_speed = 250.0
+hound_sight = 520.0
+hound_bite_radius = 34.0
+hound_bite_interval = 0.6
+hound_damage = 11
+hound_knockback = 120.0
+hound_rise_time = 0.45

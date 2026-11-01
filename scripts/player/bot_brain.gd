@@ -15,6 +15,10 @@ var _strafe_sign: float = 1.0
 var _aim_error: float = 0.0
 var _last_aim: Vector2 = Vector2.ZERO
 var _since_target: float = INF
+## Fighters with several signature specials (kinds from SkillData.Kind.STEP up, e.g. Shadow's) rotate between them: a random
+## one is picked into slot 1 each time it comes off cooldown, so bots use the whole kit.
+var rotates_kit: bool = true
+var _kit_ready: bool = false
 
 
 func _init(p_arena: Arena, bot_seed: int) -> void:
@@ -24,6 +28,7 @@ func _init(p_arena: Arena, bot_seed: int) -> void:
 
 func get_input(player: Player, delta: float) -> InputFrame:
 	_frame.seq += 1
+	_rotate_kit(player)
 	_decision_timer -= delta
 	# Only a wall we're walking into forces a new direction; re-rolling on every touch made bots jitter in place.
 	var wall := Vector2.ZERO  # summed, so a corner counts as one wall
@@ -99,3 +104,17 @@ func _nearest_visible_enemy(player: Player) -> Variant:
 				best = spot
 				best_dist_sq = d
 	return best
+
+
+## Pick a random kit special (see `rotates_kit`) into slot 1 when it is ready again.
+func _rotate_kit(player: Player) -> void:
+	var slot: CharacterSkill = player.skills[1]
+	var ready: bool = slot.is_ready()
+	if ready and not _kit_ready and rotates_kit and slot.data.kind >= SkillData.Kind.STEP:
+		var kit: Array[SkillData] = []
+		for sd: SkillData in SkillCatalog.shared().specials_for(player.character):
+			if sd.kind >= SkillData.Kind.STEP and sd.tags.has(player.character.id):
+				kit.append(sd)
+		if kit.size() > 1:
+			player.set_skill(1, kit[rng.randi() % kit.size()])
+	_kit_ready = ready

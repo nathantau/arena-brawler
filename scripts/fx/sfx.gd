@@ -23,6 +23,7 @@ const SKILL_SOUNDS: Dictionary[int, StringName] = {
 	SkillData.Kind.SNARE: &"trap", SkillData.Kind.PILLAR: &"trap",
 	SkillData.Kind.OVERDRIVE: &"boost",
 	SkillData.Kind.BARK_SKIN: &"bark", SkillData.Kind.BLOOM: &"bloom", SkillData.Kind.GUST: &"gust",
+	SkillData.Kind.STEP: &"shadow_step", SkillData.Kind.HOUND: &"hound", SkillData.Kind.BIND: &"bind",
 }
 
 enum Wave { SINE, SQUARE, SAW, NOISE }
@@ -60,6 +61,10 @@ const RECIPES: Dictionary[StringName, Array] = {
 	&"bark": [0.3, 140.0, 80.0, Wave.SAW, 0.55, 0.75, 0.004, 10.0, 0.5],
 	&"bloom": [0.55, 330.0, 620.0, Wave.SINE, 0.15, 0.6, 0.06, 5.0, 0.4],
 	&"gust": [0.4, 350.0, 900.0, Wave.NOISE, 1.0, 0.35, 0.05, 8.0, 0.5],
+	# Shadow: a falling whoosh into the floor, a low growl that rises, a taut twang.
+	&"shadow_step": [0.4, 500.0, 70.0, Wave.SAW, 0.55, 0.8, 0.01, 7.0, 0.45],
+	&"hound": [0.5, 90.0, 220.0, Wave.SAW, 0.4, 0.7, 0.04, 5.0, 0.5],
+	&"bind": [0.3, 1200.0, 160.0, Wave.SQUARE, 0.25, 0.4, 0.002, 10.0, 0.4],
 	&"results": [0.6, 520.0, 780.0, Wave.SINE, 0.0, 0.0, 0.01, 4.0, 0.4],
 }
 

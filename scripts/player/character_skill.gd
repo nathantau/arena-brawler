@@ -24,6 +24,13 @@ extends RefCounted
 ## - BARK_SKIN: the plates are on while active (the Player scales damage taken); armor is refilled on the press.
 ## - BLOOM: the moss patch lies at `anchor` (her feet) for `duration`; a heal falls due every `bloom_interval`.
 ## - GUST: the cone points along `direction` from the player for `duration`; the hit lands on the press.
+## - STEP (Shadow): he is a puddle for `duration` (i-frames the whole time; the Player moves him faster, no firing); the Player
+##   strikes where he emerges when it ends.
+## - HOUND (Shadow): `anchor` = the hound's feet position (the Player moves it every step, so it is in the snapshot),
+##   `direction` = its heading.
+## - BIND (Shadow): the line runs from `anchor` along `direction` (the whole vector, cut short by a wall); the head travels at
+##   `bind_speed`. When the Player (authority) finds a victim it shortens `direction` to the victim and leaves `bind_stun` of
+##   tether; a miss ends the slot as the head reaches the end.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 const WHIRL_EPSILON: float = 0.0001
@@ -102,6 +109,24 @@ func bloom_tick_due(before: float) -> bool:
 		return false
 	var interval: float = data.bloom_interval
 	return floori((elapsed() + WHIRL_EPSILON) / interval) > floori((before + WHIRL_EPSILON) / interval)
+
+
+func is_stepping() -> bool:
+	return data.kind == SkillData.Kind.STEP and is_active()
+
+
+func is_binding() -> bool:
+	return data.kind == SkillData.Kind.BIND and is_active()
+
+
+## BIND: how far along its line the shadow's head is (px from `anchor`).
+func bind_head() -> float:
+	return minf(direction.length(), data.bind_speed * elapsed())
+
+
+## HOUND: still rising (can't bite yet).
+func hound_rising() -> bool:
+	return data.kind == SkillData.Kind.HOUND and is_active() and elapsed() < data.hound_rise_time
 
 
 func is_whirling() -> bool:
@@ -194,10 +219,12 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 		SkillData.Kind.SWING, SkillData.Kind.TRAIL:
 			anchor = origin
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.swing_iframes)
-		SkillData.Kind.DRIFT:
+		SkillData.Kind.DRIFT, SkillData.Kind.STEP:
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.duration)
 		SkillData.Kind.BARK_SKIN:
 			stats.armor = stats.max_armor
+		SkillData.Kind.BIND:
+			anchor = origin
 		SkillData.Kind.TRANSFORM:
 			form_weapon.cooldown = 0.0
 	return true
