@@ -3992,7 +3992,7 @@ def bolt_spikes(t: int) -> Canvas:
         pt = lambda f, sd: (rx + ca * ln * f - sa * w * (1 - f) * sd + PAD, ry + sa * ln * f + ca * w * (1 - f) * sd + PAD)
         end = (tip[0] + PAD, tip[1] + PAD)
         c.part(P([pt(0, -1), pt(0, 1), end]), YELLOW, shade=False)
-        c.flat(P([pt(0, -1), pt(0, 1), pt(0.12, 1), pt(0.12, -1)]), WHITE)  # white-hot root
+        c.flat(P([pt(0.06, -0.5), pt(0.06, 0.5), pt(0.26, 0.3), pt(0.26, -0.3)]), WHITE)  # a small white-hot wedge at the root
         c.flat(P([pt(0.58, -1), pt(0.58, 1), end]), ORANGE)  # cooler tip
     return c
 
@@ -4195,7 +4195,7 @@ def bolt_godspeed_fx(f: Image.Image, k: int, tips=None) -> Image.Image:
     seeded by `k`, so they flicker)."""
     w, h = f.size
     px = f.load()
-    roots = [(x, y) for y in range(24, 64) for x in range(1, w - 1) if px[x, y][3] and not all(
+    roots = [(x, y) for y in range(54, 64) for x in range(1, w - 1) if px[x, y][3] and not all(
         px[x + dx, y + dy][3] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
     rng = random.Random(BOLT_ARC_SEEDS + k * 37)
     c = Canvas(CELL)
@@ -4205,9 +4205,9 @@ def bolt_godspeed_fx(f: Image.Image, k: int, tips=None) -> Image.Image:
         zap_arc(c, zap_zig(rng, tips[j], tips[j + 1], 3, 2.2), YELLOW, WHITE, tip=WHITE)
     out = bolt_glow(f, k)
     out.alpha_composite(f)
-    for y in range(h):  # arcs stay clear of the frame's edge
+    for y in range(h):  # arcs stay clear of the frame's edge, and never cross his head or hair
         for x in range(w):
-            if (x < 2 or y < 2 or x >= w - 2 or y >= h - 2) and c.px[x, y][3]:
+            if c.px[x, y][3] and (x < 2 or y < 2 or x >= w - 2 or y >= h - 2 or (y < 58 and px[x, y][3])):
                 c.px[x, y] = (0, 0, 0, 0)
     out.alpha_composite(c.img)
     return out
