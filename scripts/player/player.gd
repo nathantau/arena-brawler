@@ -508,6 +508,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			slot.anchor = hound_spot(slot.direction, slot.data)
 		SkillData.Kind.BIND:
 			slot.direction *= bind_length(slot.direction, slot.data)
+			if slot.direction.is_zero_approx():  # a wall at his feet: no line at all (a zero heading would catch anyone)
+				slot.active_remaining = 0.0
 		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET

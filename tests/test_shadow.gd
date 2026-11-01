@@ -424,6 +424,28 @@ func test_bind_is_stopped_by_walls_and_misses_cleanly() -> void:
 	assert_gt(p.skills[1].cooldown_remaining, 0.0)
 
 
+func test_bind_against_an_adjacent_wall_stuns_nobody() -> void:
+	# Pressed with the wall right at his feet the line has no length: it must end, not catch an enemy across the map.
+	var s: Array = _bind_setup()
+	var p: Player = s[2]
+	var body := StaticBody2D.new()
+	body.collision_layer = Constants.LAYER_WALLS
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(20, 600)
+	var cs := CollisionShape2D.new()
+	cs.shape = shape
+	body.add_child(cs)
+	body.add_child(Arena.feet_strip([Rect2(-shape.size * 0.5, shape.size)] as Array[Rect2]))
+	body.position = Vector2(p.global_position.x + Constants.PLAYER_RADIUS + 5.0, 300)
+	s[0].add_child(body)
+	var far: Player = _foe(s[0], s[1], 2, Vector2(p.global_position.x - 200.0, 300))
+	await wait_physics_frames(2)
+	_press(p, Vector2.RIGHT)
+	_run(p, 30)
+	assert_false(far.stats.is_stunned(), "an enemy behind him is not stunned")
+	assert_false(p.skills[1].is_active(), "the line ended at once")
+
+
 func test_bind_has_a_range() -> void:
 	var s: Array = _bind_setup()
 	var p: Player = s[2]
