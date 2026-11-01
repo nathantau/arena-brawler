@@ -4158,8 +4158,14 @@ def bolt_parts(step=None, t: int = 0, god: bool = False):
                 if up.px[fx, fy][:3] == WHITE:
                     up.px[fx, fy] = SKIN + (255,)
     up.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)  # chin shade
-    if god:  # all of it stands up and away: no fringe, the forehead shows down to the brows
-        up.flat(L([(32, 16), (38, 16)], 1), SKIN_D)  # the hairline's soft shade
+    if god:  # all of it stands up and away: a low flat hairline (a tiny peak), a strip of forehead above the brows
+        up.part(P([(21, 15), (49, 15), (49, 16), (38, 16), (35, 17), (32, 16), (21, 16)]), col, shade=False)
+        for yy in range(13, 19):  # no outline seam where the band sits on the yellow hair
+            for xx in range(17, 53):
+                if up.px[xx, yy][:3] == OUTLINE and (
+                        (up.px[xx - 1, yy][:3] == YELLOW and up.px[xx + 1, yy][:3] == YELLOW)
+                        or (up.px[xx, yy - 1][:3] == YELLOW and up.px[xx, yy + 1][:3] == YELLOW)):
+                    up.px[xx, yy] = YELLOW + (255,)
         up.dot(37, 19, SKIN_D)  # a furrow between the brows
         up.dot(37, 20, SKIN_D)
     else:
@@ -4219,25 +4225,56 @@ def bolt_glow(f: Image.Image, k: int, reach: int = 7) -> Image.Image:
     return out
 
 
+def bolt_wrap_bolts(rng, k: int) -> tuple:
+    """Two or three thin yellow bolts coiling round his body, Flash-style (CELL canvases): each is one jagged line orbiting him, its
+    back half (sin > 0 is the front, nearer the viewer) on the first canvas, drawn before his body so it disappears behind him, its
+    front half on the second, drawn over him. New heights and angles every frame, advancing round him as k grows."""
+    back, front = Canvas(CELL), Canvas(CELL)
+    cx = 48
+    for i in range(rng.choice((2, 3, 3))):
+        way = 1 if i % 2 == 0 else -1
+        base = i * 2.1 + k * 0.6 * way + rng.uniform(-0.3, 0.3)
+        y0 = (rng.uniform(55, 60), rng.uniform(66, 72), rng.uniform(36, 46))[i]  # torso, legs, round the head (hidden by it)
+        drift = rng.uniform(-8, 8)
+        rx = rng.uniform(23, 30)
+        span = rng.uniform(1.4, 2.2) * math.pi
+        n = int(span / 0.5) + 2
+        nodes = []
+        for jn in range(n):
+            u = jn / (n - 1)
+            a = base + way * span * u
+            nodes.append((a, cx + rx * math.cos(a) + rng.uniform(-1, 1),
+                          y0 + drift * u + 4 * math.sin(a) + (1.8 if jn % 2 else -1.8) * rng.uniform(0.6, 1.2)))
+        for (a0, x0, y0_), (a1, x1, y1) in zip(nodes, nodes[1:]):
+            for q in range(4):  # the front / back split follows the orbit, so a bolt passes from behind to in front mid-segment
+                t0, t1 = q / 4, (q + 1) / 4
+                lay = front if math.sin(a0 + (a1 - a0) * (t0 + t1) / 2) > 0 else back
+                lay.flat(L([(x0 + (x1 - x0) * t0, y0_ + (y1 - y0_) * t0), (x0 + (x1 - x0) * t1, y0_ + (y1 - y0_) * t1)], 1), YELLOW)
+        for a, x, y in nodes[1:-1]:  # white-hot joints
+            sdot(front if math.sin(a) > 0 else back, round(x), round(y), WHITE)
+    return back, front
+
+
 def bolt_godspeed_fx(f: Image.Image, k: int, tips=None) -> Image.Image:
-    """An outlined godspeed frame with its glow behind and crisp yellow arcs jumping off his sides (new ones every frame,
-    seeded by `k`, so they flicker)."""
+    """An outlined godspeed frame with its glow behind, thin yellow bolts coiling round him (back halves behind the body, front
+    halves over it, never over his head) and short arcs jumping between quill tips; new ones every frame, seeded by `k`."""
     w, h = f.size
     px = f.load()
-    roots = [(x, y) for y in range(54, 64) for x in range(1, w - 1) if px[x, y][3] and not all(
-        px[x + dx, y + dy][3] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
     rng = random.Random(BOLT_ARC_SEEDS + k * 37)
+    back, front = bolt_wrap_bolts(rng, k)
     c = Canvas(CELL)
-    arcs_from(c, rng, rng.sample(roots, min(90, len(roots))), (48, 52), 4, (10, 20), forks=0.6, glow=YELLOW, tip=WHITE, jit=2.8)
-    for _ in range(3 if tips else 0):  # arcs jump between neighbouring quill tips, a different pair each frame
+    for _ in range(2 if tips else 0):  # arcs jump between neighbouring quill tips, a different pair each frame
         j = rng.randrange(len(tips) - 1)
         zap_arc(c, zap_zig(rng, tips[j], tips[j + 1], 3, 2.2), YELLOW, WHITE, tip=WHITE)
     out = bolt_glow(f, k)
+    for lay in (back, front, c):  # bolts stay clear of the frame's edge; those in front and the tip arcs never cross his head or hair
+        for y in range(h):
+            for x in range(w):
+                if lay.px[x, y][3] and (x < 2 or y < 2 or x >= w - 2 or y >= h - 2 or (lay is not back and y < 58 and px[x, y][3])):
+                    lay.px[x, y] = (0, 0, 0, 0)
+    out.alpha_composite(back.img)
     out.alpha_composite(f)
-    for y in range(h):  # arcs stay clear of the frame's edge, and never cross his head or hair
-        for x in range(w):
-            if c.px[x, y][3] and (x < 2 or y < 2 or x >= w - 2 or y >= h - 2 or (y < 58 and px[x, y][3])):
-                c.px[x, y] = (0, 0, 0, 0)
+    out.alpha_composite(front.img)
     out.alpha_composite(c.img)
     return out
 
@@ -4284,19 +4321,19 @@ def arc_zapper(c: Canvas, t: int = 0) -> None:
     c.part(P([(27, 6), (40, 5), (40, 7), (29, 9)]), STEEL_D, shade=False)  # upper prong
     c.part(P([(27, 12), (40, 13), (40, 15), (29, 15)]), STEEL_D, shade=False)  # lower prong
     rng = random.Random(30 + t)
-    zap_arc(c, zap_zig(rng, (40, 7), (40, 13), 3, 2.5 + t % 2), TEAL_L)  # the spark between the tips
+    zap_arc(c, zap_zig(rng, (40, 7), (40, 13), 3, 2.5 + t % 2), YELLOW)  # the spark between the tips
     sdot(c, 41, 10, WHITE)
-    c.dot(5, 8, TEAL_L)
+    c.dot(5, 8, YELLOW)
 
 
 def zap_shot(c: Canvas, f: int) -> None:  # Arc Zapper: a short zig-zag spark; the kinks flip each frame
     m = PROJ // 2
     s = -1 if f else 1
     pts = [(4, m), (6, m - 3 * s), (9, m + 3 * s), (11, m - 3 * s), (13, m + 2 * s), (15, m)]
-    c.flat(L(pts, 2), TEAL_L)
+    c.flat(L(pts, 2), YELLOW)
     c.flat(L(pts, 1), WHITE)
-    c.dot(15, m, YELLOW)
-    c.dot(4, m, BLUE)
+    c.dot(15, m, ORANGE)
+    c.dot(4, m, ORANGE)
 
 
 # --- Overdrive FX (SpecialFx draws them from synced state) ---
@@ -4313,11 +4350,14 @@ def overdrive_frame(k: int) -> Image.Image:
     c = Canvas(CELL)
     rng = random.Random(8100 + k * 53)
     roots = [(48 + math.cos(a) * 13, 52 + math.sin(a) * 18) for a in (rng.uniform(0, math.tau) for _ in range(14))]
-    arcs_from(c, rng, roots, (48, 52), 6, (14, 27), forks=0.8, jit=3.0)
+    arcs_from(c, rng, roots, (48, 52), 5, (14, 27), forks=0.8, glow=YELLOW, jit=3.0)
     arcs_from(c, rng, roots, (48, 52), 2, (8, 12), forks=0, glow=YELLOW, jit=2.0)
     for _ in range(10):
         a, r = rng.uniform(0, math.tau), rng.uniform(24, 41)
-        sdot(c, round(48 + math.cos(a) * r), round(52 + math.sin(a) * r * 0.9), rng.choice((WHITE, YELLOW, TEAL_L)))
+        sdot(c, round(48 + math.cos(a) * r), round(52 + math.sin(a) * r * 0.9), rng.choice((WHITE, YELLOW, ORANGE)))
+    for y in range(8, 57):  # never over his face or hair: the coiling bolts in his own sheet cover the head's side
+        for x in range(26, 71):
+            c.px[x, y] = (0, 0, 0, 0)
     return outline(c.img)
 
 
@@ -4335,7 +4375,7 @@ def bolt_ghost_frame(k: int) -> Image.Image:
         for x in range(src.width):
             r, g, b, a = px[x, y]
             if a and (r, g, b) != OUTLINE:
-                px[x, y] = (TEAL_L if (x + y) % 2 else BLUE) + (255,)
+                px[x, y] = (YELLOW if (x + y) % 2 else ORANGE) + (255,)
     rng = random.Random(900 + k)
     for y in rng.sample(range(34, 80, 2), 9):
         row = [x for x in range(src.width) if px[x, y][3]]
@@ -4343,7 +4383,7 @@ def bolt_ghost_frame(k: int) -> Image.Image:
             continue
         x0, ln = min(row) - 2, rng.randint(7, 24)
         for x in range(max(x0 - ln, 3), x0):
-            px[x, y] = (WHITE if x > x0 - 3 else TEAL_L if x % 3 else BLUE) + (255,)
+            px[x, y] = (WHITE if x > x0 - 3 else YELLOW if x % 3 else ORANGE) + (255,)
     return src
 
 
@@ -4359,7 +4399,7 @@ def bolt_crack_frame(k: int) -> Image.Image:
     if reach:
         end = (foot[0], 4 + (foot[1] - 4) * reach)
         pts = zap_zig(rng, (m + 4, 4), end, 8, 5)
-        c.flat(L(pts, width + 2), TEAL_L)
+        c.flat(L(pts, width + 2), ORANGE)
         c.flat(L(pts, width), WHITE)
         for x, y in pts[1:-1:2]:
             sdot(c, x, y, YELLOW)
@@ -4367,21 +4407,21 @@ def bolt_crack_frame(k: int) -> Image.Image:
             fx, fy = pts[j]
             side = 1 if j == 2 else -1
             e = (fx + side * rng.randint(12, 20), fy + rng.randint(6, 14))
-            zap_arc(c, zap_zig(rng, (fx, fy), e, 3, 3), TEAL_L if k > 1 else WHITE, tip=YELLOW)
+            zap_arc(c, zap_zig(rng, (fx, fy), e, 3, 3), YELLOW if k > 1 else WHITE, tip=YELLOW)
     if 1 <= k <= 9:  # flash at the feet, then a squashed ring racing out over the floor
         r = (0, 6, 11, 14, 11, 8, 5, 3, 2, 1)[k]
         if r:
-            c.flat(E((foot[0] - r, foot[1] - r * 0.5, foot[0] + r, foot[1] + r * 0.5)), WHITE if k < 4 else TEAL_L)
+            c.flat(E((foot[0] - r, foot[1] - r * 0.5, foot[0] + r, foot[1] + r * 0.5)), WHITE if k < 4 else YELLOW)
         rr = 6 + k * 5
         c.flat(lambda d, f: d.ellipse((foot[0] - rr, foot[1] - rr * 0.35, foot[0] + rr, foot[1] + rr * 0.35),
-                                      outline=f, width=2 if k < 6 else 1), TEAL_L if k < 6 else BLUE)
+                                      outline=f, width=2 if k < 6 else 1), YELLOW if k < 6 else ORANGE)
     for j in range(10 if k >= 1 else 0):  # sparks thrown out, fading with k
         a = rng.uniform(-3.1, 0.0)
         r = (k - 1) * rng.uniform(2.5, 6)
         life = max(0.0, 1 - k / BOLT_CRACK_FRAMES)
         if r > 0 and rng.random() < life + 0.2:
             sdot(c, round(foot[0] + math.cos(a) * r * 1.3), round(foot[1] + math.sin(a) * r * 0.9),
-                 (WHITE, YELLOW, TEAL_L)[j % 3])
+                 (WHITE, YELLOW, ORANGE)[j % 3])
     return outline(c.img)
 
 
@@ -4394,7 +4434,7 @@ def bolt_fizzle_frame(k: int) -> Image.Image:
     life = 1 - k / n
     roots = [(48 + math.cos(a) * 13, 52 + math.sin(a) * 18) for a in (rng.uniform(0, math.tau) for _ in range(10))]
     if life > 0.25:
-        arcs_from(c, rng, roots, (48, 52), round(5 * life) + 1, (6 * life + 4, 16 * life + 6), forks=0.3, jit=2.0)
+        arcs_from(c, rng, roots, (48, 52), round(5 * life) + 1, (6 * life + 4, 16 * life + 6), forks=0.3, glow=YELLOW, jit=2.0)
     for j in range(3):  # smoke puffs
         if k >= 2 + j:
             age = k - 2 - j
@@ -4404,7 +4444,7 @@ def bolt_fizzle_frame(k: int) -> Image.Image:
     for _ in range(6):  # last sparks, dropping
         x, y = round(48 + rng.uniform(-24, 24)), round(40 + rng.uniform(-10, 14) + k * 2.2)
         if rng.random() < life + 0.15:
-            sdot(c, x, y, rng.choice((YELLOW, TEAL_L, WHITE)) if k < n - 3 else YELLOW)
+            sdot(c, x, y, rng.choice((YELLOW, ORANGE, WHITE)) if k < n - 3 else YELLOW)
     return outline(c.img)
 
 
@@ -4414,9 +4454,9 @@ def bolt_spark_frame(k: int) -> Image.Image:
     rng = random.Random(21 + k // 2)  # the shape holds for two frames
     ln = (11, 20, 25, 23, 14, 6)[k]
     pts = zap_zig(rng, (32, 32), (32 + ln, 32 - ln * 0.5), 4, 4)
-    zap_arc(c, pts, TEAL_L if k < 4 else BLUE, tip=WHITE if k < 4 else None)
+    zap_arc(c, pts, YELLOW if k < 4 else ORANGE, tip=WHITE if k < 4 else None)
     if 1 <= k <= 3:
-        zap_arc(c, zap_zig(rng, pts[1], (pts[1][0] - 9, pts[1][1] + 12), 3, 3), TEAL_L, tip=YELLOW)
+        zap_arc(c, zap_zig(rng, pts[1], (pts[1][0] - 9, pts[1][1] + 12), 3, 3), YELLOW, tip=YELLOW)
     return outline(c.img)
 
 
