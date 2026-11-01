@@ -339,8 +339,133 @@ def variant_g2():
     return variant_g(mask=True)
 
 
+# --- H: G with a loose, baggy hoodie and a hood that is its own grey shape ----------------------------------------------------
+def baggy_hoodie(up: Canvas) -> None:
+    """Oversized hoodie: wide boxy body, sleeves that droop past the wrists in bunched cuffs, a low ribbed hem, a big pocket."""
+    # back sleeve (left), hanging loose and wider than the arm, cuff bunched over the hand
+    up.part(RR((8, 34, 20, 51), 5), SHADOW)
+    up.flat(L([(10, 38), (10, 45)], 1), STEEL_D)  # lit fold on the sleeve
+    up.flat(L([(15, 41), (17, 46)], 1), BLACK)  # crease
+    up.part(RR((7, 47, 20, 52), 2), BLACK)  # bunched cuff
+    up.flat(L([(8, 47), (19, 47)], 1), STEEL_D)
+    up.flat(L([(9, 49), (18, 49)], 1), SHADOW)
+    # torso: much wider than the shoulders, boxy, falling past the hips
+    up.part(RR((14, 31, 50, 50), 7), SHADOW)
+    up.flat(L([(17, 34), (15, 42)], 1), STEEL_D)  # lit edge, left
+    up.flat(L([(22, 38), (20, 44)], 1), STEEL_D)  # folds
+    up.flat(L([(41, 36), (44, 44)], 1), BLACK)
+    up.flat(L([(28, 45), (30, 49)], 1), BLACK)
+    up.flat(L([(36, 44), (38, 48)], 1), STEEL_D)
+    # ribbed hem band hanging low
+    up.part(R((14, 47, 49, 50)), BLACK)
+    up.flat(L([(15, 47), (48, 47)], 1), STEEL_D)
+    for x in range(17, 48, 3):
+        up.flat(L([(x, 48), (x, 49)], 1), SHADOW)
+    # big kangaroo pocket, both fists pushing it out, sleeve cuffs drooping into the openings
+    up.part(P([(19, 40), (45, 40), (49, 47), (15, 47)]), BLACK)
+    up.flat(L([(19, 40), (45, 40)], 1), STEEL_D)
+    up.flat(L([(19, 40), (15, 47)], 1), STEEL_D)
+    up.flat(L([(45, 40), (49, 47)], 1), SHADOW)
+    for x in (23, 36):
+        up.part(E((x, 41, x + 7, 47)), SHADOW)
+        up.flat(L([(x + 1, 43), (x + 4, 42)], 1), STEEL_D)
+    # front sleeve (right), its cuff bunched at the pocket edge
+    up.part(RR((43, 34, 55, 49), 5), SHADOW)
+    up.flat(L([(45, 37), (45, 43)], 1), STEEL_D)
+    up.flat(L([(51, 40), (52, 45)], 1), BLACK)
+    up.part(RR((43, 45, 56, 50), 2), BLACK)
+    up.flat(L([(44, 45), (55, 45)], 1), STEEL_D)
+    up.flat(L([(45, 47), (54, 47)], 1), SHADOW)
+
+
+def variant_h(mask: bool = False):
+    low = Canvas()
+    grin_shadow(low)
+    wisps(low, ((16, 58), (49, 58)))
+    jogger_legs(low, SHADOW, RED, stripe=RED)
+    up = Canvas()
+    # hood volume behind the head and neck: a grey bunched collar, visible around the shoulders
+    baggy_hoodie(up)
+    if not mask:
+        up.part(P([(21, 32), (43, 32), (40, 40), (32, 44), (24, 40)]), RED)  # bandana round the neck
+        up.flat(L([(22, 33), (42, 33)], 1), ORANGE)
+        for x, y in ((28, 37), (33, 40), (37, 36)):
+            up.dot(x, y, WHITE)
+        up.part(P([(41, 34), (47, 38), (46, 43), (41, 40)]), RED)
+    # drawstrings dangling at different lengths with aglets
+    up.flat(L([(26, 35), (25, 40), (26, 46)], 1), WHITE)
+    up.flat(R((26, 46, 26, 47)), RED)
+    up.flat(L([(36, 35), (37, 39), (36, 42)], 1), WHITE)
+    up.flat(R((36, 42, 36, 43)), RED)
+    # the hood: its own big grey shape, loose around the head, slouching back to a soft peak
+    up.part(lambda d, f: (d.ellipse((11, 3, 53, 38), f), d.polygon(
+        [(11, 18), (4, 29), (9, 28), (8, 39), (17, 35), (21, 41), (25, 32), (25, 20)], f),
+        d.polygon([(14, 12), (11, 4), (20, 6), (26, 5)], f)), SHADOW)  # drape + a soft slouched peak
+    up.flat(L([(15, 14), (13, 7), (20, 6)], 1), STEEL_D)  # lit peak
+    up.flat(L([(18, 8), (28, 4), (39, 5), (47, 9)], 2), STEEL_D)  # lit crown, two px thick
+    up.flat(L([(12, 20), (7, 28), (10, 30)], 1), STEEL_D)  # lit drape
+    up.flat(L([(31, 5), (38, 9), (44, 15)], 1), BLACK)  # a seam / fold across the crown
+    up.flat(L([(32, 6), (39, 10)], 1), STEEL_D)
+    up.flat(L([(51, 20), (52, 28)], 1), BLACK)  # shaded far side
+    up.flat(L([(14, 34), (19, 37)], 1), BLACK)  # fold at the drape's bottom
+    # opening: lit lip, then the hood's dark lining, then the face
+    up.flat(RR((FACE[0] - 4, FACE[1] - 5, FACE[2] + 3, FACE[3] + 1), FACE_R + 4), STEEL)
+    up.flat(RR((FACE[0] - 3, FACE[1] - 4, FACE[2] + 2, FACE[3] + 1), FACE_R + 3), BLACK)
+    face_base(up)
+    up.part(P([(23, 25), (23, 16), (26, 13), (26, 7), (30, 12), (33, 5), (36, 13), (40, 8), (41, 14), (45, 12), (46, 17),
+               (45, 22), (43, 18), (41, 20), (38, 18), (34, 20), (30, 18), (26, 20), (25, 27)]), OUTLINE, shade=False)
+    up.flat(L([(26, 9), (27, 11)], 1), STEEL_D)
+    up.flat(L([(33, 7), (34, 10)], 1), STEEL_D)
+    up.flat(L([(40, 10), (40, 12)], 1), STEEL_D)
+    up.flat(L([(29, 14), (33, 16)], 1), SHADOW)
+    up.part(P([(23, 24), (21, 31), (25, 29)]), OUTLINE, shade=False)
+    violet_eyes(up)
+    brows(up, 0)
+    if mask:
+        up.part(P([(24, 28), (46, 27), (45, 33), (38, 38), (31, 35), (25, 33)]), RED)
+        up.flat(L([(25, 28), (45, 27)], 1), ORANGE)
+        for x, y in ((31, 31), (37, 33), (42, 30)):
+            up.dot(x, y, WHITE)
+        up.part(P([(24, 29), (18, 34), (19, 39), (24, 34)]), RED)
+        up.flat(R((g.BLUSH[0], 29, g.BLUSH[0] + 1, 29)), ORANGE)
+    else:
+        smirk(up, tooth=False, tongue=True)
+    up.dot(21, 31, STEEL)
+    return low, up
+
+
+def variant_h2():
+    return variant_h(mask=True)
+
+
+def gh() -> None:
+    cols = [("G", variant_g), ("H", variant_h), ("H2", variant_h2)]
+    panels = []
+    games = []
+    for label, build in cols:
+        im = idle_frame(build)
+        bg = Image.new("RGBA", (g.CELL * 5, g.CELL * 5), (60, 56, 52, 255))
+        bg.alpha_composite(nn(im, 5))
+        panels.append(labelled(bg, label))
+        games.append(labelled(ingame(im), f"{label} in game"))
+    w = max(sum(p.width for p in panels) + 32, games[0].width + 16)
+    h = panels[0].height + sum(x.height for x in games) + 24 + 8 * len(games)
+    out = Image.new("RGBA", (w, h), (24, 24, 32, 255))
+    x = 8
+    for p in panels:
+        out.alpha_composite(p, (x, 8))
+        x += p.width + 8
+    y = panels[0].height + 16
+    for gm in games:
+        out.alpha_composite(gm, (8, y))
+        y += gm.height + 8
+    out.convert("RGB").save(OUT_DIR / "shadow_gh.png")
+
+
 EXTRA = (("G", variant_g, "E with a real hoodie: hood up over messy hair, violet eyes, tongue out"),
-         ("G2", variant_g2, "G with the bandana pulled up over his mouth"))
+         ("G2", variant_g2, "G with the bandana pulled up over his mouth"),
+         ("H", variant_h, "baggy hoodie, grey hood with a lit rim, violet eyes, tongue out"),
+         ("H2", variant_h2, "H with the bandana pulled up over his mouth"))
 
 
 def sheet_for(letter: str, build, blurb: str) -> Image.Image:
@@ -355,6 +480,7 @@ def sheet_for(letter: str, build, blurb: str) -> Image.Image:
 
 
 def extras() -> None:
+    gh()
     for letter, build, blurb in EXTRA:
         sheet_for(letter, build, blurb).convert("RGB").save(OUT_DIR / f"shadow_{letter.lower()}.png")
     pair = [("E", variant_e, "E"), ("G", variant_g, "G (hoodie, violet eyes)")]
