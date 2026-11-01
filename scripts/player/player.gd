@@ -8,6 +8,8 @@ signal died(victim: Player, killer_id: int)
 signal shot_fired(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName)
 ## Predicted/authoritative skill activation (not emitted during replay). For effects/SFX.
 signal skill_used(user: Player, skill: SkillData)
+## Verdant Bloom healed this player by `amount` (seen from the synced hp, so on every peer).
+signal healed(user: Player, amount: int)
 
 ## Layout of capture_state() / apply_state() arrays sent in snapshots.
 enum StateField {
@@ -162,6 +164,7 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	add_child(_overlay)
 	add_child(_special_fx)
 	_ward.caught.connect(_special_fx.petal_pop)
+	_special_fx.healed.connect(func(amount: int) -> void: healed.emit(self, amount))
 	# The walls players move against (shifted to the feet): standing under a wall puts the centre inside the wall
 	# itself, and a ray starting inside a wall misses it, so clones ran out through it (even past the border).
 	# Grapple Kunai casts against them too, so it only bites walls she can stand against.

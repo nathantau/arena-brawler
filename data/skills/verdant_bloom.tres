@@ -14,6 +14,6 @@ blurb = "Healing moss"
 tags = Array[StringName]([&"eden"])
 cooldown = 11.0
 duration = 5.0
-bloom_radius = 70.0
+bloom_radius = 52.0
 bloom_heal = 3
 bloom_interval = 0.5

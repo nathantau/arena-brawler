@@ -4271,19 +4271,23 @@ def eden_aura(i: int) -> Canvas:
 
 # --- Seed Sling (weapon) and its seed pod ---
 def seed_sling(c: Canvas, t: int = 0) -> None:
-    """A short barrel of gnarled bark with a flared leaf-green bell, a seed pod loaded in the mouth."""
+    """A short wooden Y-shaped slingshot: a stubby handle forking into two prongs, a vine band running between their
+    tips with a seed pod loaded in the pouch, a little moss on the fork."""
     grip(c)
-    c.part(R((3, 8, 27, 13)), BROWN)
-    for x in (8, 14, 20):  # bark grain
-        c.flat(L([(x, 8), (x, 12)], 1), MAROON)
-    c.flat(R((4, 8, 12, 8)), GREEN)  # moss
-    c.dot(17, 8, GREEN_L)
-    c.part(P([(27, 6), (36, 4), (36, 17), (27, 14)]), GREEN)  # flared bell
-    c.flat(L([(29, 7), (35, 6)], 1), GREEN_L)
-    c.part(E((34, 5, 44, 16)), GREEN_D)  # the pod, sitting in the mouth
-    c.flat(E((36, 7, 38, 9)), GREEN_L)
-    c.dot(40, 12, GREEN_L)
-    c.dot(41, 7, YELLOW)
+    c.part(R((3, 9, 18, 13)), BROWN)  # handle
+    c.flat(L([(7, 9), (7, 12)], 1), MAROON)  # bark grain
+    c.flat(L([(12, 9), (12, 12)], 1), MAROON)
+    c.part(L([(17, 10), (31, 3)], 3), BROWN)  # upper prong
+    c.part(L([(17, 11), (31, 18)], 3), BROWN)  # lower prong
+    c.flat(R((16, 9, 20, 9)), GREEN)  # moss on the fork
+    c.dot(18, 8, GREEN_L)
+    c.flat(L([(32, 3), (26, 10)], 1), GREEN_D)  # the band, drawn back to the pouch
+    c.flat(L([(32, 18), (26, 11)], 1), GREEN_D)
+    c.part(E((24, 8, 29, 13)), BROWN)  # pouch
+    c.part(E((26, 7, 35, 14)), GREEN_D)  # the pod, riding in front of it
+    c.flat(E((28, 9, 30, 11)), GREEN_L)
+    c.dot(33, 12, GREEN_L)
+    c.dot(33, 8, YELLOW)
 
 
 def seed_pod_shot(c: Canvas, f: int) -> None:  # a plump pod tumbling, two leaves trailing
@@ -4346,10 +4350,9 @@ def eden_burst_frame(k: int) -> Image.Image:
 # --- Bark Skin FX (96 px cells like her sheet, drawn over her) ---
 # Plates: (polygon in sheet-art coordinates, name)
 BARK_PLATES = (
-    ([(21, 34), (43, 34), (41, 46), (23, 46)], "chest"),
-    ([(10, 31), (22, 30), (23, 41), (13, 43)], "lshoulder"),
-    ([(42, 30), (54, 31), (51, 43), (41, 41)], "rshoulder"),
-    ([(19, 9), (45, 8), (46, 12), (19, 13)], "brow"),
+    ("chest", "rr", (19, 38, 45, 51)),  # hugs the torso box (BODY)
+    ("lshoulder", "rr", (14, 39, 22, 50)),  # the small arms, front and back
+    ("rshoulder", "rr", (42, 39, 50, 50)),
 )
 BARK_CELL = 96
 
@@ -4365,8 +4368,8 @@ def bark_frame(k: int, n: int, mode: str) -> Image.Image:
         out = (1 - min(1.0, u * 1.35)) ** 2 * 16
     cx, cy = 32 + PAD, 40 + PAD
     s = SWAY[k % 4]
-    for pts, name in BARK_PLATES:
-        pts = [(x + PAD, y + PAD) for x, y in pts]
+    for name, _kind, box in BARK_PLATES:
+        pts = [(box[0] + PAD, box[1] + PAD), (box[2] + PAD, box[1] + PAD), (box[2] + PAD, box[3] + PAD), (box[0] + PAD, box[3] + PAD)]
         gx = sum(p[0] for p in pts) / len(pts)
         gy = sum(p[1] for p in pts) / len(pts)
         dx, dy = gx - cx, gy - cy
@@ -4382,19 +4385,19 @@ def bark_frame(k: int, n: int, mode: str) -> Image.Image:
             ox, oy = dx / ln * 14 * u, dy / ln * 6 * u + 26 * fall
             shrink = 1 - 0.55 * u
         q = [(round(gx + (x - gx) * shrink + ox), round(gy + (y - gy) * shrink + oy)) for x, y in pts]
-        c.part(P(q), BROWN)
-        if name == "chest" or name.endswith("shoulder"):
-            for j in range(1, 3):  # grain
-                a, b = q[0], q[3]
-                x0 = round(a[0] + (q[1][0] - a[0]) * j / 3)
-                y0 = round(a[1] + (q[1][1] - a[1]) * j / 3 + 2)
-                c.flat(L([(x0, y0), (x0 + (b[0] - a[0]) // 4, y0 + max(2, (b[1] - a[1]) // 2))], 1), MAROON)
+        c.part(RR((q[0][0], q[0][1], q[2][0], q[2][1]), 3 if name == "chest" else 2), BROWN)
+        w = q[2][0] - q[0][0]
+        for j in range(1, 3 if name == "chest" else 2):  # bark grain
+            x0 = q[0][0] + round(w * j / (3 if name == "chest" else 2))
+            c.flat(L([(x0, q[0][1] + 3), (x0 + (j % 2), q[2][1] - 3)], 1), MAROON)
+        if name == "chest":
+            c.flat(R((q[0][0] + 2, q[2][1] - 4, q[2][0] - 2, q[2][1] - 4)), MAROON)  # a lower ridge
         if mode != "off" or u < 0.5:
-            tx, ty = q[0][0] + (q[1][0] - q[0][0]) // 2, q[0][1]
+            tx, ty = (q[0][0] + q[2][0]) // 2, q[0][1]
             c.flat(R((tx - 3, ty, tx + 2, ty)), GREEN)  # moss on top
             c.dot(tx, ty - 1, GREEN_L)
     if mode == "loop" or (mode == "on" and u > 0.6):  # sprouts growing out of the plates
-        for sx, sy, col in ((24, 33, GREEN_L), (41, 32, GREEN), (32, 33, GREEN_L), (16, 29, GREEN)):
+        for sx, sy, col in ((25, 38, GREEN_L), (40, 38, GREEN), (32, 38, GREEN_L), (17, 39, GREEN)):
             draw_leaf(c, sx + PAD, sy + PAD, -1.57 + (0.5 if sx > 32 else -0.5) + s * 0.12, 5, 1.8, col, shade=False)
     if mode == "off":
         for i in range(9):  # chunks fall and spores rise
@@ -4422,8 +4425,8 @@ def bark_frame(k: int, n: int, mode: str) -> Image.Image:
 
 
 # --- Verdant Bloom FX (a moss patch on the floor; drawn under the players) ---
-MOSS_SIZE = 112
-MOSS_R = 46  # art px the patch reaches (the skill's 70 px radius / 1.5)
+MOSS_SIZE = 90
+MOSS_R = 35  # art px the patch reaches (the skill's 52 px radius / 1.5)
 MOSS_GROW_FRAMES = 12
 MOSS_LOOP_FRAMES = 8
 MOSS_WILT_FRAMES = 12
@@ -4440,8 +4443,28 @@ def _dither_cut(img: Image.Image, u: float) -> Image.Image:
     return out
 
 
+def _moss_holes(img: Image.Image) -> Image.Image:
+    """See-through moss: the rim is dithered away and a few specks inside, so the floor shows through."""
+    out = img.copy()
+    px = out.load()
+    src = img.load()
+    w, h = img.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = src[x, y]
+            if not a or (r, g, b) == OUTLINE:
+                continue
+            rim = any(not (0 <= x + dx < w and 0 <= y + dy < h) or not src[x + dx, y + dy][3]
+                      for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (1, 1), (-1, 1), (1, -1)))
+            if (rim and (x + y) % 2 == 0) or (not rim and ((x * 73856093) ^ (y * 19349663)) % 9 == 0):
+                px[x, y] = (0, 0, 0, 0)
+    return out
+
+
 def moss_frame(k: int, n: int, mode: str) -> Image.Image:
-    rng = random.Random(51)
+    """A mossy patch: dark irregular mat (dithered rim and specks, so the floor shows through), short grass tufts
+    that sway and a few tiny flowers; grows in, loops, wilts."""
+    rng = random.Random(52)
     c = Canvas(MOSS_SIZE)
     m = MOSS_SIZE // 2
     u = k / max(1, n - 1)
@@ -4451,43 +4474,37 @@ def moss_frame(k: int, n: int, mode: str) -> Image.Image:
         grow = 0.25 + 0.75 * math.sin(min(1.0, u * 1.25) * math.pi / 2)
         sprout = max(0.0, (u - 0.35) / 0.65)
     elif mode == "wilt":
-        grow = 1.0 - 0.12 * u
+        grow = 1.0 - 0.1 * u
         sprout = max(0.0, 1 - u * 1.6)
-    lumps = [(math.tau * i / 11 + rng.uniform(-0.2, 0.2), rng.uniform(0.62, 0.9), rng.uniform(0.2, 0.3)) for i in range(11)]
-    # base: dark moss, then a lighter mat on top
-    c.part(blobs([(m + math.cos(a) * MOSS_R * d * grow, m + math.sin(a) * MOSS_R * d * 0.62 * grow, round(MOSS_R * r * grow))
-                  for a, d, r in lumps] + [(m, m, round(MOSS_R * 0.55 * grow))]), GREEN_D)
-    c.part(blobs([(m + math.cos(a) * MOSS_R * d * 0.82 * grow, m + math.sin(a) * MOSS_R * d * 0.5 * grow, round(MOSS_R * r * 0.7 * grow))
-                  for a, d, r in lumps] + [(m, m, round(MOSS_R * 0.4 * grow))]), GREEN)
-    for _ in range(14):  # tufts of lighter moss
-        a, d = rng.uniform(0, math.tau), rng.uniform(0.1, 0.8)
-        x, y = m + math.cos(a) * MOSS_R * d * grow, m + math.sin(a) * MOSS_R * d * 0.55 * grow
-        c.flat(R((round(x) - 2, round(y), round(x) + 2, round(y))), GREEN_L)
-        c.dot(round(x), round(y) - 1, GREEN_L)
-    if mode == "wilt":  # it browns as it dies
-        for _ in range(int(40 * u)):
-            a, d = rng.uniform(0, math.tau), rng.uniform(0.0, 0.9)
-            sdot(c, round(m + math.cos(a) * MOSS_R * d), round(m + math.sin(a) * MOSS_R * d * 0.6), BROWN)
-    img = outline(c.img)
+    lumps = [(math.tau * i / 15 + rng.uniform(-0.15, 0.15), rng.uniform(0.55, 0.95), rng.uniform(0.14, 0.26)) for i in range(15)]
+    pts = lambda f, sq: [(m + math.cos(a) * MOSS_R * d * f * grow, m + math.sin(a) * MOSS_R * d * 0.6 * f * grow,
+                          round(MOSS_R * r * sq * grow)) for a, d, r in lumps]
+    c.part(blobs(pts(1.0, 1.0) + [(m, m, round(MOSS_R * 0.5 * grow))]), GREEN_D)
+    c.part(blobs(pts(0.78, 0.7) + [(m, m, round(MOSS_R * 0.35 * grow))]), GREEN, shade=False)
+    img = _moss_holes(outline(c.img))
     if mode == "wilt":
+        for _ in range(int(30 * u)):
+            a, d = rng.uniform(0, math.tau), rng.uniform(0.0, 0.8)
+            xx, yy = round(m + math.cos(a) * MOSS_R * d), round(m + math.sin(a) * MOSS_R * d * 0.55)
+            if img.getpixel((xx, yy))[3]:
+                img.putpixel((xx, yy), BROWN + (255,))
         img = _dither_cut(img, max(0.0, (u - 0.45) / 0.55))
     c = Canvas(MOSS_SIZE)
     c.img = img
     c.px = img.load()
-    # grass blades and little flowers (bright, over the outline): they sway, and pop up late in the grow-in
     sway = SWAY[k % 4]
-    for j in range(46):
-        a, d = rng.uniform(0, math.tau), math.sqrt(rng.uniform(0.02, 0.85))
+    for j in range(34):  # grass tufts (bright, over the mat) and tiny flowers
+        a, d = rng.uniform(0, math.tau), math.sqrt(rng.uniform(0.04, 0.92))
         x, y = m + math.cos(a) * MOSS_R * d * grow, m + math.sin(a) * MOSS_R * d * 0.55 * grow
-        h = round(rng.randint(4, 8) * sprout)
+        h = round(rng.randint(3, 6) * sprout)
         if h < 1:
             continue
-        lean = sway * (1 if j % 2 else -1) * (1 if h > 3 else 0)
-        col = GREEN_L if j % 3 else YELLOW if j % 7 == 0 else GREEN
-        c.flat(L([(round(x), round(y)), (round(x) + lean, round(y) - h)], 1), GREEN_L if j % 2 else GREEN)
-        sdot(c, round(x) + lean, round(y) - h, col)
-        if j % 7 == 0 and h >= 4:  # a tiny flower on a few
-            sdot(c, round(x) + lean, round(y) - h - 1, WHITE)
+        lean = (sway if j % 2 else -sway) if h > 3 else 0
+        x0, y0 = round(x), round(y)
+        c.flat(L([(x0, y0), (x0 + lean, y0 - h)], 1), GREEN_L if j % 3 else GREEN)
+        sdot(c, x0 + lean + (1 if j % 2 else -1), y0 - h + 1, GREEN_L)  # a second blade beside it
+        if j % 9 == 0 and h >= 4:
+            sdot(c, x0 + lean, y0 - h - 1, WHITE if j % 2 else YELLOW)
     return c.img
 
 
@@ -4515,46 +4532,59 @@ GUST_FRAMES = 12
 
 
 def gust_frame(k: int) -> Image.Image:
-    """A cone of wind: leaves and streaks ride swirling paths that spread as they leave her (the front sweeps out
-    first, the tail follows and thins away)."""
+    """A cone of wind: a faint dithered wedge with crisp edges sweeps out to the range, concentric wind streaks (curved
+    arcs, white with a green tail) rush through it and big leaves tumble out along the fan."""
     n = GUST_FRAMES
     t = k / (n - 1)
-    rng = random.Random(61)
+    rng = random.Random(62)
     c = Canvas(GUST_SIZE)
+    fx = Canvas(GUST_SIZE)  # the wedge and streaks: bright and unoutlined, under the leaves
     mid = GUST_SIZE // 2
-    spread = math.sin(GUST_HALF) * GUST_R * 0.85  # lateral reach at full range
-    front = GUST_R * min(1.0, math.sin(min(1.0, t * 1.7) * math.pi / 2))
-    back = GUST_R * max(0.0, (t - 0.35) / 0.65)
-
-    def path(r, lane, ph):  # (x, y) of a swirl lane at distance r
-        amp = spread * (0.18 + 0.82 * r / GUST_R)
-        return GUST_OX + r, mid + amp * (lane * 0.55 + 0.45 * math.sin(r * 0.085 + ph + t * 9))
-
-    for i in range(5):  # swirling wind streaks
-        lane = (i / 4 * 2 - 1)
-        ph = i * 1.3
-        r0, r1 = max(back, 8), min(front, GUST_R - 4)
-        if r1 - r0 < 8:
+    front = GUST_R * min(1.0, math.sin(min(1.0, t * 1.8) * math.pi / 2))
+    back = GUST_R * max(0.0, (t - 0.45) / 0.55)
+    pos = lambda r, a: (round(GUST_OX + r * math.cos(a)), round(mid + r * math.sin(a)))
+    # the wedge: dithered fill between the back and the front of the wind, with two crisp edges
+    for y in range(GUST_SIZE):
+        for x in range(GUST_SIZE):
+            dx, dy = x - GUST_OX, y - mid
+            r = math.hypot(dx, dy)
+            if back < r <= front and abs(math.atan2(dy, dx)) <= GUST_HALF and x % 2 == 0 and y % 2 == 0 and (x // 2 + y // 2) % 2 == 0:
+                sdot(fx, x, y, GREEN_L)
+    for sgn in (-1, 1):
+        edge = [pos(r, sgn * GUST_HALF) for r in range(int(max(back, 6)), int(front) - 1, 3)]
+        if len(edge) > 1:
+            fx.flat(L(edge, 1), GREEN_L)
+    # wind streaks: arcs across the cone at a few radii, sweeping outwards at different speeds
+    for i in range(8):
+        r = (t * (1.1 + 0.18 * i) + i * 0.17) % 1.0 * GUST_R
+        if r < 10 or r > front - 2 or r < back:
             continue
-        pts = [tuple(round(v) for v in path(r0 + (r1 - r0) * j / 9, lane, ph)) for j in range(10)]
-        c.flat(L(pts, 1), WHITE if i % 2 else GREEN_L)
-    for i in range(30):  # leaves
+        centre = rng.uniform(-0.25, 0.25)
+        span = rng.uniform(0.35, 0.55)
+        a0, a1 = centre - span, centre + span
+        for j in range(14):  # dashed: a head of white, then a green tail
+            aa = a0 + (a1 - a0) * j / 13
+            if abs(aa) > GUST_HALF * 0.92 or j % 5 == 4:
+                continue
+            x, y = pos(r - 2 * (j < 6), aa)
+            col = WHITE if j >= 7 else GREEN_L
+            for ox, oy in ((0, 0), (1, 0), (0, 1)):
+                sdot(fx, x + ox, y + oy, col)
+    # tumbling leaves fanning out along the aim
+    for i in range(14):
         born = rng.uniform(0, 0.4)
-        speed = rng.uniform(1.1, 1.8)
-        lane = rng.uniform(-1, 1)
-        ph = rng.uniform(0, math.tau)
+        speed = rng.uniform(1.1, 1.7)
+        lane = rng.uniform(-1, 1) * GUST_HALF * 0.85
         r = (t - born) * speed * GUST_R
-        if r <= 4 or r > GUST_R - 6:
+        if r <= 5 or r > GUST_R - 8:
             continue
-        x, y = path(r, lane, ph)
-        ang = math.atan2(math.cos(r * 0.085 + ph + t * 9) * 0.3, 1) + 2.6 * t * (1 if i % 2 else -1) + i
-        draw_leaf(c, x, y, ang, rng.choice((7, 8, 9)), 2.6, (GREEN, GREEN_L, GREEN, YELLOW, BROWN, GREEN_D)[i % 6], shade=False)
-    for i in range(10):  # specks of dust and seeds in the air
-        r = (t * 1.6 - rng.uniform(0, 0.5)) * GUST_R
-        x, y = path(r, rng.uniform(-1, 1), rng.uniform(0, 6))
-        if 4 < r < GUST_R - 4:
-            sdot(c, round(x), round(y), WHITE if i % 2 else GREEN_L)
-    return outline(c.img)
+        a = lane * (0.25 + 0.75 * r / GUST_R)
+        x, y = pos(r, a)
+        spin = rng.uniform(0, math.tau) + 3.0 * t * (1 if i % 2 else -1)
+        draw_leaf(c, x, y, spin, rng.choice((8, 9, 10)), 3.0, (GREEN, GREEN_L, GREEN, YELLOW, BROWN)[i % 5], shade=True,
+                  rib=None)
+    fx.img.alpha_composite(outline(c.img))
+    return fx.img
 
 
 CHARACTERS["eden"] = eden

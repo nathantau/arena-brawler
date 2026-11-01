@@ -7,7 +7,7 @@
 
 [resource]
 script = ExtResource("1_wd")
-muzzle_x = 43.0
+muzzle_x = 35.0
 projectile_sprite = ExtResource("9_proj")
 burst_art = ExtResource("10_burst")
 burst_art_radius = 31.0

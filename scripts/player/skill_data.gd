@@ -142,7 +142,7 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 
 
 @export_group("Bloom")
-@export var bloom_radius: float = 70.0
+@export var bloom_radius: float = 52.0
 @export var bloom_heal: int = 3
 ## Seconds between heals (the first falls one interval after the press).
 @export var bloom_interval: float = 0.5

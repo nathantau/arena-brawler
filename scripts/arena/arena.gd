@@ -180,6 +180,9 @@ func add_player(id: int, color_index: int, ctrl: PlayerController,
 	p.died.connect(_on_player_died)
 	p.shot_fired.connect(_on_player_shot)
 	p.skill_used.connect(_on_skill_used)
+	p.healed.connect(func(user: Player, amount: int) -> void:
+		if effects != null:
+			effects.heal_number(user.global_position + user.visual_offset - Vector2(0.0, Constants.HEAL_NUMBER_RISE), amount))
 	players.append(p)
 	_by_id[id] = p
 	if is_bot:

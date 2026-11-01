@@ -251,7 +251,7 @@ const MOSS_ART: Texture2D = preload(FX_DIR + "eden_moss.png")
 const MOSS_WILT_ART: Texture2D = preload(FX_DIR + "eden_moss_wilt.png")
 const HEAL_ART: Texture2D = preload(FX_DIR + "eden_heal.png")
 ## Art px from the patch's centre to its edge (generate.py MOSS_R): scaled to the skill's radius.
-const MOSS_ART_RADIUS: float = 46.0
+const MOSS_ART_RADIUS: float = 35.0
 const MOSS_FPS: float = 8.0
 const MOSS_STRIP_FPS: float = 24.0
 const HEAL_FPS: float = 12.0
@@ -383,6 +383,10 @@ var _bloom: CharacterSkill
 var _gust: CharacterSkill
 var _eden_at: Vector2 = Vector2.ZERO
 var _in_moss: bool = false
+var _last_hp: int = -1
+var _in_moss_was: bool = false
+## Her hp went up inside her own moss by this much (Player forwards it as `healed`).
+signal healed(amount: int)
 
 
 ## Marks on the floor (the cloud's shadow, a strike's scorch) draw here: above the arena floor, under the players.
@@ -511,8 +515,13 @@ func _sync_eden(p: Player) -> void:
 	var gust: CharacterSkill = _slot(p, SkillData.Kind.GUST)
 	_gust = gust if gust != null and gust.is_gusting() and not p.dead else null
 	_eden_at = p.global_position + p.visual_offset
+	var hp: int = p.stats.hp
+	if _in_moss_was and hp > _last_hp and _last_hp >= 0:
+		healed.emit(hp - _last_hp)
+	_last_hp = hp
 	_in_moss = _bloom != null and (p.global_position + Vector2(0.0, Player.FOOT_RING_Y)).distance_to(_bloom.anchor) \
 		<= _bloom.data.bloom_radius
+	_in_moss_was = _in_moss
 
 
 ## The plates over her: slam on, loop, shed over the last strip's length.

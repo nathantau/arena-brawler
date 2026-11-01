@@ -2067,3 +2067,21 @@ func test_bots_only_cast_edens_specials_when_they_help() -> void:
 	var bark: Player = _eden(w[0], w[1], &"bark_skin", 3)
 	assert_true(bot.special_useful(bark, 200.0))
 	assert_false(bot.special_useful(bark, 900.0), "no fight yet")
+
+
+func test_bloom_heal_is_announced_from_the_synced_hp_inside_the_moss() -> void:
+	var s: Array = _bloom_setup()
+	var p: Player = s[2]
+	await wait_physics_frames(2)
+	var got: Array[int] = []
+	p.healed.connect(func(_u: Player, amount: int) -> void: got.append(amount))
+	p.stats.hp = 50
+	_press_special(p, Vector2.RIGHT)
+	_idle(p, 2)
+	p._special_fx.sync(p)  # a sync inside the moss...
+	p.stats.hp = 53  # ...then the server's heal arrives
+	p._special_fx.sync(p)
+	assert_eq(got, [3], "a +3 for the 3 hp it healed")
+	p.stats.hp = 40  # damage is not a heal
+	p._special_fx.sync(p)
+	assert_eq(got.size(), 1)
