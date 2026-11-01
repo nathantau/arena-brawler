@@ -4316,10 +4316,6 @@ def draw_leaf(c: Canvas, x, y, ang, ln, w, col, shade=True, rib=None) -> None:
         c.flat(L([(round(x), round(y)), (round(x + math.cos(ang) * ln * 0.8), round(y + math.sin(ang) * ln * 0.8))], 1), rib)
 
 
-EDEN_MASK = [(22, 19), (26, 15), (32, 14), (36, 16), (39, 16), (43, 14), (48, 15), (51, 19), (49, 25), (47, 27),
-             (46, 22), (45, 19), (40, 19), (39, 25), (36, 25), (35, 19), (30, 19), (27, 21), (26, 27), (24, 26), (23, 22)]
-
-
 def _eden_face(c: Canvas, pose, between) -> None:
     """Sakura's face (full-width brow tapering to a small rounded chin, big eyes with a calm lid and a lash flick at each
     outer corner, blush on the narrower cheeks), with green irises and a little smile. `between` draws the hair and mask
@@ -4359,11 +4355,50 @@ def _eden_braid(c: Canvas, bx: int, sway: float, lagy) -> None:
         ox = round(sway * (i + 1) / 4)
         oy = lagy(i)
         y = 26 + i * 4 + oy
-        c.part(E((bx - 3 + ox, y, bx + 3 + ox, y + 6)), CHESTNUT)
-        c.flat(L([(bx - 2 + ox, y + 2), (bx - 1 + ox, y + 1)], 1), CHESTNUT_L)
+        c.part(E((bx - 2 + ox, y, bx + 3 + ox, y + 6)), CHESTNUT_L)
+        c.flat(L([(bx - 1 + ox, y + 2), (bx + ox, y + 1)], 1), SKIN)
     c.part(R((bx - 2 + ox, 44 + oy, bx + 2 + ox, 45 + oy)), CREAM, line=False)
-    c.part(P([(bx - 2 + ox, 46 + oy), (bx + 2 + ox, 46 + oy), (bx + ox + (1 if sway > 1 else 0), 49 + oy)]), CHESTNUT,
+    c.part(P([(bx - 2 + ox, 46 + oy), (bx + 2 + ox, 46 + oy), (bx + ox + (1 if sway > 1 else 0), 49 + oy)]), CHESTNUT_L,
            shade=False)
+
+
+def _eden_crown(c: Canvas, t: int, dy: int) -> None:
+    """A crown of thorns: a twisted dark bramble ring (two tones alternating along its length) on her head above the fringe,
+    small sharp thorns pointing out, and soft cream / peach / ochre petals nestled inside it (pointed rose or wildflower
+    petals, not blossoms). The back half of the ring goes down first, then the petals, then the front half over them. The
+    petals tremble a pixel on a stagger; `dy` is the crown's follow-through on the head's bob."""
+    cx, cy, rx, ry = 33, 9 + dy, 15, 4
+    path = []
+    for k in range(96):
+        a = math.tau * k / 96
+        p = (round(cx + rx * math.cos(a)), round(cy + ry * math.sin(a)))
+        if not path or path[-1][:2] != p:
+            path.append((p[0], p[1], a))
+
+    def vine(lo, hi):
+        for i, (x, y, a) in enumerate(path):
+            if lo <= a <= hi:
+                top, low = (WALNUT_D, OLIVE_D) if (i // 2) % 2 else (OLIVE_D, WALNUT_D)
+                c.dot(x, y, top)
+                c.dot(x, y + 1, low)
+
+    def thorns(angles):
+        for a in angles:
+            nx, ny = math.cos(a) / rx, math.sin(a) / ry
+            ln = math.hypot(nx, ny)
+            nx, ny = nx / ln, ny / ln
+            px, py = cx + rx * math.cos(a), cy + ry * math.sin(a)
+            c.dot(round(px + nx * 1.6), round(py + ny * 1.6 + 0.5), WALNUT)
+            c.dot(round(px + nx * 2.6), round(py + ny * 2.6 + 0.5), CREAM_D)
+
+    vine(math.pi, math.tau)
+    thorns((3.5, 4.0, 4.6, 5.2, 5.8))
+    for i, (x, y, ang, col) in enumerate(((26, 10, 0.5, CREAM), (30, 8, -0.7, SKIN), (35, 9, 1.2, CREAM),
+                                           (40, 8, -0.3, OCHRE), (44, 10, 0.9, CREAM))):
+        y += 1 if (t + i) % 4 == 0 and i % 2 else 0  # a stagger of one-pixel trembles
+        c.part(P(leaf_pts(x - 1, y - 2, ang, 6, 2.2)), col, line=False)
+    vine(0, math.pi)
+    thorns((0.4, 1.0, 1.6, 2.2, 2.8))
 
 
 def eden(step=None, t=0, pose=None, sway=None, flare=None):
@@ -4428,15 +4463,18 @@ def eden(step=None, t=0, pose=None, sway=None, flare=None):
         up.part(E((x - 1, 34 + squash, x + 7, 42 + (a if a > 0 else 0))), CREAM)
         up.flat(R((x + 1, 41 + (a if a > 0 else 0), x + 5, 41 + (a if a > 0 else 0))), OCHRE)
         if k == 0:
-            up.part(RR((21, 36, 43, 42), 3), BROWN)  # bark-brown corset
-            up.flat(L([(23, 39), (23, 40)], 1), SKIN_D)
-            up.part(R((21, 41, 43, 42)), OCHRE, line=False)
-            up.flat(L([(21, 41), (43, 41)], 1), YELLOW)
-            edge = [(25, 37), (27, 38), (30, 39), (32, 38), (33, 40), (34, 38), (36, 39), (39, 38), (41, 37)]
+            up.part(RR((21, 36, 43, 43), 3), GREEN_D)  # moss-green corset
+            up.flat(L([(23, 39), (23, 40)], 1), GREEN)
+            up.part(R((21, 42, 43, 43)), OCHRE, line=False)
+            up.flat(L([(21, 42), (43, 42)], 1), YELLOW)
+            edge = [(25, 37), (27, 37), (30, 38), (32, 37), (33, 39), (34, 37), (36, 38), (39, 37), (41, 37)]
             edge = [(x_, y_ - breath) for x_, y_ in edge]
             up.flat(P([(25, 36), (41, 36)] + edge[::-1]), SKIN)  # the sweetheart scoop
-            up.flat(P(edge + [(x_, y_ + 2) for x_, y_ in edge[::-1]]), CREAM)  # cream chemise band
+            up.flat(P(edge + [(x_, y_ + 1) for x_, y_ in edge[::-1]]), CREAM)  # cream chemise band
             up.flat(L([(28, 36), (33, 38), (38, 36)], 1), BROWN)  # pendant cord
+            up.flat(L([(33, 40), (31, 42)], 1), BROWN)  # brown lacing: a criss-cross
+            up.flat(L([(33, 40), (35, 42)], 1), BROWN)
+            up.flat(L([(31, 40), (35, 40)], 1), BROWN)
             ps = wv(2, 1.0)
             up.part(E((32 + ps, 37, 35 + ps, 40 + (1 if ps else 0))), OCHRE_D)  # wooden pendant swings
             gx = wv(1, 1.0)  # gourd canteen on the right hip
@@ -4444,35 +4482,24 @@ def eden(step=None, t=0, pose=None, sway=None, flare=None):
             up.part(E((39 + gx, 44, 45 + gx, 50)), OCHRE_D)
             up.part(R((41 + gx, 42, 42 + gx, 44)), BROWN, line=False)
     braids = sway if not walking else sway
-    _eden_braid(up, 24, -braids, lagy)
-    _eden_braid(up, 43, braids, lagy)
+    _eden_braid(up, 23, -braids, lagy)
+    _eden_braid(up, 44, braids, lagy)
 
     # ---- head: a smooth cap, a middle part with soft bangs, the carved mask, flowers
     up.part(RR((16, 6, 48, 28), 11), CHESTNUT)
     up.flat(L([(22, 10), (28, 8), (36, 8)], 1), CHESTNUT_L)
     up.flat(L([(40, 9), (44, 11)], 1), CHESTNUT_L)
 
-    def hair_and_mask():
-        up.part(P([(35, 7), (28, 9), (23, 15), (22, 24), (24, 22), (26, 17), (30, 14), (34, 13)]), CHESTNUT_D,
-                shade=False, line=False)  # the fringe is the deepest chestnut where it meets the mask
-        up.part(P([(35, 7), (42, 9), (47, 15), (48, 24), (46, 22), (44, 17), (40, 14), (36, 13)]), CHESTNUT_D,
+    def hair():
+        up.part(P([(35, 7), (28, 9), (23, 15), (22, 24), (24, 22), (26, 17), (30, 14), (34, 13)]), CHESTNUT,
                 shade=False, line=False)
-        up.flat(L([(33, 8), (28, 11), (25, 16)], 1), CHESTNUT)
-        up.flat(L([(37, 8), (42, 11), (46, 16)], 1), CHESTNUT)
-        up.part(P(EDEN_MASK), WALNUT)  # carved walnut domino mask, outlined
-        up.flat(L([(23, 19), (26, 16), (32, 15), (36, 17), (39, 17), (43, 15), (48, 16), (50, 19)], 1), WALNUT_L)  # lit rim
-        for line in (((24, 19), (28, 17), (34, 17), (36, 18)), ((41, 17), (46, 17), (50, 19)), ((26, 22), (26, 25)),
-                     ((49, 22), (48, 25))):  # lighter wood-grain lines
-            up.flat(L(list(line), 1), WALNUT_L)
-        up.flat(L([(37, 19), (37, 22)], 1), WALNUT_L)
-        for x, y, a in ((25, 18, -1.1), (50, 18, -2.0)):  # leaf sprigs at the temples, small and angled up
-            up.part(P(leaf_pts(x, y, a, 5, 1.7)), OLIVE, line=False)
-        up.part(P(leaf_pts(36, 14, -HALF_PI, 4, 1.6)), OLIVE, line=False)
+        up.part(P([(35, 7), (42, 9), (47, 15), (48, 24), (46, 22), (44, 17), (40, 14), (36, 13)]), CHESTNUT,
+                shade=False, line=False)
+        up.flat(L([(33, 8), (28, 11), (25, 16)], 1), CHESTNUT_L)
+        up.flat(L([(37, 8), (42, 11), (46, 16)], 1), CHESTNUT_L)
 
-    _eden_face(up, pose, hair_and_mask)
-    for x, y, col in ((44, 8, WHITE), (40, 6, ORANGE)):  # two small flowers at her temple
-        up.part(E((x - 2, y - 2, x + 2, y + 2)), col)
-        up.dot(x, y, YELLOW)
+    _eden_face(up, pose, hair)
+    _eden_crown(up, t, lagy(1))
     return low, up
 
 
