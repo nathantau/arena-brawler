@@ -153,8 +153,9 @@ func on_kill(killer_id: int, victim_id: int) -> void:
 
 
 func on_snapshot(tick: int, states: Array) -> void:
-	if arena == null or tick <= _latest_tick:
+	if arena == null or tick < _latest_tick:
 		return
+	var same_tick: bool = tick == _latest_tick  # a snapshot arrives as several packets sharing one tick
 	_latest_tick = tick
 	for s: Variant in states:
 		if not s is Array or (s as Array).size() != Player.StateField.COUNT:
@@ -164,7 +165,10 @@ func on_snapshot(tick: int, states: Array) -> void:
 		if buf != null:
 			buf.push(tick, state[Player.StateField.POSITION], state[Player.StateField.FACING])
 	# Applied at the start of the next physics frame, before the local player simulates.
-	_pending_states = states
+	if same_tick and _has_pending:
+		_pending_states = _pending_states + states
+	else:
+		_pending_states = states
 	_has_pending = true
 
 

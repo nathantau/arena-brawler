@@ -49,6 +49,14 @@ static func has_enough_players(participants: Array[int]) -> bool:
 	return participants.size() >= Constants.MATCH_MIN_PLAYERS
 
 
+## True if at least one participant is a human (bots alone don't make a match worth running).
+static func has_human(participants: Array[int], humans: Array[int]) -> bool:
+	for id: int in participants:
+		if humans.has(id):
+			return true
+	return false
+
+
 ## Best first: most kills, then fewest deaths, then lowest id (stable on every peer).
 static func rank(ids: Array[int], scores: ScoreBoard) -> Array[int]:
 	var out: Array[int] = ids.duplicate()

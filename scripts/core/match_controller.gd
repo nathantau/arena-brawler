@@ -36,13 +36,15 @@ func set_ready(id: int, is_ready: bool) -> void:
 	changed.emit()
 
 
-## A player left. If a running match drops below the minimum, it ends right away.
-func remove_player(id: int, scores: ScoreBoard) -> void:
+## A player left (`humans` = the humans still connected). A running match ends right away if it drops below the
+## minimum, or if no human is left in it: the remaining bots would play on for minutes while a spectator waits.
+func remove_player(id: int, scores: ScoreBoard, humans: Array[int]) -> void:
 	var was_in: bool = state.participants.has(id) or state.ready.has(id)
 	state.ready.erase(id)
 	state.participants.erase(id)
 	var running: bool = state.phase == MatchState.Phase.COUNTDOWN or state.phase == MatchState.Phase.PLAYING
-	if running and not MatchRules.has_enough_players(state.participants):
+	if running and (not MatchRules.has_enough_players(state.participants) \
+			or not MatchRules.has_human(state.participants, humans)):
 		_end(scores)
 	elif was_in:
 		changed.emit()

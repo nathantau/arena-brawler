@@ -20,10 +20,10 @@ func _init(p_session: NetSession, p_arena: Arena, p_debug: bool) -> void:
 	debug = p_debug
 
 
-func start(port: int, bot_count: int) -> Error:
+func start(port: int, bot_count: int, max_clients: int = Constants.MAX_CLIENTS) -> Error:
 	var peer := ENetMultiplayerPeer.new()
 	# No channel count here: see Constants.NET_CHANNEL_COUNT (clients request the channels).
-	var err: Error = peer.create_server(port, Constants.MAX_CLIENTS)
+	var err: Error = peer.create_server(port, max_clients)
 	if err != OK:
 		return err
 	session.multiplayer.multiplayer_peer = peer
@@ -48,12 +48,21 @@ func physics_tick() -> void:
 		var states: Array = []
 		for p: Player in arena.players:
 			states.append(p.capture_state())
-		session.rpc_snapshot.rpc(tick, states)
+		for chunk: Array in snapshot_packets(states):
+			session.rpc_snapshot.rpc(tick, chunk)
 	if debug:
 		_debug_timer += Constants.PHYSICS_DT
 		if _debug_timer >= Constants.NET_DEBUG_INTERVAL:
 			_debug_timer = 0.0
 			_print_debug()
+
+
+## The player states split into packets that fit the MTU (Constants.SNAPSHOT_PLAYERS_PER_PACKET each); same tick on all.
+static func snapshot_packets(states: Array) -> Array[Array]:
+	var out: Array[Array] = []
+	for i: int in range(0, states.size(), Constants.SNAPSHOT_PLAYERS_PER_PACKET):
+		out.append(states.slice(i, i + Constants.SNAPSHOT_PLAYERS_PER_PACKET))
+	return out
 
 
 func on_inputs(peer_id: int, batch: Array) -> void:
