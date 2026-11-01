@@ -806,7 +806,6 @@ def flint(step=None, t=0, heat=0.0):
     mid_y = (HEAD[1] + HEAD[3]) // 2
     up.part(lambda d, f: (d.rounded_rectangle((HEAD[0], HEAD[1], HEAD[2], mid_y + 2), 4, f), d.ellipse(HEAD, f),
                           d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)
-    up.part(E((MOUTH[0] - 5, 29, MOUTH[0] + 5, 35)), YELLOW, line=False)  # hot glow round the mouth, clear of the eyes
     if hot and not KO:  # blazing eyes: white-hot with flame trailing back off them
         for x in EYES_X:
             up.flat(R((x, EYES_Y, x + 3, EYES_Y + 5)), YELLOW)  # same eye shape, lit from inside
@@ -814,13 +813,7 @@ def flint(step=None, t=0, heat=0.0):
             up.flat(L([(x + 1, EYES_Y - 1), (x - 1, EYES_Y - 3 - (t % 2))], 1), YELLOW)  # flame flicking up off it
     else:
         big_eyes(up, EYES_Y, EYES_X, YELLOW)
-    up.flat(R((BLUSH[0], BLUSH[2], BLUSH[0] + 1, BLUSH[2])), RED)  # blush
-    up.flat(R((BLUSH[1], BLUSH[2], BLUSH[1] + 1, BLUSH[2])), RED)
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
-    # Tongues licking up from the forehead; orange rim so no red stripe runs across the face.
-    mid = (HEAD[0] + HEAD[2]) // 2
-    if hot:  # (only Inferno: on the idle face the yellow tongues dripped down over the eyes)
-        flame(up, mid - 13, mid + 13, FACE[1] + 5, 8, t + 2, tongues=5, line=False, rim=ORANGE)
     return low, up
 
 
@@ -833,31 +826,65 @@ def flint_burn(x: int, y: int) -> float:
 
 
 def flint_crown(t: int, dy: int, heat: float = 0.0) -> Canvas:
-    """Flint's head on fire: an upright flame rising off his head, its tongues flickering every tick, taller and
-    leaping with `heat`. A CELL canvas drawn behind the body before outlining (the face covers its base);
-    `dy` = the head's bob."""
+    """Flint's hair is fire: one continuous flame growing out of the top of his head, streaming a little backwards,
+    its tongues flickering every tick (taller and wilder with `heat`). Coloured by height above the head: white-hot /
+    yellow at the root, orange through the body, red at the tips, so there is no seam where it meets the head. A CELL
+    canvas drawn behind the body before outlining; `dy` = the head's bob."""
     c = Canvas(CELL)
     top = PAD + UPPER_DY + dy  # cell y of the art box's top, moving with the head
     mid = PAD + (HEAD[0] + HEAD[2]) // 2  # centred on the head
-    base = top + FACE[1] + 9
-    hw = 14  # as wide as the squared head's flat top, so the tufts sit along it like a crown
-    n = 6 + round(heat * 2)
-    sway = (-0.14, 0.1, 0.14, -0.1)  # the whole crown leans left and right as it flickers
-    flame(c, mid - hw, mid + hw, base, 27 + round(heat * 3), t, tongues=n, lean=sway[t % 4])  # tall outer tufts of uneven height
-    flame(c, mid - hw + 3, mid + hw - 3, base, 19 + round(heat * 6), t + 2, tongues=n - 2, line=False, rim=ORANGE, lean=-sway[t % 4])  # inner tufts, out of step, leaning the other way
+    ref = top + HEAD[1] + 1  # the head's top edge: the flame's root
+    sway = (-0.12, 0.08, 0.12, -0.08)[t % 4]
+    n = 7 + round(heat)
+    hs = [10, 16, 21, 24, 20, 14, 9, 7][:n]  # taller towards the back of the head (left), shorter at the front
+    mask = Image.new("L", (CELL, CELL), 0)
+    d = ImageDraw.Draw(mask)
+    d.rectangle((mid - 15, ref, mid + 15, ref + 10), 255)  # the root, wide as the head
+    for i, h0 in enumerate(hs):
+        x = mid - 15 + i * (30 / (n - 1))
+        h = h0 * (1 + 0.08 * heat) + (2 if (i * 7 + t) % 4 in (1, 2) else 0)  # tongues take turns to leap
+        tip = x - 0.28 * h + sway * h  # streaming back, swaying as it flickers
+        w = 9.0 - 0.3 * i
+        d.polygon([(x - w / 2, ref + 4), (x - w * 0.46 + (tip - x) * 0.4, ref - h * 0.5), (tip, ref - h),
+                   (x + w * 0.4 + (tip - x) * 0.55, ref - h * 0.45), (x + w / 2, ref + 4)], 255)
+    d.rectangle((0, ref - 5, mid - 16, CELL), 0)  # the flame grows from the head, it doesn't hang off its sides
+    d.rectangle((mid + 16, ref - 5, CELL, CELL), 0)
+    m = mask.load()
+    col_top = {}
+    for x in range(CELL):
+        for y in range(CELL):
+            if m[x, y]:
+                col_top[x] = y
+                break
+    for x, y0 in col_top.items():
+        span = max(1, ref - y0)
+        for y in range(y0, ref + 1):
+            if not m[x, y]:
+                continue
+            v = (ref - y) / span  # 0 at the root, 1 at the tip of this column
+            hot = 0.16 + 0.08 * heat
+            if v < hot and heat > 0.5:
+                col = WHITE
+            elif v < 0.34:
+                col = YELLOW
+            elif v < 0.66:
+                col = ORANGE
+            else:
+                col = RED
+            c.px[x, y] = col + (255,)
     for k in range(3):  # tips breaking off into small flame wisps that rise and shrink over 4 ticks
         ph = (t + k * 2) % 4
-        wx = mid - hw + 4 + k * (2 * hw - 8) // 2 + SWAY[(t + k) % 4] * 2
-        wy = top + 4 - 3 * ph - round(heat * 2)
+        wx = mid - 10 + k * 10 + SWAY[(t + k) % 4] * 2
+        wy = top + 6 - 3 * ph - round(heat * 2)
         r = (3, 2, 1, 0)[ph]
         if r:
             c.part(P([(wx - r, wy + r), (wx + SWAY[(t + k) % 4], wy - r - 1), (wx + r, wy + r), (wx, wy + r + 1)]),
-                   (YELLOW, ORANGE, RED)[min(ph, 2)], shade=False, line=False)
-    for k in range(3 + round(heat * 2)):  # tiny embers lifting off the tufts and dying out (period 4)
+                   (ORANGE, RED, RED)[min(ph, 2)], shade=False, line=False)
+    for k in range(3 + round(heat * 2)):  # tiny embers lifting off the tips and dying out (period 4)
         ph = (t + k) % 4
-        ex = mid - hw + 3 + (k * 11 + 5) % (2 * hw - 5) + SWAY[(t + k) % 4]
+        ex = mid - 12 + (k * 11 + 5) % 24 + SWAY[(t + k) % 4]
         c.dot(ex, top + 6 - 4 * ph - (k % 2) * 3 - round(heat * 3), (YELLOW, ORANGE, RED, MAROON)[ph])
-    return fill_notches(c)  # no dark specks in the tufts' valleys
+    return fill_notches(c)  # no dark specks in the valleys between tongues
 
 
 def flint_embers(i: int, heat: float = 0.0) -> Canvas:
