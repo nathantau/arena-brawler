@@ -669,5 +669,69 @@ def main():
     print("wrote previews to", OUT_DIR)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and "--final" not in sys.argv:
     main()
+
+
+def final_sheet() -> None:
+    """Every frame of the shipped assets/sprites/shadow.png at 4x (labelled rows) plus Apex's idle + walk rows to compare."""
+    rows = [("shadow idle", "shadow", range(0, 4)), ("shadow hit", "shadow", range(4, 6)), ("shadow walk", "shadow", range(6, 14)),
+            ("shadow death", "shadow", range(14, 22)), ("apex idle", "wukong", range(0, 4)), ("apex walk", "wukong", range(6, 14))]
+    k = 4
+    w = 8 * g.CELL * k + 16
+    cellw = g.CELL * k
+    out = Image.new("RGBA", (w, len(rows) * (cellw + 22) + 8), (24, 24, 32, 255))
+    d = ImageDraw.Draw(out)
+    for r, (label, name, idx) in enumerate(rows):
+        y = 8 + r * (cellw + 22)
+        d.text((8, y + 4), label, fill=(240, 240, 230, 255))
+        for c, i in enumerate(idx):
+            bg = Image.new("RGBA", (cellw, cellw), (60, 56, 52, 255))
+            bg.alpha_composite(nn(sheet_frame(name, i), k))
+            out.alpha_composite(bg, (8 + c * cellw, y + 20))
+    out.convert("RGB").save(OUT_DIR / "shadow_final_sheet.png")
+    # per-row crops are easier to look at
+    for r, (label, _n, _i) in enumerate(rows[:4]):
+        y = 8 + r * (cellw + 22)
+        out.crop((0, y, w, y + cellw + 22)).convert("RGB").save(OUT_DIR / f"_row_{r}.png")
+
+
+if __name__ == "__main__" and "--final" in sys.argv:
+    final_sheet()
+
+
+def fx_frame(name: str, i: int) -> Image.Image:
+    img = Image.open(ROOT / "assets" / "fx" / f"{name}.png").convert("RGBA")
+    return img.crop((i * g.CELL, 0, (i + 1) * g.CELL, g.CELL))
+
+
+def final_ingame() -> None:
+    """Idle, walk and the Shadow Step sink / puddle / rise composed from the shipped assets on arena floor (2x, like the game's
+    1.5 sprite scale x 1.4 camera); the puddle and sink share the sprite's cell and feet row, as SpecialFx draws them."""
+    cw = g.CELL
+    names = [("shadow", i) for i in range(4)] + [("shadow", i) for i in range(6, 14)]
+    step = []
+    for k in range(10):  # sinking: puddle_in under, sink over
+        step.append((fx_frame("shadow_puddle_in", k), fx_frame("shadow_sink", k)))
+    for k in range(4):  # gliding as the puddle
+        step.append((fx_frame("shadow_puddle", k * 2), None))
+    for k in range(10):  # rising: puddle_out under, the sink played backwards over
+        step.append((fx_frame("shadow_puddle_out", k), fx_frame("shadow_sink", 9 - k)))
+    rows = [[sheet_frame(n, i) for n, i in names], [p for p, _ in step[:12]], [p for p, _ in step[12:24]]]
+    floor_w = max(len(r) for r in rows[:1]) * cw
+    out = Image.new("RGBA", (floor_w, cw * 3), (0, 0, 0, 255))
+    out.alpha_composite(floor_crop(floor_w, cw * 3))
+    for i, im in enumerate(rows[0]):
+        out.alpha_composite(im, (i * cw, 0))
+    seq = [(p, b) for p, b in step]
+    for j, (p, b) in enumerate(seq):
+        x, y = (j % 12) * cw, cw * (1 + j // 12)
+        out.alpha_composite(p, (x, y))
+        if b is not None:
+            out.alpha_composite(b, (x, y))
+    labelled(nn(out, 2), "idle x4, walk x8 | Shadow Step: sink x10, glide x4, rise x10 (puddle under, body over)").convert("RGB").save(
+        OUT_DIR / "shadow_final_ingame.png")
+
+
+if __name__ == "__main__" and "--final" in sys.argv:
+    final_ingame()
