@@ -184,6 +184,15 @@ def sleeve_detail(c: Canvas, x: int):
     c.dot(x + 4, 39, SHADOW)
 
 
+def tassel(c: Canvas, pts, notch: bool = True) -> None:
+    """A 3 px band of red cloth along `pts`: shaded right column, a V notch cut in its tip."""
+    c.part(L(pts, 3), RED, shade=False)
+    c.flat(L([(x + 1, y) for x, y in pts], 1), MAROON)
+    x, y = pts[-1]
+    for dy in (0, 1) if notch else ():
+        c.px[x, y + dy] = (0, 0, 0, 0)
+
+
 def flicker(step=None, t=0, zip_=False):
     """Shade, a kunoichi: a choppy jagged bob with a big spiky topknot that swings in the wind, red ribbon tails fluttering from its tie, a steel forehead
     plate, big lashed teal eyes over a mask that peaks at the bridge of her nose; fitted navy shroud, a metal
@@ -229,10 +238,9 @@ def flicker(step=None, t=0, zip_=False):
     else:
         arm(up, ARM_X[1], NAVY, SKIN)
         sleeve_detail(up, ARM_X[1])
-    # ribbon tails: two thin red streamers hanging from the topknot's tie, fluttering behind her head
-    for x0, lag in ((18, 1), (21, 2)) if not zip_ else ():
-        up.part(L([(x0, 10), (x0 - 7 - wave(lag, 1), 20), (x0 - 12 - wave(lag + 1, 2), 30),
-                   (x0 - 13 - wave(lag + 2, 2), 37)], 2), RED, shade=False)
+    # ribbon tail: one band of red cloth hanging from the topknot's tie, fluttering behind her head
+    if not zip_:
+        tassel(up, [(17, 12), (13 - wave(1, 1), 20), (10 - wave(2, 1), 29), (9 - wave(3, 1), 37)])
     up.part(RR((14, 8, 20, 13), 2), RED)  # tie round the topknot's base, half hidden behind her hair
     # choppy bob: the head's hair ends in jagged points round the back of her neck
     up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
@@ -264,11 +272,10 @@ def flicker_topknot(t: int, dy: int) -> Canvas:
     c = Canvas(CELL)
     wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
     at = lambda pts: [(PAD + x, PAD + UPPER_DY + dy + y) for x, y in pts]  # art px -> cell px
-    c.part(P(at([(29, 9), (25 - wave(0, 1), -4), (19 - wave(0, 1), 3), (9 - wave(1, 1.5), -3), (12 - wave(1, 1), 7),
-                 (-2 - wave(2, 2), 5), (9 - wave(2, 1), 11), (-3 - wave(3, 2), 15), (10 - wave(2, 1), 16),
-                 (2 - wave(3, 1.5), 24), (19, 18)])), NAVY)
-    c.flat(L(at([(22, 6), (12 - wave(1, 1.5), 0)]), 1), BLUE)  # its sheen
-    c.flat(L(at([(15, 10), (2 - wave(2, 2), 9)]), 1), BLUE)
+    c.part(P(at([(30, 9), (27 - wave(0, 1), -5), (21, 3), (11 - wave(1, 1), -4), (15, 8), (3 - wave(2, 1), 3), (13, 14),
+                 (5 - wave(3, 1), 21), (19, 18)])), NAVY)
+    c.flat(L(at([(23, 2), (26 - wave(0, 1), -3)]), 1), BLUE)  # sheen on each tuft's lit edge
+    c.flat(L(at([(15, 5), (13 - wave(1, 1), -1)]), 1), BLUE)
     return c
 
 
@@ -297,11 +304,10 @@ def flicker_zip(i: int) -> Image.Image:
     bob = [0, 0, 1, 1, 0, 0, 1, 1][i]  # the whole body judders a px as the chain tugs
     rib = Canvas(CELL)
     y0 = PAD + UPPER_DY + 10
-    for k, (x0, dy) in enumerate(((PAD + 18, 0), (PAD + 20, 3))):
-        w = lambda lag: snap[(i + 2 * lag + 3 * k) % 8]
-        rib.part(L([(x0, y0 + dy), (x0 - 7, y0 + dy + 3 + w(0)), (x0 - 14, y0 + dy + 6 + w(1)),
-                    (x0 - 21, y0 + dy + 10 + w(2)), (x0 - 27, y0 + dy + 12 + w(3))], 2), RED, shade=False)
-        rib.flat(L([(x0 - 14, y0 + dy + 5 + w(1)), (x0 - 20, y0 + dy + 8 + w(2))], 1), ORANGE)  # lit stretch
+    w = lambda lag: snap[(i + 2 * lag) % 8] // 2  # one streaming tail, kinks a px at a time
+    x0 = PAD + 18
+    tassel(rib, [(x0, y0), (x0 - 7, y0 + 3 + w(0)), (x0 - 14, y0 + 5 + w(1)), (x0 - 21, y0 + 8 + w(2)),
+                 (x0 - 27, y0 + 9 + w(3))], notch=False)
     f.alpha_composite(rib.img)
     f.alpha_composite(low.img, (PAD - 2, PAD - 1))  # legs trail a little, toes off the floor
     f.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
