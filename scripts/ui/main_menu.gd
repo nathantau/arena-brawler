@@ -11,7 +11,14 @@ signal join_pressed(address: String)
 const FAKE_KEYBOARD_FLAG: String = "--fake-keyboard"
 const BUTTON_MIN_SIZE: Vector2 = Vector2(360, 64)
 const FIELD_MIN_SIZE: Vector2 = Vector2(236, 64)
-const SPACING: int = 12
+const PLAY_SIZE: Vector2 = Vector2(560, 100)
+const PLAY_FONT: int = 44
+const ROW_H: float = 56.0
+## Menu column width (centred under the logo).
+const CENTRE_W: float = 620.0
+const SPACING: int = 10
+const SHOT_FLAG: String = "--home-shot="
+const SHOT_DELAY: float = 2.0
 const GAME_LABEL_W: float = 430.0
 
 var _status: Label
@@ -19,6 +26,7 @@ var _address: LineEdit
 var _join: Button
 var _host: Button
 var _box: VBoxContainer
+var _backdrop: TitleBackdrop
 var _hide_while_typing: Array[Control] = []
 var _browser: LanDiscovery
 var _games_box: VBoxContainer
@@ -31,27 +39,29 @@ func _ready() -> void:
 
 	var backdrop := TitleBackdrop.new()
 	add_child(backdrop)
+	_backdrop = backdrop
 
 	var box := VBoxContainer.new()
 	_box = box
 	box.add_theme_constant_override("separation", SPACING)
-	box.alignment = BoxContainer.ALIGNMENT_END
+	box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	add_child(box)
-	UiStyle.fit_to_safe_area(box)
+	_place_box()
+	get_viewport().size_changed.connect(_place_box)
 
 	_status = Label.new()
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.add_theme_color_override("font_color", UiStyle.C_ORANGE)
-	box.add_child(_status)
 
-	var offline := _button("PLAY VS BOTS", BUTTON_MIN_SIZE)
+	var offline := _button("PLAY VS BOTS", PLAY_SIZE)
 	offline.theme_type_variation = &"PrimaryButton"
-	offline.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
+	offline.add_theme_font_size_override("font_size", PLAY_FONT)
 	offline.add_child(ButtonShine.new())
 	offline.pressed.connect(offline_pressed.emit)
 	var offline_row := _centered(offline)
 	box.add_child(offline_row)
 	_hide_while_typing.append(offline_row)
+	box.add_child(_status)
 
 	_games_box = VBoxContainer.new()
 	_games_box.add_theme_constant_override("separation", SPACING)
@@ -63,11 +73,20 @@ func _ready() -> void:
 	visibility_changed.connect(_sync_browser)
 	_sync_browser()
 
-	_ip_toggle = _button("Enter IP", Vector2(BUTTON_MIN_SIZE.x, FIELD_MIN_SIZE.y))
+	var small: Vector2 = Vector2((PLAY_SIZE.x - SPACING * 2.0) / 3.0, ROW_H)
+	_ip_toggle = _button("Enter IP", small)
 	_ip_toggle.pressed.connect(func() -> void: _ip_row.visible = not _ip_row.visible)
-	var toggle_row := _centered(_ip_toggle)
-	box.add_child(toggle_row)
-	_hide_while_typing.append(toggle_row)
+	_host = _button("Host Wi-Fi", small)
+	_host.pressed.connect(host_pressed.emit)
+	var settings := _button("Settings", small)
+	settings.pressed.connect(func() -> void: SettingsPanel.show_on(self))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", SPACING)
+	for c: Control in [_ip_toggle, _host, settings]:
+		row.add_child(c)
+	var secondary := _centered(row)
+	box.add_child(secondary)
+	_hide_while_typing.append(secondary)
 
 	var join_row := HBoxContainer.new()
 	join_row.add_theme_constant_override("separation", SPACING)
@@ -85,18 +104,30 @@ func _ready() -> void:
 	_ip_row = _centered(join_row)
 	_ip_row.visible = false  # manual IP is the fallback; "Enter IP" reveals it
 	box.add_child(_ip_row)
-
-	_host = _button("HOST A GAME ON THIS WI-FI", Vector2(BUTTON_MIN_SIZE.x, FIELD_MIN_SIZE.y))
-	_host.pressed.connect(host_pressed.emit)
-	var host_row := _centered(_host)
-	box.add_child(host_row)
-	_hide_while_typing.append(host_row)
-	var settings := _button("Settings", Vector2(BUTTON_MIN_SIZE.x, FIELD_MIN_SIZE.y))
-	settings.pressed.connect(func() -> void: SettingsPanel.show_on(self))
-	var settings_row := _centered(settings)
-	box.add_child(settings_row)
-	_hide_while_typing.append(settings_row)
 	add_child(IntroSplash.new(backdrop, box))  # first-launch opening; skippable
+	_maybe_shoot()
+
+
+## Centred column right under the logo + tagline (the backdrop owns that spacing).
+func _place_box() -> void:
+	var i: Vector4 = UiStyle.safe_insets(get_viewport())
+	_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_box.anchor_left = 0.5
+	_box.anchor_right = 0.5
+	_box.offset_left = -CENTRE_W * 0.5
+	_box.offset_right = CENTRE_W * 0.5
+	_box.offset_top = _backdrop.logo_bottom()
+	_box.offset_bottom = -i.w
+
+
+## `--home-shot=PATH`: save the menu to PNG once the intro is done and quit (layout checks / renders).
+func _maybe_shoot() -> void:
+	for a: String in OS.get_cmdline_user_args():
+		if a.begins_with(SHOT_FLAG):
+			var path: String = a.trim_prefix(SHOT_FLAG)
+			get_tree().create_timer(SHOT_DELAY).timeout.connect(func() -> void:
+				get_viewport().get_texture().get_image().save_png(path)
+				get_tree().quit())
 
 
 ## Browse only while the menu is showing (the socket is closed during a match).
@@ -155,6 +186,7 @@ func set_status(text: String) -> void:
 
 
 func _process(_delta: float) -> void:
+	_box.offset_top = _backdrop.logo_bottom()
 	_lift_above_keyboard()
 
 

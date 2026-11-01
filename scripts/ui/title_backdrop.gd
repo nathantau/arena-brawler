@@ -31,40 +31,38 @@ const MID_PARALLAX: float = 1.5
 const PUNCH_DECAY: float = 3.0
 const PUNCH_PX: float = 14.0
 
-const LOGO_PX: float = 5.0
-const LOGO_TOP: float = 6.0
+## Home layout: logo, tagline and the menu form one centred group at the top; the roster stands in an arc along the
+## bottom, cropped by the screen edge, scaled so it never reaches the group.
 const LOGO_BOB: float = 5.0
 const LOGO_BOB_SPEED: float = 2.0
 const SHINE_PERIOD: float = 3.8
 const SHINE_TIME: float = 0.8
 const TAGLINE: String = "Pick a fighter. Grab a weapon. Brawl."
-const TAGLINE_GAP: float = 14.0
+const LOGO_PX_WIDE: float = 6.0
+const LOGO_PX_NARROW: float = 4.0
+const WIDE_MIN: float = 1400.0
+const TAG_GAP: float = 10.0  ## logo -> tagline
+const MENU_GAP: float = 16.0  ## tagline -> PLAY
+const MENU_BLOCK_H: float = 210.0  ## PLAY + status + secondary row, as built by MainMenu
+const ARC_GAP: float = 20.0  ## menu block -> tallest fighter
+const ARC_SPREAD: float = 0.46  ## fighters span +-this fraction of the width around the centre
+const ARC_DIP: float = 40.0  ## the outer fighters stand this much higher than the centre one
+const ARC_FEET: float = 14.0  ## centre fighters' feet below the screen bottom
+const ARC_FIT: float = 0.85  ## share of a sprite's opaque width that counts toward overlap
+const ARC_SCALE_MIN: float = 3.0
+const ARC_SCALE_MAX: float = 5.5
 
-## Fighters: where each of the six stands, relative to the screen centre / the floor line.
-## (dx, dy, pixel scale, faces left, pose, dim). Left team faces right, right team faces left.
 const POSE_IDLE: int = 0
-const POSE_RUN: int = 1
 const POSE_STRIKE: int = 2
-const TEAM_INNER_X: float = 270.0  ## innermost fighter of each team, from the screen centre (clear of the menu buttons)
-const TEAM_OUTER_X: float = 460.0  ## outermost allowed (clear of the pillars)
-const TEAM_STEP_X: float = 190.0
-## Per rank within a team (0 = frontline): (dy, pixel scale, pose).
-const RANKS: Array[Vector3] = [
-	Vector3(6.0, 3.0, POSE_STRIKE), Vector3(-14.0, 2.9, POSE_RUN), Vector3(-40.0, 2.5, POSE_IDLE)]
-const FIGHTER_SCALE: float = 0.75  ## all fighters drawn this much smaller so three fit beside the buttons
-const FLOOR_LINE_ART: float = 14.0  ## fighters stand this many art px (x ART_SCALE) below the horizon
-const CELL_FEET: float = 78.0  ## feet row inside a 96 px sprite cell
 const CELL: float = 96.0
-const BACK_DIM: float = 0.72
-const RUN_SWAY: float = 12.0
 const STRIKE_PERIOD: float = 3.6
-const STRIKE_STAGGER: float = 1.1
 const STRIKE_FPS: float = 10.0
 const RING_FPS: float = 24.0
-const RING_SCALE: float = 1.0
 const RING_ALPHA: float = 0.5
 const SHADOW_ALPHA: float = 0.55
 const REVEAL_RISE: float = 36.0
+const SPOT_COLOR: Color = Color(1.0, 0.86, 0.55, 1.0)
+const SPOT_STEPS: int = 9
 
 const EMBER_COUNT: int = 44
 const PETAL_EVERY: int = 4
@@ -93,7 +91,11 @@ var _idle: Array = []  ## per slot: Array[Texture2D]
 var _run: Array = []
 var _strike: Array = []
 var _time: float = 0.0
-var _slots: Array[Vector4] = []
+var _fighters: Array[Dictionary] = []  ## placed per layout: i, feet, sc, flip, pose
+var _boxes: Array[Rect2] = []  ## opaque rect of each fighter's idle frame inside its cell
+var _laid_out: Vector2 = Vector2.ZERO
+var _logo_rect: Rect2 = Rect2()
+var _spot: Vector3 = Vector3.ZERO  ## spotlight pool centre x, y, half-width
 var _insets: Vector4 = Vector4.ZERO
 var _version: String = ""
 var _ex: PackedFloat32Array = PackedFloat32Array()  ## ember x, y (0..1), rise speed, drift, phase, size index
@@ -109,12 +111,13 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tiles = load(ArenaFloor.ART_DIR + "%s_tiles.png" % FLOOR_THEME)
 	var roster: Array[CharacterData] = CharacterCatalog.load_all().ordered
-	_slots = _layout(roster.size())
-	for i: int in mini(roster.size(), _slots.size()):
+	for i: int in roster.size():
 		var f: SpriteFrames = roster[i].sprite_frames()
 		_idle.append(_textures(f, &"idle"))
 		_run.append(_textures(f, &"walk"))
 		_strike.append(_textures(f, &"attack") if f.has_animation(&"attack") else _textures(f, &"idle"))
+		var img: Image = (_idle[i][0] as Texture2D).get_image()
+		_boxes.append(Rect2(img.get_used_rect()))
 	_insets = UiStyle.safe_insets(get_viewport())
 	get_viewport().size_changed.connect(func() -> void: _insets = UiStyle.safe_insets(get_viewport()))
 	_version = "v" + str(ProjectSettings.get_setting("application/config/version", "dev"))
@@ -156,9 +159,13 @@ func _draw() -> void:
 	draw_texture_rect(_far, Rect2(far_at, art_size), false)
 	_draw_beams(far_at, s)
 	_draw_floor(stage_at, floor_top)
-	_draw_fighters(size.x * 0.5 + stage_at.x - origin.x, floor_top + FLOOR_LINE_ART * s)
+	if _laid_out != size:
+		_laid_out = size
+		_place(floor_top)
+	_draw_spot()
 	_draw_embers()
 	draw_texture_rect(_mid, Rect2((origin + cam * MID_PARALLAX).round(), art_size), false)
+	_draw_fighters()
 	var vs: float = maxf(size.x / VIGNETTE_ART_W, size.y / VIGNETTE_ART_H)
 	var vsize := Vector2(VIGNETTE_ART_W, VIGNETTE_ART_H) * vs
 	draw_texture_rect(_vignette, Rect2((size - vsize) * 0.5, vsize), false, Color(1, 1, 1, VIGNETTE_ALPHA))
@@ -195,58 +202,85 @@ func _draw_floor(stage_at: Vector2, floor_top: float) -> void:
 		PackedColorArray([dark, dark, clear, clear]))
 
 
-func _draw_fighters(centre_x: float, ground_y: float) -> void:
+## Places the roster in the arc and sets the logo + spotlight; the arc scale keeps clear of the menu block.
+func _place(_floor_top: float) -> void:
+	_fighters.clear()
+	var n: int = _idle.size()
+	var w: float = size.x
+	var h: float = size.y
+	var logo: Vector2 = _logo.get_size()
+	var lpx: float = LOGO_PX_WIDE if w >= WIDE_MIN else LOGO_PX_NARROW
+	_logo_rect = Rect2(Vector2((w - logo.x * lpx) * 0.5, _insets.y + 4.0), logo * lpx)
+	var max_w: float = 1.0
+	var max_h: float = 1.0
+	for b: Rect2 in _boxes:
+		max_w = maxf(max_w, b.size.x)
+		max_h = maxf(max_h, b.size.y)
+	var spacing: float = w * ARC_SPREAD * 2.0 / maxf(1.0, n - 1.0)
+	var room: float = h + ARC_FEET - ARC_DIP - (logo_bottom() + MENU_BLOCK_H + ARC_GAP)
+	var sc: float = floorf(minf(spacing / (max_w * ARC_FIT), room / max_h) * 2.0) * 0.5
+	sc = clampf(sc, ARC_SCALE_MIN, ARC_SCALE_MAX)
+	for k: int in n:
+		var u: float = (k - (n - 1) * 0.5) / ((n - 1) * 0.5)
+		_fighters.append({"i": k, "feet": Vector2(w * 0.5 + u * w * ARC_SPREAD, h + ARC_FEET - u * u * ARC_DIP),
+			"sc": sc, "flip": u > 0.05, "pose": POSE_STRIKE if k == n / 2 else POSE_IDLE})
+	_spot = Vector3(w * 0.5, h - 30.0, w * 0.4)
+	_fighters.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["feet"] as Vector2).y < (b["feet"] as Vector2).y)
+
+
+## Warm spotlight pool (stacked ellipses) under the arc.
+func _draw_spot() -> void:
+	var c := Vector2(_spot.x, _spot.y)
+	var wide: float = _spot.z
+	for k: int in SPOT_STEPS:
+		var f: float = 1.0 - float(k) / SPOT_STEPS
+		var pts := PackedVector2Array()
+		for j: int in 32:
+			var t: float = TAU * j / 32.0
+			pts.append(c + Vector2(cos(t) * wide * f, sin(t) * wide * f * 0.28))
+		draw_colored_polygon(pts, Color(SPOT_COLOR, 0.05 * reveal))
+
+
+func _draw_fighters() -> void:
 	var rise: float = (1.0 - reveal) * REVEAL_RISE
-	var base := Vector2(centre_x, ground_y)
-	# Smallest (back row) first, so nearer fighters overlap them.
-	for pass_i: int in 3:
-		for i: int in _idle.size():
-			var sc: float = _slots[i].z
-			var rank: int = 0 if sc < 2.6 else (1 if sc < 2.95 else 2)
-			if rank == pass_i:
-				_draw_fighter(i, _slots[i], base, rise)
+	for f: Dictionary in _fighters:
+		_draw_fighter(f, rise)
 
 
-func _draw_fighter(i: int, slot: Vector4, base: Vector2, rise: float) -> void:
-	var sc: float = slot.z * FIGHTER_SCALE
-	var right_team: bool = slot.x > 0.0
-	var pose: int = int(slot.w)
+func _draw_fighter(f: Dictionary, rise: float) -> void:
+	var i: int = f["i"]
+	var sc: float = f["sc"]
+	var flip: bool = f["flip"]
 	var t: float = _time + i * 0.37
 	var tex: Texture2D
-	var ph: float = fposmod(_time + i * STRIKE_STAGGER, STRIKE_PERIOD)
-	var dx: float = slot.x
-	match pose:
-		POSE_RUN:
-			var run: Array = _run[i]
-			tex = run[int(t * Constants.SPRITE_WALK_FPS) % run.size()]
-			dx += sin(_time * 1.3 + i) * RUN_SWAY
-		POSE_STRIKE:
-			var atk: Array = _strike[i]
-			var k: int = int(ph * STRIKE_FPS)
-			if k < atk.size() and atk.size() > Constants.SPRITE_IDLE_FRAMES:
-				tex = atk[k]
-			else:
-				var idle: Array = _idle[i]
-				tex = idle[int(t * Constants.SPRITE_IDLE_FPS) % idle.size()]
-		_:
-			var idle2: Array = _idle[i]
-			tex = idle2[int(t * Constants.SPRITE_IDLE_FPS) % idle2.size()]
-	var feet := Vector2(base.x + dx, base.y + slot.y + rise)
-	var shade: float = BACK_DIM if slot.z < 2.6 else 1.0
-	var tint := Color(shade, shade, shade, reveal)
-	var ss: Vector2 = _shadow.get_size() * sc * 1.1
+	var ph: float = fposmod(_time + i * 1.1, STRIKE_PERIOD)
+	var strike: bool = false
+	if int(f["pose"]) == POSE_STRIKE:
+		var atk: Array = _strike[i]
+		var k: int = int(ph * STRIKE_FPS)
+		if k < atk.size() and atk.size() > Constants.SPRITE_IDLE_FRAMES:
+			tex = atk[k]
+			strike = true
+	if tex == null:
+		var idle: Array = _idle[i]
+		tex = idle[int(t * Constants.SPRITE_IDLE_FPS) % idle.size()]
+	var box: Rect2 = _boxes[i]
+	var feet: Vector2 = (f["feet"] as Vector2) + Vector2(0.0, rise)
+	var ss: Vector2 = _shadow.get_size() * sc * 1.2
 	draw_texture_rect(_shadow, Rect2(feet - Vector2(ss.x * 0.5, ss.y * 0.55), ss), false,
 		Color(1, 1, 1, SHADOW_ALPHA * reveal))
-	var w: float = CELL * sc * (-1.0 if right_team else 1.0)
-	var origin := Vector2(feet.x - absf(w) * 0.5, feet.y - CELL_FEET * sc)
-	draw_texture_rect(tex, Rect2(origin, Vector2(w, CELL * sc)), false, tint)
+	var cx: float = box.get_center().x
+	var ox: float = feet.x - ((CELL - cx) if flip else cx) * sc
+	var oy: float = feet.y - box.end.y * sc
+	draw_texture_rect(tex, Rect2(Vector2(ox, oy), Vector2(CELL * sc * (-1.0 if flip else 1.0), CELL * sc)), false,
+		Color(1, 1, 1, reveal))
 	var frames: int = _ring.get_width() / _ring.get_height()
-	if pose == POSE_STRIKE and ph < float(frames) / RING_FPS:
-		var rs: float = _ring.get_height() * RING_SCALE
-		var f: int = mini(int(ph * RING_FPS), frames - 1)
-		var c: Vector2 = feet + Vector2(0.0, -6.0 * sc)
+	if strike and ph < float(frames) / RING_FPS:
+		var rs: float = _ring.get_height() * minf(sc / 3.0, 1.6)
+		var fr: int = mini(int(ph * RING_FPS), frames - 1)
+		var c: Vector2 = feet + Vector2((-1.0 if flip else 1.0) * 6.0 * sc, -6.0 * sc)
 		draw_texture_rect_region(_ring, Rect2(c - Vector2(rs, rs) * 0.5, Vector2(rs, rs)),
-			Rect2(f * _ring.get_height(), 0, _ring.get_height(), _ring.get_height()), Color(1, 1, 1, RING_ALPHA * reveal))
+			Rect2(fr * _ring.get_height(), 0, _ring.get_height(), _ring.get_height()), Color(1, 1, 1, RING_ALPHA * reveal))
 
 
 func _draw_embers() -> void:
@@ -261,10 +295,9 @@ func _draw_embers() -> void:
 
 
 func _draw_logo() -> void:
-	var base: Vector2 = _logo.get_size() * LOGO_PX
+	var base: Vector2 = _logo_rect.size
 	var bob: float = roundf(sin(_time * LOGO_BOB_SPEED) * LOGO_BOB)
-	var top: float = _insets.y + LOGO_TOP
-	var rect := Rect2(Vector2((size.x - base.x) * 0.5, top + bob), base)
+	var rect := Rect2(_logo_rect.position + Vector2(0.0, bob), base)
 	var centre: Vector2 = rect.get_center()
 	rect = Rect2(centre - base * logo_scale * 0.5, base * logo_scale)
 	var tint := Color(1, 1, 1, logo_alpha)
@@ -274,27 +307,14 @@ func _draw_logo() -> void:
 		var n: int = _shine.get_width() / _logo.get_width()
 		var f: int = mini(int(ph / SHINE_TIME * n), n - 1)
 		draw_texture_rect_region(_shine, rect, Rect2(f * _logo.get_width(), 0, _logo.get_width(), _logo.get_height()), tint)
-	var tag_y: float = top + base.y + TAGLINE_GAP + UiStyle.SIZE_BODY
-	UiStyle.draw_text(self, Vector2(0.0, tag_y), TAGLINE, UiStyle.SIZE_BODY, Color(1, 1, 1, logo_alpha),
-		HORIZONTAL_ALIGNMENT_CENTER, size.x)
+	var tag_y: float = _logo_rect.end.y + TAG_GAP + UiStyle.SIZE_BODY
+	UiStyle.draw_text(self, Vector2(_logo_rect.position.x, tag_y), TAGLINE, UiStyle.SIZE_BODY, Color(1, 1, 1, logo_alpha),
+		HORIZONTAL_ALIGNMENT_CENTER, _logo_rect.size.x)
 
 
-## Two facing teams (left gets the extra fighter), each fanned out from the centre; a lone fighter stands in the middle.
-static func _layout(n: int) -> Array[Vector4]:
-	var out: Array[Vector4] = []
-	if n == 1:
-		out.append(Vector4(0.0, RANKS[0].x, RANKS[0].y, RANKS[0].z))
-		return out
-	var left: int = (n + 1) / 2
-	for i: int in n:
-		var on_left: bool = i < left
-		var team: int = left if on_left else n - left
-		var k: int = i if on_left else i - left
-		var step: float = minf(TEAM_STEP_X, (TEAM_OUTER_X - TEAM_INNER_X) / maxf(1.0, team - 1.0))
-		var r: Vector3 = RANKS[mini(k, RANKS.size() - 1)]
-		var dx: float = TEAM_INNER_X + k * step
-		out.append(Vector4(-dx if on_left else dx, r.x, r.y, r.z))
-	return out
+## Y just below the logo + tagline: the menu starts here.
+func logo_bottom() -> float:
+	return _logo_rect.end.y + TAG_GAP + UiStyle.SIZE_BODY + MENU_GAP
 
 
 static func _textures(f: SpriteFrames, anim: StringName) -> Array[Texture2D]:
