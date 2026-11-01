@@ -9,6 +9,8 @@ var args: CmdArgs
 var _offline_arena: Arena
 var _server_arena: Arena
 var _menu: MainMenu
+## Picks the default arena of a new lobby (the server / offline host decides; clients just show it).
+var _arena_rng := RandomNumberGenerator.new()
 var _announcer: LanDiscovery
 
 
@@ -78,9 +80,10 @@ func _run_discover() -> void:
 
 
 func _start_server() -> void:
+	_arena_rng.randomize()
 	Engine.max_fps = Constants.SERVER_MAX_FPS
 	_server_arena = Arena.new(Arena.Mode.SERVER, randi(), args.match_mode, args.time_limit)
-	_server_arena.match_state.arena_index = args.arena_index
+	_server_arena.match_state.arena_index = args.pick_arena(_arena_rng)
 	add_child(_server_arena)
 	var err: Error = session.start_server(_server_arena, args.port, args.bots, args.net_debug)
 	if err != OK:
@@ -91,9 +94,10 @@ func _start_server() -> void:
 ## Listen server: the same NetServer as `--server`, plus this device plays as peer 1 (the
 ## server's own id, so it never clashes with a client) through a local view, like offline.
 func _start_host() -> void:
+	_arena_rng.randomize()
 	_hide_menu()
 	_server_arena = Arena.new(Arena.Mode.SERVER, randi(), args.match_mode, args.time_limit)
-	_server_arena.match_state.arena_index = args.arena_index
+	_server_arena.match_state.arena_index = args.pick_arena(_arena_rng)
 	add_child(_server_arena)
 	var err: Error = session.start_server(_server_arena, args.port, args.bots, args.net_debug)
 	if err != OK:
@@ -134,11 +138,12 @@ func _on_host_leave(_restart: bool) -> void:
 
 
 func _start_offline() -> void:
+	_arena_rng.randomize()
 	_hide_menu()
 	if _offline_arena != null:
 		_offline_arena.queue_free()
 	_offline_arena = Arena.new(Arena.Mode.OFFLINE, Constants.DEFAULT_MATCH_SEED, args.match_mode, args.time_limit)
-	_offline_arena.match_state.arena_index = args.arena_index
+	_offline_arena.match_state.arena_index = args.pick_arena(_arena_rng)
 	add_child(_offline_arena)
 	_offline_arena.leave_requested.connect(_on_offline_leave, CONNECT_DEFERRED)
 	var input := LocalInput.new()
