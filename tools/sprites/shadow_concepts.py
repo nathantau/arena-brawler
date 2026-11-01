@@ -130,6 +130,8 @@ def pocket_hoodie(up: Canvas, accent, pocket=True, front_hand=False) -> None:
     if pocket:
         up.flat(P([(23, 43), (41, 43), (43, 48), (21, 48)]), BLACK)
         up.flat(L([(23, 43), (41, 43)], 1), STEEL_D)
+        up.flat(L([(23, 43), (21, 48)], 1), STEEL_D)
+        up.flat(L([(41, 43), (43, 48)], 1), SHADOW)
         for x in ((27,) if front_hand else (27, 35)):
             up.part(E((x, 42, x + 5, 47)), SHADOW)
             up.flat(L([(x + 1, 43), (x + 3, 43)], 1), STEEL_D)
@@ -275,6 +277,104 @@ VARIANTS = (("D", variant_d, "hood up over a cap, gold hoop + chain, tooth-glint
             ("F", variant_f, "beanie + plaster, silver chain, flicking a shuriken"))
 
 
+# --- G: E with a real hoodie (hood up over the messy hair), violet eyes --------------------------------------------------------
+def violet_eyes(up: Canvas) -> None:
+    sly_eyes(up, VIOLET_L)
+    for x in (31, 41):
+        up.flat(R((x + 1, 26, x + 2, 26)), VIOLET)  # iris deepens at the bottom
+        up.dot(x + 2, 25, PINK_L)  # second, softer glint
+
+
+def variant_g(mask: bool = False):
+    low = Canvas()
+    grin_shadow(low)
+    wisps(low, ((16, 57), (49, 57)))
+    jogger_legs(low, SHADOW, RED, stripe=RED)
+    up = Canvas()
+    pocket_hoodie(up, RED)
+    for x in (g.ARM_X[0], g.ARM_X[1]):  # ribbed sleeve cuffs
+        up.flat(R((x, 41, x + 5, 42)), BLACK)
+        up.flat(R((x, 41, x + 5, 41)), STEEL_D)
+    up.flat(L([(23, 33), (41, 33)], 1), STEEL_D)  # hood collar seam
+    # bandana round the neck (collar of the hoodie shows above and below it)
+    if not mask:
+        up.part(P([(21, 32), (43, 32), (40, 40), (32, 44), (24, 40)]), RED)
+        up.flat(L([(22, 33), (42, 33)], 1), ORANGE)
+        for x, y in ((28, 37), (33, 40), (37, 36)):
+            up.dot(x, y, WHITE)
+        up.part(P([(41, 34), (46, 38), (45, 43), (41, 40)]), RED)
+    # the hood: big shell with a drape behind, a lit rim round the face, a pointy peak on top
+    up.part(lambda d, f: (d.ellipse((14, 4, 50, 38), f), d.polygon(
+        [(14, 20), (9, 30), (13, 29), (12, 38), (19, 34), (22, 39), (25, 31), (25, 20)], f)), SHADOW)
+    up.flat(L([(20, 9), (30, 5), (40, 6)], 1), STEEL_D)
+    up.flat(L([(15, 20), (12, 28)], 1), STEEL_D)
+    up.flat(L([(18, 34), (22, 36)], 1), STEEL_D)
+    up.flat(RR((FACE[0] - 3, FACE[1] - 4, FACE[2] + 2, FACE[3] + 1), FACE_R + 3), STEEL_D)  # the hood's lit lip
+    up.flat(RR((FACE[0] - 2, FACE[1] - 3, FACE[2] + 1, FACE[3] + 1), FACE_R + 2), BLACK)  # the opening, in shadow
+    face_base(up)
+    # messy black hair poking out of the opening: spiky fringe over the brow + tufts at the temples
+    up.part(P([(23, 25), (23, 16), (26, 13), (26, 7), (30, 12), (33, 5), (36, 13), (40, 8), (41, 14), (45, 12), (46, 17),
+               (45, 22), (43, 18), (41, 20), (38, 18), (34, 20), (30, 18), (26, 20), (25, 27)]), OUTLINE, shade=False)
+    up.flat(L([(26, 9), (27, 11)], 1), STEEL_D)
+    up.flat(L([(33, 7), (34, 10)], 1), STEEL_D)
+    up.flat(L([(40, 10), (40, 12)], 1), STEEL_D)
+    up.flat(L([(29, 14), (33, 16)], 1), SHADOW)
+    up.part(P([(23, 24), (21, 31), (25, 29)]), OUTLINE, shade=False)  # sideburn tuft
+    violet_eyes(up)
+    brows(up, 0)
+    if mask:  # bandana pulled up over the mouth only
+        up.part(P([(24, 28), (46, 27), (45, 33), (38, 38), (31, 35), (25, 33)]), RED)
+        up.flat(L([(25, 28), (45, 27)], 1), ORANGE)
+        for x, y in ((31, 31), (37, 33), (42, 30)):
+            up.dot(x, y, WHITE)
+        up.part(P([(24, 29), (18, 34), (19, 39), (24, 34)]), RED)  # knot tail
+        up.flat(R((g.BLUSH[0], 29, g.BLUSH[0] + 1, 29)), ORANGE)
+    else:
+        smirk(up, tooth=False, tongue=True)
+    up.dot(21, 31, STEEL)  # stud
+    return low, up
+
+
+def variant_g2():
+    return variant_g(mask=True)
+
+
+EXTRA = (("G", variant_g, "E with a real hoodie: hood up over messy hair, violet eyes, tongue out"),
+         ("G2", variant_g2, "G with the bandana pulled up over his mouth"))
+
+
+def sheet_for(letter: str, build, blurb: str) -> Image.Image:
+    im = idle_frame(build)
+    bg = Image.new("RGBA", (g.CELL * 8, g.CELL * 8), (60, 56, 52, 255))
+    bg.alpha_composite(nn(im, 8))
+    game = ingame(im)
+    sheet = Image.new("RGBA", (max(bg.width, game.width) + 16, bg.height + game.height + 24), (24, 24, 32, 255))
+    sheet.alpha_composite(bg, (8, 8))
+    sheet.alpha_composite(game, (8, bg.height + 16))
+    return labelled(sheet, f"Shadow {letter}: {blurb}")
+
+
+def extras() -> None:
+    for letter, build, blurb in EXTRA:
+        sheet_for(letter, build, blurb).convert("RGB").save(OUT_DIR / f"shadow_{letter.lower()}.png")
+    pair = [("E", variant_e, "E"), ("G", variant_g, "G (hoodie, violet eyes)")]
+    panels = []
+    for letter, build, label in pair:
+        im = idle_frame(build)
+        bg = Image.new("RGBA", (g.CELL * 7, g.CELL * 7), (60, 56, 52, 255))
+        bg.alpha_composite(nn(im, 7))
+        panels.append(labelled(bg, label))
+    game = ingame(idle_frame(variant_g))
+    game_e = ingame(idle_frame(variant_e))
+    w = sum(p.width for p in panels) + 24
+    out = Image.new("RGBA", (w, panels[0].height + game.height * 2 + 40), (24, 24, 32, 255))
+    out.alpha_composite(panels[0], (8, 8))
+    out.alpha_composite(panels[1], (16 + panels[0].width, 8))
+    out.alpha_composite(labelled(game_e, "E in game"), (8, panels[0].height + 16))
+    out.alpha_composite(labelled(game, "G in game"), (8, panels[0].height + game.height + 40))
+    out.convert("RGB").save(OUT_DIR / "shadow_eg.png")
+
+
 def rim(f: Image.Image, col=STEEL_D) -> None:
     """Rim light: dark pixels on the silhouette's top / left edge turn STEEL_D so the black reads against the floor."""
     px = f.load()
@@ -370,6 +470,7 @@ def main():
         allsheet.alpha_composite(p, (8, y))
         y += p.height + 8
     allsheet.convert("RGB").save(OUT_DIR / "shadow_all.png")
+    extras()
     print("wrote previews to", OUT_DIR)
 
 
