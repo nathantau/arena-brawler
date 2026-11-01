@@ -6910,6 +6910,24 @@ def floor_clip(dst: Canvas, src: Canvas, down: int) -> None:
     dst.px = dst.img.load()
 
 
+def hound_puddle(c: Canvas, j: int) -> None:
+    """The puddle under the hound at rise frame `j` (0..HOUND_RISE_FRAMES-1; the melt plays this backwards): it opens out over
+    the first half, then from the halfway frame shrinks towards the hound's feet by ~30% per frame pair while a Bayer dither eats
+    it away (and thins its rim), so on the last rise frame nothing is left but the hound's own ground shadow (SpecialFx)."""
+    n = HOUND_RISE_FRAMES
+    half = n // 2
+    if j < half:
+        r, dith = 22 * min(1.0, (j + 1) / n * 2.2), 0.0
+    else:
+        r, dith = 22 * 0.7 ** ((j - half + 1) / 2), (j - half + 1) / (n - half)
+    pc = Canvas(96)
+    puddle_shape(pc, 30, HOUND_GROUND + 1, r, 0.3 + 0.1 * j, eyes=False, seed=5)
+    if dith > 0:
+        pc.img = dither_out(pc.img, min(1.0, dith), flip=j % 2 == 1)
+    c.img.alpha_composite(pc.img)
+    c.px = c.img.load()
+
+
 def hound_frame(kind: str, k: int) -> Image.Image:
     c = Canvas(96)
     g = HOUND_GROUND
@@ -6921,17 +6939,17 @@ def hound_frame(kind: str, k: int) -> Image.Image:
         hound_body(c, 0.9, jaw=open_, lunge=math.sin(t * math.pi), k=k)
     elif kind == "rise":
         u = (k + 1) / HOUND_RISE_FRAMES
-        # the puddle it comes out of, then the beast pushing up through it (what is below the floor line is not drawn)
-        puddle_shape(c, 30, g + 1, 22 * min(1.0, u * 2.2), 0.3, eyes=False, seed=5)
+        # the puddle it comes out of (shrinking away over the second half), then the beast pushing up through it
+        hound_puddle(c, k)
         body = Canvas(96)
         hound_body(body, 0.0, k=k)
         floor_clip(c, body, round((1 - min(1.0, u * 1.2)) ** 1.5 * 46))
         rng = random.Random(70 + k)
         for _ in range(4):
             sdot2(c, round(30 + rng.uniform(-20, 20)), round(g - rng.uniform(0, 8 + 20 * u)), rng.choice((VIOLET, VIOLET_L)))
-    else:  # melt: sinks back into the puddle, dithering away
+    else:  # melt: sinks back into a puddle that opens out under it (the rise's puddle, backwards), dithering away
         u = k / (HOUND_MELT_FRAMES - 1)
-        puddle_shape(c, 30, g + 1, 22 * (1 - u * u) + 3, 0.1 * k, eyes=False, seed=5)
+        hound_puddle(c, HOUND_RISE_FRAMES - 1 - k)
         body = Canvas(96)
         hound_body(body, 0.0)
         body.img = dither_out(body.img, u * 0.7, flip=k % 2 == 1)

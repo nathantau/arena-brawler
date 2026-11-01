@@ -1584,8 +1584,10 @@ func _draw_hound_floor() -> void:
 	if _hound == null:
 		return
 	var d: SkillData = _hound.data
-	var k: float = clampf(_hound.elapsed() / maxf(d.hound_rise_time, 0.01), 0.0, 1.0) \
-		* clampf(_hound.active_remaining / HOUND_MELT_TIME, 0.0, 1.0)
+	# Cross-fades with the art's puddle (which shrinks away over the second half of the rise and opens out again over the
+	# first half of the melt), so there is always exactly one shadow under it.
+	var k: float = clampf((_hound.elapsed() / maxf(d.hound_rise_time, 0.01) - 0.5) * 2.0, 0.0, 1.0) \
+		* clampf((_hound.active_remaining / HOUND_MELT_TIME - 0.5) * 2.0, 0.0, 1.0)
 	var feet: Vector2 = _hound_pos + Vector2(0.0, Player.FOOT_RING_Y)
 	_floor.draw_set_transform(feet, 0.0, Vector2(1.0, Player.FOOT_RING_SQUASH))
 	_floor.draw_circle(Vector2.ZERO, HOUND_SHADOW_RADIUS, Color(Player.SHADOW_COLOR, Player.SHADOW_COLOR.a * k))
