@@ -4157,9 +4157,7 @@ def bolt_parts(step=None, t: int = 0, stage: int = 0):
     if stage >= 2:
         up.flat(lambda d, f: d.arc(BOLT_HEAD, 100, 175, f), ORANGE)
     if stage <= 1:
-        up.flat(L([(BOLT_PART_X, 8), (BOLT_PART_X, 14)], 1), DARKER[col])  # the parting
-        up.flat(L([(BOLT_PART_X - 1, 9), (BOLT_PART_X - 1, 13)], 1), LIGHTER[col])  # lit hair beside it
-        up.flat(L([(24, 10), (30, 8)], 1), LIGHTER[col])
+        up.flat(L([(24, 10), (30, 8)], 1), LIGHTER[col])  # soft sheen on the crown (no hard line down the middle)
         up.flat(L([(41, 8), (45, 11)], 1), LIGHTER[col])
     up.part(RR(FACE, FACE_R), SKIN)
     if stage >= 3:  # no cream rim round the face's top-left edge (the auto highlight of SKIN is white)
@@ -4194,12 +4192,16 @@ def bolt_parts(step=None, t: int = 0, stage: int = 0):
             right = [(37, 15), (49, 15), (49, 18), (45, 17), (41, 16), (38, 16)]
         up.part(P(left), col, shade=False)
         up.part(P(right), col, shade=False)
+        for yy in range(14, 27):  # no outline seam where a curtain sits on the hair mass (only against skin)
+            for xx in range(17, 52):
+                if up.px[xx, yy][:3] == OUTLINE and (
+                        (up.px[xx - 1, yy][:3] == col and up.px[xx + 1, yy][:3] == col)
+                        or (up.px[xx, yy - 1][:3] == col and up.px[xx, yy + 1][:3] == col)
+                        or sum(up.px[xx + dx, yy + dy][:3] == col for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))) >= 3):
+                    up.px[xx, yy] = col + (255,)
         for x in range(21, 50):  # no seam where the curtains meet the hair mass
             if up.px[x, 14][:3] == OUTLINE and up.px[x, 13][3] and up.px[x, 13][:3] != OUTLINE:
                 up.px[x, 14] = up.px[x, 13]
-    if stage <= 1:  # the parting reads down onto the forehead
-        up.dot(BOLT_PART_X, 14, DARKER[col])
-        up.dot(BOLT_PART_X, 15, OUTLINE)
     if stage >= 2:
         _bolt_eyes_godspeed(up, t)
     else:
