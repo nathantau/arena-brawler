@@ -4591,35 +4591,53 @@ def thunder_mark_frame(k: int) -> Image.Image:
 
 
 def thunder_bolt_frame(k: int) -> Image.Image:
-    """The strike (128 px, bottom of the bolt at row THUNDER_BASE, centred across): the bolt races down (frame 0-1), lands with a
-    white flash (frame 2), thins out, rings of light race over the floor, then sparks fall away."""
+    """The strike (128 px, bottom of the bolt at row THUNDER_BASE, centred across): a chunky trunk (white-hot core, yellow body, orange
+    edge) races down (frame 0-1), lands with a wide white flash and a soft yellow halo (frame 2), thins out while rings of light race
+    over the floor, then sparks fall away. Thinner forks branch off it."""
     n, m = 128, 64
     c = Canvas(n)
     rng = random.Random(700 + k * 11)
     top, base = 3, THUNDER_BASE
     reach = (0.35, 0.8, 1, 1, 1, 1, 0, 0, 0, 0)[k]
-    width = (1, 2, 5, 4, 3, 1, 0, 0, 0, 0)[k]
+    outer = (3, 6, 10, 9, 7, 4, 0, 0, 0, 0)[k]  # trunk widths: orange edge / yellow body / white core
+    body = max(1, outer - 2)
+    core = max(1, outer - 5) if outer > 3 else 1
     if reach:
         end = (m, top + (base - top) * reach)
-        pts = zap_zig(rng, (m + 3, top), end, max(3, round(9 * reach)), 5)
-        c.flat(L(pts, width + 2), ORANGE)
-        c.flat(L(pts, width + 1), YELLOW)
-        c.flat(L(pts, max(1, width - 1)), WHITE)
-        for x, y in pts[1:-1:2]:
+        pts = zap_zig(rng, (m + 3, top), end, max(3, round(9 * reach)), 6)
+        if 2 <= k <= 4:  # a soft halo round the trunk: dithered yellow, thinning out
+            halo = Canvas(n)
+            halo.flat(L(pts, outer + 12), YELLOW)
+            hp, cp = halo.img.load(), c.img.load()
+            for y in range(n):
+                for x in range(n):
+                    if hp[x, y][3] and BAYER[y % 4][x % 4] / 16 < (0.45, 0.4, 0.28)[k - 2]:
+                        cp[x, y] = YELLOW + (255,)
+        c.flat(L(pts, outer), ORANGE)
+        c.flat(L(pts, body), YELLOW)
+        c.flat(L(pts, core), WHITE)
+        for x, y in pts[1:-1]:
             sdot(c, x, y, WHITE)
-        if k >= 2:  # forks
-            for j in (3, 6):
-                fx, fy = pts[j]
-                side = 1 if j == 3 else -1
-                zap_arc(c, zap_zig(rng, (fx, fy), (fx + side * rng.randint(10, 18), fy + rng.randint(6, 14)), 3, 3), YELLOW, tip=WHITE)
-    if 2 <= k <= 6:  # the flash at the foot and a ring racing out over the floor
-        r = (0, 0, 17, 12, 7, 3, 0)[k]
+        if k >= 2:  # three thinner forks
+            for j, side in ((2, 1), (4, -1), (6, 1)):
+                fx, fy = pts[min(j, len(pts) - 2)]
+                fe = (fx + side * rng.randint(14, 26), fy + rng.randint(8, 18))
+                fp = zap_zig(rng, (fx, fy), fe, 3, 3)
+                fw = max(1, outer // 3)
+                c.flat(L(fp, fw + 1), ORANGE)
+                c.flat(L(fp, fw), YELLOW)
+                c.flat(L(fp, 1), WHITE)
+    if 2 <= k <= 6:  # a wide white flash at the foot and rings racing out over the floor
+        r = (0, 0, 26, 19, 12, 6, 0)[k]
         if r:
             c.flat(E((m - r, base - r * 0.55, m + r, base + r * 0.55)), WHITE if k < 4 else YELLOW)
-        rr = 10 + (k - 2) * 9
-        c.flat(lambda d, f: d.ellipse((m - rr, base - rr * 0.35, m + rr, base + rr * 0.35), outline=f, width=2 if k < 5 else 1),
+            c.flat(E((m - r * 0.55, base - r * 0.3, m + r * 0.55, base + r * 0.3)), WHITE)
+        rr = 14 + (k - 2) * 10
+        c.flat(lambda d, f: d.ellipse((m - rr, base - rr * 0.35, m + rr, base + rr * 0.35), outline=f, width=3 if k < 4 else 2 if k < 5 else 1),
                YELLOW if k < 5 else ORANGE)
-    for j in range(12 if k >= 2 else 0):  # sparks thrown out and falling
+        if k < 5:
+            c.flat(lambda d, f: d.ellipse((m - rr + 3, base - (rr - 3) * 0.35, m + rr - 3, base + (rr - 3) * 0.35), outline=f, width=1), WHITE)
+    for j in range(14 if k >= 2 else 0):  # sparks thrown out and falling
         a = rng.uniform(-3.1, 0.0)
         r = (k - 1) * rng.uniform(2.5, 6.5)
         life = max(0.0, 1 - k / THUNDER_BOLT_FRAMES)
@@ -4637,7 +4655,7 @@ def thunder_scorch_frame(k: int) -> Image.Image:
     if k < 2:
         return c.img
     rng = random.Random(800)  # the same mark every frame, so it stays put
-    r0 = 26
+    r0 = 32
     pts = []
     for i in range(14):
         a = math.tau * i / 14
@@ -4645,7 +4663,7 @@ def thunder_scorch_frame(k: int) -> Image.Image:
         pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.8))
     heat = k - 2
     if heat < 2:  # the flash
-        c.flat(E((m - 36, m - 28, m + 36, m + 28)), WHITE if heat == 0 else YELLOW)
+        c.flat(E((m - 44, m - 34, m + 44, m + 34)), WHITE if heat == 0 else YELLOW)
     c.flat(P(pts), SHADOW)
     c.flat(P([(m + (x - m) * 0.62, m + (y - m) * 0.62) for x, y in pts]), OUTLINE)
     for _ in range(7):  # cracks glowing then going cold
