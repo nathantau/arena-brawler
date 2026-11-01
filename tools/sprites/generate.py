@@ -4855,6 +4855,25 @@ def outline(img: Image.Image) -> Image.Image:
     return out
 
 
+def fill_notches(c: Canvas, passes: int = 1) -> Canvas:
+    """Closes 1 px notches and pinholes in a canvas: a transparent pixel with 3+ opaque 4-neighbours takes the colour of
+    its top (else left) neighbour, so the final outline pass doesn't draw a dark speck inside a shape. Opt-in per
+    fighter (nothing calls it by default)."""
+    n = c.size
+    for _ in range(passes):
+        fills = []
+        for y in range(1, n - 1):
+            for x in range(1, n - 1):
+                if c.px[x, y][3]:
+                    continue
+                nb = [c.px[x, y - 1], c.px[x - 1, y], c.px[x + 1, y], c.px[x, y + 1]]
+                if sum(1 for q in nb if q[3]) >= 3:
+                    fills.append((x, y, next(q for q in nb if q[3])))
+        for x, y, q in fills:
+            c.px[x, y] = q
+    return c
+
+
 def recolor(img: Image.Image, fn) -> Image.Image:
     out = img.copy()
     px = out.load()
