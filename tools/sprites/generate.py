@@ -177,8 +177,10 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 
 def sleeve_detail(c: Canvas, x: int):
     """Shade's sleeve: a wrist wrap (lit top, shaded lower edge), a crease and a few weave pixels on the shaded side."""
+    c.flat(R((x, 39, x + 5, 39)), STEEL)  # steel vambrace: lit top, mid, shaded lower edge, a rivet
     c.flat(R((x, 40, x + 5, 40)), STEEL_D)
     c.flat(R((x, 41, x + 5, 41)), SHADOW)
+    c.dot(x + 1, 40, WHITE)
     c.flat(L([(x + 2, 37), (x + 2, 38)], 1), SHADOW)  # crease
     c.dot(x + 1, 38, BLUE)  # lit ridge beside it
     c.dot(x + 4, 39, SHADOW)
@@ -205,10 +207,14 @@ def flicker(step=None, t=0, zip_=False):
         low.flat(L([(x + 1, 46 + dy), (x + 1, 48 + dy)], 1), BLUE)  # lit fold down the thigh's left
         low.flat(L([(x + 3, 47 + dy), (x + 3, 48 + dy)], 1), SHADOW)  # crease
         low.dot(x + 4, 50 + dy, SHADOW)  # weave on the shaded side
+        low.flat(R((x + 1, 47 + dy, x + 4, 47 + dy)), STEEL)  # steel knee plate: lit top, shaded lower, a glint
+        low.flat(R((x + 1, 48 + dy, x + 4, 48 + dy)), STEEL_D)
+        low.dot(x + 1, 47 + dy, WHITE)
     up = Canvas()
     wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
     arm(up, ARM_X[0], NAVY, SKIN)
     sleeve_detail(up, ARM_X[0])
+    up.part(RR((15, 34, 21, 38), 2), STEEL)  # back shoulder plate
     up.part(RR(BODY, 3), NAVY)  # fitted shroud
     up.part(P([(24, 36), (41, 36), (42, 40), (38, 44), (27, 44), (23, 40)]), STEEL)  # metal breastplate
     up.flat(L([(33, 37), (33, 43)], 1), STEEL_D)  # its centre ridge
@@ -223,6 +229,10 @@ def flicker(step=None, t=0, zip_=False):
     up.part(R((20, 45, 44, 46)), RED, shade=False, line=False)  # thin sash
     up.flat(R((20, 46, 44, 46)), MAROON)  # shaded lower half
     up.flat(R((21, 45, 24, 45)), ORANGE)  # lit left end
+    up.flat(R((31, 44, 34, 46)), STEEL)  # sash clasp: a steel plate with a glint and a shaded base
+    up.flat(R((31, 46, 34, 46)), STEEL_D)
+    up.dot(31, 44, WHITE)
+    up.dot(32, 45, SHADOW)
     for x in range(21, 44, 2):  # shroud under the sash, in shade: weave
         up.dot(x, 47, NAVY)
     # shroud folds: a dark crease with a lit ridge beside it, light from the top left
@@ -238,6 +248,8 @@ def flicker(step=None, t=0, zip_=False):
     else:
         arm(up, ARM_X[1], NAVY, SKIN)
         sleeve_detail(up, ARM_X[1])
+        up.part(RR((42, 34, 48, 38), 2), STEEL)  # front shoulder plate: lit top, a glint
+        up.flat(R((43, 34, 45, 34)), WHITE)
     # ribbon tail: one band of red cloth hanging from the topknot's tie, fluttering behind her head
     if not zip_:
         tassel(up, [(17, 12), (13 - wave(1, 1), 20), (10 - wave(2, 1), 29), (9 - wave(3, 1), 37)])
