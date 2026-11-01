@@ -11,6 +11,7 @@ var _server_arena: Arena
 var _menu: MainMenu
 ## Picks the default arena of a new lobby (the server / offline host decides; clients just show it).
 var _arena_rng := RandomNumberGenerator.new()
+var _announcer: LanDiscovery
 
 
 func _ready() -> void:
@@ -28,7 +29,9 @@ func _ready() -> void:
 	args = CmdArgs.parse(OS.get_cmdline_user_args())
 	# Render at the sim rate: on 120 Hz phones, frames between sim ticks made moving sprites judder.
 	Engine.max_fps = Constants.PHYSICS_FPS
-	if args.server:
+	if args.discover:
+		_run_discover()
+	elif args.server:
 		_start_server()
 	elif args.host:
 		_start_host()
@@ -62,6 +65,19 @@ func _notification(what: int) -> void:
 			(pm as PauseMenu).open()
 
 
+## Debug (`--discover`): browse for ~4 s, print every game found, quit.
+func _run_discover() -> void:
+	var browser := LanDiscovery.new()
+	add_child(browser)
+	browser.sweep_self = true  # lets one machine find its own host
+	print("[discover] listen: %s" % error_string(browser.start_browse()))
+	await get_tree().create_timer(4.0).timeout
+	for g: Dictionary in browser.games.values():
+		print("[discover] found %s at %s:%d compatible=%s" % [LanDiscovery.label(g["info"]), g["ip"], g["info"]["port"], g["info"]["compatible"]])
+	print("[discover] done, %d games" % browser.games.size())
+	get_tree().quit()
+
+
 func _start_server() -> void:
 	_arena_rng.randomize()
 	Engine.max_fps = Constants.SERVER_MAX_FPS
@@ -91,6 +107,10 @@ func _start_host() -> void:
 	var ip: String = LanAddress.local()
 	_server_arena.host_address = "%s:%d" % [ip if ip != "" else "(no Wi-Fi)", args.port]
 	print("[host] %s" % _server_arena.host_address)
+	_announcer = LanDiscovery.new()
+	add_child(_announcer)
+	_announcer.broadcast_enabled = not args.no_broadcast
+	_announcer.start_host(_server_arena, args.port)
 	_server_arena.leave_requested.connect(_on_host_leave, CONNECT_DEFERRED)
 	var input := LocalInput.new()
 	input.autopilot = args.autopilot
@@ -109,6 +129,8 @@ func _start_host() -> void:
 ## Leave as host: shut the server down (clients see "Disconnected from server") and go back to the menu.
 func _on_host_leave(_restart: bool) -> void:
 	session.stop()
+	_announcer.queue_free()
+	_announcer = null
 	_server_arena.queue_free()
 	_server_arena = null
 	_show_menu("")
