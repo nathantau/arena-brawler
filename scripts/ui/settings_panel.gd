@@ -122,6 +122,14 @@ func _build_howto() -> Control:
 	return box
 
 
+## Esc closes the panel and stops there: otherwise it also reached the pause menu underneath, which closed and
+## resumed the match with the settings still on screen.
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed(&"ui_cancel"):
+		_close()
+		get_viewport().set_input_as_handled()
+
+
 func _close() -> void:
 	GameSettings.save()
 	if _on_close.is_valid():

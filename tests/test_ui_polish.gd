@@ -33,3 +33,16 @@ func test_ui_scale_only_for_phone_sized_screens() -> void:
 	assert_gt(UiStyle.scale_for(750.0, 2.0), 1.0)  # iPhone SE
 	# Phone canvas stays tall enough for the loading room: 720 / scale units.
 	assert_gt(720.0 / phone, 500.0)
+
+
+func test_safe_area_fit_stops_listening_when_the_control_is_freed() -> void:
+	var host := Control.new()
+	add_child_autofree(host)
+	var before: int = host.get_viewport().size_changed.get_connections().size()
+	var c := Control.new()
+	host.add_child(c)
+	UiStyle.fit_to_safe_area(c)
+	assert_eq(host.get_viewport().size_changed.get_connections().size(), before + 1)
+	c.free()
+	assert_eq(host.get_viewport().size_changed.get_connections().size(), before, "no stale resize handler on a freed screen")
+	host.get_viewport().size_changed.emit()  # must not touch the freed control

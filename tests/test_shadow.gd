@@ -158,6 +158,77 @@ func test_step_keeps_gliding_and_slides_under_walls_then_surfaces_clear() -> voi
 	assert_eq(p.collision_mask, Constants.LAYER_WALL_FEET, "walls solid again")
 
 
+func test_freezing_mid_step_surfaces_him_out_of_the_wall() -> void:
+	# The round ends (results / countdown freeze) while he is a puddle under a wall: no stuck-in-the-wall body.
+	var w: Array = _world()
+	var world: Node2D = w[0]
+	var body := StaticBody2D.new()
+	body.collision_layer = Constants.LAYER_WALLS
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(120, 400)
+	var cs := CollisionShape2D.new()
+	cs.shape = shape
+	body.add_child(cs)
+	body.add_child(Arena.feet_strip([Rect2(-shape.size * 0.5, shape.size)] as Array[Rect2]))
+	body.position = Vector2(400, 300)
+	world.add_child(body)
+	var p: Player = _shadow(world, w[1], &"shadow_step")
+	await wait_physics_frames(2)
+	_press(p, Vector2.RIGHT)
+	var guard: int = 0
+	while p.global_position.x < 400.0 and guard < 200:  # glide until he is in the middle of the wall
+		_run(p, 1)
+		guard += 1
+	assert_not_null(p.active_skill(SkillData.Kind.STEP), "still a puddle")
+	p.frozen = true
+	_run(p, 1)
+	assert_null(p.active_skill(SkillData.Kind.STEP), "the freeze ends the step")
+	var feet := PhysicsShapeQueryParameters2D.new()
+	feet.collision_mask = Constants.LAYER_WALL_FEET
+	var circle := CircleShape2D.new()
+	circle.radius = Constants.PLAYER_RADIUS
+	feet.shape = circle
+	feet.transform = Transform2D(0.0, p.global_position)
+	assert_true(p.get_world_2d().direct_space_state.intersect_shape(feet, 1).is_empty(), "on free floor, not inside the wall")
+
+
+## Steps from (100, 300) to the end of the puddle, with a wall block of `width` centred on `wall_x` (none if < 0) and a foe at
+## `foe_at` (none if INF). Returns [where he ends up, the foe's hp + armor].
+func _step_to_the_end(wall_x: float, width: float, foe_at: Vector2) -> Array:
+	var w: Array = _world()
+	var world: Node2D = w[0]
+	if wall_x >= 0.0:
+		var body := StaticBody2D.new()
+		body.collision_layer = Constants.LAYER_WALLS
+		var shape := RectangleShape2D.new()
+		shape.size = Vector2(width, 400)
+		var cs := CollisionShape2D.new()
+		cs.shape = shape
+		body.add_child(cs)
+		body.add_child(Arena.feet_strip([Rect2(-shape.size * 0.5, shape.size)] as Array[Rect2]))
+		body.position = Vector2(wall_x, 300)
+		world.add_child(body)
+	var p: Player = _shadow(world, w[1], &"shadow_step")
+	var foe: Player = _foe(world, w[1], 2, foe_at) if foe_at != Vector2.INF else null
+	await wait_physics_frames(2)
+	_press(p, Vector2.RIGHT)
+	_run(p, 90)
+	return [p.global_position, _hp(foe) if foe != null else 0]
+
+
+func test_step_strike_lands_where_he_surfaces_not_inside_the_wall() -> void:
+	var open: Array = await _step_to_the_end(-1.0, 0.0, Vector2.INF)
+	var end_x: float = open[0].x
+	# A wall block centred on where the puddle ends: he comes up on its far side, about 100 px from where the glide stopped.
+	var empty: Array = await _step_to_the_end(end_x, 200.0, Vector2.INF)
+	var up: Vector2 = empty[0]
+	assert_gt(up.distance_to(open[0]), 90.0, "he surfaced well away from where the glide ended")
+	var d: SkillData = skills.get_skill(&"shadow_step")
+	var full: int = characters.get_character(&"flicker").max_hp + characters.get_character(&"flicker").max_armor
+	var hit: Array = await _step_to_the_end(end_x, 200.0, up + Vector2(0, -30))
+	assert_eq(hit[1], full - d.step_damage, "the foe next to where he came up is struck")
+
+
 func test_step_strikes_where_he_emerges_only() -> void:
 	var w: Array = _world()
 	var p: Player = _shadow(w[0], w[1], &"shadow_step")
@@ -351,6 +422,28 @@ func test_bind_is_stopped_by_walls_and_misses_cleanly() -> void:
 	assert_false(behind.stats.is_stunned(), "behind the wall")
 	assert_false(p.skills[1].is_active(), "a miss just ends")
 	assert_gt(p.skills[1].cooldown_remaining, 0.0)
+
+
+func test_bind_against_an_adjacent_wall_stuns_nobody() -> void:
+	# Pressed with the wall right at his feet the line has no length: it must end, not catch an enemy across the map.
+	var s: Array = _bind_setup()
+	var p: Player = s[2]
+	var body := StaticBody2D.new()
+	body.collision_layer = Constants.LAYER_WALLS
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(20, 600)
+	var cs := CollisionShape2D.new()
+	cs.shape = shape
+	body.add_child(cs)
+	body.add_child(Arena.feet_strip([Rect2(-shape.size * 0.5, shape.size)] as Array[Rect2]))
+	body.position = Vector2(p.global_position.x + Constants.PLAYER_RADIUS + 5.0, 300)
+	s[0].add_child(body)
+	var far: Player = _foe(s[0], s[1], 2, Vector2(p.global_position.x - 200.0, 300))
+	await wait_physics_frames(2)
+	_press(p, Vector2.RIGHT)
+	_run(p, 30)
+	assert_false(far.stats.is_stunned(), "an enemy behind him is not stunned")
+	assert_false(p.skills[1].is_active(), "the line ended at once")
 
 
 func test_bind_has_a_range() -> void:

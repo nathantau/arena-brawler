@@ -325,9 +325,9 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 				_sapling_shoot(skills[i], input.seq)
 			if projectiles != null and bloom_before[i] >= 0.0 and skills[i].bloom_tick_due(bloom_before[i]):
 				projectiles.bloom(player_id, skills[i].anchor, skills[i].data.bloom_radius, skills[i].data.bloom_heal)
-	_shadow_tick(step_was, hound_was, hound_before, input.seq, delta, replay)
 	if step_was != null and not step_was.is_active():
-		_surface()  # rises from under whatever he slid through, onto the nearest floor
+		_surface()  # rises from under whatever he slid through, onto the nearest floor, then strikes from there
+	_shadow_tick(step_was, hound_was, hound_before, input.seq, delta, replay)
 	if storm != null and not replay and storm.storm_tick_due(storm_before):
 		var sd: SkillData = storm.data
 		projectiles.strike(player_id, input.seq + STORM_SEQ_OFFSET, storm.anchor, sd.storm_radius, sd.storm_damage,
@@ -455,10 +455,14 @@ func _interrupt_channels() -> void:
 func _end_abilities(swing: CharacterSkill) -> void:
 	if swing != null:
 		global_position = swing.anchor + swing.direction
+	var stepping: bool = false
 	for slot: CharacterSkill in skills:
 		if slot.data.kind == SkillData.Kind.TRAIL and slot.trail_dashing(0.0):
 			global_position = slot.anchor + slot.direction
+		stepping = stepping or slot.is_stepping()
 		slot.active_remaining = 0.0
+	if stepping:
+		_surface()  # a puddle under a wall comes up on free floor, not stuck in the wall for the whole results screen
 
 
 ## True while the other slot is in a phase that blocks this one (see CharacterSkill.blocks_other): the press is ignored.
@@ -504,6 +508,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			slot.anchor = hound_spot(slot.direction, slot.data)
 		SkillData.Kind.BIND:
 			slot.direction *= bind_length(slot.direction, slot.data)
+			if slot.direction.is_zero_approx():  # a wall at his feet: no line at all (a zero heading would catch anyone)
+				slot.active_remaining = 0.0
 		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
