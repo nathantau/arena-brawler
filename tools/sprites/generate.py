@@ -4329,17 +4329,15 @@ def eden(step=None, t=0):
     for i, (x0, x1, y0) in enumerate(((22, 42, 34), (23, 41, 38), (24, 40, 42))):
         up.part(R((x0, y0, x1, y0 + 3)), BROWN)
         up.flat(R((x0 + 1, y0, x1 - 1, y0)), SKIN_D)
-    for x in (26, 38):  # long bark grooves running down the plates
-        up.flat(L([(x, 35), (x, 44)], 1), MAROON)
-        up.flat(L([(x - 1, 36), (x - 1, 38)], 1), SKIN_D)  # lit lip beside each groove
-    for x in (23, 24, 40):  # moss creeping over the top plate
-        up.dot(x, 34, GREEN_L)
+        up.flat(R((x0 + 3 + i * 3, y0 + 1, x0 + 3 + i * 3, y0 + 2)), MAROON)
+        up.flat(R((x1 - 4 - i * 2, y0 + 1, x1 - 4 - i * 2, y0 + 2)), MAROON)
     up.part(E((30, 36 - breath, 35, 41 - breath)), STEEL_D)
     up.dot(31, 37 - breath, STEEL)
     up.dot(33, 40 - breath, (YELLOW, ORANGE, ORANGE, ORANGE)[t % 4])  # amber glints
     # woven belt, buckle
     up.part(R((20, 45, 44, 46)), BROWN, line=False)
-    up.flat(R((21, 45, 43, 45)), SKIN_D)  # lit top edge of the belt
+    for x in range(21, 44, 2):
+        up.dot(x, 45 + (x // 2) % 2, SKIN_D)
     up.part(RR((30, 44, 35, 47), 1), YELLOW)
     up.dot(32, 45, ORANGE)
     # pouch + gourd swing from the belt (follow-through: the gourd lags the pouch)
@@ -4363,10 +4361,6 @@ def eden(step=None, t=0):
     draw_leaf(up, 47 + b, 47 + c_ + sag, math.pi / 2 + 0.5 + 0.12 * b, 5, 2.0, GREEN_D, shade=False)  # hem tip
     # front arm + stone cuff
     _eden_arm(up, ARM_X[1], GREEN_D, SKIN, -ay)
-    up.part(RR((41, 33 - breath, 47, 37 - breath), 2), STEEL_D)  # stone pauldron: lit top, a mossy crack
-    up.flat(R((42, 33 - breath, 45, 33 - breath)), STEEL)
-    up.dot(42, 34 - breath, WHITE)
-    up.dot(45, 36 - breath, GREEN)
     up.part(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 42 - ay)), STEEL_D)
     up.flat(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 40 - ay)), STEEL)
     # small mossy mantle at the other shoulder
@@ -4379,14 +4373,19 @@ def eden(step=None, t=0):
     lag_x = wv(2, 1.0)
     up.part(RR((15, 6, 48, 36), 9), BROWN)
     up.part(P([(15, 26), (19, 26), (19, 36 + lag_y), (16, 37 + lag_y)]), BROWN, shade=False)  # swinging ends
-    for pts in (((34, 7), (26, 8), (19, 13), (17, 22)), ((34, 7), (42, 8), (47, 12))):  # a strand each side of the part
+    for pts in (((34, 7), (26, 8), (19, 13), (17, 22)), ((34, 7), (42, 8), (47, 12)), ((30, 7), (23, 10), (18, 17)),
+                ((38, 7), (44, 9))):  # strands fanning from the part
         up.flat(L(list(pts), 1), SKIN_D)
+    for pts in (((32, 8), (24, 12), (19, 20)), ((36, 8), (45, 11))):
+        up.flat(L(list(pts), 1), MAROON)
     up.flat(L([(34, 6), (34, 10)], 1), MAROON)  # the part
     up.flat(L([(16, 28), (16, 34 + lag_y)], 1), MAROON)
     up.part(RR(FACE, FACE_R), SKIN)
     up.part(P([(FACE[0] - 1, 17), (FACE[0] + 3, 17), (FACE[0] + 2, 30), (FACE[0] - 2, 34 + lag_y),
                (FACE[0] - 4, 26)]), BROWN, shade=False)
     up.flat(L([(FACE[0] - 1, 19), (FACE[0], 29)], 1), SKIN_D)  # lock highlight
+    up.flat(L([(15, 30), (13 - lag_x, 36 + lag_y), (14 - lag_x, 39 + lag_y)], 1), BROWN)  # loose locks flicking out
+    up.flat(L([(18, 33), (17 - lag_x, 38 + lag_y)], 1), BROWN)
     # leaf mask: pointed leaf shape sweeping out at the sides (tips flick), midrib + veins
     f = wv(2, 1.0)
     mask = [(20, 21 + f), (24, 14), (36, 11), (47, 14), (51, 20 - f), (49, 26), (46, 29), (41, 29), (39, 27), (36, 27),
@@ -4401,9 +4400,9 @@ def eden(step=None, t=0):
     up.dot(36, 10, GREEN_L)
     # bangs: a scalloped fringe over the mask's brow (swaying a little), with a lit rim
     bx = wv(1, 1.0) // 1
-    up.part(lambda d, f: [d.ellipse((x - 3, 9, x + 3, 15), f) for x in range(24, 48, 4)], BROWN, shade=False, line=False)
-    up.flat(R((21, 14, 47, 14)), MAROON)  # the fringe's shaded lower edge: one clean line
-    up.flat(R((22, 10, 46, 10)), SKIN_D)  # lit top edge
+    up.part(lambda d, f: [d.ellipse((x - 3, 9, x + 3, 15 + (i % 2)), f) for i, x in enumerate(range(24, 48, 4))], BROWN)
+    for x in range(25, 47, 4):
+        up.dot(x + bx % 2, 11, SKIN_D)
     # glowing eyes in dark holes: shimmer every beat, a half-lid on the idle's last frame
     up.flat(E((29, 20, 36, 28)), OUTLINE)
     up.flat(E((39, 20, 46, 28)), OUTLINE)
