@@ -652,7 +652,7 @@ def sakura(step=None, t=0):
     # long ponytail from a high tie at the back of her head, flowing in the wind
     up.part(P([(19, 9), (12, 12), (8 - wave(0, 0.5), 20), (6 - wave(1, 1), 30), (6 - wave(2, 1.5), 40),
                (9 - wave(3, 2), 46), (12 - wave(2, 1.5), 38), (15 - wave(1, 1), 28), (19, 17)]), PINK)
-    up.flat(L([(13, 15), (10 - wave(1, 0.5), 24), (9 - wave(2, 1), 36)], 1), PINK_L)  # its sheen
+    up.flat(L([(12, 17), (10 - wave(1, 0.5), 24)], 1), PINK_L)  # its sheen: one short lit streak, the rest is the part's own shading
     up.part(E((16, 5, 48, 37)), PINK)  # hair
     up.part(RR(FACE, FACE_R), SKIN)  # face
     # middle part: two curtains and two long side locks, mirrored about the face's centre line
@@ -664,7 +664,7 @@ def sakura(step=None, t=0):
     for side in (1, -1):  # each curtain and its lock as one shape, so no line where the lock meets the curtain
         c_pts, l_pts = ([(mid + side * (x - mid), y) for x, y in pts] for pts in (curtain, lock))
         up.part(lambda d, f, c_pts=c_pts, l_pts=l_pts: (d.polygon(c_pts, f), d.polygon(l_pts, f)), PINK)  # shaded like the ponytail
-        up.flat(L([(mid + side * 6, 11), (mid + side * 11, 15), (mid + side * 13, 24 - drift * side)], 1), PINK_L)  # sheen
+        up.flat(L([(mid + side * 6, 11), (mid + side * 10, 14)], 1), PINK_L)  # sheen: short, light from the top
     up.flat(L([(mid, 8), (mid, 13)], 1), MAROON)  # the parting
     up.part(lambda d, f: [d.ellipse((x - 2, y - 2, x + 2, y + 2), f) for x, y in
                           ((19, 4), (22, 6), (21, 9), (17, 9), (16, 6))], PINK_L)  # cherry blossom tying the ponytail
