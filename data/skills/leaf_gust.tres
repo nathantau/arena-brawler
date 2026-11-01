@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_leaf_gust.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"leaf_gust"
+display_name = "Leaf Gust"
+kind = 22
+special = true
+blurb = "Push, wipe shots"
+tags = Array[StringName]([&"eden"])
+cooldown = 8.0
+duration = 0.5
+gust_range = 150.0
+gust_half_angle_deg = 36.0
+gust_damage = 8
+gust_knockback = 560.0

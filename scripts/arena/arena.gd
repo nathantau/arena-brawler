@@ -371,6 +371,7 @@ func _attach_effects() -> void:
 		else:
 			effects.swing(origin, facing, w.melee_range, w.melee_arc_deg, w.color))
 	projectiles.exploded.connect(_fx_explosion)
+	projectiles.burst_shown.connect(effects.burst_strip)
 	hit_landed.connect(_fx_hit)
 	kill_registered.connect(_fx_kill)
 	crates.destroyed.connect(func(at: Vector2) -> void:

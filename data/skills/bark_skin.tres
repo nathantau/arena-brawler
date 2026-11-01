@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_bark_skin.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"bark_skin"
+display_name = "Bark Skin"
+kind = 20
+special = true
+blurb = "Half damage, armor"
+tags = Array[StringName]([&"eden"])
+cooldown = 13.0
+duration = 4.0
+bark_damage_scale = 0.5

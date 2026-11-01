@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/eden_sling.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/eden_sling.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/eden_burst.png" id="10_burst"]
+
+[resource]
+script = ExtResource("1_wd")
+muzzle_x = 43.0
+projectile_sprite = ExtResource("9_proj")
+burst_art = ExtResource("10_burst")
+burst_art_radius = 31.0
+id = &"eden_sling"
+display_name = "Seed Sling"
+pickup = false
+damage = 20
+fire_interval = 0.5
+spread_deg = 2.0
+projectile_speed = 640.0
+projectile_range = 560.0
+projectile_radius = 6.0
+energy_cost = 50
+knockback = 150.0
+color = Color(0.55, 0.78, 0.3, 1)
+screen_shake = 0.06
+sfx = &"shot_launcher"
+splash_radius = 52.0
+splash_edge_scale = 0.5
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"eden"])

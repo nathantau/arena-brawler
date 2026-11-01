@@ -103,6 +103,8 @@ class Ring:
 	var pos: Vector2 = Vector2.ZERO
 	var radius: float = 0.0
 	var art: Texture2D
+	## Art px from the strip's centre to the radius (BLAST_ART_RADIUS for the fireball).
+	var art_radius: float = BLAST_ART_RADIUS
 
 
 var _particles: Array[Particle] = []
@@ -219,6 +221,15 @@ func blast(at: Vector2, radius: float, slam: bool) -> void:
 	r.pos = at
 	r.radius = radius
 	r.art = SLAM_ART if slam else BLAST_ART
+	r.art_radius = BLAST_ART_RADIUS
+
+
+## A weapon's own burst strip (WeaponData.burst_art), scaled so `art_radius` art px reach `radius`.
+func burst_strip(at: Vector2, radius: float, art: Texture2D, art_radius: float) -> void:
+	blast(at, radius, false)
+	var r: Ring = _rings[(_rc + _rings.size() - 1) % _rings.size()]
+	r.art = art
+	r.art_radius = art_radius
 
 
 func _process(delta: float) -> void:
@@ -269,7 +280,7 @@ func _draw() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	for r: Ring in _rings:
 		if r.life > 0.0 and r.art != SLAM_ART:
-			_draw_strip(self, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / BLAST_ART_RADIUS, Color.WHITE)
+			_draw_strip(self, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / r.art_radius, Color.WHITE)
 	for s: Swing in _swings:
 		if s.life <= 0.0:
 			continue
@@ -302,7 +313,7 @@ func _draw() -> void:
 func _draw_slams() -> void:
 	for r: Ring in _rings:
 		if r.life > 0.0 and r.art == SLAM_ART:
-			_draw_strip(_ground, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / BLAST_ART_RADIUS, Color.WHITE)
+			_draw_strip(_ground, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / r.art_radius, Color.WHITE)
 
 
 ## Frame `t` (0..1) of a strip of square frames, centred on `at`, rotated and scaled, drawn on `ci`.

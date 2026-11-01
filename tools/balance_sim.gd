@@ -30,7 +30,8 @@ class SimBot extends BotBrain:
 
 	func get_input(player: Player, delta: float) -> InputFrame:
 		var f: InputFrame = super.get_input(player, delta)
-		if f.fire and player.skills[1].is_ready():
+		if f.fire and player.skills[1].is_ready() and seen != null \
+				and special_useful(player, player.global_position.distance_to(seen as Vector2)):
 			f.special = rng.randf() < 1.5 * delta
 		if seen != null:
 			var w: WeaponData = player.held_weapon().data

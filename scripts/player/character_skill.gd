@@ -21,6 +21,9 @@ extends RefCounted
 ## - NOVA: charges for `nova_charge`, then the Player sets off `nova_blast` on itself (nothing stored but the active time).
 ## - SAPLING: the tree stands at `anchor` for `duration`; the Player shoots from it.
 ## - STORM: `anchor` = the cloud's spot (the Player places it against the walls); strikes fall due every `storm_interval`.
+## - BARK_SKIN: the plates are on while active (the Player scales damage taken); armor is refilled on the press.
+## - BLOOM: the moss patch lies at `anchor` (her feet) for `duration`; a heal falls due every `bloom_interval`.
+## - GUST: the cone points along `direction` from the player for `duration`; the hit lands on the press.
 ## Pure state (no nodes) so it is captured in snapshots and replayed during prediction.
 
 const WHIRL_EPSILON: float = 0.0001
@@ -78,6 +81,27 @@ func is_drifting() -> bool:
 
 func is_overdriving() -> bool:
 	return data.kind == SkillData.Kind.OVERDRIVE and is_active()
+
+
+func is_barked() -> bool:
+	return data.kind == SkillData.Kind.BARK_SKIN and is_active()
+
+
+func is_gusting() -> bool:
+	return data.kind == SkillData.Kind.GUST and is_active()
+
+
+## GUST: true only in the step the press happened in (nothing has ticked yet).
+func gust_just_pressed() -> bool:
+	return is_gusting() and elapsed() < WHIRL_EPSILON
+
+
+## BLOOM: a heal falls due in the step that ticked from `before` (elapsed) to now.
+func bloom_tick_due(before: float) -> bool:
+	if data.kind != SkillData.Kind.BLOOM:
+		return false
+	var interval: float = data.bloom_interval
+	return floori((elapsed() + WHIRL_EPSILON) / interval) > floori((before + WHIRL_EPSILON) / interval)
 
 
 func is_whirling() -> bool:
@@ -172,6 +196,8 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.swing_iframes)
 		SkillData.Kind.DRIFT:
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.duration)
+		SkillData.Kind.BARK_SKIN:
+			stats.armor = stats.max_armor
 		SkillData.Kind.TRANSFORM:
 			form_weapon.cooldown = 0.0
 	return true

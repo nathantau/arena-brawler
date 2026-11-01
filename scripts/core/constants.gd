@@ -79,6 +79,11 @@ const BOT_TARGET_MEMORY: float = 0.5
 const BOT_SIGHT_RANGE: float = 600.0
 const BOT_SKILL_CHANCE_PER_SEC: float = 0.4
 const BOT_SPECIAL_CHANCE_PER_SEC: float = 0.15
+## Eden's specials: a bot casts Leaf Gust within this share of its range, Verdant Bloom under this share of its max hp,
+## Bark Skin with an enemy this close.
+const BOT_GUST_REACH_SCALE: float = 0.9
+const BOT_BLOOM_HP_FRACTION: float = 0.85
+const BOT_BARK_ENGAGE_DISTANCE: float = 320.0
 
 # --- Feedback ---
 const HIT_FLASH_TIME: float = 0.08

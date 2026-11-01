@@ -30,8 +30,12 @@ extends Resource
 ## STORM: a thundercloud at a spot ahead along the aim (short of walls) for `duration`: every `storm_interval` a bolt strikes
 ## each enemy within `storm_radius` of the spot that it can see.
 ## OVERDRIVE: super speed for `duration`: move speed x`overdrive_speed_scale`, steerable and still able to fire, no i-frames; weapon cooldowns tick x`overdrive_fire_scale` faster.
+## BARK_SKIN: bark plates for `duration`: damage taken x`bark_damage_scale`, armor refilled on the press.
+## BLOOM: a moss patch at your feet for `duration`: every `bloom_interval` you heal `bloom_heal` while you stand within `bloom_radius` of it (only you).
+## GUST: a cone of leaves along the aim: enemies within `gust_range` and `gust_half_angle_deg` take `gust_damage` and are thrown
+## `gust_knockback` away; enemy projectiles in the cone are destroyed (for the whole `duration`).
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19, BARK_SKIN = 20, BLOOM = 21, GUST = 22 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
@@ -123,6 +127,25 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var overdrive_speed_scale: float = 1.9
 ## Weapon cooldowns tick this much faster while it runs (energy still limits the fire rate).
 @export var overdrive_fire_scale: float = 1.0
+
+
+@export_group("Bark Skin")
+## Incoming damage is multiplied by this while the bark is on; armor is refilled to full when it goes on.
+@export_range(0.0, 1.0) var bark_damage_scale: float = 0.5
+
+
+@export_group("Bloom")
+@export var bloom_radius: float = 70.0
+@export var bloom_heal: int = 3
+## Seconds between heals (the first falls one interval after the press).
+@export var bloom_interval: float = 0.5
+
+
+@export_group("Gust")
+@export var gust_range: float = 150.0
+@export var gust_half_angle_deg: float = 36.0
+@export var gust_damage: int = 8
+@export var gust_knockback: float = 560.0
 
 
 @export_group("Nova")

@@ -22,6 +22,8 @@ signal beam_drawn(owner_id: int, from: Vector2, to: Vector2, weapon: WeaponData)
 signal swung(origin: Vector2, facing: Vector2, weapon: WeaponData)
 ## `art` false: a skill draws its own (Eruption's pillar of fire); keep just the sound, sparks and shake.
 signal exploded(at: Vector2, radius: float, color: Color, slam: bool, art: bool)
+## A splash weapon with its own burst strip (WeaponData.burst_art): `art_radius` = art px to the splash edge.
+signal burst_shown(at: Vector2, radius: float, art: Texture2D, art_radius: float)
 
 ## Slam lines reach this far past their end so a crate that stopped them is struck.
 const LINE_END_REACH: float = 6.0
@@ -64,6 +66,8 @@ class Slot:
 	var color: Color = Color.WHITE
 	var splash_radius: float = 0.0
 	var splash_edge: float = 1.0
+	var burst_art: Texture2D
+	var burst_art_radius: float = 0.0
 	var bounces_left: int = 0
 	var bounce_damping: float = 1.0
 	var drag: float = 0.0
@@ -195,6 +199,8 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.sprite = weapon.projectile_sprite
 	slot.splash_radius = weapon.splash_radius
 	slot.splash_edge = weapon.splash_edge_scale
+	slot.burst_art = weapon.burst_art
+	slot.burst_art_radius = weapon.burst_art_radius
 	slot.bounces_left = weapon.bounces
 	slot.bounce_damping = weapon.bounce_damping
 	slot.drag = weapon.drag
@@ -298,6 +304,46 @@ func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int,
 			(result.collider as Crate).take_damage(damage)
 
 
+## Verdant Bloom: heals `owner_id` (and only them) by `amount` if they stand within `radius` of the patch at `at`
+## (their feet). Authoritative only.
+func bloom(owner_id: int, at: Vector2, radius: float, amount: int) -> void:
+	if not authoritative:
+		return
+	for target: Player in targets:
+		if target.player_id == owner_id and not target.dead \
+				and (target.global_position + Vector2(0.0, Player.FOOT_RING_Y)).distance_to(at) <= radius:
+			target.stats.heal(amount)
+
+
+## Leaf Gust: enemy projectiles inside the cone (apex `origin`, along `dir`, `reach` long, `half_angle` rad each side)
+## are destroyed on every peer; with `damage` > 0 (authoritative only) enemies in it with line of sight take it and are
+## thrown `knockback` away from the apex (a crate in it takes the damage too).
+func gust(owner_id: int, seq: int, origin: Vector2, dir: Vector2, reach: float, half_angle: float, damage: int,
+		knockback: float) -> void:
+	for s: Slot in _slots:
+		if s.active and s.attacker_id != owner_id and _in_cone(s.pos, origin, dir, reach + s.radius, half_angle):
+			s.active = false
+			_add_impact(s.pos, s.radius, s.color)
+	if not authoritative or damage <= 0:
+		return
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	for target: Player in targets:
+		if target.player_id == owner_id or not target.can_be_hit() \
+				or not _in_cone(target.global_position, origin, dir, reach, half_angle) \
+				or not AutoAim.has_line_of_sight(space, _los_query, origin, target.global_position):
+			continue
+		var push: Vector2 = (target.global_position - origin).normalized() * knockback
+		_damage_player(target, owner_id, seq, 0, damage, false, push, target.global_position)
+
+
+static func _in_cone(at: Vector2, origin: Vector2, dir: Vector2, reach: float, half_angle: float) -> bool:
+	var to: Vector2 = at - origin
+	var dist: float = to.length()
+	if dist > reach:
+		return false
+	return dist < 1.0 or absf(dir.angle_to(to)) <= half_angle
+
+
 ## Enemy projectiles within `radius` of `origin` vanish (every peer: the cosmetic copies go too).
 func _destroy_shots(owner_id: int, origin: Vector2, radius: float) -> void:
 	for s: Slot in _slots:
@@ -325,6 +371,8 @@ func _blast(owner_id: int, seq: int, at: Vector2, weapon: WeaponData, slam: bool
 	blast.color = weapon.color
 	blast.splash_radius = weapon.splash_radius
 	blast.splash_edge = weapon.splash_edge_scale
+	blast.burst_art = weapon.burst_art
+	blast.burst_art_radius = weapon.burst_art_radius
 	_explode(blast, at, slam, not weapon.blast)
 
 
@@ -484,7 +532,9 @@ func _finish(s: Slot, at: Vector2) -> void:
 
 func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> void:
 	s.active = false
-	exploded.emit(at, s.splash_radius, s.color, slam, art)
+	exploded.emit(at, s.splash_radius, s.color, slam, art and s.burst_art == null)
+	if s.burst_art != null:
+		burst_shown.emit(at, s.splash_radius, s.burst_art, s.burst_art_radius)
 	if not authoritative:
 		return
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state

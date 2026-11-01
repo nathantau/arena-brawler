@@ -49,6 +49,8 @@ const PILLAR_SEQ_OFFSET: int = 1 << 28
 const NOVA_SEQ_OFFSET: int = 1 << 30
 ## Cherry Sapling shots are keyed too (below the volley offset).
 const SAPLING_SEQ_OFFSET: int = 1 << 22
+## Leaf Gust hits are keyed too.
+const GUST_SEQ_OFFSET: int = 1 << 21
 ## Storm Cloud lightning strikes are keyed too.
 const STORM_SEQ_OFFSET: int = 1 << 29
 ## Shadow clones weave side to side as they run.
@@ -276,13 +278,17 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var sapling_before: Array[float] = []
 	var storm: CharacterSkill = active_skill(SkillData.Kind.STORM)
 	var storm_before: float = storm.elapsed() if storm != null else 0.0
+	var bloom_before: Array[float] = []
 	for slot: CharacterSkill in skills:
 		sapling_before.append(slot.elapsed() if slot.is_active() else -1.0)
+		bloom_before.append(slot.elapsed() if slot.is_active() else -1.0)
 		slot.tick(delta)
 	if not replay:
 		for i: int in skills.size():
 			if sapling_before[i] >= 0.0 and skills[i].sapling_shot_due(sapling_before[i]):
 				_sapling_shoot(skills[i], input.seq)
+			if projectiles != null and bloom_before[i] >= 0.0 and skills[i].bloom_tick_due(bloom_before[i]):
+				projectiles.bloom(player_id, skills[i].anchor, skills[i].data.bloom_radius, skills[i].data.bloom_heal)
 	if storm != null and not replay and storm.storm_tick_due(storm_before):
 		var sd: SkillData = storm.data
 		projectiles.strike(player_id, input.seq + STORM_SEQ_OFFSET, storm.anchor, sd.storm_radius, sd.storm_damage,
@@ -356,6 +362,9 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	_sync_shields()
 	if whirl != null:
 		_whirl(whirl, input.seq, delta, replay)
+	var gust: CharacterSkill = active_skill(SkillData.Kind.GUST)
+	if gust != null:
+		_gust(gust, input.seq, replay)
 
 	if input.aim_vec.length_squared() > 0.0:
 		facing = input.aim_vec.normalized()
@@ -396,7 +405,7 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			slot.direction = (wall.position if not wall.is_empty() else _sight_query.to) - global_position
 		SkillData.Kind.GRAPPLE:
 			_throw_grapple(slot)
-		SkillData.Kind.SAPLING:
+		SkillData.Kind.SAPLING, SkillData.Kind.BLOOM:
 			slot.anchor = global_position + Vector2(0.0, FOOT_RING_Y)
 		SkillData.Kind.ERUPTION:
 			slot.anchor = eruption_spot(slot.direction, slot.data)
@@ -418,6 +427,16 @@ func _whirl(slot: CharacterSkill, seq: int, delta: float, replay: bool) -> void:
 	var d: SkillData = slot.data
 	projectiles.whirl(player_id, seq + WHIRL_SEQ_OFFSET, global_position, d.whirl_radius,
 		d.whirl_damage if slot.whirl_tick_due(delta) else 0, d.whirl_knockback)
+
+
+## The leaf gust: enemy shots in the cone are destroyed on every step it lasts (so ones flying into it die too); the hit
+## (damage + push) lands once, on the press. Replay changes nothing.
+func _gust(slot: CharacterSkill, seq: int, replay: bool) -> void:
+	if replay or projectiles == null:
+		return
+	var d: SkillData = slot.data
+	projectiles.gust(player_id, seq + GUST_SEQ_OFFSET, global_position, slot.direction, d.gust_range,
+		deg_to_rad(d.gust_half_angle_deg), d.gust_damage if slot.gust_just_pressed() else 0, d.gust_knockback)
 
 
 ## The tree shoots one petal at the nearest visible enemy in range (shadow clones count, smoked ones don't). Ties go
@@ -718,6 +737,9 @@ func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int) ->
 	var tf: CharacterSkill = form()
 	if tf != null:
 		damage = maxi(1, roundi(damage * tf.data.form_damage_scale))
+	var bark: CharacterSkill = active_skill(SkillData.Kind.BARK_SKIN)
+	if bark != null:
+		damage = maxi(1, roundi(damage * bark.data.bark_damage_scale))
 	var dealt: int = stats.apply_damage(damage)
 	if dealt <= 0:
 		return 0
@@ -732,8 +754,9 @@ func _die(killer_id: int) -> void:
 	respawn_timer = Constants.RESPAWN_DELAY
 	velocity = Vector2.ZERO
 	for slot: CharacterSkill in skills:
-		if slot.data.kind == SkillData.Kind.SAPLING:
-			slot.active_remaining = 0.0  # the tree goes with her
+		if slot.data.kind == SkillData.Kind.SAPLING or slot.data.kind == SkillData.Kind.BLOOM \
+				or slot.data.kind == SkillData.Kind.BARK_SKIN:
+			slot.active_remaining = 0.0  # the tree (patch, bark) goes with her
 	_set_dead(true)
 	died.emit(self, killer_id)
 
