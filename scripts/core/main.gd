@@ -67,6 +67,7 @@ func _notification(what: int) -> void:
 func _run_discover() -> void:
 	var browser := LanDiscovery.new()
 	add_child(browser)
+	browser.sweep_self = true  # lets one machine find its own host
 	print("[discover] listen: %s" % error_string(browser.start_browse()))
 	await get_tree().create_timer(4.0).timeout
 	for g: Dictionary in browser.games.values():
@@ -104,6 +105,7 @@ func _start_host() -> void:
 	print("[host] %s" % _server_arena.host_address)
 	_announcer = LanDiscovery.new()
 	add_child(_announcer)
+	_announcer.broadcast_enabled = not args.no_broadcast
 	_announcer.start_host(_server_arena, args.port)
 	_server_arena.leave_requested.connect(_on_host_leave, CONNECT_DEFERRED)
 	var input := LocalInput.new()

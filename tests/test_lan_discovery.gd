@@ -48,3 +48,23 @@ func test_upsert_and_expiry() -> void:
 func test_directed_broadcast() -> void:
 	assert_eq(LanDiscovery.directed_broadcast("192.168.1.42"), "192.168.1.255")
 	assert_eq(LanDiscovery.directed_broadcast(""), "")
+
+
+func test_probe_round_trip() -> void:
+	var p: PackedByteArray = LanDiscovery.encode_probe()
+	assert_true(LanDiscovery.is_probe(p))
+	assert_true(LanDiscovery.decode(p).is_empty(), "a probe is not a game")
+	assert_false(LanDiscovery.is_probe(LanDiscovery.encode(_info())))
+	assert_false(LanDiscovery.is_probe("junk".to_utf8_buffer()))
+	assert_false(LanDiscovery.is_probe('{"magic":"NOPE","probe":true}'.to_utf8_buffer()))
+
+
+func test_sweep_targets() -> void:
+	var t: PackedStringArray = LanDiscovery.sweep_targets("192.168.1.42")
+	assert_eq(t.size(), 253)
+	assert_false(t.has("192.168.1.42"))
+	assert_false(t.has("192.168.1.0"))
+	assert_false(t.has("192.168.1.255"))
+	assert_true(t.has("192.168.1.1") and t.has("192.168.1.254"))
+	assert_eq(LanDiscovery.sweep_targets("192.168.1.42", true).size(), 254)
+	assert_eq(LanDiscovery.sweep_targets("").size(), 0)

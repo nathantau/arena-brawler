@@ -27,6 +27,8 @@ var offline: bool = false
 var autopilot: bool = false
 ## Debug: print LAN games found by discovery, then quit (see CLAUDE.md Commands).
 var discover: bool = false
+## Debug: host doesn't broadcast (answers unicast probes only), to test the entitlement-free sweep.
+var no_broadcast: bool = false
 var net_debug: bool = false
 var match_mode: MatchRules.Mode = MatchRules.Mode.FFA
 var time_limit: float = Constants.MATCH_TIME_LIMIT
@@ -62,6 +64,8 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				a.offline = true
 			"--autopilot":
 				a.autopilot = true
+			"--no-broadcast":
+				a.no_broadcast = true
 			"--discover":
 				a.discover = true
 			"--net-debug":
