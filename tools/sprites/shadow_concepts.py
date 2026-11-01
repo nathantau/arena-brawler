@@ -669,7 +669,7 @@ def main():
     print("wrote previews to", OUT_DIR)
 
 
-if __name__ == "__main__" and "--final" not in sys.argv:
+if __name__ == "__main__" and not {"--final", "--smirks"} & set(sys.argv):
     main()
 
 
@@ -735,3 +735,36 @@ def final_ingame() -> None:
 
 if __name__ == "__main__" and "--final" in sys.argv:
     final_ingame()
+
+
+def smirks() -> None:
+    """The three mouths (generate.SHADOW_MOUTH 1/2/3): 10x face crops over the idle frame at in-game scale."""
+    panels = []
+    for m in (1, 2, 3):
+        g.SHADOW_MOUTH = m
+        low, up = g.shadow(None, 0)
+        f = Image.new("RGBA", (g.SIZE, g.SIZE), (0, 0, 0, 0))
+        f.alpha_composite(low.img)
+        f.alpha_composite(up.img, (0, g.UPPER_DY))
+        full = g.cell(g.outline(f))
+        crop = full.crop((g.PAD + 20, g.PAD + 14, g.PAD + 52, g.PAD + 40))
+        bg = Image.new("RGBA", crop.size, (60, 56, 52, 255))
+        bg.alpha_composite(crop)
+        big = nn(bg, 10)
+        game = nn(floor_crop(g.CELL, g.CELL), 2)
+        game.alpha_composite(nn(full, 2))
+        panel = Image.new("RGBA", (big.width, big.height + game.height + 8), (24, 24, 32, 255))
+        panel.alpha_composite(big)
+        panel.alpha_composite(game, ((big.width - game.width) // 2, big.height + 8))
+        panels.append(labelled(panel, str(m)))
+    g.SHADOW_MOUTH = 1
+    out = Image.new("RGBA", (sum(p.width for p in panels) + 8 * 4, panels[0].height + 16), (24, 24, 32, 255))
+    x = 8
+    for p in panels:
+        out.alpha_composite(p, (x, 8))
+        x += p.width + 8
+    out.convert("RGB").save(OUT_DIR / "shadow_smirks.png")
+
+
+if __name__ == "__main__" and "--smirks" in sys.argv:
+    smirks()

@@ -5954,6 +5954,9 @@ def app_icon(style: str | None = None) -> Image.Image:
 EYE_GLOW = (PINK_L, WHITE)
 
 
+SHADOW_MOUTH = 1  # 1 level smirk (shipped), 2 tilted closed smile, 3 smirk with a tiny open corner (concept previews)
+
+
 def shadow_floor_grin(c: Canvas, t: int = 0) -> None:
     """His own shadow on the floor, grinning up at you; the grin flickers (narrows) on one idle tick."""
     c.flat(E((12, 57, 54, 64)), VIOLET_D)
@@ -6086,16 +6089,18 @@ def shadow(step=None, t=0, pose=None, floor: bool = True):
             hd.flat(R((x, 22, x + 3, 22)), OUTLINE)
     if KO:
         hd.flat(L([(35, 31), (39, 31)], 1), OUTLINE)
-        hd.flat(R((37, 32, 38, 33)), RED)  # tongue lolling out
-        hd.dot(37, 34, MAROON)
-    elif fly:
+    elif fly and pose != "hit2":
         hd.flat(R((36, 30, 39, 32)), OUTLINE)  # an "ow"
         hd.flat(R((37, 31, 38, 32)), MAROON)
-    else:  # a short lopsided smirk: the far corner lifted, a tiny dimple beside it
-        hd.flat(L([(35, 31), (37, 32), (39, 31)], 1), OUTLINE)
-        hd.dot(40, 30, OUTLINE)
-        hd.dot(41, 29, SKIN_D)
-        hd.dot(41, 31, SKIN_D)
+    else:  # a short clean smirk on the mouth row the others use: level, the far end stepping up one pixel
+        if SHADOW_MOUTH == 2:  # a closed smile tilted: the far half one pixel higher
+            hd.flat(R((36, 31, 37, 31)), OUTLINE)
+            hd.flat(R((38, 30, 39, 30)), OUTLINE)
+        else:
+            hd.flat(R((36, 31, 38, 31)), OUTLINE)
+            hd.dot(39, 30, OUTLINE)
+            if SHADOW_MOUTH == 3:  # a tiny open "heh" corner
+                hd.dot(38, 32, MAROON)
     hd.flat(R((BLUSH[0], 29, BLUSH[0] + 1, 29)), ORANGE)
     hd.flat(R((45, 29, 46, 29)), ORANGE)
     hd.flat(R((21, 30, 22, 31)), YELLOW)  # gold stud
