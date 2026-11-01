@@ -7,9 +7,9 @@ extends PanelContainer
 ## Cards are rebuilt when the local character changes; highlights follow the synced state.
 
 const SPACING: int = 10
-const BUTTON_MIN_SIZE: Vector2 = Vector2(170, 52)
-const READY_MIN_SIZE: Vector2 = Vector2(240, 64)
-const LEAVE_MIN_SIZE: Vector2 = Vector2(140, 64)
+const BUTTON_MIN_SIZE: Vector2 = Vector2(190, UiStyle.TOUCH_MIN_H)
+const READY_MIN_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
+const LEAVE_MIN_SIZE: Vector2 = Vector2(140, UiStyle.TOUCH_MIN_H)
 const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 222)
 ## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
 ## the cell's body box, so they all stand in the same spot.
@@ -31,6 +31,8 @@ var _mode_button: Button
 var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
 var _weapon_row: HBoxContainer
+var _fighter_scroller: HScroller
+var _weapon_scroller: HScroller
 var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
 var _special_row: VBoxContainer
@@ -43,6 +45,7 @@ var _rows: HFlowContainer
 var _blocker: Label
 var _ready_button: Button
 ## Last highlighted (character, weapon, slot 0 special, slot 1 special), so _process only restyles on change.
+var _revealed: Array[StringName] = [&"", &""]
 var _shown_pick: Array[StringName] = [&"", &"", &"", &""]
 
 
@@ -61,10 +64,14 @@ func _ready() -> void:
 	var titles := VBoxContainer.new()
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(titles)
+	titles.custom_minimum_size.x = 0.0
 	_title = _label(titles, &"HeaderLabel")
 	_rules = _label(titles, &"DimLabel")
 	_join_hint = _label(titles, &"HeaderLabel")
 	_join_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+	for l: Label in [_title, _rules, _join_hint]:
+		l.clip_text = true
+		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_mode_button = _button(header, BUTTON_MIN_SIZE)
 	_mode_button.pressed.connect(_on_mode_pressed)
 	_arena_button = _button(header, BUTTON_MIN_SIZE)
@@ -85,20 +92,17 @@ func _ready() -> void:
 	steps.add_child(top)
 	var fighters := VBoxContainer.new()
 	fighters.add_theme_constant_override("separation", SPACING)
+	fighters.custom_minimum_size.x = 0.0
 	fighters.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # pushes the specials column to the right edge
 	top.add_child(fighters)
 	_label(fighters, &"HeaderLabel").text = "1 · Choose your fighter"
-	# Scrolls sideways once there are more fighters than fit (drag the row).
-	var fighter_scroll := ScrollContainer.new()
-	fighter_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	fighter_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-	fighters.add_child(fighter_scroll)
-	var character_row := _row(fighter_scroll)
+	# Scrolls sideways once there are more fighters than fit (drag the row; tap selects).
+	_fighter_scroller = _scroller(fighters)
 	for c: CharacterData in arena.characters.ordered:
-		var card: Button = _card(character_row, CHARACTER_CARD_SIZE, _fighter_art(c),
+		var card: Button = _card(_fighter_scroller.content, CHARACTER_CARD_SIZE, _fighter_art(c),
 			[c.display_name, "HP %d · Armor %d" % [c.max_hp, c.max_armor]])
 		var id: StringName = c.id
-		card.pressed.connect(func() -> void: arena.character_requested.emit(id))
+		_fighter_scroller.on_tap(card, func() -> void: arena.character_requested.emit(id))
 		_character_cards[id] = card
 
 	# Weapons under the fighters, so a character with many specials can't push them below the fold.
@@ -106,7 +110,8 @@ func _ready() -> void:
 	gap.custom_minimum_size.y = SPACING
 	fighters.add_child(gap)
 	_label(fighters, &"HeaderLabel").text = "2 · Choose your weapon"
-	_weapon_row = _row(fighters)
+	_weapon_scroller = _scroller(fighters)
+	_weapon_row = _weapon_scroller.content
 
 	var specials := VBoxContainer.new()
 	specials.add_theme_constant_override("separation", SPACING)
@@ -166,6 +171,12 @@ func _refresh() -> void:
 	if _weapons_for != me.character.id:
 		_build_weapon_cards(me.character)
 	_shown_pick = _pick()
+	if _shown_pick[0] != _revealed[0] or _shown_pick[1] != _revealed[1]:
+		_revealed = [_shown_pick[0], _shown_pick[1]]
+		if _character_cards.has(_shown_pick[0]):
+			_fighter_scroller.reveal(_character_cards[_shown_pick[0]])
+		if _weapon_cards.has(_shown_pick[1]):
+			_weapon_scroller.reveal(_weapon_cards[_shown_pick[1]])
 	for id: StringName in _character_cards:
 		_character_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[0] else &"Card"
 	for id: StringName in _weapon_cards:
@@ -209,7 +220,7 @@ func _build_weapon_cards(c: CharacterData) -> void:
 			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
 				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost]])
 		var id: StringName = w.id
-		card.pressed.connect(func() -> void: arena.weapon_requested.emit(id))
+		_weapon_scroller.on_tap(card, func() -> void: arena.weapon_requested.emit(id))
 		_weapon_cards[id] = card
 
 	_special_cards.clear()
@@ -242,6 +253,7 @@ func _skill_row(sk: SkillData, blurb: String) -> Button:
 	var b := _button(_special_row, SKILL_ROW_SIZE)
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, SPACING)
+	row.offset_right = -(SPACING + 30.0)  # room for the 1 / 2 badge
 	row.add_theme_constant_override("separation", SPACING)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(row)
@@ -292,6 +304,14 @@ func _on_ready_pressed() -> void:
 	arena.ready_requested.emit(not _is_ready())
 
 
+func _scroller(parent: Node) -> HScroller:
+	var h := HScroller.new()
+	h.fade_color = COLOR_BG
+	h.content.add_theme_constant_override("separation", SPACING)
+	parent.add_child(h)
+	return h
+
+
 func _row(parent: Node) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", SPACING)
@@ -317,7 +337,8 @@ func _card(parent: Node, min_size: Vector2, art: Control, lines: Array[String]) 
 			l.add_theme_font_override("font", UiStyle.bold())
 		else:
 			l.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-		l.text = lines[i]
+		var avail: float = min_size.x - SPACING * 2.0 - 8.0
+		UiStyle.fit_label(l, lines[i], avail, UiStyle.SIZE_BODY if i == 0 else UiStyle.SIZE_TINY, UiStyle.SIZE_TINY - 4, i == 0)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return card
@@ -373,5 +394,7 @@ func _button(parent: Node, min_size: Vector2) -> Button:
 	var b := Button.new()
 	b.custom_minimum_size = min_size
 	b.focus_mode = Control.FOCUS_NONE
+	b.clip_text = true
+	b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	parent.add_child(b)
 	return b

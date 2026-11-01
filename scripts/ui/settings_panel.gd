@@ -7,8 +7,8 @@ extends Control
 const LAYER: int = 110
 const PANEL_MIN_SIZE: Vector2 = Vector2(620, 0)
 const SPACING: int = 14
-const BUTTON_SIZE: Vector2 = Vector2(240, 60)
-const SLIDER_MIN_SIZE: Vector2 = Vector2(280, 36)
+const BUTTON_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
+const SLIDER_MIN_SIZE: Vector2 = Vector2(280, 48)
 const COLOR_VEIL: Color = Color(0.05, 0.05, 0.1, 0.8)
 const HOWTO: Array[String] = [
 	"MOVE   drag anywhere on the left side",

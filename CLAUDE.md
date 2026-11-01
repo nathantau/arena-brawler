@@ -99,6 +99,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   then `godot --path . --headless --import`
 
 ## Status
+- **UI polish pass** (2026-11-01, `ui-polish`): `HScroller` (`ui/h_scroller.gd`) = drag-scrolled sideways row (tap selects, drag scrolls via a travel threshold; edge fades + arrows; `reveal()` scrolls the selected card into view) used for the loading room's fighter and weapon rows (the weapon row used to force the screen wider than 16:9, pushing the specials column and Mode/Arena buttons off-screen). `UiStyle.fit_size/fit_label` shrink card text to its width (then clip with an ellipsis); header/roster/result names clip; special rows leave room for the 1/2 badge; `UiStyle.TOUCH_MIN_H` 72 for pause/menu/lobby/results/settings buttons. Tests: `tests/test_ui_polish.gd`. Screens were checked at 2532x1170, 2778x1284, 1334x750 with `--notch`.
 - **App polish** (2026-11-01): `GameSettings` (user://settings.cfg: music/SFX volume, vibration, howto_seen; all haptics go through `GameSettings.vibrate`),
   `SettingsPanel` (modal on its own CanvasLayer; Settings button on the main menu and in the pause menu; controls guide shown once on a player's
   first match), `Music` (synthesized 4-chord loop started by Main, honours the music slider, runs while paused), a click SFX on every button
