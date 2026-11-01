@@ -4329,6 +4329,11 @@ def eden(step=None, t=0):
     for i, (x0, x1, y0) in enumerate(((22, 42, 34), (23, 41, 38), (24, 40, 42))):
         up.part(R((x0, y0, x1, y0 + 3)), BROWN)
         up.flat(R((x0 + 1, y0, x1 - 1, y0)), SKIN_D)
+    for x in (26, 38):  # long bark grooves running down the plates
+        up.flat(L([(x, 35), (x, 44)], 1), MAROON)
+        up.flat(L([(x - 1, 36), (x - 1, 38)], 1), SKIN_D)  # lit lip beside each groove
+    for x in (23, 24, 40):  # moss creeping over the top plate
+        up.dot(x, 34, GREEN_L)
     up.part(E((30, 36 - breath, 35, 41 - breath)), STEEL_D)
     up.dot(31, 37 - breath, STEEL)
     up.dot(33, 40 - breath, (YELLOW, ORANGE, ORANGE, ORANGE)[t % 4])  # amber glints
@@ -4358,6 +4363,10 @@ def eden(step=None, t=0):
     draw_leaf(up, 47 + b, 47 + c_ + sag, math.pi / 2 + 0.5 + 0.12 * b, 5, 2.0, GREEN_D, shade=False)  # hem tip
     # front arm + stone cuff
     _eden_arm(up, ARM_X[1], GREEN_D, SKIN, -ay)
+    up.part(RR((41, 33 - breath, 47, 37 - breath), 2), STEEL_D)  # stone pauldron: lit top, a mossy crack
+    up.flat(R((42, 33 - breath, 45, 33 - breath)), STEEL)
+    up.dot(42, 34 - breath, WHITE)
+    up.dot(45, 36 - breath, GREEN)
     up.part(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 42 - ay)), STEEL_D)
     up.flat(R((ARM_X[1], 40 - ay, ARM_X[1] + 5, 40 - ay)), STEEL)
     # small mossy mantle at the other shoulder
