@@ -3953,9 +3953,11 @@ def arcs_from(c: Canvas, rng, roots, centre, n, reach, forks=0.6, glow=TEAL_L, t
 BOLT_SUIT, BOLT_STRIPE, BOLT_ACCENT = MAROON, YELLOW, RED
 BOLT_HEAD = (17, 7, 48, 35)  # the hair mass, the same in both looks
 BOLT_PART_X = 35  # the centre parting
-## Godspeed spikes: (centre x on the base, tip x, tip y, half width), base at y 16; plus a flame blown back off the nape.
-BOLT_SPIKES = [(23, 17, -3, 7), (29, 25, -10, 7), (35, 34, -14, 7), (41, 42, -10, 7), (46, 51, -3, 6)]
-BOLT_FLAME = [(22, 16), (5, 8), (25, 27)]
+## Godspeed hair bristles out of the whole head like a porcupine / a static shock. Per quill: (angle in degrees, y down, so -90 is
+## straight up; length; half width at the root), ten thick quills round the same dome from low behind the head, over the top, to the front.
+BOLT_QUILLS = [(145, 11, 3.2), (165, 13, 3.4), (-172, 14, 3.6), (-150, 16, 3.8), (-128, 17, 3.8), (-105, 18, 4.0),
+               (-82, 18, 4.0), (-58, 16, 3.8), (-36, 14, 3.6), (-14, 11, 3.3)]
+BOLT_HEAD_C, BOLT_HEAD_R = (32.5, 21.0), (15.5, 14.0)
 
 
 def _bolt_stripe(c: Canvas, x: int, y0: int, y1: int) -> None:
@@ -3965,21 +3967,33 @@ def _bolt_stripe(c: Canvas, x: int, y0: int, y1: int) -> None:
     c.dot(x, y1, DARKER[BOLT_STRIPE])
 
 
+def bolt_quill(t: int, i: int) -> tuple:
+    """Quill i at tick t: (root, unit direction, length, half width, tip), art coordinates. Each quill's length jitters by a pixel on
+    its own beat, so the hair feels charged."""
+    ang, ln, w = BOLT_QUILLS[i]
+    a = math.radians(ang)
+    ca, sa = math.cos(a), math.sin(a)
+    ln += SWAY[(t + 3 * i) % 4]
+    root = (BOLT_HEAD_C[0] + BOLT_HEAD_R[0] * 0.95 * ca, BOLT_HEAD_C[1] + BOLT_HEAD_R[1] * 0.95 * sa)
+    return root, (ca, sa), ln, w, (root[0] + ca * ln, root[1] + sa * ln)
+
+
+def bolt_spike_tips(t: int) -> list:
+    """Where the quills end (art coordinates), for the arcs that jump between them."""
+    return [bolt_quill(t, i)[4] for i in range(len(BOLT_QUILLS))]
+
+
 def bolt_spikes(t: int) -> Canvas:
-    """Godspeed hair above the head (a CELL canvas in art coordinates + PAD, no body bob): a flame blown back off the nape
-    and five faceted spikes, each shaded on its right, their tips flickering with the tick. Spikes outline each other."""
+    """Godspeed hair outside the dome (a CELL canvas in art coordinates + PAD, no body bob): the quills, each a yellow cone with a
+    white-hot root and an orange tip, outlining the ones it overlaps."""
     c = Canvas(CELL)
-    at = lambda ps: [(x + PAD, y + PAD) for x, y in ps]
-    (bx, by), (fx, fy), (ex, ey) = BOLT_FLAME
-    fx -= HAIR_FLOW[t % 4]
-    fy += SWAY[t % 4]
-    c.part(P(at([(bx, by), (fx, fy), (ex, ey)])), YELLOW, shade=False)
-    c.flat(P(at([(fx, fy), (ex, ey), (bx + 2, by + 6)])), ORANGE)
-    for i, (xc, tx, ty, hw) in enumerate(BOLT_SPIKES):
-        tx += SWAY[(t + i) % 4]
-        c.part(P(at([(xc - hw, 16), (tx, ty), (xc + hw, 16)])), YELLOW, shade=False)
-        c.flat(P(at([(tx, ty + 2), (xc + hw, 16), (xc, 16)])), ORANGE)  # shaded right facet
-        c.flat(L(at([(tx - 1, ty + 4), (tx - 2, ty + 8)]), 1), WHITE)  # a glint on the lit side
+    for i in range(len(BOLT_QUILLS)):
+        (rx, ry), (ca, sa), ln, w, tip = bolt_quill(t, i)
+        pt = lambda f, sd: (rx + ca * ln * f - sa * w * (1 - f) * sd + PAD, ry + sa * ln * f + ca * w * (1 - f) * sd + PAD)
+        end = (tip[0] + PAD, tip[1] + PAD)
+        c.part(P([pt(0, -1), pt(0, 1), end]), YELLOW, shade=False)
+        c.flat(P([pt(0, -1), pt(0, 1), pt(0.12, 1), pt(0.12, -1)]), WHITE)  # white-hot root
+        c.flat(P([pt(0.58, -1), pt(0.58, 1), end]), ORANGE)  # cooler tip
     return c
 
 
@@ -4010,16 +4024,32 @@ def _bolt_eyes_godspeed(c: Canvas, t: int) -> None:
 def bolt_parts(step=None, t: int = 0, god: bool = False):
     """(legs, upper body) canvases facing right: maroon track suit with gold stripes, brown hair parted in the middle
     (godspeed: yellow, spiking up from the part). `step` = walk frame (arms swing against the legs), `t` = tick (hair sways,
-    the zip pull swings, godspeed crackle flickers)."""
+    the zip pull, jacket folds, hem, sleeves and trouser creases move a frame behind, godspeed crackle flickers)."""
     suit, stripe, acc = BOLT_SUIT, BOLT_STRIPE, BOLT_ACCENT
     lit, dark = LIGHTER[suit], DARKER[suit]
+    # Cloth lags the body by a frame (secondary motion); the light stays top-left, so lit edges are left and shade right.
+    walking = step is not None
+    bob = WALK_BOB if walking else IDLE_BOB
+    cl = SWAY[(t - 1) % 4]  # a smooth -1..1 sway, a frame behind
+    tw = WALK_LEGS[step][1][0] / 3 if walking else 0.0  # the torso's twist now (-1..1), and a frame ago
+    tw_lag = WALK_LEGS[(step - 1) % 8][1][0] / 3 if walking else 0.0
+    breath = bob[t % len(bob)]
+    dh = bob[(t - 1) % len(bob)] - bob[t % len(bob)]  # the hem follows late: lifts and settles against the body
     low = Canvas()
     for x, dy in legs(low, suit, WHITE, step):
-        # only ~3 rows of trousers show under the jacket: a lit edge, a shaded side, a stripe, a bunched elastic cuff
+        stride = x - (24 if x < 29 else 34)
+        sg = (stride > 0) - (stride < 0)
+        # only ~3 rows of trousers show under the jacket: a lit edge, a shaded side, a crease that slides with the stride,
+        # a stripe that bends with it, a bunched elastic cuff
         low.flat(R((x, 49 + dy, x + 3, 52 + dy)), suit)
         low.flat(L([(x, 49 + dy), (x, 51 + dy)], 1), lit)
         low.flat(R((x + 4, 49 + dy, x + 5, 52 + dy)), dark)
-        _bolt_stripe(low, x + 3, 49 + dy, 52 + dy)
+        cx = x + 2 - (1 if sg > 0 else 0)
+        low.flat(L([(cx, 50 + dy), (cx, 51 + dy)], 1), dark)
+        low.dot(cx - 1, 49 + dy + (1 if cl > 0 else 0), lit)
+        for yy in range(49, 53):
+            low.dot(x + 3 + (sg if yy >= 51 else 0), yy + dy,
+                    LIGHTER[stripe] if yy == 49 else DARKER[stripe] if yy == 52 else stripe)
         low.flat(R((x, 52 + dy, x + 2, 52 + dy)), dark)
         # sneaker: toe cap, heel tab, strap, laces, sole
         low.flat(R((x + 5, 55 + dy, x + 7, 56 + dy)), acc)
@@ -4028,41 +4058,64 @@ def bolt_parts(step=None, t: int = 0, god: bool = False):
         low.dot(x + 4, 54 + dy, STEEL_D)
         low.flat(R((x - 1, 57 + dy, x + 7, 57 + dy)), STEEL_D)
     up = Canvas()
-    sw = WALK_LEGS[step][1][0] if step is not None else 0  # arms swing against the legs
-    ax = (ARM_X[0] + round(sw * 0.5), ARM_X[1] - round(sw * 0.5))
+    sw = WALK_LEGS[step][1][0] if walking else 0  # arms swing against the legs
+    swing = (round(sw * 0.5), -round(sw * 0.5))  # (back arm, front arm) in px
+    ax = (ARM_X[0] + swing[0], ARM_X[1] + swing[1])
 
-    def sleeve(x: int, sx: int) -> None:
-        _bolt_stripe(up, x + sx, 37, 40)
+    def sleeve(x: int, sx: int, sg: int) -> None:
+        sg = (sg > 0) - (sg < 0)
+        hi = 37 + (1 if t % 4 in (1, 2) else 0)  # the stripe's highlight slides down and back: it catches the light differently
+        for y in range(37, 41):  # the stripe bends with the swing
+            bx = min(max(x + sx + (sg if y in (38, 39) else 0), x), x + 5)
+            up.dot(bx, y, LIGHTER[stripe] if y == hi else DARKER[stripe] if y == 40 else stripe)
         up.flat(R((x + 1, 41, x + 4, 41)), dark)  # ribbed cuff
         up.dot(x + 1, 41, lit)
-        up.flat(L([(x + 2, 38), (x + 3, 39)], 1), dark)  # crease at the elbow
+        e = 38 + (1 if sg > 0 else 0)  # ripple creases at the elbow, re-forming with the swing
+        up.flat(L([(x + 2, e), (x + 3, e + 1)], 1), dark)
+        up.dot(x + 1, e, lit)
+        if sg:
+            up.dot(x + 1, e + 2, dark)
 
     arm(up, ax[0], suit, SKIN)
-    sleeve(ax[0], 1)
+    sleeve(ax[0], 1, swing[0])
     up.part(RR(BODY, 3), suit)  # jacket
     up.flat(L([(21, 38), (21, 42)], 1), lit)  # lit left edge
-    up.flat(L([(29, 42), (27, 45)], 1), dark)  # folds running down from the chest
-    up.flat(L([(38, 41), (40, 45)], 1), dark)
-    up.flat(L([(23, 44), (26, 43)], 1), dark)  # pocket slit
-    up.flat(R((20, 46, 44, 47)), dark)  # ribbed hem
+    if tw < -0.3 or (not walking and breath == 0):  # the lit side widens as he turns / breathes out
+        up.flat(L([(22, 39), (22, 43)], 1), lit)
+    if tw > 0.3 or (not walking and breath == 2):  # the shaded side widens as he turns away / breathes in
+        up.flat(L([(41, 39), (41, 44)], 1), dark)
+    a = round(tw_lag * 2) if walking else cl  # folds re-form a frame after the step / the breath
+    up.flat(L([(38 - a, 40), (40 - a, 45)], 1), dark)  # folds running down from the chest
+    up.dot(37 - a, 41, lit)
+    up.flat(L([(30 + a, 44), (29 + a, 46)], 1), dark)
+    if abs(tw_lag) > 0.6:  # at the widest stride the cloth bunches on the side he leans away from
+        bx = 23 if tw_lag > 0 else 39
+        up.flat(L([(bx, 40), (bx + 2, 41)], 1), dark)
+        up.dot(bx, 41, lit)
+    up.flat(L([(23 + (a > 0), 44), (26 + (a > 0), 43)], 1), dark)  # pocket slit
+    hy = 46 + dh  # ribbed hem, lifting and settling
+    up.flat(R((20, hy, 44, hy + 1)), dark)
     for x in range(22, 43, 2):
-        up.dot(x, 47, OUTLINE)
-    up.flat(R((21, 46, 30, 46)), suit)  # hem lit on the left
+        up.dot(x, hy + 1, OUTLINE)
+    up.flat(R((21, hy, 30, hy)), suit)  # hem lit on the left
+    if walking and abs(tw_lag) > 0.6:  # the hem flaps out at the end of a stride
+        up.dot(19 if tw_lag > 0 else 45, hy + 1, dark)
     up.flat(R((26, 37, 40, 37)), stripe)  # gold-trimmed collar band under the chin
     up.flat(R((24, 37, 25, 37)), LIGHTER[stripe])
     up.flat(R((41, 37, 43, 37)), DARKER[stripe])
     up.flat(R((28, 38, 38, 38)), dark)  # its lining
-    up.flat(L([(33, 38), (33, 46)], 1), STEEL)  # zip, and a pull tab that swings a little
+    up.flat(L([(33, 38), (33, 46)], 1), STEEL)  # zip, and a pull tab that sways a frame behind the body
     up.flat(L([(34, 39), (34, 46)], 1), STEEL_D)
-    pull = (0, 0, 1, 0)[t % 4]
-    up.flat(R((32 + pull, 40, 34 + pull, 42)), WHITE)
-    up.flat(R((32 + pull, 42, 34 + pull, 42)), STEEL)
+    pull = cl
+    py = 1 if pull else 0
+    up.flat(R((32 + pull, 40 + py, 34 + pull, 42 + py)), WHITE)
+    up.flat(R((32 + pull, 42 + py, 34 + pull, 42 + py)), STEEL)
     up.flat(P([(29, 39), (25, 42), (27, 42), (26, 45), (31, 41), (29, 41)]), stripe)  # gold bolt patch on the chest
     up.flat(L([(29, 39), (26, 42)], 1), LIGHTER[stripe])
     up.dot(26, 45, DARKER[stripe])
     up.dot(30, 41, DARKER[stripe])
     arm(up, ax[1], suit, SKIN)
-    sleeve(ax[1], 4)
+    sleeve(ax[1], 4, swing[1])
     # hair: one dome in both looks (godspeed adds the spikes on top and the nape flame behind)
     col = YELLOW if god else BROWN
     up.part(lambda d, f: d.ellipse(BOLT_HEAD, f), col, shade=not god)
@@ -4077,7 +4130,7 @@ def bolt_parts(step=None, t: int = 0, god: bool = False):
         up.flat(L([(41, 8), (45, 11)], 1), LIGHTER[col])
     up.part(RR(FACE, FACE_R), SKIN)
     up.flat(L([(FACE[0] + 3, FACE[3] - 2), (FACE[2] - 4, FACE[3] - 1)], 1), SKIN_D)  # chin shade
-    s = SWAY[t % 4]  # the curtains' ends sway with the bob
+    s = SWAY[(t - 1) % 4]  # the curtains' ends drift a frame behind the bob
     if god:  # short curtains with ragged ends
         left = [(21, 15), (34, 15), (33, 17), (29, 20), (27 + s, 20), (24 + s, 22), (22, 19)]
         right = [(37, 15), (49, 15), (49, 22), (47 + s, 20), (45 + s, 22), (42, 19), (39, 17)]
@@ -4137,7 +4190,7 @@ def bolt_glow(f: Image.Image, k: int, reach: int = 7) -> Image.Image:
     return out
 
 
-def bolt_godspeed_fx(f: Image.Image, k: int) -> Image.Image:
+def bolt_godspeed_fx(f: Image.Image, k: int, tips=None) -> Image.Image:
     """An outlined godspeed frame with its glow behind and crisp yellow arcs jumping off his sides (new ones every frame,
     seeded by `k`, so they flicker)."""
     w, h = f.size
@@ -4146,7 +4199,10 @@ def bolt_godspeed_fx(f: Image.Image, k: int) -> Image.Image:
         px[x + dx, y + dy][3] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
     rng = random.Random(BOLT_ARC_SEEDS + k * 37)
     c = Canvas(CELL)
-    arcs_from(c, rng, rng.sample(roots, min(90, len(roots))), (48, 52), 6, (10, 20), forks=0.6, glow=YELLOW, tip=WHITE, jit=2.8)
+    arcs_from(c, rng, rng.sample(roots, min(90, len(roots))), (48, 52), 4, (10, 20), forks=0.6, glow=YELLOW, tip=WHITE, jit=2.8)
+    for _ in range(3 if tips else 0):  # arcs jump between neighbouring quill tips, a different pair each frame
+        j = rng.randrange(len(tips) - 1)
+        zap_arc(c, zap_zig(rng, tips[j], tips[j + 1], 3, 2.2), YELLOW, WHITE, tip=WHITE)
     out = bolt_glow(f, k)
     out.alpha_composite(f)
     for y in range(h):  # arcs stay clear of the frame's edge
@@ -4167,11 +4223,12 @@ def bolt_sheet(god: bool) -> tuple:
         f.alpha_composite(up.img, (PAD, PAD + UPPER_DY + dy))
         return f
 
-    def done(img: Image.Image, k: int) -> Image.Image:
-        return bolt_godspeed_fx(img, k) if god else img
+    def done(img: Image.Image, k: int, t=None, dy: int = 0) -> Image.Image:
+        tips = [(x + PAD, y + PAD + UPPER_DY + dy) for x, y in bolt_spike_tips(t)] if t is not None else None
+        return bolt_godspeed_fx(img, k, tips) if god else img
 
-    idle = [done(outline(raw(None, i, dy)), i) for i, dy in enumerate(IDLE_BOB)]
-    walk = [done(outline(raw(i, i, dy)), 4 + i) for i, dy in enumerate(WALK_BOB)]
+    idle = [done(outline(raw(None, i, dy)), i, i, dy) for i, dy in enumerate(IDLE_BOB)]
+    walk = [done(outline(raw(i, i, dy)), 4 + i, i, dy) for i, dy in enumerate(WALK_BOB)]
     r0 = raw(None, 0, 0)  # hit: squashed flat as the blow lands, then stretching back up
     hit = [done(recolor(outline(_squash(r0, 1.1, 0.9)), lambda _c: WHITE), 12),
            done(recolor(outline(_squash(r0, 0.97, 1.02)), LIGHTER.__getitem__), 13)]
