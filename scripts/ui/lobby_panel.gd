@@ -10,7 +10,7 @@ const SPACING: int = 10
 const BUTTON_MIN_SIZE: Vector2 = Vector2(190, UiStyle.TOUCH_MIN_H)
 const READY_MIN_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
 const LEAVE_MIN_SIZE: Vector2 = Vector2(140, UiStyle.TOUCH_MIN_H)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 164)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 174)
 ## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
 ## the cell's body box, so they all stand in the same spot.
 const FIGHTER_ART_SCALE: float = 1.5
@@ -18,8 +18,8 @@ const FIGHTER_ART_SIZE: Vector2 = Vector2(120, 96)
 ## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
 const SKILL_ROW_SIZE: Vector2 = Vector2(320, 64)  # 7 rows (5 own + Dash + Barrier) fit above READY on a phone
 const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
-const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 104)
-const WEAPON_ART_SCALE: float = 2.0
+const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 124)
+const WEAPON_ART_SCALE: float = 1.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 
 var arena: Arena

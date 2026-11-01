@@ -14,8 +14,8 @@ const BOLD_WEIGHT: float = 700.0
 
 ## The UI is authored on a 720-unit-tall canvas (project stretch base), but on a phone that would be ~0.54 pt per
 ## unit (18-unit text = 9.7 pt). `install_scaling` raises the window's content_scale_factor so the canvas is only
-## ~PT_PER_UNIT-sized: a phone canvas is ~630 units tall, 1 unit ~ 0.62 pt (TINY 16 ~ 10 pt, SMALL 18 ~ 11 pt, BODY 22 ~ 13.6 pt,
-## a 72-unit button ~ 45 pt). The arena camera divides its zoom by the same factor, so the world view is unchanged.
+## ~PT_PER_UNIT-sized: a phone canvas is ~670 units tall, 1 unit ~ 0.58 pt (TINY 16 ~ 9.3 pt, SMALL 18 ~ 10.4 pt, BODY 22 ~ 12.8 pt,
+## a 76-unit button ~ 44 pt). The arena camera divides its zoom by the same factor, so the world view is unchanged.
 const SIZE_TINY: int = 16
 const SIZE_SMALL: int = 18
 const SIZE_BODY: int = 22
@@ -23,8 +23,8 @@ const SIZE_HEADING: int = 30
 const SIZE_TITLE: int = 56
 const SIZE_HUGE: int = 120
 const TEXT_OUTLINE: int = 6
-## Thumb-sized buttons: 72 units ~ 45 pt at PT_PER_UNIT.
-const TOUCH_MIN_H: float = 72.0
+## Thumb-sized buttons: 76 units ~ 44 pt at PT_PER_UNIT.
+const TOUCH_MIN_H: float = 76.0
 
 ## Palette (tools/sprites/palette.py).
 const C_OUTLINE: Color = Color8(27, 26, 46)
@@ -42,7 +42,7 @@ const C_TEAL_L: Color = Color8(126, 224, 207)
 const C_DIM: Color = Color(0.95, 0.94, 0.9, 0.6)
 
 ## Points per canvas unit the UI should land on on phones, and the largest scale we apply.
-const PT_PER_UNIT: float = 0.62
+const PT_PER_UNIT: float = 0.58
 const MAX_UI_SCALE: float = 1.8
 const BASE_HEIGHT: float = 720.0
 ## `--pixel-ratio=3`: pretend the screen has this many pixels per point (desktop previews of a phone).
