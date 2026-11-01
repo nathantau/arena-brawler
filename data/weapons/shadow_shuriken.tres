@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/shadow_shuriken.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/shadow_shuriken.png" id="9_proj"]
+
+[resource]
+script = ExtResource("1_wd")
+muzzle_x = 30.0
+projectile_sprite = ExtResource("9_proj")
+id = &"shadow_shuriken"
+display_name = "Umbral Shuriken"
+pickup = false
+damage = 9
+fire_interval = 0.3
+spread_deg = 2.0
+projectile_speed = 820.0
+projectile_range = 460.0
+projectile_radius = 4.0
+energy_cost = 30
+crit_chance = 0.1
+knockback = 30.0
+color = Color(0.62, 0.43, 0.84, 1)
+screen_shake = 0.03
+sfx = &"shot_light"
+bounces = 1
+bounce_damping = 0.9
+homing = 1.2
+sprite = ExtResource("2_sprite")
+tags = Array[StringName]([&"shadow"])

@@ -75,8 +75,8 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 - Run headless server: `godot --path . --headless -- --server --port 7777` (add `--bots N` for server-side bots)
 - Match options (server / offline): `--mode duel|ffa` (starting mode; players can switch it in the lobby),
   `--arena N` (0 = Pit, 1 = Foundry), `--time-limit S` (shorter matches for testing)
-- Pick a character (client / offline): `--character flicker|warden|twinshot|wukong|flint|sakura|bolt`
-  (ids; shown as Shade / Warden / Gunnar / Apex / Flint / Sakura / Bolt: `display_name` only, ids, files and art keep the old names)
+- Pick a character (client / offline): `--character flicker|warden|twinshot|wukong|flint|sakura|bolt|shadow`
+  (ids; shown as Shade / Warden / Gunnar / Apex / Flint / Sakura / Bolt / Shadow: `display_name` only, ids, files and art keep the old names)
 - Render frames to check visuals without a screen: `godot --path . --write-movie /tmp/f.png --fixed-fps 30 --quit-after 300 -- --offline --autopilot --touch`
 - Net debugging: add `--net-debug` (prints server/client net stats every second, logs reconciliation corrections);
   `--autopilot` makes a client drive + fire on its own, e.g. two headless autopilot clients for soak tests:
@@ -426,6 +426,40 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `SpecialFx._sync_overdrive` (every peer, from synced state): `bolt_crack` 14-frame lightning strike on the rising edge, `bolt_overdrive` 8-frame
   crackle loop over him, `bolt_ghost` afterimages (dithered blue/cyan silhouettes with speed streaks, drawn on the floor layer under him from a
   position history), `bolt_spark` arcs popping off him while he moves, `bolt_fizzle` 12 frames when it ends; `icon_overdrive`.
+- **Shadow + Shadow Step / Gloom Hound / Shadow Bind** (2026-11-01, `shadow`): new fighter `shadow` (in rotation; 90 hp, 40 armor, 275 speed, tags shadow/light/arcane).
+  Look: a hooded shadow-magic ninja, nothing but a void with two glowing slit eyes under a violet hood whose long tip curls back above his head
+  (generate.py `shadow_crown`, in `CROWNS`), a torn dark-violet cloak streaming behind him, lilac sash with a glowing rune, belt gem, dark gloves;
+  thin wisps of shadow rise off him (`shadow_aura`, period 4: wisps 12 px apart rising 3 px a tick). **Palette grew by three violets** (`VIOLET_D/VIOLET/VIOLET_L`
+  in palette.py, 21 colours now, ramps added) because the brief wanted violet/black: everything else still draws from the shared palette.
+  **Umbral Shuriken** (signature weapon `shadow_shuriken`, ordinary projectile kind): 9 dmg every 0.3 s, 30 energy, 820 px/s, range 460, `homing` 1.2, one wall bounce;
+  held art is a spinning star (WEAPON_ANIMS, quarter turn a frame). His three signature specials are all tagged `shadow` (his alone): the first, Shadow Step,
+  is `signature_skill`; loading room lists all three. New `SkillData.Kind` values start at 30 (`STEP = 30, HOUND = 31, BIND = 32`) so parallel fighter work
+  doesn't collide; new `Player` key offsets `STEP_SEQ_OFFSET` (1 << 31) and `HOUND_SEQ_OFFSET` (1 << 32); new `StateField.STUN_REMAINING`.
+  - **Shadow Step** (`shadow_step`, STEP, cd 8 s, `duration` 1.2 s): like Petal Drift's glide but a puddle: i-frames the whole time (`try_activate`), `Player.is_hidden()`
+    (auto-aim / bots skip him), can't fire, `step_speed_scale` 1.5x, steerable, gliding along the press direction without a stick, walls still stop him. When it ends
+    `Player._shadow_tick` calls `ProjectilePool.strike` on where he stands: `step_radius` 80 (needs sight), `step_damage` 24, `step_knockback` 200, authoritative,
+    replay-safe, keyed `seq + STEP_SEQ_OFFSET`. Art: `shadow_sink` (10 frames of his body submerging, played backwards to rise), floor-layer `shadow_puddle_in/_out`
+    (10) + `shadow_puddle` loop (8, glowing eyes, ripples, wisps), `shadow_burst` (14 frames of spikes erupting out to the strike radius) + `shadow_burst_floor`.
+  - **Gloom Hound** (`gloom_hound`, HOUND, cd 12 s, `duration` 6 s; named so it isn't mistaken for the fighter Shade): a hound rises `hound_distance` 130 ahead
+    along the aim (`Player.hound_spot`, pulled back off walls). Its position lives in the slot's synced `anchor` (heading in `direction`), updated every non-replay step by
+    `Player._hound_step` (so snapshots carry it, no new field): after `hound_rise_time` 0.45 s it runs at `hound_speed` 250 at the nearest enemy within `hound_sight` 520
+    that it can see (`Player.hound_target`: not dead, not hidden), stops at feet-level walls, and bites whoever is within `hound_bite_radius` 34 every
+    `hound_bite_interval` 0.6 s (first bite on rising): `hound_damage` 11, knockback 120 through `strike`, authoritative only. Not a Player, not in `targets`: nothing
+    hits it and auto-aim / bots never see it. It melts away at the end and when its owner dies. `SpecialFx` smooths the drawn position (interpolated remote peers),
+    plays rise / run (only while moving) / bite (when a bite falls due) / melt. Art `hound_rise/run/bite/melt` (80 px frames, paws on row 60, mirrored to face left).
+  - **Shadow Bind** (`shadow_bind`, BIND, cd 11 s, `duration` 1.47 = range / speed + stun): a dark line stretches from his feet along the aim at `bind_speed` 700 px/s up to
+    `bind_range` 330 (cut short by a wall at activation: `Player.bind_length`, stored as the whole vector in `direction`, `anchor` = origin). Each step the authority
+    (`Player._bind_step`, `projectiles.authoritative` only, never on replay) looks for the first enemy (can be hit, within `bind_width`/2 + a player radius of the line, behind
+    the head's length so far): `PlayerStats.apply_stun(bind_stun)` 1.0 s, the line is cut to them and `active_remaining` is set to the stun time (the tether). A line that reaches
+    its end with nobody ends the slot. **Stun** (new, in the style of the snare slow): `PlayerStats.stun_remaining`, synced as `StateField.STUN_REMAINING`, ticks in `stats.tick`,
+    cleared by `reset()`, a new stun never shortens one running; a stunned player can't move (`rooted` in `Player.simulate`), fire or press a special. No damage,
+    no i-frames (dodging/dashing before it lands, or being hidden/untargetable, makes the line pass through). `SpecialFx`: line tiled from `bind_line` (16 px tiles every 14 art px,
+    cropped to length) + `bind_head` on the floor layer, `bind_hit` burst and coiled `bind_wrap` tendrils + `bind_floor` pool on whoever's synced stun jumps up.
+  - Sound: `Sfx.skill_sound` has `shadow_step` / `hound` / `bind` recipes. Bots (`BotBrain._rotate_kit`, `rotates_kit`): fighters whose slot-1 special is of kind >= STEP rotate a random pick
+    from their own tagged kit into slot 1 every time it comes off cooldown, so bots use all three (other fighters unchanged; `balance_sim` turns it off in `mode=specials`).
+  - Balance (fighters sim, n=6 per pairing, win% seed 3 / seed 1): Shadow 54 / 66, Bolt 48 / 46, Shade 38 / 44, Sakura 43 / 44, Flint 37 / 40, Apex 30 / 35 (noisy, +-10; Shadow sits high-ish but in range; numbers untouched after the first pass).
+  Smoke: 62 combos, 0 SCRIPT ERROR (also fixed a latent `SpecialFx._draw_morph` null-art crash when a fighter swaps away from a form mid-morph).
+  - Tests: `tests/test_shadow.gd`; the catalog test counts 6 fighters and lists the three skills. Previews saved outside the repo (see the PR notes).
 - [~] **M5 – iOS build + cloud server: local half done, blocked on accounts/hosting** (2026-10-30)
   - Done: `export_presets.cfg` with "Linux Server x86_64"/"Linux Server arm64" (dedicated-server exports, tests
     and GUT excluded) and "iOS" (bundle `com.nabot.brawlbit`, landscape, Xcode project only).
