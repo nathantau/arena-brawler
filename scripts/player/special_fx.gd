@@ -1441,7 +1441,9 @@ const HOUND_RUN_ART: Texture2D = preload(FX_DIR + "hound_run.png")
 const HOUND_BITE_ART: Texture2D = preload(FX_DIR + "hound_bite.png")
 const HOUND_MELT_ART: Texture2D = preload(FX_DIR + "hound_melt.png")
 const HOUND_FEET_ROW: float = 60.0
-const HOUND_RUN_FPS: float = 16.0
+const HOUND_RUN_FPS: float = 12.0  # 6-frame run (generate.py HOUND_RUN_FRAMES): the same stride rate as 8 frames at 16
+## Its soft ground shadow, like the fighters' (Player._draw): an ellipse at the feet, this wide (a wolf is longer than a fighter).
+const HOUND_SHADOW_RADIUS: float = 27.0
 const HOUND_BITE_TIME: float = 0.25
 const HOUND_MELT_TIME: float = 0.5
 ## Drawn position chases the synced one at this rate (1/s) so interpolated remote players' hounds move smoothly.
@@ -1577,6 +1579,19 @@ func _sync_hound(p: Player) -> void:
 	_hound = slot
 
 
+## The hound's ground shadow (floor layer, under the players), fading in as it rises and out as it melts.
+func _draw_hound_floor() -> void:
+	if _hound == null:
+		return
+	var d: SkillData = _hound.data
+	var k: float = clampf(_hound.elapsed() / maxf(d.hound_rise_time, 0.01), 0.0, 1.0) \
+		* clampf(_hound.active_remaining / HOUND_MELT_TIME, 0.0, 1.0)
+	var feet: Vector2 = _hound_pos + Vector2(0.0, Player.FOOT_RING_Y)
+	_floor.draw_set_transform(feet, 0.0, Vector2(1.0, Player.FOOT_RING_SQUASH))
+	_floor.draw_circle(Vector2.ZERO, HOUND_SHADOW_RADIUS, Color(Player.SHADOW_COLOR, Player.SHADOW_COLOR.a * k))
+	_floor.draw_set_transform(Vector2.ZERO)
+
+
 func _draw_hound() -> void:
 	if _hound == null:
 		return
@@ -1675,6 +1690,7 @@ func _draw_shadow() -> void:
 
 
 func _draw_shadow_floor() -> void:
+	_draw_hound_floor()
 	_draw_step_floor()
 	_draw_bind_floor()
 	_draw_stun_floor()

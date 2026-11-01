@@ -6564,7 +6564,7 @@ SINK_FRAMES = 10
 PUDDLE_LOOP = 8
 BURST_FRAMES = 14
 HOUND_RISE_FRAMES = 12
-HOUND_RUN_FRAMES = 8
+HOUND_RUN_FRAMES = 6
 HOUND_BITE_FRAMES = 6
 HOUND_MELT_FRAMES = 12
 BIND_TILE = 16
@@ -6753,63 +6753,155 @@ HOUND_CELL = 80
 HOUND_BOX = (-8, -10, 72, 70)  # the crop: its paws land on row 60 of 80, its centre column on 40
 
 
-def hound_body(c: Canvas, phase: float, jaw: float = 0.0, lunge: float = 0.0, reveal: float = 1.0, wisp_k: float = 0.0) -> None:
-    """A shadow hound facing right (64 px coordinates): a lean violet body with a deep chest and tucked waist, a jagged
-    mane down its spine, a long snout with a glowing eye and a jaw that opens (`jaw` 0..1), swept-back ears, bent legs on
-    a run cycle (`phase` radians), a long wisp-tail and smoke streaming off its back. `reveal` < 1 hides everything above
-    that fraction of its height (rising out of the floor)."""
-    g = HOUND_GROUND
-    bob = -round(abs(math.sin(phase)) * 1.5) if phase else 0
-    hx = round(lunge * 4)
-    for i in range(5):  # smoke streaming off the back, behind everything
-        sdot2(c, 11 - i * 2 - round(wisp_k * 2), g - 24 + i * 2 + round(math.sin(phase * 0.5 + i * 1.3) * 2) + bob,
-              VIOLET_D if i % 2 else VIOLET)
-    tw = round(math.sin(phase) * 2)
-    c.flat(L([(15, g - 21 + bob), (9, g - 26 + bob), (4, g - 33 + tw), (6, g - 40 + tw)], 2), VIOLET_D)  # the tail wisp
-    c.flat(L([(6, g - 39 + tw), (8, g - 43 + tw)], 1), VIOLET)
-    sdot2(c, 8, g - 44 + tw, PINK_L)
+HD_S = 0.64  # design coordinates (a ~56 px wolf, paws on row 68, centre column 48) are shrunk to this
+HD_BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
 
-    def leg(hip: tuple, ph: float, back: bool, col) -> None:
-        swing, lift = math.sin(ph), max(0.0, math.cos(ph))
-        paw = (round(hip[0] + swing * 6), round(g - lift * 5))
-        knee = (round(hip[0] + (-3 if back else 3) + swing * 2), round((hip[1] + g) / 2 - lift * 2))
-        c.part(L([hip, knee, paw], 3), col)
-        c.flat(R((paw[0] - 1, paw[1], paw[0] + 3, paw[1])), VIOLET)  # paw
-    hips = ((20, g - 17 + bob), (40 + hx, g - 15 + bob))
-    far = phase + math.pi
-    leg((24, g - 16 + bob), far, True, SHADOW)  # the far legs, darker
-    leg((44 + hx, g - 14 + bob), far + 0.9, False, SHADOW)
-    # body: deep chest, tucked waist, a round haunch
-    c.part(P([(13, g - 22 + bob), (20, g - 28 + bob), (31, g - 30 + bob), (40, g - 32 + bob), (47 + hx, g - 29 + bob),
-              (48 + hx, g - 17 + bob), (41 + hx, g - 11 + bob), (33, g - 15 + bob), (24, g - 14 + bob), (15, g - 15 + bob)]), VIOLET_D)
-    c.part(E((12, g - 26 + bob, 27, g - 12 + bob)), VIOLET_D)
-    c.flat(L([(17, g - 27 + bob), (31, g - 29 + bob), (40, g - 31 + bob)], 1), VIOLET)  # lit back
-    for i in range(6):  # jagged mane down the spine
-        x = 18 + i * 5 + (hx if i > 3 else 0)
-        c.part(P([(x, g - 28 - i // 3 + bob), (x + 4, g - 29 - i // 3 + bob), (x + 1, g - 35 - i % 2 * 2 + bob)]), VIOLET)
-    leg(hips[0], phase, True, VIOLET_D)  # the near legs
-    leg(hips[1], phase + 0.9, False, VIOLET_D)
-    # head: long snout, swept-back ears, jaw
-    hy = g - 27 + bob
-    for ex, ey, ew in ((45, -6, 0), (50, -7, 1)):  # ears swept back
-        c.part(P([(ex + hx + 4, hy - 4 + ew), (ex + hx - 2, hy + ey - 9), (ex + hx + 1, hy - 4 + ew)]), VIOLET)
-    c.part(P([(46 + hx, hy - 5), (55 + hx, hy - 5), (64 + hx, hy + 1), (62 + hx, hy + 4), (55 + hx, hy + 5), (47 + hx, hy + 7)]),
-           VIOLET_D)
-    jd = round(jaw * 7)
-    c.part(P([(48 + hx, hy + 6), (60 + hx, hy + 4 + jd), (63 + hx, hy + 4 + jd), (54 + hx, hy + 10 + jd)]), VIOLET_D)
-    if jaw > 0.2:  # teeth
-        for tx in (55, 58, 61):
-            c.dot(tx + hx, hy + 5, WHITE)
-            c.dot(tx + hx - 1, hy + 4 + jd - 1, WHITE)
-    c.flat(R((53 + hx, hy - 3, 57 + hx, hy - 2)), PINK_L)  # the eye, an angry slit
-    c.dot(55 + hx, hy - 3, WHITE)
-    c.dot(52 + hx, hy - 4, PINK)
-    c.dot(63 + hx, hy + 1, VIOLET_L)  # nose
-    if reveal < 1.0:  # rising out of the floor: nothing above the reveal line
-        cut = round(g - 48 * reveal)
-        for y in range(0, cut):
-            for x in range(c.size):
-                c.px[x, y] = (0, 0, 0, 0)
+
+def hd_t(x: float, y: float) -> tuple[float, float]:
+    """Design coordinates -> the 96 px hound canvas (paws on HOUND_GROUND, centre column 32)."""
+    return 32 + (x - 48) * HD_S, HOUND_GROUND + (y - 68) * HD_S
+
+
+class HdMask:
+    """One smooth silhouette: ellipses, polygons and tapered limbs (circles along a polyline) drawn into a mask."""
+
+    def __init__(self):
+        self.im = Image.new("L", (96, 96), 0)
+        self.d = ImageDraw.Draw(self.im)
+
+    def ell(self, x0, y0, x1, y1):
+        a, b = hd_t(x0, y0), hd_t(x1, y1)
+        self.d.ellipse((a[0], a[1], b[0], b[1]), 255)
+
+    def poly(self, pts):
+        self.d.polygon([hd_t(*p) for p in pts], 255)
+
+    def limb(self, pts, radii):
+        segs = [math.hypot(x1 - x0, y1 - y0) for (x0, y0), (x1, y1) in zip(pts, pts[1:])]
+        total = sum(segs) or 1.0
+        steps = int(total * 1.6) + 1
+        for i in range(steps + 1):
+            u = i / steps
+            dist, k = u * total, 0
+            while k < len(segs) - 1 and dist > segs[k]:
+                dist -= segs[k]
+                k += 1
+            v = dist / (segs[k] or 1.0)
+            x = pts[k][0] + (pts[k + 1][0] - pts[k][0]) * v
+            y = pts[k][1] + (pts[k + 1][1] - pts[k][1]) * v
+            r = radii[0] + (radii[-1] - radii[0]) * u
+            self.ell(x - r, y - r, x + r, y + r)
+
+
+def hd_light(mask: HdMask, base, rim, lift, fade_below: int | None = None) -> Image.Image:
+    """Lights a mask from the top left: a `rim` on the top / left edges, a dithered `lift` just inside it, the darker bottom /
+    right edge, `base` inside. Pixels below `fade_below` (the paws) dither away into smoke."""
+    m = mask.im.load()
+    img = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
+    px = img.load()
+    em = lambda x, y: not (0 <= x < 96 and 0 <= y < 96) or m[x, y] == 0
+    for y in range(96):
+        for x in range(96):
+            if not m[x, y]:
+                continue
+            if fade_below is not None and y > fade_below:
+                f = (y - fade_below) / max(1, HOUND_GROUND - fade_below + 1)
+                if HD_BAYER[y % 4][x % 4] / 16 < f * 1.15:
+                    continue
+            if em(x, y - 1) or em(x - 1, y) or em(x - 1, y - 1):
+                col = rim
+            elif em(x, y - 2) or em(x - 2, y):
+                col = lift if (x + y) % 2 == 0 else base
+            elif em(x, y + 1) or em(x + 1, y):
+                col = VIOLET_D if (x + y) % 3 == 0 and base == OUTLINE else base
+            else:
+                col = base
+            px[x, y] = col + (255,)
+    return img
+
+
+def hd_wisp(img: Image.Image, x: float, y: float, dx: float, dy: float, n: int, sway: float = 0.0) -> None:
+    """A clean smoke wisp: a 1 px streak drifting off along (dx, dy) in design px, lilac then violet then dark, the last pixels
+    dithered away. Deterministic: no stray scatter."""
+    px = img.load()
+    for i in range(n):
+        u = i / n
+        X, Y = hd_t(x + dx * i * 1.4, y + dy * i * 1.4 + sway * u * u * 3)
+        X, Y = round(X), round(Y)
+        if i >= n - 2 and (X + Y) % 2:
+            continue
+        if 2 <= X < 94 and 2 <= Y < 94 and not px[X, Y][3]:
+            px[X, Y] = (VIOLET_L if u < 0.3 else VIOLET if u < 0.7 else VIOLET_D) + (255,)
+
+
+def hd_leg(m: HdMask, hip, ph: float, front: bool, r0: float) -> tuple:
+    swing, lift = math.sin(ph), max(0.0, math.cos(ph))
+    paw = (hip[0] + 11 * swing, 68 - 8 * lift)
+    mid = ((hip[0] + paw[0]) / 2 + (4 if front else -5) * (0.5 + 0.5 * lift), (hip[1] + paw[1]) / 2 - lift * 3)
+    m.limb([hip, mid, paw], [r0, r0 * 0.55, r0 * 0.4])
+    return paw
+
+
+def hound_body(c: Canvas, phase: float, jaw: float = 0.0, lunge: float = 0.0, k: int = 0) -> None:
+    """The Gloom Hound facing right (96 px canvas, paws on HOUND_GROUND): a near-black wolf with a violet rim light from the top
+    left, a deep chest and tucked waist, near legs (lighter) and far legs (darker) that swap in the stride, a plume tail and a
+    smoke mane of clean wisps streaming back off the neck and spine. `jaw` 0..1 opens the mouth, `lunge` 0..1 throws the head
+    forward (the bite), `k` alternates the wisp flicker."""
+    bob = -abs(math.sin(phase)) * 1.5 if phase else 0.0
+    g = 68 + bob
+    b = g - 7
+    hx = lunge * 5
+    body = HdMask()
+    body.ell(21, b - 33, 45, b - 9)  # haunch
+    body.ell(51, b - 37, 73, b - 8)  # deep chest
+    body.poly([(34, b - 31), (46, b - 33), (58, b - 34), (58, b - 15), (47, b - 17), (35, b - 11)])  # back, tucked waist
+    body.poly([(58 + hx * 0.4, b - 36), (67 + hx, b - 42), (72 + hx, b - 27), (62 + hx * 0.4, b - 20)])  # neck
+    body.ell(62 + hx, b - 44, 78 + hx, b - 29)  # skull
+    body.poly([(72 + hx, b - 40), (91 + hx, b - 33), (92 + hx, b - 30), (90 + hx, b - 28), (74 + hx, b - 28)])  # tapered muzzle
+    if jaw > 0.05:  # the lower jaw swings down
+        d = jaw * 10
+        body.poly([(73 + hx, b - 29), (89 + hx, b - 29 + d * 0.4), (87 + hx, b - 27 + d), (75 + hx, b - 25 + d * 0.6)])
+    body.poly([(63 + hx, b - 41), (59 + hx, b - 55), (70 + hx, b - 43)])  # ears, pointed, swept back
+    body.poly([(69 + hx, b - 43), (70 + hx, b - 56), (77 + hx, b - 41)])
+    body.limb([(25, b - 25), (16, b - 29), (11, b - 38 + math.sin(phase) * 2), (13, b - 47 + math.sin(phase) * 2)], [3.4, 2.3, 0.9])  # tail
+    far = HdMask()
+    near = HdMask()
+    paws = [hd_leg(far, (33, b - 12), phase + math.pi, False, 3.8), hd_leg(far, (61, b - 12), phase + math.pi + 0.7, True, 3.4),
+            hd_leg(near, (30, b - 12), phase, False, 4.0), hd_leg(near, (58, b - 12), phase + 0.7, True, 3.6)]
+    fade = int(hd_t(0, 68)[1]) - 2
+    img = hd_light(far, OUTLINE, SHADOW, OUTLINE, fade)  # far legs: the darkest tone
+    img.alpha_composite(hd_light(body, OUTLINE, VIOLET, SHADOW))  # near-black body, violet rim
+    img.alpha_composite(hd_light(near, VIOLET_D, VIOLET, VIOLET_D, fade))  # near legs: lighter
+    px = img.load()
+    for i in range(10):  # lit ridge along the back
+        x, y = hd_t(46 + i * 2.6, b - 35 - (1 if i % 3 == 0 else 0))
+        if px[round(x), round(y)][3] and 0 < i < 10:
+            px[round(x), round(y)] = VIOLET_L + (255,)
+    ex, ey = hd_t(74 + hx, b - 42)
+    ex, ey = round(ex), round(ey)
+    for i in range(2):  # the glowing eye: white core, a 1 px glow
+        px[ex + i, ey] = WHITE + (255,)
+        px[ex + i, ey - 1] = VIOLET_L + (255,)
+        px[ex + i, ey + 1] = VIOLET_L + (255,)
+    px[ex - 1, ey] = VIOLET_L + (255,)
+    px[ex + 2, ey] = VIOLET_L + (255,)
+    nx, ny = hd_t(90 + hx, b - 36)
+    px[round(nx), round(ny)] = VIOLET + (255,)
+    if jaw > 0.2:  # fangs
+        for tx in (80, 84):
+            fx, fy = hd_t(tx + hx, b - 27)
+            px[round(fx), round(fy)] = WHITE + (255,)
+    # smoke mane: clean wisps off the neck and spine, streaming back (they lean with the stride), two off the tail tip, paw puffs
+    sw = math.sin(phase + k)
+    for i in range(5):
+        hd_wisp(img, 64 - i * 5.5 + hx * (0.8 if i < 2 else 0), b - 40 - (i % 2) * 2, -0.9, -0.55 - 0.1 * (i % 2), 6 + (i % 2), sw)
+    tx, ty = 13, b - 47 + math.sin(phase) * 2
+    hd_wisp(img, tx, ty - 1, -0.5, -0.9, 6, sw)
+    hd_wisp(img, tx - 1, ty + 1, -0.9, -0.5, 4, sw)
+    for p in paws:
+        hd_wisp(img, p[0] - 1, p[1] - 1, -0.7, 0.1, 3)
+    c.img.alpha_composite(img)
+    c.px = c.img.load()
 
 
 def floor_clip(dst: Canvas, src: Canvas, down: int) -> None:
@@ -6822,17 +6914,17 @@ def hound_frame(kind: str, k: int) -> Image.Image:
     c = Canvas(96)
     g = HOUND_GROUND
     if kind == "run":
-        hound_body(c, math.tau * k / HOUND_RUN_FRAMES, wisp_k=k % 2)
+        hound_body(c, math.tau * k / HOUND_RUN_FRAMES, k=k)
     elif kind == "bite":
         t = k / (HOUND_BITE_FRAMES - 1)
         open_ = math.sin(min(1.0, t * 1.6) * math.pi)
-        hound_body(c, 0.9, jaw=open_, lunge=math.sin(t * math.pi))
+        hound_body(c, 0.9, jaw=open_, lunge=math.sin(t * math.pi), k=k)
     elif kind == "rise":
         u = (k + 1) / HOUND_RISE_FRAMES
         # the puddle it comes out of, then the beast pushing up through it (what is below the floor line is not drawn)
         puddle_shape(c, 30, g + 1, 22 * min(1.0, u * 2.2), 0.3, eyes=False, seed=5)
         body = Canvas(96)
-        hound_body(body, 0.0, wisp_k=k % 2)
+        hound_body(body, 0.0, k=k)
         floor_clip(c, body, round((1 - min(1.0, u * 1.2)) ** 1.5 * 46))
         rng = random.Random(70 + k)
         for _ in range(4):
