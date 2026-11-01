@@ -317,6 +317,19 @@ func test_hound_rises_ahead_chases_the_nearest_enemy_and_bites() -> void:
 	assert_lte(bitten, 1 + ceili(d.duration / d.hound_bite_interval), "with a cooldown between bites")
 
 
+func test_hound_stays_put_on_a_client_pool() -> void:
+	var w: Array = _world()
+	var p: Player = _shadow(w[0], w[1], &"gloom_hound")
+	var d: SkillData = skills.get_skill(&"gloom_hound")
+	_foe(w[0], w[1], 2, Vector2(100 + 420, 300))
+	await wait_physics_frames(2)
+	w[1].authoritative = false
+	_press(p, Vector2.RIGHT)
+	var start: Vector2 = p.skills[1].anchor
+	_run(p, ceili(d.hound_rise_time / DT) + 30)
+	assert_eq(p.skills[1].anchor, start, "predicted peers leave the hound to snapshots")
+
+
 func test_hound_expires_and_is_no_target() -> void:
 	var w: Array = _world()
 	var p: Player = _shadow(w[0], w[1], &"gloom_hound")
