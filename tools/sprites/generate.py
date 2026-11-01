@@ -1723,7 +1723,7 @@ WHIRL_STAFF = 26  # half the staff's length
 WHIRL_SQUASH = 0.5  # the spin is flat on the floor in the 3/4 view
 WHIRL_R = 46
 WHIRL_RING = 112
-WHIRL_SPARK = 20
+WHIRL_SPARK = 32
 WHIRL_SPARK_FRAMES = 7
 
 
@@ -2009,14 +2009,14 @@ def whirl_spark_frame(k: int) -> Image.Image:
     c = Canvas(WHIRL_SPARK)
     m = WHIRL_SPARK // 2
     if k < 3:
-        c.flat(E((m - 3 + k, m - 3 + k, m + 3 - k, m + 3 - k)), WHITE)
+        c.flat(E((m - 5 + k * 1.5, m - 5 + k * 1.5, m + 5 - k * 1.5, m + 5 - k * 1.5)), WHITE)
     col = (WHITE, WHITE, YELLOW, YELLOW, ORANGE, ORANGE, RED)[k]
     for j in range(8):
         ang = math.tau * j / 8 + 0.5
-        d0, d1 = 1 + 0.5 * k, 2 + 0.6 * k
-        fall = 0.06 * k * k
+        d0, d1 = 2 + 0.8 * k, 3.5 + 1.0 * k
+        fall = 0.05 * k * k
         c.flat(L([(m + math.cos(ang) * d0, m + math.sin(ang) * d0 + fall),
-                  (m + math.cos(ang) * d1, m + math.sin(ang) * d1 + fall)], 1), col if j % 2 else (WHITE if k < 3 else col))
+                  (m + math.cos(ang) * d1, m + math.sin(ang) * d1 + fall)], 2 if k < 4 else 1), col if j % 2 else (WHITE if k < 3 else col))
     return outline(c.img)
 
 
@@ -2351,13 +2351,13 @@ def smoke_frame(k: int, size: int = 136) -> Image.Image:
     c = Canvas(size)
     m = size // 2
     phase = k / SMOKE_FRAMES  # 0..1 round the loop
-    turn = math.tau / 10 * 2 * phase
+    turn = math.tau / 10 * 4 * phase
     lumps = []  # spread through the whole cloud: an outer ring and a few inside, all breathing
     for i in range(10):
         ang = math.tau * i / 10 + turn
-        reach = 34 + 4 * math.sin(math.tau * phase + i)
+        reach = 30 + 6 * math.sin(math.tau * phase + i)
         lumps.append((m + math.cos(ang) * reach, m + math.sin(ang) * reach,
-                      17 + 4 * (i % 2) + 2 * math.sin(math.tau * phase + i * 1.7)))
+                      16 + 4 * (i % 2) + 3 * math.sin(math.tau * phase + i * 1.7)))
     for i in range(5):
         ang = math.tau * i / 5 - math.tau / 5 * phase + 0.3
         lumps.append((m + math.cos(ang) * 14, m + math.sin(ang) * 12, 16 + 2 * math.sin(math.tau * phase + i * 2)))
@@ -2857,7 +2857,8 @@ def blast_frame(k: int) -> Image.Image:
     else:  # smoke: puffs drift out and up, shrinking; a last glow inside early on
         f = (t - 0.45) / 0.55
         c.part(blobs([(m + math.cos(a) * BLAST_R * (0.55 + 0.25 * f) * d, m + math.sin(a) * BLAST_R * (0.55 + 0.25 * f) * d
-                       - rise, round(BLAST_R * 0.3 * r * (1 - 0.8 * f))) for a, d, r in lumps]), SHADOW)
+                       - rise, round(BLAST_R * 0.3 * r * (1 - 0.8 * f))) for a, d, r in lumps]),
+               ORANGE if f < 0.12 else STEEL_D if f < 0.4 else SHADOW)  # fire cools: orange, then grey, then dark smoke
         if f < 0.4:
             c.part(blobs([(m, m - rise, round(BLAST_R * 0.25 * (1 - 2 * f)))]), RED)
     if t > 0.15:  # embers streak out
@@ -3096,7 +3097,7 @@ def eruption_crack_frame(k: int) -> Image.Image:
         if (i + kh) % 4 != 3:
             c.flat(R((x - 1, y, x + 1, y)), (RED, ORANGE, YELLOW, ORANGE)[(i + kh) % 4])
     c.part(E((m - 30, m - 17, m + 30, m + 17)), MAROON, shade=False)  # scorched floor
-    heat = 0.62 + 0.3 * (0.5 + 0.5 * math.sin(ph)) + 0.05 * math.sin(3 * ph)
+    heat = 0.5 + 0.5 * (0.5 + 0.5 * math.sin(ph)) + 0.08 * math.sin(3 * ph)
     glow = random.Random(6)
     for _ in range(46):  # a dithered halo of firelight on the floor round the mound, pulsing with the lava
         a, d = glow.uniform(0, math.tau), glow.uniform(0.0, 1.0) ** 0.7
@@ -4060,7 +4061,7 @@ def bolt_ghost_frame(k: int) -> Image.Image:
         for x in range(src.width):
             r, g, b, a = px[x, y]
             if a and (r, g, b) != OUTLINE:
-                px[x, y] = (TEAL_L if (x + y + k) % 2 else BLUE) + (255,)
+                px[x, y] = (TEAL_L if (x + y) % 2 else BLUE) + (255,)
     rng = random.Random(900 + k)
     for y in rng.sample(range(34, 80, 2), 9):
         row = [x for x in range(src.width) if px[x, y][3]]
@@ -4068,7 +4069,7 @@ def bolt_ghost_frame(k: int) -> Image.Image:
             continue
         x0, ln = min(row) - 2, rng.randint(7, 24)
         for x in range(max(x0 - ln, 3), x0):
-            px[x, y] = (WHITE if x > x0 - 3 else TEAL_L if (x + k) % 3 else BLUE) + (255,)
+            px[x, y] = (WHITE if x > x0 - 3 else TEAL_L if x % 3 else BLUE) + (255,)
     return src
 
 
@@ -4135,13 +4136,13 @@ def bolt_fizzle_frame(k: int) -> Image.Image:
 
 def bolt_spark_frame(k: int) -> Image.Image:
     """A single arc popping off him while he runs (48 px, one-shot): it lashes out, flickers and winks out."""
-    c = Canvas(48)
+    c = Canvas(64)
     rng = random.Random(21 + k // 2)  # the shape holds for two frames
-    ln = (7, 13, 16, 15, 9, 4)[k]
-    pts = zap_zig(rng, (24, 24), (24 + ln, 24 - ln * 0.5), 3, 3)
+    ln = (11, 20, 25, 23, 14, 6)[k]
+    pts = zap_zig(rng, (32, 32), (32 + ln, 32 - ln * 0.5), 4, 4)
     zap_arc(c, pts, TEAL_L if k < 4 else BLUE, tip=WHITE if k < 4 else None)
     if 1 <= k <= 3:
-        zap_arc(c, zap_zig(rng, pts[1], (pts[1][0] - 6, pts[1][1] + 8), 2, 2), TEAL_L, tip=YELLOW)
+        zap_arc(c, zap_zig(rng, pts[1], (pts[1][0] - 9, pts[1][1] + 12), 3, 3), TEAL_L, tip=YELLOW)
     return outline(c.img)
 
 

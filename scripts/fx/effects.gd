@@ -9,6 +9,8 @@ extends Node2D
 
 const PARTICLE_POOL: int = 384
 const NUMBER_POOL: int = 40
+## Fraction of a strip's run (at its end) over which it fades out.
+const STRIP_TAIL_FADE: float = 0.15
 const BEAM_POOL: int = 32
 const SWING_POOL: int = 16
 const RING_POOL: int = 24
@@ -310,6 +312,7 @@ func _draw_strip(ci: CanvasItem, art: Texture2D, t: float, at: Vector2, angle: f
 	var n: int = int(art.get_width() / h)
 	var k: int = mini(int(t * n), n - 1)
 	ci.draw_set_transform(at, angle, Vector2(scale_px, scale_px))
+	tint.a *= clampf((1.0 - t) / STRIP_TAIL_FADE, 0.0, 1.0)  # the last sparks ease out instead of vanishing
 	ci.draw_texture_rect_region(art, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2(k * h, 0, h, h), tint)
 	ci.draw_set_transform(Vector2.ZERO)
 
