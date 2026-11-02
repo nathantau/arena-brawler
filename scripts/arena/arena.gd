@@ -14,6 +14,8 @@ signal ready_requested(is_ready: bool)
 signal mode_requested(mode: MatchRules.Mode)
 ## Lobby (Teams): the local player picked a team (0 = auto).
 signal team_requested(team: int)
+## Teams: the lock-in was refused, a teammate (this id) already holds the fighter.
+signal lock_refused(holder_id: int)
 signal arena_requested(index: int)
 signal character_requested(id: StringName)
 signal weapon_requested(id: StringName)
@@ -168,7 +170,9 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 		referee.phase_changed.connect(_on_phase_changed)
 		ready_requested.connect(func(is_ready: bool) -> void:
 			if local_player != null:
-				referee.set_ready(local_player.player_id, is_ready))
+				var holder: int = try_ready(local_player.player_id, is_ready)
+				if holder != 0:
+					lock_refused.emit(holder))
 		mode_requested.connect(referee.set_mode)
 		team_requested.connect(func(team: int) -> void:
 			if local_player != null:
@@ -306,10 +310,23 @@ func player_color(id: int) -> Color:
 	return p.display_color if p != null else Color.GRAY
 
 
+## Authoritative: READY from a player; in Teams it locks their current fighter. Returns the teammate who already
+## holds that fighter (the lock is refused), else 0.
+func try_ready(id: int, is_ready: bool) -> int:
+	var p: Player = get_player(id)
+	return referee.set_ready(id, is_ready, p.character.id if p != null else &"")
+
+
+## Teams: a locked-in player's fighter, weapon and specials are fixed.
+func is_locked_in(p: Player) -> bool:
+	return match_state.mode == MatchRules.Mode.TEAMS and match_state.locked.has(p.player_id) \
+		and match_state.ready.has(p.player_id)
+
+
 ## Lobby only (authoritative): switch a player's character. Takes effect immediately.
 func select_character(p: Player, id: StringName) -> void:
 	var c: CharacterData = characters.get_character(id)
-	if c == null or c == p.character or match_state.phase != MatchState.Phase.LOBBY:
+	if c == null or c == p.character or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p):
 		return
 	p.set_character(c)
 	match_updated.emit()
@@ -318,7 +335,7 @@ func select_character(p: Player, id: StringName) -> void:
 ## Lobby only (authoritative): the one weapon a player fights with. Must be one of weapons_for(character).
 func select_weapon(p: Player, id: StringName) -> void:
 	var w: WeaponData = catalog.get_weapon(id)
-	if w == null or not weapons_for(p.character).has(w) or match_state.phase != MatchState.Phase.LOBBY:
+	if w == null or not weapons_for(p.character).has(w) or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p):
 		return
 	p.set_weapon(w)
 	match_updated.emit()
@@ -328,7 +345,7 @@ func select_weapon(p: Player, id: StringName) -> void:
 func select_special(p: Player, slot: int, id: StringName) -> void:
 	var s: SkillData = SkillCatalog.shared().get_skill(id)
 	if s == null or not s.special or not p.character.can_use_skill(s) or slot < 0 or slot >= Constants.SKILL_SLOTS \
-			or match_state.phase != MatchState.Phase.LOBBY:
+			or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p):
 		return
 	p.set_skill(slot, s)
 	match_updated.emit()
@@ -732,6 +749,7 @@ func _physics_process(delta: float) -> void:
 	if mode != Mode.CLIENT:
 		if mode == Mode.OFFLINE:
 			_fill_teams_bots()
+		_resolve_bot_fighters()
 		referee.tick(delta, _human_ids, _bot_ids, scores)
 		_tick_flags()
 		_tick_respawns(delta)
@@ -762,6 +780,47 @@ func _tick_respawns(delta: float) -> void:
 		p.respawn_timer -= delta
 		if p.respawn_timer <= 0.0 and match_state.may_respawn(p.player_id):
 			p.respawn(_pick_spawn_for(p))
+
+
+## Teams lobby (authoritative): bots count as locked at once, never share a fighter with a teammate, and give way
+## to a human who locked theirs (the bot moves to the next free fighter in catalog order).
+func _resolve_bot_fighters() -> void:
+	var st: MatchState = match_state
+	if st.phase != MatchState.Phase.LOBBY:
+		return
+	var now: Dictionary[int, StringName] = {}
+	if st.mode == MatchRules.Mode.TEAMS:
+		var teams: Dictionary[int, int] = referee.lobby_teams()
+		for id: int in st.locked:  # humans keep their lock while they stay ready
+			if not _bot_ids.has(id) and st.ready.has(id):
+				now[id] = st.locked[id]
+		for team: int in [MatchRules.TEAM_A, MatchRules.TEAM_B]:
+			var taken: Array[StringName] = []
+			for id: int in now:
+				if teams.get(id, 0) == team:
+					taken.append(now[id])
+			for id: int in st.participants:
+				var b: Player = get_player(id)
+				if b == null or not b.is_bot or teams.get(id, 0) != team:
+					continue
+				if taken.has(b.character.id):
+					b.set_character(_free_fighter(b.character, taken))
+				taken.append(b.character.id)
+				now[id] = b.character.id
+	if now != st.locked:
+		st.locked = now
+		referee.changed.emit()
+		match_updated.emit()
+
+
+## The first fighter after `from` (catalog order, wrapping) that isn't in `taken`.
+func _free_fighter(from: CharacterData, taken: Array[StringName]) -> CharacterData:
+	var i: int = characters.ordered.find(from)
+	for step: int in range(1, characters.ordered.size() + 1):
+		var c: CharacterData = characters.ordered[(i + step) % characters.ordered.size()]
+		if not taken.has(c.id):
+			return c
+	return from
 
 
 ## Offline Teams needs five bots around the player; the other modes use fewer, extra ones just sit out.

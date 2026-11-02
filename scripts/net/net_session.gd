@@ -121,6 +121,12 @@ func rpc_select_weapon(id: StringName) -> void:
 # --- server -> client -------------------------------------------------------
 
 @rpc("authority", "call_remote", "reliable", CH_EVENTS)
+func rpc_lock_refused(holder_id: int) -> void:
+	if client != null:
+		client.on_lock_refused(holder_id)
+
+
+@rpc("authority", "call_remote", "reliable", CH_EVENTS)
 func rpc_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void:
 	if client != null:
 		client.on_welcome(your_id, match_seed, tick, roster)

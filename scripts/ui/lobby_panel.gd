@@ -22,6 +22,9 @@ const SKILL_ROW_SIZE: Vector2 = Vector2(320, 64)  # 7 rows (5 own + Dash + Barri
 const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
 const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 140)
 const WEAPON_ART_SCALE: float = 1.5
+## Teams hero select: a teammate's locked card is dimmed to this, and shows "LOCKED · name".
+const LOCKED_DIM: Color = Color(0.5, 0.5, 0.55)
+const TOAST_TIME: float = 2.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 
 var arena: Arena
@@ -48,6 +51,13 @@ var _older_slot: int = 1
 var _rows: VBoxContainer
 var _blocker: Label
 var _ready_button: Button
+## Per fighter card: teammates' hover tags (top) and the lock badge (middle).
+var _fighter_tags: Dictionary[StringName, HBoxContainer] = {}
+var _fighter_badges: Dictionary[StringName, Label] = {}
+## Everyone's (fighter, locked) as last drawn, so _process restyles when a teammate browses.
+var _shown_crowd: Array = []
+var _toast: String = ""
+var _toast_left: float = 0.0
 ## Last highlighted (character, weapon, slots 0-2 specials), so _process only restyles on change.
 var _revealed: Array[StringName] = [&"", &""]
 var _shown_pick: Array[StringName] = [&"", &"", &"", &"", &""]
@@ -108,6 +118,23 @@ func _ready() -> void:
 		var id: StringName = c.id
 		_fighter_scroller.on_tap(card, func() -> void: arena.character_requested.emit(id))
 		_character_cards[id] = card
+		var tags := HBoxContainer.new()
+		tags.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 6)
+		tags.add_theme_constant_override("separation", 4)
+		tags.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(tags)
+		_fighter_tags[id] = tags
+		var badge: Label = _label(card, &"Label")
+		badge.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+		badge.add_theme_font_override("font", UiStyle.bold())
+		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+		badge.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		badge.grow_vertical = Control.GROW_DIRECTION_BOTH
+		badge.offset_top -= 24.0
+		badge.offset_bottom -= 24.0
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.visible = false
+		_fighter_badges[id] = badge
 
 	# Weapons under the fighters, so a character with many specials can't push them below the fold.
 	var gap := Control.new()
@@ -152,13 +179,48 @@ func _ready() -> void:
 	_ready_button.pressed.connect(_on_ready_pressed)
 
 	arena.match_updated.connect(_refresh)
+	arena.lock_refused.connect(func(holder: int) -> void:
+		_toast = "Taken by %s" % _team_name(arena.get_player(holder))
+		_toast_left = TOAST_TIME
+		_refresh())
 	_refresh()
 
 
-## Loadouts reach clients in snapshots, not match updates: restyle when the pick changes.
-func _process(_delta: float) -> void:
-	if visible and _pick() != _shown_pick:
+## Loadouts reach clients in snapshots, not match updates: restyle when the pick (or a teammate's hover) changes.
+func _process(delta: float) -> void:
+	if not visible:
+		return
+	if _toast_left > 0.0:
+		_toast_left -= delta
+		if _toast_left <= 0.0:
+			_refresh()
+	if _pick() != _shown_pick or _crowd() != _shown_crowd:
 		_refresh()
+
+
+## Every player's current fighter + whether it is locked, for change detection.
+func _crowd() -> Array:
+	var out: Array = []
+	for p: Player in arena.players:
+		out.append([p.player_id, p.character.id, arena.match_state.locked.has(p.player_id)])
+	return out
+
+
+func _hovers() -> Dictionary:
+	var out: Dictionary = {}
+	for p: Player in arena.players:
+		if arena.match_state.is_participant(p.player_id):
+			out[p.player_id] = p.character.id
+	return out
+
+
+## How a player is named on the team lines: You / <fighter> (bot) / Player N.
+func _team_name(p: Player) -> String:
+	if p == null:
+		return "a teammate"
+	if p == arena.local_player:
+		return "You"
+	return "%s (bot)" % p.character.display_name if p.is_bot else "Player %d" % p.player_id
 
 
 func _refresh() -> void:
@@ -230,21 +292,89 @@ func _refresh() -> void:
 		else:
 			tag = "picking"
 		var you: String = " (you)" if p == me else ""
+		if p.is_bot and tag == "sits out" and not shown_teams.is_empty():
+			continue  # filler bots that don't play
 		var team: int = shown_teams.get(p.player_id, 0)
 		var row: Label = _label(flows.get(team, flows[flows.keys()[0]]), &"Label")
 		row.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
 		if shown_teams.is_empty():
 			row.add_theme_color_override("font_color", p.display_color)
 			row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
-		else:  # no colour words in team names (they clash with ally blue / enemy red): the fighter + bot / you
+		else:  # no colour words in team names (they clash with ally blue / enemy red)
 			row.add_theme_color_override("font_color", TEAM_ALLY_COLOR if team == my_team else UiStyle.C_RED)
-			var who: String = "You" if p == me else "%s (bot)" % p.character.display_name if p.is_bot \
-				else "Player %d" % p.player_id
-			row.text = "● %s" % who if p.is_bot and tag == "bot" else "● %s · %s" % [who, tag] if p.is_bot else "● %s · %s · %s" % [who, p.character.display_name, tag]
+			if team != my_team:  # enemies: no fighter until the match starts
+				var foe: String = "Bot %d" % (p.player_id - Constants.BOT_ID_BASE + 1) if p.is_bot \
+					else "Player %d" % p.player_id
+				row.text = "● %s" % foe if p.is_bot or tag == "sits out" else "● %s · %s" % [foe, tag]
+			else:
+				var state: String = tag if tag == "sits out" else "LOCKED" if st.locked.has(p.player_id) else "hovering"
+				row.text = "● %s · %s" % [_team_name(p), state] if p.is_bot \
+					else "● %s · %s · %s" % [_team_name(p), p.character.display_name, state]
 
-	_blocker.text = st.blocker
-	_ready_button.text = "UNREADY" if _is_ready() else "READY!"
+	_shown_crowd = _crowd()
+	var teams_mode: bool = st.mode == MatchRules.Mode.TEAMS
+	var taker: int = MatchRules.lock_holder(shown_teams, _human_locks(st), me.player_id, me.character.id) \
+		if teams_mode and not _is_ready() else 0
+	_mark_fighters(st, me, shown_teams, taker)
+	_blocker.text = _toast if _toast_left > 0.0 else "Taken by %s" % _team_name(arena.get_player(taker)) if taker != 0 \
+		else st.blocker
+	_ready_button.text = ("UNLOCK" if teams_mode else "UNREADY") if _is_ready() else "LOCK IN" if teams_mode else "READY!"
+	_ready_button.disabled = taker != 0
 	_ready_button.theme_type_variation = &"Button" if _is_ready() else &"PrimaryButton"
+
+
+## Locks held by humans (bots yield to them, so they never block a lock-in).
+func _human_locks(st: MatchState) -> Dictionary:
+	var out: Dictionary = {}
+	for id: int in st.locked:
+		if st.ready.has(id):
+			out[id] = st.locked[id]
+	return out
+
+
+## Teams hero select on the fighter cards: teammates' hover tags, their locks (dimmed + badge), your own lock (gold).
+## Enemy picks are never drawn (MatchRules.teammate_picks only returns teammates).
+func _mark_fighters(st: MatchState, me: Player, shown_teams: Dictionary, taker: int) -> void:
+	for id: StringName in _character_cards:
+		_character_cards[id].modulate = Color.WHITE
+		_fighter_badges[id].visible = false
+		for t: Node in _fighter_tags[id].get_children():
+			t.queue_free()
+	if st.mode != MatchRules.Mode.TEAMS:
+		return
+	if _is_ready() and _character_cards.has(me.character.id):
+		_character_cards[me.character.id].theme_type_variation = &"CardGold"
+		_badge(me.character.id, "LOCKED IN", UiStyle.C_YELLOW)
+	var picks: Dictionary = MatchRules.teammate_picks(me.player_id, shown_teams, _hovers(), st.locked)
+	for pid: int in picks:
+		var who: Player = arena.get_player(pid)
+		var fid: StringName = picks[pid][0]
+		if who == null or not _character_cards.has(fid):
+			continue
+		if not picks[pid][1]:  # hovering: a coloured dot + short name
+			var tag: Label = _label(_fighter_tags[fid], &"Label")
+			tag.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY - 2)
+			tag.add_theme_font_override("font", UiStyle.bold())
+			tag.add_theme_color_override("font_color", who.display_color)
+			tag.text = "● P%d" % pid
+			tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		elif who.is_bot:  # a bot yields to a human, so its card stays pickable
+			_badge(fid, "BOT", UiStyle.C_STEEL)
+		else:
+			_character_cards[fid].modulate = LOCKED_DIM
+			_badge(fid, "LOCKED · P%d" % pid, UiStyle.C_ORANGE)
+
+
+func _badge(fighter: StringName, text: String, color: Color) -> void:
+	var badge: Label = _fighter_badges[fighter]
+	badge.text = text
+	badge.add_theme_color_override("font_color", color)
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(COLOR_BG, 0.85)
+	box.set_content_margin_all(3.0)
+	box.set_corner_radius_all(2)
+	badge.add_theme_stylebox_override("normal", box)
+	badge.visible = true
 
 
 func _build_weapon_cards(c: CharacterData) -> void:

@@ -54,6 +54,15 @@ func _tick() -> void:
 			arena.camera.process_callback = Camera2D.CAMERA2D_PROCESS_IDLE
 		if not lobby:
 			arena.referee.set_ready(1, true)
+		else:  # hero select screenshot: two human teammates, one hovering, one locked in
+			arena.referee.set_team(1, MatchRules.TEAM_A)
+			for id: int in [2, 3]:
+				arena.add_player(id, id, BotBrain.new(arena, id))
+				arena.referee.set_team(id, MatchRules.TEAM_A)
+			arena.select_character(arena.get_player(2), &"wukong")
+			arena.select_character(arena.get_player(3), &"flint")
+			arena.select_character(me, &"eden")
+			arena.try_ready(3, true)
 		arena.referee.round_ended.connect(_on_round_ended)
 	if lobby and shot_path != "" and frames == 60:
 		_shoot()

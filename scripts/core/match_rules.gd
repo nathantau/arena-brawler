@@ -95,6 +95,25 @@ static func assign_teams(participants: Array[int], picks: Dictionary) -> Diction
 	return out
 
 
+## Teams hero select: the human teammate of `id` who already locked `fighter` (0 = free). `humans_locked` is
+## id -> fighter for humans only; `teams` the full lobby assignment.
+static func lock_holder(teams: Dictionary, humans_locked: Dictionary, id: int, fighter: StringName) -> int:
+	for other: int in humans_locked:
+		if other != id and humans_locked[other] == fighter and teams.get(other, 0) == teams.get(id, -1):
+			return other
+	return 0
+
+
+## What `viewer` may see of the others' fighter picks: teammates only (enemies never), id -> [fighter, is_locked].
+## `hovers` is every player's current fighter, `locked` the locked ones (a locked pick wins over the hover).
+static func teammate_picks(viewer: int, teams: Dictionary, hovers: Dictionary, locked: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for id: int in hovers:
+		if id != viewer and teams.has(id) and teams.get(id) == teams.get(viewer, -1):
+			out[id] = [locked.get(id, hovers[id]), locked.has(id)]
+	return out
+
+
 ## ROUND_ON while both teams have a player with lives left; else the team still standing (0 if both are out).
 static func round_result(teams: Dictionary, lives: Dictionary) -> int:
 	var in_a: bool = false

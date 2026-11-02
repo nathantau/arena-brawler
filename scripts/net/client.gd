@@ -113,6 +113,11 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 		arena.ready_requested.emit(true)
 
 
+func on_lock_refused(holder_id: int) -> void:
+	if arena != null:
+		arena.lock_refused.emit(holder_id)
+
+
 func on_player_joined(id: int, color_index: int, is_bot: bool) -> void:
 	if arena != null:
 		_add_player(id, color_index, is_bot)

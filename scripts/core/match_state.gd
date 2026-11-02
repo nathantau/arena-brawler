@@ -4,7 +4,7 @@ extends RefCounted
 ## sends it whole, reliably, on every change; clients only count time_left down for display.
 
 enum Phase { LOBBY, COUNTDOWN, PLAYING, RESULTS }
-enum Field { PHASE, MODE, ARENA, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, TEAMS, ROUND_SCORES, ROUND, ROUND_WINNER, INTERMISSION, FLAGS, ROUND_REASON, COUNT }
+enum Field { PHASE, MODE, ARENA, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, TEAMS, ROUND_SCORES, ROUND, ROUND_WINNER, INTERMISSION, FLAGS, ROUND_REASON, LOCKS, COUNT }
 ## One results row: [id, kills, deaths].
 enum ResultField { ID, KILLS, DEATHS, COUNT }
 
@@ -18,6 +18,9 @@ var time_limit: float = Constants.MATCH_TIME_LIMIT
 ## In LOBBY: who would play if the match started now. Afterwards: who is playing.
 var participants: Array[int] = []
 var ready: Array[int] = []
+## Teams lobby: player id -> the fighter they locked in (humans: set with READY; bots: held from the moment they pick).
+## Teammates see these; humans are unique per team, a bot yields to a human (see Arena._resolve_bot_fighters).
+var locked: Dictionary[int, StringName] = {}
 ## Final standings (best first), set on entering RESULTS.
 var results: Array = []
 ## 0 = draw.
@@ -126,6 +129,10 @@ func to_array() -> Array:
 		fl.append_array([flag_state[t], flag_carrier[t], flag_pos[t].x, flag_pos[t].y, flag_timer[t]])
 	a[Field.FLAGS] = fl
 	a[Field.ROUND_REASON] = round_reason
+	var lk: Array = []
+	for id: int in locked:
+		lk.append_array([id, String(locked[id])])
+	a[Field.LOCKS] = lk
 	return a
 
 
@@ -142,7 +149,8 @@ func apply_array(a: Array) -> bool:
 			or typeof(a[Field.TEAMS]) != TYPE_PACKED_INT32_ARRAY or typeof(a[Field.ROUND_SCORES]) != TYPE_PACKED_INT32_ARRAY \
 			or typeof(a[Field.ROUND]) != TYPE_INT or typeof(a[Field.ROUND_WINNER]) != TYPE_INT \
 			or typeof(a[Field.INTERMISSION]) != TYPE_FLOAT or typeof(a[Field.ROUND_REASON]) != TYPE_INT \
-			or typeof(a[Field.FLAGS]) != TYPE_PACKED_FLOAT32_ARRAY or (a[Field.FLAGS] as PackedFloat32Array).size() != 10:
+			or typeof(a[Field.FLAGS]) != TYPE_PACKED_FLOAT32_ARRAY or (a[Field.FLAGS] as PackedFloat32Array).size() != 10 \
+			or typeof(a[Field.LOCKS]) != TYPE_ARRAY or (a[Field.LOCKS] as Array).size() % 2 != 0:
 		return false
 	var tl: PackedInt32Array = a[Field.TEAMS]
 	var rs: PackedInt32Array = a[Field.ROUND_SCORES]
@@ -173,6 +181,11 @@ func apply_array(a: Array) -> bool:
 	round_winner = a[Field.ROUND_WINNER]
 	intermission = a[Field.INTERMISSION]
 	round_reason = a[Field.ROUND_REASON]
+	locked = {}
+	var lk: Array = a[Field.LOCKS]
+	for i: int in range(0, lk.size() - 1, 2):
+		if typeof(lk[i]) == TYPE_INT and typeof(lk[i + 1]) == TYPE_STRING:
+			locked[lk[i]] = StringName(lk[i + 1])
 	var fl: PackedFloat32Array = a[Field.FLAGS]
 	for i: int in 2:
 		var t: int = i + 1
