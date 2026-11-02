@@ -8521,7 +8521,7 @@ FX.update({
 
 
 # --- Barrier bubble (shared special): a force field round the player. CELL px frames, centred on the player ---
-BUBBLE_R = 40  # art px; x SPRITE_SCALE 1.5 = 60 = barrier.tres shield_radius (keep in sync)
+BUBBLE_R = 33  # art px; x SPRITE_SCALE 1.5 = 50 = barrier.tres shield_radius (keep in sync)
 BUBBLE_LOOP = 8  # frames per damage stage (a seamless shimmer loop)
 BUBBLE_STAGES = 4  # hit budget (barrier.tres shield_hits): stage = hits taken, the last is badly cracked
 BUBBLE_OPEN_FRAMES = 8
@@ -8530,7 +8530,7 @@ BUBBLE_BREAK_FRAMES = 12
 BUBBLE_BREAK_CELL = 128  # the shards fly out past the rim
 BUBBLE_RIPPLE_FRAMES = 8
 BUBBLE_RIPPLE_CELL = 48
-HEX_S = 8.0  # hex lattice size
+HEX_S = 7.0  # hex lattice size
 
 
 def _hex_edge(x: float, y: float) -> float:
@@ -8560,7 +8560,7 @@ def _bubble_cracks(stage: int) -> list:
     out = []
     for i in range(n):
         a = math.tau * (i / max(1, n)) + 0.4 + rng.uniform(-0.2, 0.2)
-        length = BUBBLE_R * (0.3 + 0.12 * stage + rng.uniform(0, 0.12))
+        length = BUBBLE_R * (0.1 + 0.05 * stage + rng.uniform(0, 0.05))  # short: they stay on the rim, never across her face
         pts = []
         for j in range(5):
             r = BUBBLE_R - length * j / 4
@@ -8596,24 +8596,22 @@ def bubble_img(stage: int, k: int, n: int, scale: float = 1.0, flash: float = 0.
                 hl = (ang + 2.36 + math.pi) % math.tau - math.pi  # fixed highlight, upper left
                 if abs(da) < 0.38 or abs(hl) < 0.5 or flash > 0.5:
                     col = WHITE
-            elif r > R - 3.2:
-                col = TEAL if bay < 0.75 else TEAL_L
+            elif r > R - 2.6:  # the lighter inner rim line
+                col = TEAL if bay < 0.8 else TEAL_L
             elif fill:
                 t = r / R
                 lit = None
                 edge = _hex_edge(x - m, y - m) if scale > 0.6 else 9
-                if edge < 0.8:
+                if edge < 0.7 and t > 0.45:  # the lattice: sparse, fading toward the centre
                     band = ((x * 0.8 + y * 0.6) / (2.0 * R) - k / n) % 1.0
-                    if band < 0.16:
-                        lit = WHITE if band < 0.07 else TEAL_L
-                    elif bay < 0.45:
+                    if band < 0.14 and bay < 1.3 * t - 0.25:
+                        lit = WHITE if band < 0.06 else TEAL_L
+                    elif bay < 0.55 * t ** 2.5:
                         lit = TEAL
                 if lit is not None:
                     col = lit
-                elif bay < 0.02 + 0.2 * t ** 3 + 0.45 * flash:
-                    col = TEAL if (x + y + k) % 3 else TEAL_L
-                    if flash > 0.5:
-                        col = WHITE
+                elif t > 0.82 and bay < 0.5 * ((t - 0.82) / 0.18) ** 2:  # a very light tint hugging the rim
+                    col = TEAL
             if col is not None:
                 px[x, y] = col + (255,)
     d = ImageDraw.Draw(img)
@@ -8668,15 +8666,17 @@ def bubble_break_frame(k: int) -> Image.Image:
                 continue
             dx, dy = x - m, y - m
             r = math.hypot(dx, dy)
+            if r < BUBBLE_R - 3.2:  # the interior stays clear: only the rim breaks into shards
+                continue
             ang = math.atan2(dy, dx)
             sect = int(((ang + math.pi) / math.tau + 0.03 * math.sin(r * 0.3)) * n) % n
-            layer = 1 if r > BUBBLE_R * 0.58 else 0
+            layer = 1
             piece = sect + layer * n
             mid = (sect + 0.5) / n * math.tau - math.pi
-            dist = (4 + 17 * (0.5 + 0.5 * layer)) * speeds[piece] * (t ** 0.5)
-            ox, oy = round(math.cos(mid) * dist), round(math.sin(mid) * dist + 9 * t * t)
+            dist = 22 * speeds[piece] * (t ** 0.5)
+            ox, oy = round(math.cos(mid) * dist), round(math.sin(mid) * dist + 7 * t * t)
             gone = BAYER4[(y + piece) % 4][(x + piece) % 4] / 16 + 0.1 * piece / (2 * n)
-            if gone < (t - 0.4) * 1.7 or (layer == 0 and gone < t * 1.3 - 0.2):
+            if gone < (t - 0.4) * 1.7:
                 continue
             nx, ny = x + ox, y + oy
             if 1 <= nx < cell - 1 and 1 <= ny < cell - 1:

@@ -5,7 +5,7 @@ extends SceneTree
 ## (small window in override.cfg, see CLAUDE.md Commands).
 
 const START_FRAME: int = 420
-const PRESS_AT: int = 30
+const PRESS_AT: int = 70
 
 var arena: Arena
 var me: Player
@@ -66,7 +66,7 @@ func _tick() -> void:
 	bot.global_position = home + Vector2(2000.0, 2000.0)
 	var n: int = frames - START_FRAME
 	var runner: Runner = me.controller as Runner
-	if n == PRESS_AT - 5:
+	if n == 2:
 		me.global_position = home
 		for s: CharacterSkill in me.skills:
 			s.cooldown_remaining = 0.0

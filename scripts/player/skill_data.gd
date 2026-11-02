@@ -77,7 +77,7 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export_group("Shield")
 ## Radius of the force-field bubble round the player (it follows them), and how many enemy shots it takes before it
 ## breaks (0 = until it times out).
-@export var shield_radius: float = 60.0
+@export var shield_radius: float = 50.0
 @export var shield_hits: int = 4
 ## Enemy shots that hit the barrier bounce back off it and become the owner's (like the Arc Blade).
 @export var shield_reflect: bool = false
