@@ -8006,6 +8006,389 @@ FX.update({
 })
 
 
+# --- Thorn Quake (Eden) and Dark Pool (Shade): the two specials added in the Shade/Eden buff pass --------------------
+
+QUAKE_R = 46  # the telegraph ring's radius in art px (quake_blast.tres splash 70 / SPRITE_SCALE 1.5): SpecialFx.QUAKE_ART_RADIUS
+QUAKE_MARK_FRAMES = 8
+QUAKE_FRAMES = 14  # quake_burst / quake_scar: thorns breach (impact on frame 2), hold, then sink away
+QUAKE_BASE = 112  # quake_burst: the row the thorns' roots sit on (SpecialFx.QUAKE_BASE_Y), in a 128 px frame
+
+
+def quake_mark_frame(k: int) -> Image.Image:
+    """The telegraph (112 px, centred on the spot, a loop of QUAKE_MARK_FRAMES): a ragged ring of roots with thorn tips pointing
+    in that pulse towards the middle, a faint dithered green glow, soil specks hopping and a sprout in the centre."""
+    n = 112
+    m = n // 2
+    c = Canvas(n)
+    rng = random.Random(910 + k)
+    ph = k / QUAKE_MARK_FRAMES
+    pulse = 0.5 + 0.5 * math.sin(math.tau * ph)
+    for y in range(n):  # a faint dithered glow filling the ring, breathing
+        for x in range(n):
+            d = math.hypot(x - m, y - m) / QUAKE_R
+            if d < 0.95 and BAYER[y % 4][x % 4] / 16 < 0.004 + 0.022 * (1 - d) * (0.6 + 0.4 * pulse):
+                c.dot(x, y, GREEN_L if d < 0.5 else GREEN)
+    segs = 20
+    for i in range(segs):  # root dashes round the rim, crawling slowly round
+        a0 = math.tau * (i + 0.1) / segs + ph * math.tau / segs
+        a1 = math.tau * (i + 0.7) / segs + ph * math.tau / segs
+        am = (a0 + a1) / 2
+        wob = 1.3 * math.sin(i * 2.1 + ph * math.tau)
+        pts = [(m + math.cos(a) * (QUAKE_R + wob * s), m + math.sin(a) * (QUAKE_R + wob * s)) for a, s in ((a0, 0), (am, 1), (a1, 0))]
+        c.flat(L(pts, 1), GREEN_L if i % 5 == 0 else GREEN)
+        pts2 = [(m + math.cos(a) * (QUAKE_R - 2), m + math.sin(a) * (QUAKE_R - 2)) for a in (a0, am, a1)]
+        c.flat(L(pts2, 1), BROWN)
+    for i in range(10):  # thorn tips pointing in, pulsing towards the middle
+        a = math.tau * i / 10 + 0.2
+        r0 = QUAKE_R - 3
+        r1 = r0 - 6 - 4 * pulse * (1 if i % 2 else 0.5)
+        half = 0.09
+        tip = (m + math.cos(a) * r1, m + math.sin(a) * r1)
+        b1 = (m + math.cos(a - half) * r0, m + math.sin(a - half) * r0)
+        b2 = (m + math.cos(a + half) * r0, m + math.sin(a + half) * r0)
+        c.flat(P([b1, tip, b2]), WALNUT_L if i % 2 else CHESTNUT)
+        c.dot(round(tip[0]), round(tip[1]), CREAM)
+    for _ in range(5):  # soil specks hopping at the rim
+        a, r = rng.uniform(0, math.tau), QUAKE_R + rng.uniform(-6, 2)
+        sdot(c, round(m + math.cos(a) * r), round(m + math.sin(a) * r - 1.5 * pulse), rng.choice((BROWN, CHESTNUT, GREEN_L)))
+    # a sprout in the centre, leaning with the pulse
+    lean = round(1.6 * math.sin(math.tau * ph))
+    c.flat(L([(m, m + 3), (m + lean, m - 3)], 1), GREEN_L)
+    c.flat(P([(m + lean, m - 2), (m + lean - 5, m - 6), (m + lean - 3, m - 1)]), GREEN)
+    c.flat(P([(m + lean, m - 3), (m + lean + 5, m - 7), (m + lean + 3, m - 2)]), GREEN_L)
+    return _clear_edge(outline(c.img), 1)
+
+
+def _quake_thorn(c: Canvas, x: float, y: float, h: float, w: float, lean: float, phase: float) -> None:
+    """One bark thorn rooted at (x, y), `h` tall: a curved spike with barbs, a vine wound round it and a leaf at the base."""
+    if h < 2:
+        if h > 0:
+            c.flat(E((x - w, y - 1, x + w, y + 1)), BROWN)
+        return
+    w = max(1.0, w * (0.6 + 0.4 * min(1.0, h / 28)))
+    tipx = x + lean * h / 24
+    mid = (x + lean * h / 60, y - h * 0.5)
+    left = [(x - w, y), (mid[0] - w * 0.7, mid[1]), (tipx, y - h)]
+    right = [(x + w, y), (mid[0] + w * 0.7, mid[1]), (tipx, y - h)]
+    c.part(P(left + right[::-1][1:]), BROWN)
+    # lit left face, dark right face, so the spike reads as round
+    c.flat(P([(x - w, y), (mid[0] - w * 0.7, mid[1]), (tipx, y - h), (tipx, y - h * 0.4), (x - w * 0.1, y)]), CHESTNUT)
+    c.flat(L([(x - w + 1, y - 1), (mid[0] - w * 0.4, mid[1]), (tipx, y - h + 1)], 1), WALNUT_L)
+    c.flat(P([(x + w, y), (mid[0] + w * 0.7, mid[1]), (tipx, y - h), (x + w * 0.2, y)]), WALNUT_D)
+    if h > 30:  # barbs, only on the big thorns
+        for f, s in ((0.4, -1), (0.62, 1)):
+            by = y - h * f
+            bx = x + lean * h * f / 24 + s * w * 0.5
+            c.flat(P([(bx, by + 2), (bx + s * (w + 3), by - 3), (bx + s * 0.5, by - 1)]), WALNUT_L if s < 0 else WALNUT)
+    sdot(c, round(tipx), round(y - h), CREAM)
+    if h > 10:  # vine winding up
+        pts = [(x + math.sin(phase + j * 0.9) * w * 0.9, y - j * h / 9 * 0.8) for j in range(1, 8)]
+        c.flat(L([(round(a), round(b)) for a, b in pts], 1), GREEN)
+    if h > 24 and phase % 2 < 1.2:  # leaf at the base
+        c.flat(P([(x + w, y - 1), (x + w + 6, y - 5), (x + w + 4, y)]), GREEN_L)
+        c.flat(P([(x - w, y - 1), (x - w - 5, y - 4), (x - w - 3, y)]), GREEN)
+
+
+def _quake_env(k: int, start: float, rise: float = 2.2, hold_until: float = 8.0, sink: float = 4.5) -> float:
+    """0..1.05 height envelope of a thorn: erupts from `start` (overshooting a touch), holds, sinks away by the strip's end."""
+    if k < start:
+        return 0.0
+    up = min(1.0, (k - start) / rise)
+    h = math.sin(up * math.pi / 2) * (1.0 + 0.06 * math.sin(up * math.pi))
+    if k > hold_until:
+        d = min(1.0, (k - hold_until) / sink)
+        h *= (1 - d * d)
+    return max(0.0, h)
+
+
+QUAKE_THORNS = None
+
+
+def _quake_layout() -> list:
+    """(dx, dy, max height, width, lean, start frame) for every thorn: a tall one in the middle, a ring of six, a ring of ten."""
+    rng = random.Random(930)
+    out = [(0, 0, 50, 7.0, 1.5, 1.2)]
+    for i in range(5):
+        a = math.tau * (i + 0.3) / 5
+        out.append((math.cos(a) * 20, math.sin(a) * 14, rng.uniform(32, 40), 5.4, math.cos(a) * 4, 1.8))
+    for i in range(8):
+        a = math.tau * (i + 0.6) / 8
+        out.append((math.cos(a) * 38, math.sin(a) * 27, rng.uniform(20, 28), 4.0, math.cos(a) * 6, 2.3))
+    return sorted(out, key=lambda t: t[1])
+
+
+def quake_burst_frame(k: int) -> Image.Image:
+    """The thorns (128 px, roots on row QUAKE_BASE, centred across): the ground heaves and cracks (frame 0-1), then a thicket of bark
+    thorns bursts up, middle first (impact on frame 2), clods fly, dust rolls out; they hold, sway, and sink away with leaves
+    sprouting on them as they go."""
+    n, m = 128, 64
+    c = Canvas(n)
+    rng = random.Random(940 + k)
+    base = QUAKE_BASE
+    for dx, dy, hmax, w, lean, start in _quake_layout():
+        e = _quake_env(k, start - 1.0 if start < 2 else start - 0.7)
+        sway = 0.8 * math.sin(k * 0.8 + dx) * (1 if 4 <= k <= 9 else 0)
+        _quake_thorn(c, m + dx, base + dy, hmax * e, w, lean + sway, k * 0.6)
+    # dust ring and clods
+    if 1 <= k <= 7:
+        rr = 14 + (k - 1) * 8
+        for i in range(26):
+            a = math.tau * i / 26 + 0.1 * k
+            if rng.random() < 0.8 - 0.09 * k:
+                x, y = m + math.cos(a) * rr, base + math.sin(a) * rr * 0.6
+                sdot(c, round(x), round(y - 1), CREAM if (i + k) % 3 == 0 else CREAM_D)
+                if rr > 24 and i % 2 == 0:
+                    sdot(c, round(x), round(y), CREAM_D)
+    for j in range(16 if 1 <= k <= 9 else 0):  # clods thrown up and falling
+        a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
+        sp = rng.uniform(6, 12)
+        t = (k - 1) * 0.55
+        x = m + math.cos(a) * sp * t * 2.6
+        y = base - 4 + math.sin(a) * sp * t * 2.2 + 5.5 * t * t
+        if y < base + 6:
+            sdot(c, round(x), round(y), (BROWN, CHESTNUT, GREEN, WALNUT)[j % 4])
+            if j % 4 == 0:
+                sdot(c, round(x) + 1, round(y), BROWN)
+    if k >= 8:  # leaves and spores drifting up as the thorns sink
+        for j in range(8):
+            a = rng.uniform(0, math.tau)
+            r = rng.uniform(6, 38)
+            t = (k - 8) / 5
+            if rng.random() < 1 - t:
+                x, y = m + math.cos(a) * r, base - 10 - t * 26 - rng.uniform(0, 14) + math.sin(a) * r * 0.3
+                sdot(c, round(x), round(y), GREEN_L if j % 2 else GREEN)
+    return _clear_edge(c.img)
+
+
+def quake_scar_frame(k: int) -> Image.Image:
+    """The ground left behind (112 px, centred on the spot, same timing as quake_burst): upturned soil and cracks ringing the thorns
+    appear with the impact (frame 2), then the wound closes over, greens, and dithers away."""
+    n = 112
+    m = n // 2
+    c = Canvas(n)
+    if k < 1:
+        return c.img
+    rng = random.Random(950)  # one mark, the same every frame, so it stays put
+    appear = min(1.0, k / 3.0)
+    r0 = 40 * appear
+    pts = []
+    for i in range(16):
+        a = math.tau * i / 16
+        j = rng.uniform(0.75, 1.1)
+        pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.78))
+    c.flat(P(pts), WALNUT_D)
+    c.flat(P([(m + (x - m) * 0.7, m + (y - m) * 0.7) for x, y in pts]), OUTLINE)
+    for i in range(9):  # cracks
+        a = rng.uniform(0, math.tau)
+        ln = rng.uniform(r0 * 0.8, r0 * 1.45)
+        mid = (m + math.cos(a + rng.uniform(-0.3, 0.3)) * ln * 0.55, m + math.sin(a) * ln * 0.45)
+        end = (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.78)
+        c.flat(L([(m + math.cos(a) * 8, m + math.sin(a) * 6), mid, end], 1), GREEN_D if k > 6 else WALNUT)
+    for i in range(18):  # soil clumps round the edge, turning to grass
+        a = rng.uniform(0, math.tau)
+        r = r0 * rng.uniform(0.85, 1.2)
+        x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.78)
+        col = BROWN if k < 6 else GREEN if i % 2 else GREEN_L
+        sdot(c, x, y, col)
+        sdot(c, x + 1, y, col)
+        if k >= 6 and i % 3 == 0:
+            sdot(c, x, y - 1, GREEN_L)
+    fade = max(0.0, (k - 8) / (QUAKE_FRAMES - 8))
+    px = c.img.load()
+    for y in range(n):
+        for x in range(n):
+            if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < fade:
+                px[x, y] = (0, 0, 0, 0)
+    return _clear_edge(c.img, 2)
+
+
+# --- Kunai Rain: a faint target ring on the floor, kunai streaking down and sticking in the ground -------------------
+
+RAIN_R = 54  # art px (storm_radius 84 / SPRITE_SCALE 1.5 = 56, a touch inside so the outer dashes clear the frame): SpecialFx.RAIN_ART_RADIUS
+RAIN_SIZE = 128
+RAIN_FORM_FRAMES = 8
+RAIN_LOOP_FRAMES = 8
+RAIN_END_FRAMES = 8
+RAIN_KUNAI_FRAMES = 16
+RAIN_BASE = 56  # rain_kunai: the row the kunai tip lands on, in a 64 px frame (SpecialFx.RAIN_KUNAI_BASE_Y)
+RAIN_DASHES = 30
+
+
+def rain_ring_frame(kind: str, k: int) -> Image.Image:
+    """The target ring (128 px, centred on the spot, floor layer): an open dithered ring of steel dashes that turns slowly, an inner
+    broken ring, four red chevrons pointing in, a sparse navy dither inside and a tiny crosshair. The floor stays visible. 'form' sweeps
+    the dashes on round the circle while it settles into place, 'loop' (period 8) turns one dash, 'end' dithers it away shrinking a little."""
+    n = RAIN_SIZE
+    m = n // 2
+    c = Canvas(n)
+    if kind == "form":
+        u = (k + 1) / RAIN_FORM_FRAMES
+        sweep = math.sin(u * math.pi / 2)
+        r = RAIN_R * (0.82 + 0.18 * sweep)
+        turn = (1 - u) * 0.6
+    elif kind == "end":
+        u = k / RAIN_END_FRAMES
+        sweep = 1.0
+        r = RAIN_R * (1 - 0.08 * u)
+        turn = -u * 0.4
+    else:
+        u = 0.0
+        sweep = 1.0
+        r = RAIN_R
+        turn = k / RAIN_LOOP_FRAMES
+    step = math.tau / RAIN_DASHES
+    for y in range(n):  # a sparse dither inside, thickest near the rim
+        for x in range(n):
+            d = math.hypot(x - m, y - m) / r
+            if 0.55 < d < 0.97 and BAYER[y % 4][x % 4] / 16 < 0.08 * (d - 0.5):
+                c.dot(x, y, NAVY if (x + y) % 3 else STEEL_D)
+    for i in range(RAIN_DASHES):
+        a0 = -math.pi / 2 + (i + turn) * step
+        if (i + 0.5) / RAIN_DASHES > sweep:
+            continue
+        pts = [(m + math.cos(a) * r, m + math.sin(a) * r) for a in (a0, a0 + step * 0.35, a0 + step * 0.7)]
+        light = math.cos(a0 + step * 0.35 + 2.4) > 0.2  # lit from the upper left
+        c.flat(L([(round(x), round(y)) for x, y in pts], 2 if light else 1), STEEL if light else STEEL_D)
+        if i % 5 == 0:
+            c.dot(round(pts[1][0]), round(pts[1][1]), WHITE)
+    r2 = r - 4  # the inner ring is broken into long arcs that turn the other way
+    for i in range(6):
+        a0 = -math.pi / 2 + (i / 6 - turn * 0.5) * math.tau
+        pts = [(m + math.cos(a0 + t) * r2, m + math.sin(a0 + t) * r2) for t in (0.0, 0.2, 0.4)]
+        if (i + 0.5) / 6 <= sweep:
+            c.flat(L([(round(x), round(y)) for x, y in pts], 1), NAVY)
+    if sweep > 0.9:  # red chevrons at the four compass points, pointing in
+        for j in range(4):
+            a = -math.pi / 2 + j * math.pi / 2
+            ux, uy = math.cos(a), math.sin(a)
+            px_, py_ = -uy, ux
+            bx, by = m + ux * (r + 3), m + uy * (r + 3)
+            tip = (m + ux * (r - 6), m + uy * (r - 6))
+            c.flat(P([(bx + px_ * 3, by + py_ * 3), tip, (bx - px_ * 3, by - py_ * 3), (bx + ux * -0.5, by + uy * -0.5)]), RED)
+            c.dot(round(tip[0]), round(tip[1]), WHITE if j == 0 else RED)
+    for dx, dy in ((-3, 0), (3, 0), (0, -3), (0, 3)):  # a tiny crosshair
+        c.dot(m + dx, m + dy, STEEL_D)
+    c.dot(m, m, RED)
+    if kind == "end":
+        px = c.img.load()
+        for y in range(n):
+            for x in range(n):
+                if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < u * 1.1:
+                    px[x, y] = (0, 0, 0, 0)
+    return _clear_edge(c.img, 2)
+
+
+def _rain_kunai(c: Canvas, x: float, tip_y: float, length: float, lean: float) -> None:
+    """A kunai pointing down (tip at (x, tip_y)), `length` tall, leaning `lean` px per px up: a steel leaf blade with a lit edge and a
+    dark one, a small guard, a red cord-wrapped handle and a steel ring at the end."""
+    def at(t: float, off: float = 0.0) -> tuple:  # t = 0 at the tip .. 1 at the ring
+        return (x + lean * length * t + off, tip_y - length * t)
+    blade = 0.52
+    wid = 2.3
+    left = [at(0), at(0.18, -wid * 0.6), at(blade * 0.7, -wid), at(blade, -1.0)]
+    right = [at(blade, 1.0), at(blade * 0.7, wid), at(0.18, wid * 0.6)]
+    c.flat(P(left + right), STEEL)
+    c.flat(P([at(0), at(0.18, wid * 0.6), at(blade * 0.7, wid), at(blade, 1.0), at(blade, 0.0)]), STEEL_D)  # shaded right half
+    c.flat(L([(round(a), round(b)) for a, b in (at(0.04, -0.4), at(blade * 0.8, -wid * 0.8))], 1), WHITE)  # lit edge
+    c.flat(L([(round(a), round(b)) for a, b in (at(blade, -3), at(blade, 3))], 1), NAVY)  # guard
+    hx0, hy0 = at(blade)
+    hx1, hy1 = at(0.88)
+    c.flat(L([(round(hx0), round(hy0)), (round(hx1), round(hy1))], 2), MAROON)
+    for j in range(3):  # cord wraps
+        wx, wy = at(blade + 0.1 + j * 0.1)
+        c.flat(L([(round(wx - 1), round(wy)), (round(wx + 1), round(wy))], 1), RED)
+    rx, ry = at(0.95)
+    c.flat(lambda d, f: d.ellipse((rx - 2, ry - 2, rx + 2, ry + 2), outline=f, width=1), STEEL)
+    c.dot(round(rx - 1), round(ry - 1), WHITE)
+
+
+def rain_kunai_frame(k: int) -> Image.Image:
+    """One kunai's whole life (64 px, tip lands on row RAIN_BASE, centred across): it streaks down out of the sky with a short motion
+    trail (frame 0-3), lands in a small flash of sparks and a flat ripple of dust (4-6), wobbles and stands in the floor, then fades away
+    with a dither (11-15)."""
+    n = 64
+    m = n // 2
+    body = Canvas(n)
+    extra = Canvas(n)
+    rng = random.Random(1100 + k)
+    lean = 0.14
+    fall = 4  # frames spent falling
+    FALL = 30  # px dropped
+    if k < fall:
+        u = (k + 1) / fall
+        tip_y = RAIN_BASE - FALL * (1 - u * u)
+        length = 20
+        _rain_kunai(body, m - FALL * (1 - u * u) * lean, tip_y, length, lean)
+        trail = 6 + 3 * k
+        for i in range(trail):  # a short streak above it, thinning out and dithering away
+            tt = i / trail
+            ty = tip_y - length - i
+            tx = m - FALL * (1 - u * u) * lean + lean * (length + i)
+            if BAYER[round(ty) % 4][round(tx) % 4] / 16 < 1 - tt:
+                sdot(extra, round(tx), round(ty), WHITE if tt < 0.3 else STEEL if tt < 0.65 else STEEL_D)
+        if k == 0:  # it only appears at the top: dither the first frame
+            px = body.img.load()
+            for y in range(n):
+                for x in range(n):
+                    if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < 0.4:
+                        px[x, y] = (0, 0, 0, 0)
+    else:
+        j = k - fall
+        wob = (1, -1, 1, 0)[j] if j < 4 else 0
+        stuck = 17  # how much of it stands out of the floor
+        _rain_kunai(body, m + wob * 0.5, RAIN_BASE + 2 - (0 if j > 0 else 1), stuck, lean * 0.6)
+        if j <= 2:  # the flash: a star of light flat on the floor that grows, chips flying
+            r = (6, 10, 12)[j]
+            col = WHITE if j == 0 else STEEL
+            extra.flat(L([(m - r, RAIN_BASE), (m + r, RAIN_BASE)], 1), col)
+            extra.flat(L([(m - r * 0.6, RAIN_BASE - r * 0.45), (m + r * 0.6, RAIN_BASE + r * 0.45)], 1), col)
+            extra.flat(L([(m - r * 0.6, RAIN_BASE + r * 0.45), (m + r * 0.6, RAIN_BASE - r * 0.45)], 1), col)
+            extra.flat(L([(m, RAIN_BASE - r * 0.7), (m, RAIN_BASE + 1)], 1), col)
+            if j == 0:
+                extra.flat(E((m - 2, RAIN_BASE - 2, m + 2, RAIN_BASE + 2)), WHITE)
+            for q in range(8):
+                a = rng.uniform(math.pi * 1.05, math.pi * 1.95)
+                d = r * rng.uniform(0.9, 1.8)
+                sdot(extra, round(m + math.cos(a) * d * 1.3), round(RAIN_BASE + math.sin(a) * d), (WHITE, TEAL_L, STEEL)[q % 3])
+        if 0 <= j <= 6:
+            rr = 6 + j * 3.2
+            for i in range(30):
+                a = math.tau * i / 30
+                if (i + j) % 2 == 0 and j < 6 or (i % 3 == 0 and j == 6):
+                    sdot(extra, round(m + math.cos(a) * rr * 1.25), round(RAIN_BASE + 1 + math.sin(a) * rr * 0.45),
+                         STEEL if j < 3 else STEEL_D)
+    img = outline(body.img)
+    img.alpha_composite(extra.img)
+    fade = max(0.0, (k - 10) / 5.0)
+    if fade > 0:
+        px = img.load()
+        for y in range(n):
+            for x in range(n):
+                if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < fade:
+                    px[x, y] = (0, 0, 0, 0)
+    return _clear_edge(img, 2)
+
+
+ICONS["thorn_quake"] = lambda c: (c.flat(E((0, 8, 12, 12)), GREEN_D), c.flat(E((1, 9, 11, 11)), BROWN),
+                                  c.flat(P([(5, 9), (6, 0), (8, 9)]), BROWN), c.flat(L([(6, 1), (6, 8)], 1), WALNUT_L),
+                                  c.flat(P([(1, 9), (2, 3), (4, 9)]), CHESTNUT), c.flat(P([(8, 9), (10, 4), (11, 9)]), WALNUT),
+                                  c.dot(6, 0, CREAM), c.dot(2, 3, CREAM), c.dot(10, 4, CREAM), c.flat(L([(0, 10), (12, 10)], 1), GREEN_L))
+ICONS["kunai_rain"] = lambda c: (c.flat(lambda d, f: d.ellipse((0, 7, 12, 12), outline=f, width=1), STEEL_D),
+                                 c.flat(P([(2, 5), (3, 8), (4, 5)]), STEEL), c.flat(L([(3, 0), (3, 4)], 1), RED),
+                                 c.flat(P([(6, 3), (7, 7), (8, 3)]), STEEL), c.flat(L([(7, 0), (7, 2)], 1), RED),
+                                 c.flat(P([(9, 5), (10, 8), (11, 5)]), STEEL), c.flat(L([(10, 1), (10, 4)], 1), RED),
+                                 c.dot(3, 8, WHITE), c.dot(7, 7, WHITE), c.dot(10, 8, WHITE))
+FX.update({
+    "quake_mark": lambda: strip([quake_mark_frame(k) for k in range(QUAKE_MARK_FRAMES)]),
+    "quake_burst": lambda: strip([quake_burst_frame(k) for k in range(QUAKE_FRAMES)]),
+    "quake_scar": lambda: strip([quake_scar_frame(k) for k in range(QUAKE_FRAMES)]),
+    "rain_form": lambda: strip([rain_ring_frame("form", j) for j in range(RAIN_FORM_FRAMES)]),
+    "rain_loop": lambda: strip([rain_ring_frame("loop", j) for j in range(RAIN_LOOP_FRAMES)]),
+    "rain_end": lambda: strip([rain_ring_frame("end", j) for j in range(RAIN_END_FRAMES)]),
+    "rain_kunai": lambda: strip([rain_kunai_frame(k) for k in range(RAIN_KUNAI_FRAMES)]),
+})
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():

@@ -182,7 +182,7 @@ func sapling_shot_due(before: float) -> bool:
 ## STORM: a strike falls due in the step that ticked from `before` to now (the cloud's last step counts).
 func storm_tick_due(before: float) -> bool:
 	var interval: float = data.storm_interval
-	return data.kind == SkillData.Kind.STORM and floori((elapsed() + WHIRL_EPSILON) / interval) \
+	return (data.kind == SkillData.Kind.STORM or data.kind == SkillData.Kind.RAIN) and floori((elapsed() + WHIRL_EPSILON) / interval) \
 		> floori((before + WHIRL_EPSILON) / interval)
 
 

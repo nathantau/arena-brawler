@@ -40,6 +40,10 @@ extends Resource
 ## BLOOM: a moss patch at your feet for `duration`: every `bloom_interval` you heal `bloom_heal` while you stand within `bloom_radius` of it (only you).
 ## GUST: a cone of leaves along the aim: enemies within `gust_range` and `gust_half_angle_deg` take `gust_damage` and are thrown
 ## `gust_knockback` away; enemy projectiles in the cone are destroyed (for the whole `duration`).
+## QUAKE (Eden, Thorn Quake): like THUNDER (uses the `thunder_*` fields): marks a spot ahead, and when `duration` (the telegraph) runs out thorns erupt there:
+## `thunder_blast` goes off (its `snare_*` slows whoever it hits).
+## RAIN (Shade, Kunai Rain): like STORM (uses the `storm_*` fields): a rain of kunai on a spot ahead for `duration`; every `storm_interval` it hits
+## each enemy within `storm_radius` it can see for `storm_damage`.
 ## LIGHTNING (Bolt, Lightning Beam): for `duration` he channels `beam_weapon` (a held lightning beam) from his hand along his aim, a tick
 ## every beam_weapon.fire_interval; he moves x`beam_speed_scale` and can't use his normal weapon meanwhile.
 ## THUNDER (Bolt, Thunder Strike): marks a spot ahead along the aim (short of walls); when `duration` (the telegraph) runs out a lightning
@@ -49,8 +53,8 @@ extends Resource
 ## cooldown). Lingering things (SMOKE, CLONES, SHIELD, WARD, SAPLING, STORM, BLOOM, HOUND, BIND, ERUPTION's mark, the burning trail,
 ## volleys) never block. Death, sitting out and the countdown / results freeze end every active ability.
 ## Values are stored in data/skills/*.tres, so they're explicit (3 was Blink, removed).
-enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19, BARK_SKIN = 20, BLOOM = 21, GUST = 22,
-		STEP = 30, HOUND = 31, BIND = 32, LIGHTNING = 40, THUNDER = 41 }
+enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 7, GRAPPLE = 8, ERUPTION = 9, WARD = 10, WHIRL = 11, TRAIL = 12, SNARE = 13, PILLAR = 14, DRIFT = 15, STORM = 16, NOVA = 17, SAPLING = 18, OVERDRIVE = 19, BARK_SKIN = 20, BLOOM = 21, GUST = 22, QUAKE = 23,
+		STEP = 30, HOUND = 31, BIND = 32, RAIN = 33, LIGHTNING = 40, THUNDER = 41 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""

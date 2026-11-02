@@ -91,6 +91,8 @@ const HEAL_NUMBER_RISE: float = 40.0
 const BOT_GUST_REACH_SCALE: float = 0.9
 const BOT_BLOOM_HP_FRACTION: float = 0.85
 const BOT_BARK_ENGAGE_DISTANCE: float = 320.0
+## Fighters whose bots rotate through their whole tagged kit of specials (others always use the one in slot 1).
+const KIT_ROTATORS: Array[StringName] = [&"flicker"]
 
 # --- Feedback ---
 const HIT_FLASH_TIME: float = 0.08

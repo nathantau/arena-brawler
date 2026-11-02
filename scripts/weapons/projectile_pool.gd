@@ -368,6 +368,8 @@ func _blast(owner_id: int, seq: int, at: Vector2, weapon: WeaponData, slam: bool
 	blast.crit = CombatRules.roll_crit(weapon, _shot_rng)
 	blast.damage = CombatRules.damage_for(weapon, blast.crit)
 	blast.knockback = weapon.knockback
+	blast.snare_time = weapon.snare_time
+	blast.snare_factor = weapon.snare_factor
 	blast.color = weapon.color
 	blast.splash_radius = weapon.splash_radius
 	blast.splash_edge = weapon.splash_edge_scale
@@ -552,7 +554,7 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 			var dmg: int = CombatRules.splash_damage(s.damage, dist, s.splash_radius, s.splash_edge)
 			var push: Vector2 = (offset.normalized() if offset != Vector2.ZERO else Vector2.UP) * s.knockback
 			_damage_player(target, s.attacker_id, s.shot_seq, s.pellet, dmg, s.crit, push, target.global_position,
-				s.owner_id)
+				s.owner_id, s.snare_time, s.snare_factor)
 		elif collider is Crate:
 			var crate: Crate = collider
 			var cdist: float = maxf(0.0, crate.global_position.distance_to(at) - crate.size * 0.5)

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_kunai_rain.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"kunai_rain"
+display_name = "Kunai Rain"
+kind = 33
+special = true
+blurb = "Rain of kunai"
+tags = Array[StringName]([&"flicker"])
+cooldown = 11.0
+duration = 4.5
+storm_distance = 220.0
+storm_wall_margin = 8.0
+storm_radius = 84.0
+storm_damage = 8
+storm_interval = 0.5
+storm_knockback = 40.0
