@@ -176,120 +176,259 @@ def legs(c: Canvas, pants, boots, step) -> list[int]:
 
 # --- characters: each returns (legs canvas, upper canvas), facing right ------
 
-def sleeve_detail(c: Canvas, x: int):
-    """Shade's sleeve: a wrist wrap (lit top, shaded lower edge), a crease and a few weave pixels on the shaded side."""
-    c.flat(R((x, 39, x + 5, 39)), STEEL)  # steel vambrace: lit top, mid, shaded lower edge, a rivet
-    c.flat(R((x, 40, x + 5, 40)), STEEL_D)
-    c.flat(R((x, 41, x + 5, 41)), SHADOW)
-    c.dot(x + 1, 40, WHITE)
-    c.flat(L([(x + 2, 37), (x + 2, 38)], 1), SHADOW)  # crease
-    c.dot(x + 1, 38, BLUE)  # lit ridge beside it
-    c.dot(x + 4, 39, SHADOW)
+# --- Shade (flicker): a kunoichi with long navy hair, a fox mask worn askew on the back side of her head, a steel-blue wrap
+# kimono over a fishnet V, a red obi, tekko hands, bandaged shins. Everything is drawn facing right and the game mirrors the
+# whole sprite when she faces left (mask included, on purpose: it rides her far side either way).
+
+SH_HAIR = SHADOW  # the hair: dark navy-violet, rim-lit by STEEL_D, blue streaks
+SH_GOLD = OCHRE
+SH_KIM = STEEL_D  # the kimono: a steel-blue one step lighter than the hair
 
 
-def tassel(c: Canvas, pts, notch: bool = True) -> None:
-    """A 3 px band of red cloth along `pts`: shaded right column, a V notch cut in its tip."""
-    c.part(L(pts, 3), RED, shade=False)
-    c.flat(L([(x + 1, y) for x, y in pts], 1), MAROON)
-    x, y = pts[-1]
-    for dy in (0, 1) if notch else ():
-        c.px[x, y + dy] = (0, 0, 0, 0)
+def sh_phase(t, lag=0.0, k=0.0):
+    """A 4-frame looping sine, shifted by `lag` ticks (and `k` radians): the wave that runs down hair and cloth."""
+    return math.sin(2 * math.pi * (t - lag) / 4 - k)
+
+
+def sh_sw(t, lag, amp):
+    return round(amp * sh_phase(t, lag))
+
+
+def sh_strand(p0, p1, p2, p3, t, amp, k=1.6, n=12, lag=0.0):
+    """A cubic Bezier from p0 to p3 with a travelling sine wave added across it (zero at the root, `amp` px at the tip)."""
+    out = []
+    for i in range(n + 1):
+        s = i / n
+        a, b, c, d = (1 - s) ** 3, 3 * s * (1 - s) ** 2, 3 * s ** 2 * (1 - s), s ** 3
+        x = a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0]
+        y = a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]
+        dx = 3 * ((1 - s) ** 2 * (p1[0] - p0[0]) + 2 * s * (1 - s) * (p2[0] - p1[0]) + s ** 2 * (p3[0] - p2[0]))
+        dy = 3 * ((1 - s) ** 2 * (p1[1] - p0[1]) + 2 * s * (1 - s) * (p2[1] - p1[1]) + s ** 2 * (p3[1] - p2[1]))
+        ln = math.hypot(dx, dy) or 1
+        w = amp * s * sh_phase(t, lag, k * s)
+        out.append((x - dy / ln * w, y + dx / ln * w))
+    return out
+
+
+def sh_bandw(pts, widths):
+    """Left / right edge points along `pts` with a width per point (resampled when the profile has another length)."""
+    left, right = [], []
+    n, m = len(pts), len(widths)
+    if m != n:
+        widths = [widths[int(i * (m - 1) / (n - 1))] * (1 - (i * (m - 1) / (n - 1) % 1))
+                  + widths[min(m - 1, int(i * (m - 1) / (n - 1)) + 1)] * (i * (m - 1) / (n - 1) % 1) for i in range(n)]
+    for i, (x, y) in enumerate(pts):
+        a, b = pts[max(0, i - 1)], pts[min(n - 1, i + 1)]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        ln = math.hypot(dx, dy) or 1
+        w = widths[i] / 2
+        left.append((x - dy / ln * w, y + dx / ln * w))
+        right.append((x + dy / ln * w, y - dx / ln * w))
+    return left, right
+
+
+def sh_ipts(ps):
+    return [(round(x), round(y)) for x, y in ps]
+
+
+def sh_lerp(a, b, f):
+    return [(p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f) for p, q in zip(a, b)]
+
+
+class ShCanvas(Canvas):
+    """A Canvas that clamps stray dots, can read a pixel back, and can dither a shape."""
+
+    def dot(self, x, y, color):
+        x, y = int(x), int(y)
+        if 0 <= x < self.size and 0 <= y < self.size:
+            self.px[x, y] = color + (255,)
+
+    def at(self, x, y):
+        x, y = int(x), int(y)
+        return self.px[x, y] if 0 <= x < self.size and 0 <= y < self.size else (0, 0, 0, 0)
+
+    def dither(self, shape, color, only_on=None):
+        """A checker of `color` over a shape, only on pixels that already hold `only_on` (when given)."""
+        mask = Image.new("1", (self.size, self.size), 0)
+        shape(ImageDraw.Draw(mask), 1)
+        m = mask.load()
+        for y in range(self.size):
+            for x in range(self.size):
+                if m[x, y] and self.px[x, y][3] and (x + y) % 2 == 0 and (only_on is None or self.px[x, y][:3] == only_on):
+                    self.px[x, y] = color + (255,)
+
+
+def sh_lock(c, pts, widths, clusters=((0.28, BLUE),), color=SH_HAIR, rim=True, line=True, skin_outline=False):
+    """A tapered lock of hair along `pts`: an optional crisp lit rim on the outer edge and strand streaks inside; with
+    `skin_outline` it is outlined only where it lies against her skin, never against other hair."""
+    lw, rw = sh_bandw(pts, widths)
+    poly = sh_ipts(lw + rw[::-1])
+    c.part(P(poly), color, line=line)
+    if skin_outline:
+        mask = Image.new("1", (c.size, c.size), 0)
+        P(poly)(ImageDraw.Draw(mask), 1)
+        m = mask.load()
+        for yy in range(1, c.size - 1):
+            for xx in range(1, c.size - 1):
+                if not m[xx, yy] and c.px[xx, yy][3] and c.px[xx, yy][:3] in (SKIN, SKIN_D) and any(
+                        m[xx + dx, yy + dy] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                    c.px[xx, yy] = OUTLINE + (255,)
+    outer, inner = (lw, rw) if sum(x + y for x, y in lw) < sum(x + y for x, y in rw) else (rw, lw)
+    n = len(pts)
+    if rim:
+        c.flat(L(sh_ipts(outer[1:n - 2]), 1), STEEL_D)
+    for i, (f, col) in enumerate(clusters):
+        c.flat(L(sh_ipts(sh_lerp(outer, inner, f)[3 + i:n - 3 - 2 * i]), 1), col)
+
+
+def sh_fox_mask(c, cx, cy, deg=30, k=1.0):
+    """A festival fox mask pushed up and askew on the back (left) side of her face, drawn tilted `deg` degrees clockwise
+    directly from rotated vertices (no pixel rotation), so the outline stays crisp and the markings stay symmetric about
+    the tilted axis: ears with red tips, slanted eye slits, whiskers, forehead mark, nose, and a tie cord tucked into her hair."""
+    th = math.radians(deg)
+    co, si = math.cos(th), math.sin(th)
+    rp = lambda pts: [(cx + u * k * co - v * k * si, cy + u * k * si + v * k * co) for u, v in pts]
+    mir = lambda pts: [(-u, v) for u, v in pts]
+    ear = [(-6.2, -1), (-5.8, -10), (-0.5, -4.5)]
+    c.part(P(sh_ipts(rp(ear))), WHITE)
+    c.part(P(sh_ipts(rp(mir(ear)))), WHITE)
+    face_ = [(6.8 * math.cos(math.radians(a)), 5.8 * math.sin(math.radians(a))) for a in range(0, 360, 15)]
+    muzzle = [(-4.2, 3), (-0.9, 9), (0.9, 9), (4.2, 3)]
+    c.part(lambda d, f: (d.polygon(sh_ipts(rp(face_)), f), d.polygon(sh_ipts(rp(muzzle)), f)), WHITE)
+    line = lambda a, b, col: c.flat(L(sh_ipts(rp([a, b])), 1), col)
+    for s in (1, -1):
+        line((-5.7 * s, -8.6), (-5.4 * s, -6.6), RED)  # red ear tips
+        line((-4.6 * s, -0.6), (-1.9 * s, 1.4), OUTLINE)  # slanted eye slits
+        line((-5.3 * s, 3.2), (-2.9 * s, 2.7), RED)  # whiskers
+        line((-4.5 * s, 4.9), (-2.3 * s, 4.3), RED)
+    line((0, -4.2), (0, -1.6), RED)  # forehead mark
+    line((-0.8, 7.4), (0.8, 7.4), OUTLINE)  # nose
+    for u, v in ((-4.4, -4.6), (-3.2, -5.4)):
+        x, y = rp([(u, v)])[0]
+        c.dot(round(x), round(y), STEEL)
+    # tie cord: a short red thread from the top of the mask up into her hair, with a gold bead
+    a = rp([(0, -6.0)])[0]
+    c.flat(L(sh_ipts([a, (a[0] + 1.5, a[1] - 2.5), (a[0] + 3, a[1] - 4)]), 1), RED)
+    c.dot(round(a[0] + 1.5), round(a[1] - 2.5), SH_GOLD)
 
 
 def flicker(step=None, t=0, zip_=False):
-    """Shade, a kunoichi: a choppy jagged bob with a big spiky topknot that swings in the wind, red ribbon tails fluttering from its tie, a steel forehead
-    plate, big lashed teal eyes over a mask that peaks at the bridge of her nose; fitted navy shroud, a metal
-    breastplate and a red sash. The topknot is too big for the art box: it's drawn above it (CROWNS: flicker_topknot)."""
-    low = Canvas()
-    for x, dy in legs(low, NAVY, SHADOW, step):
-        for y, top, under in ((49, STEEL_D, SHADOW), (51, STEEL_D, SHADOW)):  # shin wraps: lit top edge, shaded lower
-            low.flat(R((x, y + dy, x + 5, y + dy)), top)
-            low.flat(R((x, y + 1 + dy, x + 5, y + 1 + dy)), under)
-        low.flat(L([(x + 1, 46 + dy), (x + 1, 48 + dy)], 1), BLUE)  # lit fold down the thigh's left
-        low.flat(L([(x + 3, 47 + dy), (x + 3, 48 + dy)], 1), SHADOW)  # crease
-        low.dot(x + 4, 50 + dy, SHADOW)  # weave on the shaded side
-        low.flat(R((x + 1, 47 + dy, x + 4, 47 + dy)), STEEL)  # steel knee plate: lit top, shaded lower, a glint
-        low.flat(R((x + 1, 48 + dy, x + 4, 48 + dy)), STEEL_D)
-        low.dot(x + 1, 47 + dy, WHITE)
-    up = Canvas()
-    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
-    arm(up, ARM_X[0], NAVY, SKIN)
-    sleeve_detail(up, ARM_X[0])
-    up.part(RR((15, 34, 21, 38), 2), STEEL)  # back shoulder plate
-    up.part(RR(BODY, 3), NAVY)  # fitted shroud
-    up.part(P([(24, 36), (41, 36), (42, 40), (38, 44), (27, 44), (23, 40)]), STEEL)  # metal breastplate
-    up.flat(L([(33, 37), (33, 43)], 1), STEEL_D)  # its centre ridge
-    up.flat(L([(32, 38), (32, 40)], 1), WHITE)  # lit side of the ridge
-    up.flat(R((26, 38, 28, 38)), WHITE)  # specular, top left
-    up.dot(26, 39, WHITE)
-    for x in range(27, 40, 2):  # lower half in shade: dithered up into the lit half, solid below
-        up.dot(x, 42, STEEL_D)
-    up.flat(R((26, 43, 39, 43)), STEEL_D)
-    for x, y in ((26, 41), (39, 41)):  # rivets
-        up.dot(x, y, SHADOW)
-    up.part(R((20, 45, 44, 46)), RED, shade=False, line=False)  # thin sash
-    up.flat(R((20, 46, 44, 46)), MAROON)  # shaded lower half
-    up.flat(R((21, 45, 24, 45)), ORANGE)  # lit left end
-    up.flat(R((31, 44, 34, 46)), STEEL)  # sash clasp: a steel plate with a glint and a shaded base
-    up.flat(R((31, 46, 34, 46)), STEEL_D)
-    up.dot(31, 44, WHITE)
-    up.dot(32, 45, SHADOW)
-    for x in range(21, 44, 2):  # shroud under the sash, in shade: weave
-        up.dot(x, 47, NAVY)
-    # shroud folds: a dark crease with a lit ridge beside it, light from the top left
-    for x, y0, y1 in ((22, 41, 44), (42, 42, 44)):
-        up.flat(L([(x, y0), (x, y1)], 1), SHADOW)
-    up.flat(L([(21, 40), (21, 43)], 1), BLUE)
-    up.dot(41, 41, BLUE)
-    if zip_:  # Grapple Kunai: the front arm reaches forward along the chain (ribbons stream back: flicker_zip)
-        up.part(RR((40, 37, 50, 41), 2), NAVY)
-        up.flat(L([(45, 38), (45, 40)], 1), STEEL_D)  # forearm wrap
-        up.flat(L([(46, 38), (46, 40)], 1), SHADOW)
+    """Shade, a kunoichi (redesign 2026-11-02): long navy hair that hugs her head and falls straight down both sides (one merged
+    mask: crown + back panels, narrow side locks over her cheeks, strand bangs growing out of a parting), the shared heart-shaped
+    female face with orange eyes and crimson lips, a festival fox mask pushed up askew on the back of her head (tied into her
+    hair), a steel-blue wrap kimono with cream lapels over a fishnet V, a red obi with a knot and two hanging ends, steel tekko
+    on her hands, a short split skirt, dark leggings with bandaged shins and split-toe tabi, a kunai on her thigh.
+    Hair panels, locks, skirt and obi ends sway a tick behind the body; walking trails them back."""
+    mv = 1.0 if step is not None else 0.0  # walking: the hair streams back
+    low = ShCanvas()
+    up = ShCanvas()
+    # ---- legs: dark leggings with a dithered fishnet strip, bandage wraps with diagonal lines, split-toe tabi, thigh holster
+    for x, dy in legs(low, SHADOW, SHADOW, step):
+        low.flat(L([(x, 47 + dy), (x, 52 + dy)], 1), STEEL_D)  # lit left edge of the legging
+        low.flat(R((x - 1, 54 + dy, x + 6, 55 + dy)), STEEL)  # bandage wraps round the ankles, over the tabi
+        low.flat(R((x - 1, 55 + dy, x + 6, 55 + dy)), STEEL_D)
+        low.flat(L([(x - 1, 55 + dy), (x + 6, 54 + dy)], 1), WHITE)  # wrap line
+        low.dot(x, 54 + dy, WHITE)
+        low.flat(L([(x + 6, 56 + dy), (x + 7, 56 + dy)], 1), OUTLINE)  # tabi split toe
+    low.part(P([(39, 50), (43, 51), (43, 55), (40, 56), (39, 54)]), BROWN)  # dark-brown pouch and one kunai ring
+    low.flat(L([(39, 51), (43, 52)], 1), SHADOW)
+    low.flat(L([(43, 52), (46, 51)], 2), STEEL_D)
+    low.dot(47, 51, WHITE)
+    low.dot(47, 50, STEEL)
+    # ---- back hair: ONE merged mask (crown + both back panels): outline only on the outer silhouette
+    b = sh_sw(t, 1.2, 1) - 2.0 * mv
+    off = lambda y: b * max(0.0, (y - 28) / 20)
+    left = [(21, 16), (16, 18), (14, 24), (14, 34), (14, 42), (15, 46), (17, 48.5), (19, 47), (20, 42), (20, 32), (21, 22)]
+    polys = [sh_ipts([((x if side == 0 else 64 - x) + off(y), y) for x, y in left]) for side in (0, 1)]
+    up.part(lambda d, f: (d.ellipse((15, 4, 49, 37), f), d.polygon(polys[0], f), d.polygon(polys[1], f)), SH_HAIR, shade=False)
+    for i, ang in enumerate(range(258, 210, -4)):  # a short rim light on the outer top-left edge, fading out by dither
+        if i < 5 or (i < 9 and i % 2 == 0) or i % 3 == 0:
+            up.dot(round(32 + 16.4 * math.cos(math.radians(ang))), round(20.5 + 15.9 * math.sin(math.radians(ang))), STEEL_D)
+    for side in (0, 1):
+        hx = 15 if side == 0 else 49  # one soft vertical highlight on each panel
+        for yy in range(27, 43):
+            if yy % 6:
+                up.dot(round(hx + off(yy)), yy, BLUE if 29 < yy < 40 else STEEL_D)
+    bw = sh_sw(t, 1.0, 1)
+
+    def tekko(x):  # a darker cuff line and a small steel plate on the back of the hand
+        up.flat(R((x, 41, x + 5, 41)), SHADOW)
+        up.flat(R((x + 1, 43, x + 4, 44)), STEEL)
+        up.dot(x + 1, 43, WHITE)
+        up.flat(R((x + 1, 45, x + 4, 45)), STEEL_D)
+
+    arm(up, ARM_X[0], SH_KIM, SKIN)
+    tekko(ARM_X[0])
+    # ---- wrap top over a short flared skirt (same colour, darker underside); split flaps
+    flare = [(20, 47), (44, 47), (46, 50), (42, 53 + sh_sw(t, 1.0, 1)), (37, 51.5), (33, 49.5), (29, 51.5), (24, 53 - sh_sw(t, 0.5, 1)), (19, 50)]
+    up.part(lambda d, f: (d.rounded_rectangle((20, 33, 44, 48), 3, f), d.polygon(flare, f)), SH_KIM)
+    up.dither(R((36, 38, 45, 54)), SHADOW, only_on=SH_KIM)
+    up.flat(L([(21, 38), (21, 46)], 1), STEEL)
+    up.flat(L([(33, 49), (33, 51)], 1), SHADOW)  # skirt split
+    up.part(RR((22, 37, 43, 38), 1), RED)  # slim neck scarf under her chin
+    up.flat(L([(24, 37), (36, 37)], 1), ORANGE)
+    # fishnet undershirt in a deep V: a dark base with a regular staggered lattice of skin dots, to the sternum above the obi
+    up.part(P([(25, 39), (43, 39), (34, 45)]), NAVY, shade=False, line=False)
+    for yy in range(39, 46):
+        for xx in range(23, 46):
+            if up.at(xx, yy)[:3] == NAVY and (xx + 2 * (yy % 2)) % 4 == 0:
+                up.dot(xx, yy, SKIN_D)
+    up.flat(L([(24, 39), (34, 45)], 2), CREAM)  # two bold 2 px cream lapels from the shoulders
+    up.flat(L([(44, 39), (34, 45)], 2), CREAM)
+    up.flat(L([(23, 41), (33, 46)], 1), SHADOW)  # shadow under the lapels
+    up.flat(L([(45, 41), (35, 46)], 1), SHADOW)
+    up.part(R((20, 45, 44, 47)), RED, line=False)  # red obi: a bold 3 px band with a lit top row, a knot, two hanging ends
+    up.flat(R((20, 45, 44, 45)), ORANGE)
+    up.flat(R((20, 47, 44, 47)), MAROON)
+    up.part(P([(38, 48), (36.5, 50.5 + bw), (39, 50 + bw)]), RED)
+    up.part(P([(40, 48), (42.5, 50.5 + bw), (42, 48.5)]), RED)
+    up.part(E((38, 44, 42, 48)), RED)
+    up.dot(39, 45, ORANGE)
+    if zip_:  # Grapple Kunai: the front arm reaches forward along the chain (hair streams back: flicker_zip)
+        up.part(RR((40, 37, 50, 41), 2), SH_KIM)
+        up.flat(L([(44, 38), (44, 40)], 1), SHADOW)  # forearm wrap
+        up.flat(L([(45, 38), (45, 40)], 1), STEEL)
         up.part(E((48, 37, 53, 42)), SKIN)
+        up.flat(R((49, 38, 51, 39)), STEEL)  # tekko plate
+        up.dot(49, 38, WHITE)
     else:
-        arm(up, ARM_X[1], NAVY, SKIN)
-        sleeve_detail(up, ARM_X[1])
-        up.part(RR((42, 34, 48, 38), 2), STEEL)  # front shoulder plate: lit top, a glint
-        up.flat(R((43, 34, 45, 34)), WHITE)
-    # ribbon tail: one band of red cloth hanging from the topknot's tie, fluttering behind her head
-    if not zip_:
-        tassel(up, [(17, 12), (13 - wave(1, 1), 20), (10 - wave(2, 1), 29), (9 - wave(3, 1), 37)])
-    up.part(RR((14, 8, 20, 13), 2), RED)  # tie round the topknot's base, half hidden behind her hair
-    # choppy bob: the head's hair ends in jagged points round the back of her neck
-    up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
-        [(16, 20), (14, 31), (17, 29), (17, 37), (20, 33), (22, 39), (24, 32), (24, 20)], f)), NAVY)
-    up.flat(L([(22, 8), (32, 6)], 1), BLUE)  # crown sheen
-    up.flat(L([(16, 22), (16, 28)], 1), BLUE)  # sheen down the back
-    up.part(RR(FACE, FACE_R), SKIN)  # face
-    up.part(P([(FACE[2] - 1, 14), (51, 16), (52 + wave(2, 0.5), 27), (49, 25), (49 + wave(1, 0.5), 32),
-               (FACE[2], 28)]), NAVY, shade=False)  # jagged lock framing her face
-    up.part(P([(19, 11), (49, 11), (49, 16), (46, 13), (43, 19), (39, 13), (35, 18), (31, 13), (27, 18), (24, 13),
-               (19, 17)]), NAVY, shade=False)  # choppy fringe, over the side lock
-    up.part(R((29, 9, 40, 11)), STEEL)  # small forehead plate
-    up.flat(R((34, 10, 35, 10)), STEEL_D)  # its engraving
-    big_eyes(up, EYES_Y - 1, EYES_X, TEAL_L, h=6)
+        arm(up, ARM_X[1], SH_KIM, SKIN)
+        tekko(ARM_X[1])
+    # ---- head: the shared heart-shaped female face (Sakura / Eden)
+    up.part(lambda d, f: (d.rounded_rectangle((FACE[0], FACE[1], FACE[2], 29), FACE_R, f),
+                          d.ellipse((FACE[0] + 1, 19, FACE[2] - 1, FACE[3] - 1), f)), SKIN)
+    # narrow side locks over her cheeks (a step lighter than the back hair, outlined only against skin)
+    for p0, p1, p2, p3, lag in (((22, 13), (21, 24), (24, 34), (23, 43), 0.5), ((47, 13), (48.5, 24), (45, 34), (46, 43), 0.2)):
+        sh = -1.0 * mv
+        sh_lock(up, sh_strand(p0, (p1[0] + sh, p1[1]), (p2[0] + sh, p2[1]), (p3[0] + sh * 1.5, p3[1]), t, 0.8, k=2.0, lag=lag, n=12),
+                [4.2, 4.2, 4, 3.8, 3.5, 3.1, 2.7, 2.2, 1.7, 1.3, 1, 0.8, 0.6], color=NAVY, rim=False, line=False, skin_outline=True)
+    # strand bangs grow out of the crown seamlessly: one fill in the hair colour, outline only along the pointed tips
+    zig = [(20, 12), (19, 19), (23.5, 24), (26, 16.5), (29.5, 18.5), (32, 15.5), (34.5, 17.5), (36.5, 15.5), (38, 20.5), (40, 15.5),
+           (42.5, 17.5), (45, 15.5), (47.5, 22.5), (48, 17), (46.5, 12)]
+    up.part(P(sh_ipts([(22, 9)] + zig + [(42, 9)])), SH_HAIR, shade=False, line=False)
+    up.flat(L(sh_ipts(zig[2:-1]), 1), OUTLINE)
+    pw = (37.0, 3.0)  # the parting the strands fan out from: separators and lit streaks follow arcs towards it
+    for (vx, vy), f in (((26, 16.5), 0.5), ((32, 15.5), 0.68), ((36.5, 15.5), 0.42), ((40, 15.5), 0.6), ((45, 15.5), 0.36)):
+        at = lambda k_: (vx + (pw[0] - vx) * k_, vy + (pw[1] - vy) * k_)
+        up.flat(L(sh_ipts([(vx, vy - 1), at(f)]), 1), OUTLINE)  # strand separation, starting at staggered heights
+        up.flat(L(sh_ipts([(at(0.1)[0] - 1.5, at(0.1)[1]), (at(f * 0.75)[0] - 1.5, at(f * 0.75)[1])]), 1), BLUE)  # staggered lit streak
+    up.flat(lambda d, f: d.arc((22, 6, 44, 30), 212, 236, f), BLUE)  # two short curved crown streaks, not rings
+    up.flat(lambda d, f: d.arc((26, 9, 44, 27), 232, 252, f), STEEL_D)
+    sh_fox_mask(up, 19, 16, 30)  # the mask rides the back of her head, tilted down-left, clear of her eye
+    # eyes: orange iris with a bright lower rim, a heavy top lid and a lash flick with a red tip; crimson lips
+    big_eyes(up, EYES_Y - 1, EYES_X, ORANGE, h=6)
     if not KO:
-        for x in EYES_X:  # lashes flick up and out at the top outer corner
+        for x in EYES_X:
+            up.flat(R((x - 1, 20, x + 3, 20)), OUTLINE)
             up.flat(R((x + 3, 19, x + 4, 19)), OUTLINE)
             up.dot(x + 5, 18, OUTLINE)
-    # mask: rises from her cheek to a peak at the bridge of her nose, then drops again
-    up.part(P([(23, 34), (38, 28), (48, 33), (47, 34), (42, 36), (29, 36), (23, 36)]), SHADOW)
-    up.dot(38, 30, NAVY)  # seam under the peak
-    up.flat(R((BLUSH[0], 30, BLUSH[0] + 2, 30)), PINK)  # blush above it
+            up.dot(x + 5, 19, RED)
+            up.dot(x + 1, 26, YELLOW)
+            up.dot(x + 2, 26, YELLOW)
+    face(up, BLUSH, None)
+    up.flat(R((37, 30, 40, 30)), RED)  # small closed lips: crimson upper, darker lower
+    up.flat(R((38, 31, 39, 31)), MAROON)
     return low, up
-
-
-def flicker_topknot(t: int, dy: int) -> Canvas:
-    """Shade's big spiky topknot: four fat tufts fanning back from her crown, rising above the art box; the whole tuft
-    swings in the wind, the tips furthest. A CELL canvas drawn behind the body; `dy` = the head's bob."""
-    c = Canvas(CELL)
-    wave = lambda lag, amp: round(HAIR_FLOW[(t - lag) % 4] * amp)
-    at = lambda pts: [(PAD + x, PAD + UPPER_DY + dy + y) for x, y in pts]  # art px -> cell px
-    c.part(P(at([(30, 9), (27 - wave(0, 1), -5), (21, 3), (11 - wave(1, 1), -4), (15, 8), (3 - wave(2, 1), 3), (13, 14),
-                 (5 - wave(3, 1), 21), (19, 18)])), NAVY)
-    c.flat(L(at([(23, 2), (26 - wave(0, 1), -3)]), 1), BLUE)  # sheen on each tuft's lit edge
-    c.flat(L(at([(15, 5), (13 - wave(1, 1), -1)]), 1), BLUE)
-    return c
 
 
 ZIP_LEAN = 0.3  # Grapple Kunai pose: px a row leans forward per row above her feet
@@ -310,18 +449,10 @@ ZIP_FRAMES = 8
 
 def flicker_zip(i: int) -> Image.Image:
     """Shade zipping along her chain (period-8 loop, CELL px, facing right): leaning hard forward, arm out along the
-    chain, legs trailing, ribbon tails and topknot snapping in the wind, speed streaks and a fading afterimage."""
+    chain, legs trailing, her hair streaming back, speed streaks and a fading afterimage."""
     low, up = flicker(0, i % 4, zip_=True)
-    f = flicker_topknot(i % 4, 0).img
-    snap = [0, 1, 2, 1, 0, -1, -2, -1]
+    f = Image.new("RGBA", (CELL, CELL), (0, 0, 0, 0))
     bob = [0, 0, 1, 1, 0, 0, 1, 1][i]  # the whole body judders a px as the chain tugs
-    rib = Canvas(CELL)
-    y0 = PAD + UPPER_DY + 10
-    w = lambda lag: snap[(i + 2 * lag) % 8] // 2  # one streaming tail, kinks a px at a time
-    x0 = PAD + 18
-    tassel(rib, [(x0, y0), (x0 - 7, y0 + 3 + w(0)), (x0 - 14, y0 + 5 + w(1)), (x0 - 21, y0 + 8 + w(2)),
-                 (x0 - 27, y0 + 9 + w(3))], notch=False)
-    f.alpha_composite(rib.img)
     f.alpha_composite(low.img, (PAD - 2, PAD - 1))  # legs trail a little, toes off the floor
     f.alpha_composite(up.img, (PAD, PAD + UPPER_DY))
     body = lean(f, PAD + ZIP_FEET, ZIP_LEAN)
@@ -4519,11 +4650,11 @@ AURAS = {"wukong": wukong_clouds, "flint": flint_embers,
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
 GROUND_GLOWS = {"flint_inferno": flint_ground_glow}  # optional floor glow laid under each frame
-CROWNS = {"flicker": flicker_topknot, "flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
+CROWNS = {"flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
 HITS = {}  # per-character hit frames: fn(idle frame 0) -> 2 frames (default: white flash, then one step lighter)
 DEATHS = {}  # per-character death frames: fn() -> 8 CELL frames (default: death_frames)
 SHEETS = {}  # whole hand-built sheets (idle, hit, walk, death): fn() -> list of CELL frames, written after the loop in main()
-KO_CROWNS = {"flicker"}  # crowns that stay on a knocked-out body (Flint's flame goes out)
+KO_CROWNS = set()  # crowns that stay on a knocked-out body (none now: Flint's flame goes out)
 ## Optional melee attack strip after the death frames (CharacterData "attack"): (pose, body dy) per frame,
 ## build(None, i, pose). Fists go up over his head, then smash down in front on frame 3 (the hit lands then:
 ## ape_fists windup), the body squashed, and settle back into the knuckle-walk.
