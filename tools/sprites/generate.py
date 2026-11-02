@@ -7734,7 +7734,7 @@ PROJECTILES["shadow_shuriken"] = shadow_star_shot
 SINK_FRAMES = 10
 PUDDLE_LOOP = 8
 BURST_FRAMES = 14
-HOUND_RISE_FRAMES = 12
+HOUND_RISE_FRAMES = 18
 HOUND_RUN_FRAMES = 6
 HOUND_BITE_FRAMES = 6
 HOUND_MELT_FRAMES = 12
@@ -8120,7 +8120,7 @@ def hound_frame(kind: str, k: int) -> Image.Image:
             sdot2(c, round(30 + rng.uniform(-20, 20)), round(g - rng.uniform(0, 8 + 20 * u)), rng.choice((VIOLET, VIOLET_L)))
     else:  # melt: sinks back into a puddle that opens out under it (the rise's puddle, backwards), dithering away
         u = k / (HOUND_MELT_FRAMES - 1)
-        hound_puddle(c, HOUND_RISE_FRAMES - 1 - k)
+        hound_puddle(c, round((HOUND_RISE_FRAMES - 1) * (1 - u)))
         body = Canvas(96)
         hound_body(body, 0.0)
         body.img = dither_out(body.img, u * 0.7, flip=k % 2 == 1)
