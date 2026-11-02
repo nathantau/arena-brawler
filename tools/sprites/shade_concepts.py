@@ -365,21 +365,28 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
             pt = strand(p0, (p1[0] - sh, p1[1]), (p2[0] - sh, p2[1]), (p3[0] - sh * 1.4, p3[1] - sh * 0.5), t, 2.4, k=2.0, lag=lag, n=16)
             hair_band(up, pt, [3, 6, 8, 9, 9.5, 9.5, 9.5, 9, 9, 8.5, 8, 7, 6, 4.5, 3, 1.5, 1],
                       clusters=((0.3, BLUE),), color=(NAVY if ci % 2 else HAIR_A), rim=(ci == 0))
-    elif hair == "H9":  # one smooth straight sheet of hair falling straight down behind her; only its bottom edge sways
+    elif hair == "H9":  # long straight hair seen from the front: two vertical panels falling behind the shoulders on both sides
         b = sw_(t, 1.2, 1) - 2.0 * mv
-        off = lambda y: b * max(0.0, (y - 28) / 26)
-        sheet = [(18, 14), (11, 20), (7, 28), (6, 38), (6, 45), (8, 50), (12, 53), (18, 54), (22, 51), (24, 46), (26, 36), (30, 24), (30, 16)]
-        up.part(P([(x + off(y), y) for x, y in sheet]), NAVY)
-        for yy in range(16, 60):  # a second, darker navy on the inner half of the sheet (gently curved boundary)
-            split = 13.5 + 1.5 * math.sin(yy / 7.0) + off(yy)
-            for xx in range(8, 30):
-                if xx >= split and up.at(xx, yy)[:3] == NAVY:
-                    up.dot(xx, yy, SHADOW)
-        for yy in range(26, 47):  # one soft vertical highlight
-            if yy % 5 or yy in (30, 31, 41, 42):
-                up.dot(round(10 + off(yy)), yy, BLUE if 29 < yy < 44 else STEEL_D)
-        for yy in range(33, 40):
-            up.dot(round(10 + off(yy)), yy, STEEL)
+        off = lambda y: b * max(0.0, (y - 30) / 24)
+        left = [(22, 16), (14, 20), (11, 26), (10, 34), (10, 44), (11, 50), (13, 54), (16, 57.5), (19, 54), (21, 52), (22, 46)]
+        for side in (0, 1):
+            pts_ = [((x if side == 0 else 66 - x) + off(y), y) for x, y in left]
+            up.part(P(ipts(pts_)), NAVY)
+            for yy in range(16, 60):  # a darker navy toward the body, on a gently curved boundary
+                for xx in range(6, 62):
+                    near = (xx - 10) if side == 0 else (56 - xx)
+                    if near > 5.5 + 1.4 * math.sin(yy / 7.0) and up.at(xx, yy)[:3] == NAVY:
+                        up.dot(xx, yy, SHADOW)
+            hx = 12 if side == 0 else 54  # one soft vertical highlight, nearer the outer edge
+            for yy in range(28, 46):
+                if not (yy % 6 == 0):
+                    up.dot(round(hx + off(yy)) , yy, BLUE if 30 < yy < 43 else STEEL_D)
+            for yy in range(34, 39):
+                up.dot(round(hx + off(yy)), yy, STEEL)
+            sx = 15 if side == 0 else 51  # one subtle strand line
+            for yy in range(33, 52):
+                if yy % 7:
+                    up.dot(round(sx + off(yy)), yy, SHADOW if side == 0 else OUTLINE)
     elif hair == "H6":  # side ponytail on her far side, swinging out behind her head
         pt = strand((44, 6), (62 - 6 * mv, -6), (70 - 9 * mv, 22), (60 - 12 * mv, 42), t, 4.0, k=2.0, lag=0.8, n=18)
         hair_band(up, pt, [4, 8, 10, 11, 11, 10, 10, 9, 9, 8, 7, 6, 5, 4, 3, 2, 1.5, 1.2, 1])
@@ -392,15 +399,23 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         r1 = strand((rx, ry), (rx - 4, ry - 3), (rx - 8, ry + 1), (rx - 11 - 2 * mv, ry + 5), t, 2.0, k=2.0, lag=1.4, n=8)
         ribbon(up, r1, 3.2, 2.6, RED)
     # ---- scarf: a snug neck wrap with two SHORT rounded tails from the knot, an S-wave, the second lagging; gold bands
-    t1 = strand((22, 37), (16, 34 - mv), (10 - 2 * mv, 39 - 2 * mv), (3 - 3 * mv, 37 - 3 * mv), t, 3.0, k=2.6, lag=0.0, n=12)
-    t2 = strand((22, 39), (17, 43), (12 - mv, 44 - mv), (6 - 3 * mv, 48 - 2 * mv), t, 2.6, k=2.6, lag=1.0, n=12)
-    ribbon(up, t2, 5.0, 4.0, RED)
-    ribbon(up, t1, 5.6, 4.4, RED)
-    across(up, t1, 7, 2.4, GOLD)
-    across(up, t2, 7, 2.2, GOLD)
+    if hair == "H9":  # two short rounded stubs at the knot, so the hair panel shows
+        t1 = strand((22, 37), (19, 35.5), (16, 38), (13 - mv, 37 - mv), t, 1.4, k=2.4, lag=0.0, n=9)
+        t2 = strand((22, 39), (19, 41), (17, 43), (14 - mv, 45 - mv), t, 1.2, k=2.4, lag=1.0, n=9)
+        ribbon(up, t2, 4.2, 3.4, RED)
+        ribbon(up, t1, 4.8, 3.8, RED)
+        across(up, t1, 5, 2.0, GOLD)
+        across(up, t2, 5, 1.8, GOLD)
+    else:
+        t1 = strand((22, 37), (16, 34 - mv), (10 - 2 * mv, 39 - 2 * mv), (3 - 3 * mv, 37 - 3 * mv), t, 3.0, k=2.6, lag=0.0, n=12)
+        t2 = strand((22, 39), (17, 43), (12 - mv, 44 - mv), (6 - 3 * mv, 48 - 2 * mv), t, 2.6, k=2.6, lag=1.0, n=12)
+        ribbon(up, t2, 5.0, 4.0, RED)
+        ribbon(up, t1, 5.6, 4.4, RED)
+        across(up, t1, 7, 2.4, GOLD)
+        across(up, t2, 7, 2.2, GOLD)
     bw = sw_(t, 1.0, 1)  # small obi bow behind her hip
-    up.part(P([(21, 43), (15, 41 + bw), (14, 45 + bw), (18, 46), (21, 45)]), RED)
-    up.part(P([(21, 44), (16, 48 + bw), (18, 51 + bw), (22, 47)]), RED)
+    up.part(P([(21, 43), (17, 41 + bw), (16, 45 + bw), (19, 46), (21, 45)]), RED)
+    up.part(P([(21, 44), (17, 48 + bw), (19, 50 + bw), (22, 47)]), RED)
     # ---- back arm: gold bracer
     ax = g.ARM_X[0]
     arm(up, ax, NAVY, SKIN)
@@ -443,19 +458,11 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     up.dot(46, 45, OUTLINE)
     # ---- head: hair mass, face
     if hair in ("H5", "H7", "H8", "H9"):
-        up.part(E((17, 7, 49, 36) if hair == "H7" else (16, 4, 50, 36)), HAIR_A)
-        if hair in ("H8", "H9"):  # rounded crown: lit rim top-left and a blue sheen band across it
-            up.flat(lambda d, f: d.arc((17, 5, 49, 35), 195, 290, f), STEEL_D)
-            up.flat(lambda d, f: d.arc((19, 8, 47, 30), 205, 335, f), BLUE)
-            up.flat(lambda d, f: d.arc((19, 9, 47, 31), 215, 325, f), BLUE)
-            up.flat(lambda d, f: d.arc((20, 6, 46, 28), 200, 250, f), STEEL)
-    else:
-        up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
-            [(16, 20), (14, 30), (18, 28), (19, 36), (22, 31), (24, 20)], f)), HAIR_A)
-    if hair == "H7":  # choppy layered crown tufts
-        for pts_ in ([(22, 12), (16, 4), (31, 9)], [(29, 9), (26, -3), (41, 8)], [(37, 9), (36, 0), (49, 13)]):
-            up.part(P(pts_), HAIR_A)
-            up.flat(L([pts_[0], pts_[1]], 1), STEEL_D)
+        up.part(E((17, 7, 49, 36) if hair == "H7" else ((13, 3, 53, 37) if hair == "H9" else (16, 4, 50, 36))), HAIR_A)
+        if hair in ("H8", "H9"):  # rounded crown: a soft curved highlight following the head, from the top left (no horizontal band)
+            up.flat(lambda d, f: d.arc((14, 4, 52, 36), 190, 262, f), STEEL_D)
+            up.flat(lambda d, f: d.arc((17, 7, 49, 33), 200, 252, f), BLUE)
+            up.flat(lambda d, f: d.arc((20, 10, 46, 30), 208, 240, f), STEEL)
     up.part(RR(FACE, FACE_R), SKIN)
     up.flat(L([(26, 35), (42, 36)], 1), SKIN_D)
     # side locks + fringe, per style
@@ -555,7 +562,7 @@ def floor_bg(w, h):
     return out
 
 
-HAIRS = [("H8b  smooth long hair: strand bangs in front, one straight sheet down the back", "H9")]
+HAIRS = [("H8c  long straight hair: strand bangs, two vertical hair panels behind the shoulders", "H9")]
 MOUTHS = [("M1  clean crimson smirk line", "M1"), ("M2  small closed lips", "M2"), ("M3  cat smile :3", "M3")]
 SHOTS = ((0, None), (2, None), (1, 1), (3, 5))  # two idle + two walking frames
 DEFAULT_MOUTH = "M2"
@@ -615,7 +622,7 @@ def scale_sheet(out_dir):
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v6_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v7_scale.png")
 
 
 def main():
@@ -633,7 +640,7 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v6.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v7.png")
     scale_sheet(out_dir)
 
 
