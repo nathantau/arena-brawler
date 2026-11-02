@@ -40,6 +40,9 @@ const MELEE_ANIM_TIME: float = 0.16
 const MELEE_REST_DEG: float = 35.0
 const THRUST_REACH: float = 0.35
 const INVULN_ALPHA: float = 0.45
+## The held weapon fades out / back in over this long as a pose takes over from him and hands back.
+const GUN_FADE_TIME: float = 0.12
+const GHOST_FADE_TIME: float = 0.15
 ## Spawn protection look: flicker rate (Hz, doubled for the last SPAWN_WARN_TIME s), low alpha, shimmer rate, ground ring.
 const SPAWN_BLINK_HZ: float = 8.0
 const SPAWN_WARN_TIME: float = 0.4
@@ -131,6 +134,10 @@ var _shield := ShieldWall.new()
 var _ward := ShieldWall.new(true)
 var _prev_skills: Array[bool] = [false, false]
 var _hit_flash: float = 0.0
+## 0..1: how much of the held weapon shows (fades while a pose replaces him, see _gun_suppressed).
+var _gun_fade: float = 1.0
+var _gun_alpha: float = 1.0
+var _ghost_a: float = 1.0
 ## Attack animation time left, and its full length (depends on the weapon used).
 var _recoil: float = 0.0
 var _recoil_len: float = RECOIL_TIME
@@ -320,8 +327,12 @@ func _process(delta: float) -> void:
 	_sprite.position = visual_offset
 	_sprite.flip_h = facing.x < 0.0
 	_special_fx.sync(self)
-	_sprite.modulate.a = 0.0 if _special_fx.hides_owner() or _special_fx.is_swinging() else \
-		INVULN_ALPHA if stats.invulnerable_time > 0.0 or is_hidden() else 1.0
+	_gun_fade = move_toward(_gun_fade, 0.0 if _gun_suppressed() else 1.0, delta / GUN_FADE_TIME)
+	# Going ghostly (i-frames, hidden in smoke) and back eases over GHOST_FADE_TIME instead of popping between 1 and INVULN_ALPHA.
+	_ghost_a = move_toward(_ghost_a, INVULN_ALPHA if stats.invulnerable_time > 0.0 or is_hidden() else 1.0,
+		(1.0 - INVULN_ALPHA) * delta / GHOST_FADE_TIME)
+	_gun_alpha = _ghost_a  # (the weapon fades on its own, not with the body)
+	_sprite.modulate.a = 0.0 if _special_fx.is_swinging() else _special_fx.owner_alpha() * _gun_alpha
 	_sprite.modulate = Color(1, 1, 1, _sprite.modulate.a)
 	if stats.spawn_protect > 0.0 and _sprite.modulate.a > 0.0:
 		# Spawn protection: flickers (faster as it runs out) with a cool shimmer sweeping through the tint.
@@ -330,6 +341,7 @@ func _process(delta: float) -> void:
 		var shimmer: float = 0.5 + 0.5 * sin(phase * TAU * SPAWN_SHIMMER_HZ)
 		_sprite.modulate = Color(1.0 + 0.3 * shimmer, 1.0 + 0.3 * shimmer, 1.0 + 0.5 * shimmer,
 			SPAWN_ALPHA_LOW if fmod(phase * blink, 1.0) < 0.5 else 1.0)
+		_gun_alpha = _sprite.modulate.a
 	queue_redraw()
 	_overlay.queue_redraw()
 
@@ -1220,14 +1232,20 @@ func _draw() -> void:
 
 
 func _draw_overlay() -> void:
-	var body_hidden: bool = _special_fx.hides_owner() or _special_fx.is_swinging()  # morph, grapple zip, swing pose...: no gun floating alone
-	if not body_hidden and held_weapon().data.sprite != null and held_weapon().data.held_art and active_skill(SkillData.Kind.WHIRL) == null \
-			and active_skill(SkillData.Kind.PILLAR) == null and not _special_fx.is_petals() and not _special_fx.is_flaring() and not _special_fx.is_stepping():  # the staff is in the spin / plant pose; petals hide it
+	if _gun_fade > 0.0 and held_weapon().data.sprite != null and held_weapon().data.held_art:
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)
 	if not is_local:
 		_draw_bars(Constants.PLAYER_RADIUS)
+
+
+## The held weapon is left out while a pose replaces him: morph, grapple zip, swing, staff whirl / plant, petals, flare, step
+## (the staff is in the spin / plant pose).
+func _gun_suppressed() -> bool:
+	return _special_fx.hides_owner() or _special_fx.is_swinging() or active_skill(SkillData.Kind.WHIRL) != null \
+		or active_skill(SkillData.Kind.PILLAR) != null or _special_fx.is_petals() or _special_fx.is_flaring() \
+		or _special_fx.is_stepping()
 
 
 func _draw_head_over_weapon() -> void:
@@ -1264,7 +1282,7 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 		angle -= deg_to_rad(MELEE_REST_DEG) * flip_v
 	var scale_px: float = Constants.SPRITE_SCALE
 	var hand_at: Vector2 = visual_offset + offset + hand_offset(facing) + facing * hold
-	var tint := Color(1, 1, 1, _sprite.modulate.a)
+	var tint := Color(1, 1, 1, _gun_alpha * _gun_fade)
 	if w.upright:  # an orb: not turned with the aim, so its flames rise; mirrored to face the aim
 		ci.draw_set_transform(hand_at, 0.0, Vector2(scale_px * flip_v, scale_px))
 	else:

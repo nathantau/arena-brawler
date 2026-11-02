@@ -58,6 +58,7 @@ const SMOKE_EASE_IN: float = 0.12
 const OD_DOUBLE_ALPHA: float = 0.6  # a second, out-of-step crackle frame: the 1 px arcs were too faint alone
 const WARD_GLOW: Color = Color(1.0, 0.72, 0.86)
 const WARD_GLOW_ALPHA: float = 0.14
+const WARD_GLOW_FADE: float = 0.3
 const WARD_RING_ALPHA: float = 0.45
 const CRACK_FPS: float = 24.0  # 16-frame loop (was 8 at 12)
 ## The crack's ring of embers is drawn for this blast radius (generate.py ERUPT_R); other radii scale it.
@@ -122,6 +123,7 @@ const FLARE_CHARGE_ART: Texture2D = preload(FX_DIR + "flint_flare.png")
 const FLARE_RING_ART: Texture2D = preload(FX_DIR + "flare_ring.png")
 const FLARE_RING_FLOOR_ART: Texture2D = preload(FX_DIR + "flare_ring_floor.png")  # its scorch and glow, under the players
 const FLARE_RING_TIME: float = 0.7
+const FLARE_FADE_OUT: float = 0.15
 const FLARE_ART_RADIUS: float = 80.0
 ## Supernova (VOLLEY of 16 fireballs, generate.py SUPERNOVA_*): a burst of fire and sparks centred on him the step it goes off.
 const SUPERNOVA_ART: Texture2D = preload(FX_DIR + "supernova_burst.png")
@@ -232,7 +234,15 @@ const DISSOLVE_ART: Texture2D = preload(FX_DIR + "sakura_dissolve.png")
 const REFORM_ART: Texture2D = preload(FX_DIR + "sakura_reform.png")
 const DRIFT_FPS: float = 48.0
 const DRIFT_STRIP_FRAMES: int = 16
-const DISSOLVE_TIME: float = DRIFT_STRIP_FRAMES / DRIFT_FPS
+## The dissolve / reform strips (generate.py DISSOLVE_FRAMES) play at DISSOLVE_FPS; the swirl loops a whole number of
+## times between the two so it ends on its first frame, which is where the reform strip starts.
+const DISSOLVE_STRIP_FRAMES: int = 24
+const DISSOLVE_FPS: float = 60.0
+const DISSOLVE_TIME: float = DISSOLVE_STRIP_FRAMES / DISSOLVE_FPS
+## The last of the reform: the real sprite and her weapon fade in under the strip's closing sparkle, which fades out.
+const REFORM_FADE: float = 0.12
+## Anything that hides the owner's sprite fades it out under the pose over this long (the weapon too, both ways).
+const BODY_FADE_OUT: float = 0.1
 ## How much of her motion's slope (radians) the swirl leans with.
 const DRIFT_LEAN: float = 0.4
 ## Speed under which the swirl keeps its last heading.
@@ -258,6 +268,8 @@ const HEAL_FPS: float = 12.0
 const GUST_ART: Texture2D = preload(FX_DIR + "eden_gust.png")
 const GUST_SIZE: float = 128.0
 const GUST_ORIGIN_X: float = 8.0
+## The cone fades over its last stretch instead of its last leaves cutting out.
+const GUST_FADE_OUT: float = 0.12
 ## Art px the cone reaches (generate.py GUST_R): scaled to the skill's range.
 const GUST_ART_RANGE: float = 100.0
 ## Bolt's Overdrive (from synced skill state on every peer): a crack of lightning when it starts, a crackling loop over
@@ -337,6 +349,8 @@ var _morph_flip: bool = false
 var _ward_t: float = -1.0
 var _ward_radius: float = 0.0
 var _ward_at: Vector2 = Vector2.ZERO
+## Seconds left of the floor glow fading after the ward ends (-1 = none).
+var _ward_out: float = -1.0
 ## Staff Whirl: seconds spinning (-1 = not), its radius, where he's drawn, which way he faces, damage ticks seen.
 var _whirl_t: float = -1.0
 var _whirl_radius: float = 0.0
@@ -351,6 +365,9 @@ var _pillar_at: Vector2 = Vector2.ZERO
 var _flare: CharacterSkill
 var _flare_at: Vector2 = Vector2.ZERO
 var _flare_flip: bool = false
+## Seconds left of the charge pose fading out after the ring goes off (-1 = none), and the frame it was on.
+var _flare_out: float = -1.0
+var _flare_frame: int = 0
 ## Whether his Supernova was going off at the last sync (the burst plays on the rising edge).
 var _supernova_was: bool = false
 var _grapple_at: Vector2 = Vector2.ZERO
@@ -382,6 +399,9 @@ var _reform_t: float = -1.0
 var _drift_at: Vector2 = Vector2.ZERO
 var _drift_flip: bool = false
 var _drift_lean: float = 0.0
+var _drift_len: float = 1.0
+## 1 = the owner's own sprite fully there; eases to 0 under a pose that replaces it.
+var _body_a: float = 1.0
 var _face_flip: bool = false
 ## Overdrive: seconds in (-1 = off), where he is drawn, afterimage positions (newest first) with their mirroring.
 var _god_was: bool = false
@@ -419,6 +439,7 @@ var _floor := Node2D.new()
 
 func _init() -> void:
 	top_level = true
+	process_priority = -100  # timers end before the Player reads them (no one-frame gap when a pose ends)
 	z_index = 1
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_floor.z_as_relative = false
@@ -458,6 +479,7 @@ func sync(p: Player) -> void:
 		_ward_radius = ward.data.ward_radius
 	elif _ward_t >= 0.0 and not p.dead:
 		_poof(_ward_at, WARD_CLOSE_ART, WARD_CLOSE_TIME, _ward_scale())
+		_ward_out = WARD_GLOW_FADE
 	_ward_t = ward.elapsed() if warding else -1.0
 	if p.dead:
 		_morph_t = -1.0
@@ -473,6 +495,12 @@ func sync(p: Player) -> void:
 		var at: Vector2 = p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y)
 		_poof(at, FLARE_RING_ART, FLARE_RING_TIME, k)
 		_poof(at, FLARE_RING_FLOOR_ART, FLARE_RING_TIME, k, true)
+	if _flare != null and not charging and not p.dead:  # the white-hot pose fades off over the ring's flash
+		_flare_out = FLARE_FADE_OUT
+	elif p.dead:
+		_flare_out = -1.0
+	if charging:
+		_flare_out = -1.0
 	_flare = nova if charging else null
 	var supernova: CharacterSkill = _slot_id(p, &"supernova")
 	var bursting: bool = supernova != null and supernova.is_active() and not p.dead
@@ -578,7 +606,8 @@ func _draw_gust() -> void:
 	var k: float = _gust.data.gust_range / (GUST_ART_RANGE * Constants.SPRITE_SCALE)
 	var px: float = Constants.SPRITE_SCALE * k
 	draw_set_transform(_eden_at, _gust.direction.angle(), Vector2.ONE)
-	_draw_frame(GUST_ART, frame, GUST_SIZE, Vector2((GUST_SIZE * 0.5 - GUST_ORIGIN_X) * px, 0.0), px)
+	_draw_frame(GUST_ART, frame, GUST_SIZE, Vector2((GUST_SIZE * 0.5 - GUST_ORIGIN_X) * px, 0.0), px,
+		clampf(_gust.active_remaining / GUST_FADE_OUT, 0.0, 1.0))
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -759,14 +788,20 @@ func _sync_drift(p: Player) -> void:
 	var on: bool = slot != null and slot.is_drifting() and not p.dead
 	_drift_at = p.global_position + p.visual_offset
 	_face_flip = p.facing.x < 0.0
+	if on and _drift_t < 0.0:  # starts as she stands: facing her aim, upright
+		_drift_flip = _face_flip
+		_drift_lean = 0.0
 	if on and p.velocity.length() > DRIFT_MIN_SPEED:
 		_drift_flip = p.velocity.x < 0.0
 		_drift_lean = atan2(p.velocity.y, absf(p.velocity.x)) * DRIFT_LEAN * (-1.0 if _drift_flip else 1.0)
 	if _drift_t >= 0.0 and not on and not p.dead:  # gathers back with a little burst of petals
-		_reform_t = 0.0
+		# (cut short while still dissolving, the reform picks up at the same frame instead of jumping to the swirl)
+		_reform_t = maxf(0.0, DISSOLVE_TIME - _drift_t)
 		petal_pop(_drift_at)
 	if p.dead:
 		_reform_t = -1.0
+	if on:
+		_drift_len = slot.data.duration
 	_drift_t = slot.elapsed() if on else -1.0
 
 
@@ -776,7 +811,16 @@ func is_flaring() -> bool:
 
 
 func is_petals() -> bool:
-	return _drift_t >= 0.0 or _reform_t >= 0.0
+	return _drift_t >= 0.0 or (_reform_t >= 0.0 and _reform_t < DISSOLVE_TIME - REFORM_FADE)
+
+
+## How much of the owner's own sprite shows: fades out under a pose that replaces it, and back in under the end of a reform.
+func owner_alpha() -> float:
+	if hides_owner():  # (only the petals' first frame is her own idle frame; other poses / forms are other art)
+		return _body_a if is_petals() else 0.0
+	if _reform_t >= 0.0:
+		return clampf((_reform_t - (DISSOLVE_TIME - REFORM_FADE)) / REFORM_FADE * 2.0, 0.0, 1.0)
+	return 1.0
 
 
 func _sync_blaze(p: Player) -> void:
@@ -840,8 +884,16 @@ func _process(delta: float) -> void:
 			_morph_t = -1.0
 	if _reform_t >= 0.0:
 		_reform_t += delta
-		if _reform_t > DRIFT_STRIP_FRAMES / DRIFT_FPS:
+		if _reform_t > DISSOLVE_TIME:
 			_reform_t = -1.0
+	if _flare_out >= 0.0:
+		_flare_out -= delta
+	if _ward_out >= 0.0:
+		_ward_out -= delta
+	if hides_owner():
+		_body_a = maxf(0.0, _body_a - delta / BODY_FADE_OUT)
+	else:
+		_body_a = 1.0
 	if _sapling_fire_t >= 0.0:
 		_sapling_fire_t += delta
 		if _sapling_fire_t > SAPLING_FIRE_ART.get_width() / SAPLING_FIRE_ART.get_height() / SAPLING_FIRE_FPS:
@@ -1028,8 +1080,8 @@ func _draw_floor() -> void:
 				STORM_SIZE, centre, px, 1.0, _floor)
 		else:
 			_draw_frame(STORM_FLOOR_ART, int(t * STORM_FPS) % STORM_LOOP_COUNT, STORM_SIZE, centre, px, 1.0, _floor)
-	if _ward_t >= 0.0:  # a soft pool of petal light on the floor so the ward's reach reads under the players
-		var glow: float = clampf(_ward_t / WARD_OPEN_TIME, 0.0, 1.0)
+	if _ward_t >= 0.0 or _ward_out >= 0.0:  # a soft pool of petal light on the floor so the ward's reach reads under the players
+		var glow: float = clampf(_ward_t / WARD_OPEN_TIME, 0.0, 1.0) if _ward_t >= 0.0 else _ward_out / WARD_GLOW_FADE
 		_floor.draw_circle(_ward_at, _ward_radius, Color(WARD_GLOW, WARD_GLOW_ALPHA * glow))
 		_floor.draw_arc(_ward_at, _ward_radius, 0.0, TAU, 48, Color(WARD_GLOW, WARD_RING_ALPHA * glow), 2.0)
 	_draw_overdrive_floor()
@@ -1224,23 +1276,33 @@ func _draw_whirl() -> void:
 func _draw_drift() -> void:
 	var px: float = Constants.SPRITE_SCALE
 	var cell: float = DRIFT_ART.get_height()
-	var frame: int = 0
-	var art: Texture2D = REFORM_ART
-	var flip: bool = _face_flip
-	if _drift_t >= DISSOLVE_TIME:  # the swirl, leaning with her motion
-		draw_set_transform(_drift_at, _drift_lean, Vector2(-1.0 if _drift_flip else 1.0, 1.0))
-		_draw_frame(DRIFT_ART, int(_drift_t * DRIFT_FPS) % DRIFT_STRIP_FRAMES, cell, Vector2.ZERO, px)
+	var face: float = -1.0 if _face_flip else 1.0
+	var heading: float = -1.0 if _drift_flip else 1.0
+	if _drift_t >= DISSOLVE_TIME:  # the swirl, leaning with her motion; whole loops, so it ends where the reform starts
+		var span: float = maxf(_drift_len - DISSOLVE_TIME, 0.1)
+		var loops: float = maxf(1.0, roundf(span * DRIFT_FPS / DRIFT_STRIP_FRAMES))
+		var phase: int = int(minf((_drift_t - DISSOLVE_TIME) / span, 1.0) * loops * DRIFT_STRIP_FRAMES)
+		draw_set_transform(_drift_at, _drift_lean, Vector2(heading, 1.0))
+		_draw_frame(DRIFT_ART, phase % DRIFT_STRIP_FRAMES, cell, Vector2.ZERO, px)
 		draw_set_transform(Vector2.ZERO)
 		return
-	if _drift_t >= 0.0:
-		art = DISSOLVE_ART
-		frame = int(_drift_t * DRIFT_FPS)
-	elif _reform_t >= 0.0:
-		frame = int(_reform_t * DRIFT_FPS)
+	var art: Texture2D = DISSOLVE_ART
+	var u: float = 0.0  # 0 = her as she stands, 1 = the swirl: turns to its heading and tilts with it on the way
+	var alpha: float = 1.0
+	var t: float = _drift_t
+	if _drift_t < 0.0:
+		if _reform_t < 0.0:
+			return
+		art = REFORM_ART
+		t = _reform_t
+		u = 1.0 - clampf(t / DISSOLVE_TIME, 0.0, 1.0)
+		alpha = 1.0 - clampf((t - (DISSOLVE_TIME - REFORM_FADE)) / REFORM_FADE, 0.0, 1.0)
 	else:
-		return
-	draw_set_transform(_drift_at, 0.0, Vector2(-1.0 if flip else 1.0, 1.0))
-	_draw_frame(art, mini(frame, DRIFT_STRIP_FRAMES - 1), cell, Vector2.ZERO, px)
+		u = clampf(t / DISSOLVE_TIME, 0.0, 1.0)
+	var e: float = smoothstep(0.3, 0.9, u)
+	var frame: int = mini(int(t * DISSOLVE_FPS), DISSOLVE_STRIP_FRAMES - 1)
+	draw_set_transform(_drift_at, _drift_lean * e, Vector2(lerpf(face, heading, e), 1.0))
+	_draw_frame(art, frame, cell, Vector2.ZERO, px, alpha)
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -1264,13 +1326,20 @@ func _draw_pillar() -> void:
 
 ## His flames swell and brighten over the charge (the strip, spread over `nova_charge`), in place of his sprite.
 func _draw_flare() -> void:
-	if _flare == null:
-		return
 	var cell: float = FLARE_CHARGE_ART.get_height()
 	var n: int = int(FLARE_CHARGE_ART.get_width() / cell)
-	var frame: int = mini(int(_flare.elapsed() / _flare.data.nova_charge * n), n - 1)
+	var alpha: float = 1.0
+	var frame: int = n - 1
+	if _flare != null:
+		frame = mini(int(_flare.elapsed() / _flare.data.nova_charge * n), n - 1)
+		_flare_frame = frame
+	elif _flare_out >= 0.0:
+		frame = _flare_frame
+		alpha = _flare_out / FLARE_FADE_OUT
+	else:
+		return
 	draw_set_transform(_flare_at, 0.0, Vector2(-1.0 if _flare_flip else 1.0, 1.0))
-	_draw_frame(FLARE_CHARGE_ART, frame, cell, Vector2.ZERO, Constants.SPRITE_SCALE)
+	_draw_frame(FLARE_CHARGE_ART, frame, cell, Vector2.ZERO, Constants.SPRITE_SCALE, alpha)
 	draw_set_transform(Vector2.ZERO)
 
 
@@ -1432,7 +1501,9 @@ const HOUND_RUN_ART: Texture2D = preload(FX_DIR + "hound_run.png")
 const HOUND_BITE_ART: Texture2D = preload(FX_DIR + "hound_bite.png")
 const HOUND_MELT_ART: Texture2D = preload(FX_DIR + "hound_melt.png")
 const HOUND_FEET_ROW: float = 60.0
-const HOUND_RUN_FPS: float = 16.0
+const HOUND_RUN_FPS: float = 12.0  # 6-frame run (generate.py HOUND_RUN_FRAMES): the same stride rate as 8 frames at 16
+## Its soft ground shadow, like the fighters' (Player._draw): an ellipse at the feet, this wide (a wolf is longer than a fighter).
+const HOUND_SHADOW_RADIUS: float = 27.0
 const HOUND_BITE_TIME: float = 0.25
 const HOUND_MELT_TIME: float = 0.5
 ## Drawn position chases the synced one at this rate (1/s) so interpolated remote players' hounds move smoothly.
@@ -1568,6 +1639,21 @@ func _sync_hound(p: Player) -> void:
 	_hound = slot
 
 
+## The hound's ground shadow (floor layer, under the players), fading in as it rises and out as it melts.
+func _draw_hound_floor() -> void:
+	if _hound == null:
+		return
+	var d: SkillData = _hound.data
+	# Cross-fades with the art's puddle (which shrinks away over the second half of the rise and opens out again over the
+	# first half of the melt), so there is always exactly one shadow under it.
+	var k: float = clampf((_hound.elapsed() / maxf(d.hound_rise_time, 0.01) - 0.5) * 2.0, 0.0, 1.0) \
+		* clampf((_hound.active_remaining / HOUND_MELT_TIME - 0.5) * 2.0, 0.0, 1.0)
+	var feet: Vector2 = _hound_pos + Vector2(0.0, Player.FOOT_RING_Y)
+	_floor.draw_set_transform(feet, 0.0, Vector2(1.0, Player.FOOT_RING_SQUASH))
+	_floor.draw_circle(Vector2.ZERO, HOUND_SHADOW_RADIUS, Color(Player.SHADOW_COLOR, Player.SHADOW_COLOR.a * k))
+	_floor.draw_set_transform(Vector2.ZERO)
+
+
 func _draw_hound() -> void:
 	if _hound == null:
 		return
@@ -1666,6 +1752,7 @@ func _draw_shadow() -> void:
 
 
 func _draw_shadow_floor() -> void:
+	_draw_hound_floor()
 	_draw_step_floor()
 	_draw_bind_floor()
 	_draw_stun_floor()
