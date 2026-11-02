@@ -16,5 +16,6 @@ splash_edge_scale = 0.5
 snare_time = 2.0
 snare_factor = 0.5
 blast = true
+destroys_shots = true
 held_art = false
 tags = Array[StringName]([&"eden_quake"])

@@ -44,6 +44,12 @@ const HURT_PULSE_TIME: float = 0.3
 const EMPTY_FLASH_TIME: float = 0.3
 const EMPTY_CLICK_GAP: float = 0.35
 const GLINT_TIME: float = 0.6
+## Vitals / score blocks fade to this alpha while a fighter stands under them (over FADE_TIME).
+const FADED_ALPHA: float = 0.3
+const FADE_TIME: float = 0.15
+## A fighter's on-screen box in world units, centred FIGHTER_CENTER off the body origin (sprite is drawn above the feet).
+const FIGHTER_BOX: Vector2 = Vector2(64, 96)
+const FIGHTER_CENTER: Vector2 = Vector2(0, -8)
 
 var player: Player
 var arena: Arena
@@ -78,6 +84,8 @@ var _glint: float = 0.0
 var _last_armor: int = -1
 var _last_count: int = -1
 var _last_second: int = -1
+var _vitals_layer: Control
+var _score_layer: Control
 
 var _panel: StyleBoxTexture = UiStyle.slice("panel")
 var _slot: StyleBoxTexture = UiStyle.slice("card")
@@ -87,6 +95,67 @@ var _slot_active: StyleBoxTexture = UiStyle.slice("card_gold")
 func _ready() -> void:
 	UiStyle.fit_to_safe_area(self)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_vitals_layer = _add_layer(_draw_vitals)
+	_score_layer = _add_layer(_draw_score)
+
+
+## A full-rect child that draws one HUD block, so its modulate can fade just that block.
+func _add_layer(draw_fn: Callable) -> Control:
+	var layer := Control.new()
+	layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.draw.connect(func() -> void:
+		if player != null and is_instance_valid(player):
+			draw_fn.call(layer))
+	add_child(layer)
+	return layer
+
+
+## Alpha for a HUD block: faded while any fighter's screen rect (HUD-local) is under it.
+static func fade_target(block: Rect2, fighters: Array[Rect2]) -> float:
+	for f: Rect2 in fighters:
+		if block.intersects(f):
+			return FADED_ALPHA
+	return 1.0
+
+
+## Screen-space (HUD-local) boxes of the fighters you could be missing: alive and visible to the local view.
+func _fighter_rects() -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	var inv: Transform2D = get_global_transform().affine_inverse()
+	for p: Player in arena.players:
+		if p.dead or p.is_concealed():
+			continue
+		var xf: Transform2D = p.get_global_transform_with_canvas()
+		var half: Vector2 = FIGHTER_BOX * 0.5 * xf.get_scale()
+		var c: Vector2 = inv * (xf * (p.visual_offset + FIGHTER_CENTER))
+		out.append(Rect2(c - half, half * 2.0))
+	return out
+
+
+func _fade_blocks(delta: float) -> void:
+	if arena == null:
+		return
+	var fighters: Array[Rect2] = _fighter_rects()
+	var k: float = 1.0 - exp(-delta / FADE_TIME * 3.0)
+	for pair: Array in [[_vitals_layer, _vitals_rect()], [_score_layer, _score_rect()]]:
+		var layer: Control = pair[0]
+		layer.modulate.a = lerpf(layer.modulate.a, fade_target(pair[1], fighters), k)
+		layer.queue_redraw()
+
+
+func _vitals_rect() -> Rect2:
+	var panel_h: float = PANEL_PAD.y * 2.0 + 3 * ROW_H + 2 * ROW_GAP
+	var h: float = panel_h + SECTION_GAP + SLOT_SIZE.y + UiStyle.SIZE_SMALL + 4.0
+	if show_skill:
+		h += 3.0 * (UiStyle.SIZE_SMALL + 6.0)
+	return Rect2(Vector2.ZERO, Vector2(PANEL_PAD.x * 2.0 + ROW_H + BAR_W, h))
+
+
+## The kills / deaths pill plus the clock line under it.
+func _score_rect() -> Rect2:
+	var r: Rect2 = _score_pill()
+	return Rect2(r.position, Vector2(r.size.x, PILL_H + UiStyle.SIZE_SMALL + 10.0))
 
 
 func _process(delta: float) -> void:
@@ -104,6 +173,7 @@ func _process(delta: float) -> void:
 		_banners.pop_front()
 	if player != null and is_instance_valid(player):
 		_watch_player()
+		_fade_blocks(delta)
 	queue_redraw()
 
 
@@ -165,8 +235,6 @@ func _draw() -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	_draw_vignette()
-	_draw_vitals()
-	_draw_score()
 	if status_text != "":
 		UiStyle.draw_text(self, Vector2(0.0, UiStyle.SIZE_TINY), status_text, UiStyle.SIZE_TINY, UiStyle.C_DIM,
 			HORIZONTAL_ALIGNMENT_RIGHT, size.x - STATUS_RIGHT_MARGIN)
@@ -230,38 +298,38 @@ func _draw_banners() -> void:
 		UiStyle.draw_text(self, Vector2(0.0, y), b.text, font, Color(b.color, a), HORIZONTAL_ALIGNMENT_CENTER, size.x, true)
 
 
-func _draw_vitals() -> void:
+func _draw_vitals(c: CanvasItem) -> void:
 	var s: PlayerStats = player.stats
 	var rows: int = 3
 	var panel := Rect2(Vector2.ZERO, PANEL_PAD * 2.0 + Vector2(ROW_H + BAR_W, rows * ROW_H + (rows - 1) * ROW_GAP))
-	draw_style_box(_panel, panel)
+	c.draw_style_box(_panel, panel)
 	var pos: Vector2 = PANEL_PAD
-	_bar(pos, "icon_hp", s.hp, s.max_hp, UiStyle.C_RED, UiStyle.C_MAROON)
+	_bar(c, pos, "icon_hp", s.hp, s.max_hp, UiStyle.C_RED, UiStyle.C_MAROON)
 	pos.y += ROW_H + ROW_GAP
-	_bar(pos, "icon_armor", s.armor, s.max_armor, UiStyle.C_STEEL, UiStyle.C_STEEL_D, _glint / GLINT_TIME)
+	_bar(c, pos, "icon_armor", s.armor, s.max_armor, UiStyle.C_STEEL, UiStyle.C_STEEL_D, _glint / GLINT_TIME)
 	pos.y += ROW_H + ROW_GAP
 	var shake := Vector2.ZERO
 	var flash: float = _empty_flash / EMPTY_FLASH_TIME
 	if flash > 0.0:  # out of energy for this shot: the bar shudders and blinks red
 		shake.x = 3.0 * sin(Time.get_ticks_msec() * 0.06)
-	_bar(pos + shake, "icon_energy", s.energy, s.max_energy, UiStyle.C_TEAL_L, UiStyle.C_TEAL, 0.0,
+	_bar(c, pos + shake, "icon_energy", s.energy, s.max_energy, UiStyle.C_TEAL_L, UiStyle.C_TEAL, 0.0,
 		UiStyle.C_RED if flash > 0.0 and int(Time.get_ticks_msec() / 70) % 2 == 0 else Color.TRANSPARENT)
 
 	# The one weapon (or the form's), with its energy cost per shot.
 	var w: WeaponData = player.held_weapon().data
 	var r := Rect2(Vector2(0.0, panel.end.y + SECTION_GAP), SLOT_SIZE)
-	draw_style_box(_slot_active, r)
-	UiStyle.draw_icon(self, w.sprite, r.get_center() - Vector2(0, 6), SLOT_ART_SCALE)
+	c.draw_style_box(_slot_active, r)
+	UiStyle.draw_icon(c, w.sprite, r.get_center() - Vector2(0, 6), SLOT_ART_SCALE)
 	var cost: String = "free" if w.energy_cost == 0 else str(w.energy_cost)
 	var badge := Vector2(r.end.x - 10.0, r.end.y - 10.0)
-	UiStyle.draw_text(self, badge, cost, UiStyle.SIZE_TINY, UiStyle.C_TEAL_L if w.energy_cost > 0 else UiStyle.C_DIM,
+	UiStyle.draw_text(c, badge, cost, UiStyle.SIZE_TINY, UiStyle.C_TEAL_L if w.energy_cost > 0 else UiStyle.C_DIM,
 		HORIZONTAL_ALIGNMENT_RIGHT, -1.0)
 	if w.energy_cost > 0:
 		var tw: float = UiStyle.text_width(cost, UiStyle.SIZE_TINY)
-		UiStyle.draw_icon(self, UiStyle.tex("icon_energy"), badge + Vector2(-tw - 10.0, -6.0), 1.0)
+		UiStyle.draw_icon(c, UiStyle.tex("icon_energy"), badge + Vector2(-tw - 10.0, -6.0), 1.0)
 	var active_w: WeaponData = w
 	var name_y: float = panel.end.y + SECTION_GAP + SLOT_SIZE.y + UiStyle.SIZE_SMALL + 4.0
-	UiStyle.draw_text(self, Vector2(2.0, name_y), active_w.display_name, UiStyle.SIZE_SMALL, UiStyle.C_YELLOW)
+	UiStyle.draw_text(c, Vector2(2.0, name_y), active_w.display_name, UiStyle.SIZE_SMALL, UiStyle.C_YELLOW)
 	if show_skill:
 		var y: float = name_y
 		for pair: Array in [[player.skills[0], "Space", 0], [player.skills[1], "E", 1], [player.skills[2], "Q", 2]]:
@@ -274,82 +342,89 @@ func _draw_vitals() -> void:
 			elif not sk.is_ready():
 				text += " · %.1fs" % sk.cooldown_remaining
 			y += UiStyle.SIZE_SMALL + 6.0
-			UiStyle.draw_text(self, Vector2(2.0, y), text, UiStyle.SIZE_SMALL,
+			UiStyle.draw_text(c, Vector2(2.0, y), text, UiStyle.SIZE_SMALL,
 				UiStyle.C_WHITE if sk.is_ready() and not player.skill_locked(pair[2] as int) else UiStyle.C_DIM)
 
 
 ## Icon, then a pixel bar (outline, dark well, two-tone fill, highlight) with "value / max" inside.
-func _bar(pos: Vector2, icon: String, value: int, max_value: int, fill: Color, shade: Color, glint: float = 0.0,
+func _bar(c: CanvasItem, pos: Vector2, icon: String, value: int, max_value: int, fill: Color, shade: Color, glint: float = 0.0,
 		warn: Color = Color.TRANSPARENT) -> void:
-	UiStyle.draw_icon(self, UiStyle.tex(icon), pos + Vector2(ROW_H, ROW_H) * 0.5, ICON_SCALE)
+	UiStyle.draw_icon(c, UiStyle.tex(icon), pos + Vector2(ROW_H, ROW_H) * 0.5, ICON_SCALE)
 	var r := Rect2(pos + Vector2(ROW_H + 4.0, (ROW_H - BAR_H) * 0.5), Vector2(BAR_W - 4.0, BAR_H))
-	draw_rect(r, UiStyle.C_OUTLINE)
+	c.draw_rect(r, UiStyle.C_OUTLINE)
 	var inner: Rect2 = r.grow(-2.0)
-	draw_rect(inner, UiStyle.C_SHADOW)
+	c.draw_rect(inner, UiStyle.C_SHADOW)
 	var frac: float = clampf(float(value) / float(maxi(1, max_value)), 0.0, 1.0)
 	if frac > 0.0:
 		var f := Rect2(inner.position, Vector2(inner.size.x * frac, inner.size.y))
-		draw_rect(f, fill)
-		draw_rect(Rect2(f.position + Vector2(0, f.size.y * 0.6), Vector2(f.size.x, f.size.y * 0.4)), shade)
-		draw_rect(Rect2(f.position, Vector2(f.size.x, 2.0)), Color(1, 1, 1, 0.35))
+		c.draw_rect(f, fill)
+		c.draw_rect(Rect2(f.position + Vector2(0, f.size.y * 0.6), Vector2(f.size.x, f.size.y * 0.4)), shade)
+		c.draw_rect(Rect2(f.position, Vector2(f.size.x, 2.0)), Color(1, 1, 1, 0.35))
 		if glint > 0.0:  # a bright band sweeps along the filled part while it refills
 			var gx: float = f.position.x + f.size.x * (1.0 - glint)
-			draw_rect(Rect2(gx - 10.0, f.position.y, 20.0, f.size.y).intersection(f), Color(1, 1, 1, 0.55))
+			c.draw_rect(Rect2(gx - 10.0, f.position.y, 20.0, f.size.y).intersection(f), Color(1, 1, 1, 0.55))
 	if warn.a > 0.0:
-		draw_rect(inner, Color(warn, 0.45))
-	UiStyle.draw_text(self, Vector2(inner.end.x - BAR_TEXT_PAD, inner.end.y - 4.0), "%d/%d" % [value, max_value],
+		c.draw_rect(inner, Color(warn, 0.45))
+	UiStyle.draw_text(c, Vector2(inner.end.x - BAR_TEXT_PAD, inner.end.y - 4.0), "%d/%d" % [value, max_value],
 		UiStyle.SIZE_TINY, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_RIGHT, -1.0)
 
 
 ## Top-centre pills: kills and deaths, then the clock (or warm-up) and the kill target.
-func _draw_score() -> void:
+func _score_pill() -> Rect2:
 	var st: MatchState = arena.match_state
-	if st.mode == MatchRules.Mode.TEAMS and st.phase != MatchState.Phase.LOBBY:
-		_draw_round_score(st)
+	if _teams_hud(st):
+		var w: float = UiStyle.text_width(_round_score_text(), UiStyle.SIZE_HEADING, true) + PILL_PAD * 2.0
+		return Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, PILL_H))
+	var id: int = player.player_id
+	var item_w: float = ROW_H + 4.0
+	var w: float = PILL_PAD * 2.0 + item_w * 2.0 + UiStyle.text_width(str(scores.kills_of(id)), UiStyle.SIZE_HEADING, true) \
+		+ UiStyle.text_width(str(scores.deaths_of(id)), UiStyle.SIZE_HEADING, true) + PILL_ITEM_GAP
+	return Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, PILL_H))
+
+
+func _teams_hud(st: MatchState) -> bool:
+	return st.mode == MatchRules.Mode.TEAMS and st.phase != MatchState.Phase.LOBBY
+
+
+## Teams: "2 – 1", your team first.
+func _round_score_text() -> String:
+	var st: MatchState = arena.match_state
+	var mine: int = player.team if player.team != 0 else MatchRules.TEAM_A
+	return "%d – %d" % [st.round_scores[mine], st.round_scores[MatchRules.other_team(mine)]]
+
+
+func _draw_score(c: CanvasItem) -> void:
+	var st: MatchState = arena.match_state
+	var r: Rect2 = _score_pill()
+	c.draw_style_box(_panel, r)
+	var clock: String = ""
+	var urgent: bool = false
+	if _teams_hud(st):
+		UiStyle.draw_text(c, Vector2(r.position.x, r.get_center().y + UiStyle.SIZE_HEADING * 0.35), _round_score_text(),
+			UiStyle.SIZE_HEADING, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, true)
+		if st.phase == MatchState.Phase.PLAYING:
+			clock = "Round %d · %d:%02d" % [st.round_number, ceili(st.time_left) / 60, ceili(st.time_left) % 60]
+			urgent = st.intermission <= 0.0 and _tick_clock(st)
+		_draw_clock(c, r, st, clock, urgent)
 		return
 	var id: int = player.player_id
 	var kills: String = str(scores.kills_of(id))
 	var deaths: String = str(scores.deaths_of(id))
 	var item_w: float = ROW_H + 4.0
-	var w: float = PILL_PAD * 2.0 + item_w * 2.0 + UiStyle.text_width(kills, UiStyle.SIZE_HEADING, true) \
-		+ UiStyle.text_width(deaths, UiStyle.SIZE_HEADING, true) + PILL_ITEM_GAP
-	var r := Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, PILL_H))
-	draw_style_box(_panel, r)
 	var x: float = r.position.x + PILL_PAD
 	var mid: float = r.position.y + PILL_H * 0.5
 	for pair: Array in [["icon_kills", kills, UiStyle.C_WHITE], ["icon_deaths", deaths, UiStyle.C_STEEL]]:
-		UiStyle.draw_icon(self, UiStyle.tex(pair[0]), Vector2(x + ROW_H * 0.5, mid), ICON_SCALE)
+		UiStyle.draw_icon(c, UiStyle.tex(pair[0]), Vector2(x + ROW_H * 0.5, mid), ICON_SCALE)
 		x += item_w
-		UiStyle.draw_text(self, Vector2(x, mid + UiStyle.SIZE_HEADING * 0.35), pair[1], UiStyle.SIZE_HEADING, pair[2],
+		UiStyle.draw_text(c, Vector2(x, mid + UiStyle.SIZE_HEADING * 0.35), pair[1], UiStyle.SIZE_HEADING, pair[2],
 			HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
 		x += UiStyle.text_width(pair[1], UiStyle.SIZE_HEADING, true) + PILL_ITEM_GAP
-
-	var clock: String
-	var urgent: bool = false
 	if st.phase == MatchState.Phase.PLAYING:
 		clock = "%d:%02d · first to %d" % [ceili(st.time_left) / 60, ceili(st.time_left) % 60, MatchRules.kill_target(st.mode)]
 		urgent = _tick_clock(st)
 	elif st.phase == MatchState.Phase.LOBBY:
 		clock = "Warm-up"
-	_draw_clock(r, st, clock, urgent)
-
-
-## Teams: "2 – 1" round score (your team first, ally blue / enemy red), the round and its clock under it.
-func _draw_round_score(st: MatchState) -> void:
-	var mine: int = player.team if player.team != 0 else MatchRules.TEAM_A
-	var score: String = "%d – %d" % [st.round_scores[mine], st.round_scores[MatchRules.other_team(mine)]]
-	var w: float = UiStyle.text_width(score, UiStyle.SIZE_HEADING, true) + PILL_PAD * 2.0
-	var r := Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, PILL_H))
-	draw_style_box(_panel, r)
-	UiStyle.draw_text(self, Vector2(r.position.x, r.get_center().y + UiStyle.SIZE_HEADING * 0.35), score,
-		UiStyle.SIZE_HEADING, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, true)
-	var clock: String = ""
-	var urgent: bool = false
-	if st.phase == MatchState.Phase.PLAYING:
-		clock = "Round %d · %d:%02d" % [st.round_number, ceili(st.time_left) / 60, ceili(st.time_left) % 60]
-		if st.intermission <= 0.0:
-			urgent = _tick_clock(st)
-	_draw_clock(r, st, clock, urgent)
+	_draw_clock(c, r, st, clock, urgent)
 
 
 ## Last-seconds tick sound once per second; true while the clock is urgent.
@@ -362,11 +437,11 @@ func _tick_clock(st: MatchState) -> bool:
 	return urgent
 
 
-func _draw_clock(r: Rect2, st: MatchState, clock: String, urgent: bool) -> void:
+func _draw_clock(c: CanvasItem, r: Rect2, st: MatchState, clock: String, urgent: bool) -> void:
 	if clock != "":
 		var y: float = r.end.y + UiStyle.SIZE_SMALL + 6.0
 		var cw: float = UiStyle.text_width(clock, UiStyle.SIZE_SMALL)
-		UiStyle.draw_icon(self, UiStyle.tex("icon_clock"), Vector2((size.x - cw) * 0.5 - 20.0, y - 6.0), 1.0)
+		UiStyle.draw_icon(c, UiStyle.tex("icon_clock"), Vector2((size.x - cw) * 0.5 - 20.0, y - 6.0), 1.0)
 		var cf: int = UiStyle.SIZE_SMALL
 		var cc: Color = UiStyle.C_WHITE
 		if urgent:  # last seconds: bigger, red, throbbing once a second
@@ -374,7 +449,7 @@ func _draw_clock(r: Rect2, st: MatchState, clock: String, urgent: bool) -> void:
 			cf = roundi(UiStyle.SIZE_BODY * (1.0 + 0.25 * maxf(0.0, 1.0 - beat * 4.0)))
 			cc = COLOR_URGENT
 			y += (cf - UiStyle.SIZE_SMALL) * 0.5
-		UiStyle.draw_text(self, Vector2(0.0, y), clock, cf, cc, HORIZONTAL_ALIGNMENT_CENTER, size.x)
+		UiStyle.draw_text(c, Vector2(0.0, y), clock, cf, cc, HORIZONTAL_ALIGNMENT_CENTER, size.x)
 
 
 func _draw_messages() -> void:

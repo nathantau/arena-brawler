@@ -250,7 +250,7 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 	var reach: float = weapon.melee_range + Constants.PLAYER_RADIUS
 	if weapon.reflects:
 		for s: Slot in _slots:
-			if s.active and not _same_team(s.attacker_id, owner_id) and s.pos.distance_to(origin) <= reach + s.radius \
+			if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= reach + s.radius \
 					and CombatRules.in_arc(origin, facing, s.pos, weapon.melee_arc_deg):
 				s.vel = facing * s.vel.length()
 				s.attacker_id = owner_id
@@ -285,7 +285,7 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 ## peer). `damage` > 0 (authoritative only): players and crates in reach take it, pushed away from `origin`.
 func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
 	for s: Slot in _slots:
-		if s.active and not _same_team(s.attacker_id, owner_id) and s.pos.distance_to(origin) <= radius + s.radius:
+		if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= radius + s.radius:
 			s.vel = (s.pos - origin).normalized() * s.vel.length()
 			s.attacker_id = owner_id
 			s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
@@ -321,7 +321,7 @@ func bloom(owner_id: int, at: Vector2, radius: float, amount: int) -> void:
 func gust(owner_id: int, seq: int, origin: Vector2, dir: Vector2, reach: float, half_angle: float, damage: int,
 		knockback: float) -> void:
 	for s: Slot in _slots:
-		if s.active and not _same_team(s.attacker_id, owner_id) and _in_cone(s.pos, origin, dir, reach + s.radius, half_angle):
+		if s.active and _is_enemy_shot(s, owner_id) and _in_cone(s.pos, origin, dir, reach + s.radius, half_angle):
 			s.active = false
 			_add_impact(s.pos, s.radius, s.color)
 	if not authoritative or damage <= 0:
@@ -347,9 +347,14 @@ static func _in_cone(at: Vector2, origin: Vector2, dir: Vector2, reach: float, h
 ## Enemy projectiles within `radius` of `origin` vanish (every peer: the cosmetic copies go too).
 func _destroy_shots(owner_id: int, origin: Vector2, radius: float) -> void:
 	for s: Slot in _slots:
-		if s.active and not _same_team(s.attacker_id, owner_id) and s.pos.distance_to(origin) <= radius + s.radius:
+		if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= radius + s.radius:
 			s.active = false
 			_add_impact(s.pos, s.radius, s.color)
+
+
+## Whether `s` is an enemy of `owner_id` (the one place to widen for teams: treat teammates' shots as friendly).
+func _is_enemy_shot(s: Slot, owner_id: int) -> bool:
+	return not _same_team(s.attacker_id, owner_id)
 
 
 func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData) -> void:

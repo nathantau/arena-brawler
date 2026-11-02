@@ -14,5 +14,6 @@ color = Color(0.66, 0.5, 0.88, 1)
 splash_radius = 96.0
 splash_edge_scale = 0.5
 blast = true
+destroys_shots = true
 held_art = false
 tags = Array[StringName]([&"shadow_spikes"])

@@ -2168,3 +2168,33 @@ func test_bloom_heal_is_announced_from_the_synced_hp_inside_the_moss() -> void:
 	p.stats.hp = 40  # damage is not a heal
 	p._special_fx.sync(p)
 	assert_eq(got.size(), 1)
+
+
+
+func _telegraphed_blast(id: StringName) -> WeaponData:
+	var d: SkillData = skills.get_skill(id)
+	return d.eruption_blast if d.kind == SkillData.Kind.ERUPTION else d.thunder_blast
+
+
+func test_telegraphed_blasts_destroy_only_enemy_shots_in_radius() -> void:
+	var gun: WeaponData = WeaponCatalog.load_all().get_weapon(&"pistol")
+	for id: StringName in [&"eruption", &"thunder_strike", &"thorn_quake", &"umbral_spikes"]:
+		var blast: WeaponData = _telegraphed_blast(id)
+		assert_true(blast.destroys_shots, String(id))
+		var world := Node2D.new()
+		add_child_autofree(world)
+		var pool := ProjectilePool.new()
+		world.add_child(pool)
+		await wait_physics_frames(2)
+		var spot := Vector2(300, 300)
+		pool.fire_shot(2, 1, spot + Vector2(blast.splash_radius * 0.5, 40), Vector2.RIGHT, gun, 3)  # enemy, inside
+		pool.fire_shot(2, 2, spot + Vector2(blast.splash_radius + 80.0, 40), Vector2.RIGHT, gun, 3)  # enemy, outside
+		pool.fire_shot(1, 3, spot + Vector2(blast.splash_radius * 0.5, -40), Vector2.RIGHT, gun, 3)  # caster's own
+		assert_eq(pool.active_count(), 3, String(id))
+		pool.fire_shot(1, 4, spot, Vector2.RIGHT, blast, 3)
+		var seqs: Array[int] = []
+		for s: ProjectilePool.Slot in pool.debug_slots():
+			if s.active:
+				seqs.append(s.shot_seq)
+		seqs.sort()
+		assert_eq(seqs, [2, 3] as Array[int], "%s: inside enemy shot gone, outside + own survive" % id)
