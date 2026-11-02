@@ -290,7 +290,7 @@ func slot_wanted(player: Player, slot: int, dist: float, in_sight: bool, pressur
 ## Kinds whose press moves the bot along move_vec / aim_vec (so an escape press points away from the enemy).
 static func is_mover(kind: SkillData.Kind) -> bool:
 	return kind == SkillData.Kind.DASH or kind == SkillData.Kind.SWING or kind == SkillData.Kind.TRAIL \
-		or kind == SkillData.Kind.DRIFT or kind == SkillData.Kind.STEP
+		or kind == SkillData.Kind.DRIFT or kind == SkillData.Kind.STEP or kind == SkillData.Kind.GRAPPLE
 
 
 # --- Per-frame brain ---
@@ -455,6 +455,8 @@ func _use_specials(player: Player, dist: float, has_target: bool, hp_frac: float
 			_frame.aim_vec = -dir
 			_frame.move_vec = -dir
 			_frame.fire = false
+		elif is_mover(kind) and has_target:
+			_frame.move_vec = dir  # movers follow the stick, so a gap closer must point at the target, not along the strafe
 		match slot:
 			0: _frame.skill = true
 			1: _frame.special = true

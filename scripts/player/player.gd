@@ -258,10 +258,13 @@ static func default_skills(data: CharacterData) -> Array[SkillData]:
 
 ## Put `data` in skill slot `slot`; if another slot already has it, the two swap.
 func set_skill(slot: int, data: SkillData) -> void:
-	var old: SkillData = skills[slot].data
 	for other: int in skills.size():
-		if other != slot and skills[other].data == data:
-			skills[other] = CharacterSkill.new(old)
+		if other != slot and skills[other].data == data:  # swap the slots themselves: cooldowns travel with their special
+			var held: CharacterSkill = skills[other]
+			skills[other] = skills[slot]
+			skills[slot] = held
+			_sync_shields()
+			return
 	skills[slot] = CharacterSkill.new(data)
 	_sync_shields()
 

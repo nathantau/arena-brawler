@@ -132,3 +132,12 @@ func test_bot_can_target_another_bot() -> void:
 	await wait_physics_frames(2)
 	assert_ne(a._nearest_visible_enemy(pa), null, "FFA: a bot fights other bots")
 	assert_eq(a._target, pb)
+
+
+func test_gap_closer_press_points_the_stick_at_the_target() -> void:
+	var bot := BotBrain.new(null, 1)
+	var p: Player = _player(&"dash", &"grapple_kunai")
+	bot._frame.move_vec = Vector2.UP  # strafing sideways
+	bot._use_specials(p, 300.0, true, 1.0, Vector2.RIGHT, 100.0)
+	assert_true(bot._frame.special, "grapple pressed")
+	assert_eq(bot._frame.move_vec, Vector2.RIGHT, "movement abilities follow the stick: it must point at the enemy")
