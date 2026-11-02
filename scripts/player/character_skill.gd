@@ -6,7 +6,8 @@ extends RefCounted
 ##   enemy shots absorbed so far, at `shield_hits` it breaks (the slot ends early).
 ## - TRANSFORM: a stronger form; fires `form_weapon` (its cooldown is snapshotted).
 ## - VOLLEY: the Player fires it.
-## - SMOKE / CLONES: centred on `anchor` (where you stood), aimed along `direction`.
+## - SMOKE: the user is invisible while active (Player.is_vanished); the Player ends it early when she fires or uses another special.
+## - CLONES: centred on `anchor` (where you stood), aimed along `direction`.
 ## - WARD: a ring round the player (wherever they are now) that catches enemy projectiles.
 ## - GRAPPLE: the Player casts the kunai; on a bite `anchor` is where the pull stops, on a miss it ends at once
 ##   with the short cooldown. `duration` only caps the pull.
@@ -262,7 +263,7 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.dash_iframes)
 		SkillData.Kind.SHIELD:
 			hits = 0
-		SkillData.Kind.SMOKE, SkillData.Kind.CLONES:
+		SkillData.Kind.CLONES:
 			anchor = origin
 		SkillData.Kind.SWING, SkillData.Kind.TRAIL:
 			anchor = origin

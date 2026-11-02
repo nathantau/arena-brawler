@@ -21,7 +21,6 @@ extends Node2D
 const FX_DIR: String = "res://assets/fx/"
 const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
 const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
-const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
 const WARD_ART: Texture2D = preload(FX_DIR + "blossom_ward.png")
 const WARD_OPEN_ART: Texture2D = preload(FX_DIR + "blossom_ward_open.png")
 const WARD_CLOSE_ART: Texture2D = preload(FX_DIR + "blossom_ward_close.png")
@@ -69,7 +68,6 @@ const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
 ## Ease-in times (s) so floor marks and loops don't pop on, and the ward's floor glow colour.
 const CRACK_EASE_IN: float = 0.15
 const RING_EASE_IN: float = 0.1
-const SMOKE_EASE_IN: float = 0.12
 const OD_DOUBLE_ALPHA: float = 0.6  # a second, out-of-step crackle frame: the 1 px arcs were too faint alone
 const WARD_GLOW: Color = Color(1.0, 0.72, 0.86)
 const WARD_GLOW_ALPHA: float = 0.14
@@ -88,13 +86,8 @@ const ERUPTION_TIME: float = ERUPTION_FRAMES / ERUPTION_FPS
 ## The strip starts this long before the blast lands, so its first frames (the floor bulging) lead into the burst.
 const ERUPTION_LEAD: float = ERUPTION_BLAST_FRAME / ERUPTION_FPS
 const POOF_TIME: float = 0.5
-const SMOKE_FPS: float = 10.0
-## The cloud swells in when thrown and fades out at the end instead of popping.
-const SMOKE_SWELL_TIME: float = 0.25
-const SMOKE_SWELL_FROM: float = 0.4
-## smoke.png is drawn for this radius; other radii scale it.
-const SMOKE_ART_RADIUS: float = 90.0
-const SMOKE_ALPHA: float = 0.9
+## Smoke Bomb: the clone poof, a bit bigger, bursts where she vanishes and where she reappears.
+const VANISH_POOF_SCALE: float = 1.3
 const FADE_TIME: float = 0.4
 ## Clones fade in inside their cloud while it's at its fullest (it plays slower than other poofs).
 const APPEAR_DELAY: float = 0.08
@@ -400,8 +393,7 @@ class Poof:
 var _clones: Array[AnimatedSprite2D] = []
 var _points := PackedVector2Array()
 var _owner: Player
-var _smoke_t: float = -1.0
-var _smoke: CharacterSkill
+var _was_vanished: bool = false
 var _poofs: Array[Poof] = []
 var _was_cloning: bool = false
 var _was_transformed: bool = false
@@ -547,7 +539,10 @@ func sync(p: Player) -> void:
 	_points = p.clone_points()
 	var clones: CharacterSkill = _slot(p, SkillData.Kind.CLONES)
 	var smoke: CharacterSkill = _slot(p, SkillData.Kind.SMOKE)
-	_smoke = smoke
+	var vanished: bool = smoke != null and smoke.is_active() and not p.dead
+	if vanished != _was_vanished and (vanished or not p.dead):  # the poof that hides her, and the one she comes back in
+		_poof(p.global_position + p.visual_offset, POOF_BIG, CLONE_POOF_TIME, VANISH_POOF_SCALE)
+	_was_vanished = vanished
 	var cloning: bool = clones != null and clones.is_cloning()
 	if cloning and not _was_cloning:
 		for at: Vector2 in _points:
@@ -662,7 +657,6 @@ func sync(p: Player) -> void:
 		c.position = _points[i]
 		c.flip_h = _points[i].x < clones.anchor.x
 		c.modulate.a = alpha
-	_smoke_t = smoke.elapsed() if smoke != null and smoke.is_smoking() else -1.0
 	_sync_grapple(p)
 	_sync_blaze(p)
 	var eruption: CharacterSkill = _slot(p, SkillData.Kind.ERUPTION)
@@ -1260,13 +1254,6 @@ func _draw() -> void:
 		return
 	for i: int in _points.size():
 		_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
-	if _smoke_t >= 0.0:
-		var frame: int = int(_smoke_t * SMOKE_FPS) % (SMOKE_ART.get_width() / SMOKE_ART.get_height())
-		var swell: float = lerpf(SMOKE_SWELL_FROM, 1.0, clampf(_smoke_t / SMOKE_SWELL_TIME, 0.0, 1.0))
-		var k: float = _smoke.data.smoke_radius / SMOKE_ART_RADIUS * swell
-		var fade: float = clampf(_smoke.active_remaining / FADE_TIME, 0.0, 1.0)
-		_draw_frame(SMOKE_ART, frame, SMOKE_ART.get_height(), _smoke.anchor, Constants.SPRITE_SCALE * k,
-			SMOKE_ALPHA * fade * clampf(_smoke_t / SMOKE_EASE_IN, 0.0, 1.0))
 
 
 func _draw_floor() -> void:

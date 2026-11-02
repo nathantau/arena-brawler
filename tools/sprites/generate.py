@@ -2214,8 +2214,10 @@ ICONS = {
     "grapple_kunai": lambda c: (c.flat(P([(12, 0), (10, 6), (8, 4), (6, 2)]), STEEL), c.flat(L([(8, 4), (11, 1)], 1), WHITE),
                                 c.flat(L([(7, 5), (5, 7)], 2), RED), c.flat(E((3, 7, 6, 10)), STEEL_D), c.dot(4, 8, OUTLINE),
                                 [c.dot(x, y, STEEL if x % 2 else STEEL_D) for x, y in ((3, 10), (2, 11), (1, 12), (2, 12), (0, 12))]),
-    "smoke": lambda c: (c.flat(E((0, 5, 7, 12)), STEEL_D), c.flat(E((4, 2, 12, 10)), STEEL),
-                        c.flat(E((6, 6, 12, 12)), STEEL_D), c.flat(R((4, 1, 5, 2)), RED)),
+    "smoke": lambda c: (c.flat(E((0, 7, 6, 12)), STEEL_D), c.flat(E((6, 7, 12, 12)), STEEL_D),
+                        c.flat(E((2, 6, 10, 12)), STEEL), c.flat(E((3, 0, 9, 7)), NAVY),
+                        c.flat(R((3, 2, 9, 2)), RED), c.flat(R((4, 4, 8, 4)), ORANGE),
+                        [c.dot(x, 6, STEEL) for x in (3, 5, 7, 9)], [c.dot(x, 7, STEEL) for x in (4, 6, 8)]),
     "volley": lambda c: [c.flat(L([(6 + round(2 * dx), 6 + round(2 * dy)), (6 + round(6 * dx), 6 + round(6 * dy))], 1), STEEL)
                          for dx, dy in ((1, 0), (0.7, 0.7), (0, 1), (-0.7, 0.7), (-1, 0), (-0.7, -0.7), (0, -1), (0.7, -0.7))]
                         + [c.flat(E((4, 4, 8, 8)), RED)],
@@ -2308,7 +2310,6 @@ def ui_kit() -> dict[str, Image.Image]:
 FX_OUT = ROOT / "assets" / "fx"
 POOF_FRAMES = 20
 POOF_GROW_FRAMES = 6  # the cloud swells up over these, then bursts
-SMOKE_FRAMES = 12
 
 
 def poof_frame(size: int, k: int, color) -> Image.Image:
@@ -3076,41 +3077,6 @@ def morph_frames(a: Image.Image, b: Image.Image, b_scale: float, between) -> lis
 
 
 BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
-
-
-def smoke_frame(k: int, size: int = 136) -> Image.Image:
-    """Smoke Bomb cloud, drawn like the clone poof but dark: lumps spread through the cloud over a darker shadow
-    layer, each its own part drawn back to front (outlined where they overlap, so they read as separate puffs), light
-    catching their tops, wisps rising off the top and thinning away. Loops over SMOKE_FRAMES: the outer ring turns two
-    lumps' worth (big and small alternate, so one would pop), the inner lumps churn the other way, all breathing."""
-    c = Canvas(size)
-    m = size // 2
-    phase = k / SMOKE_FRAMES  # 0..1 round the loop
-    turn = math.tau / 10 * 4 * phase
-    lumps = []  # spread through the whole cloud: an outer ring and a few inside, all breathing
-    for i in range(10):
-        ang = math.tau * i / 10 + turn
-        reach = 30 + 6 * math.sin(math.tau * phase + i)
-        lumps.append((m + math.cos(ang) * reach, m + math.sin(ang) * reach,
-                      16 + 4 * (i % 2) + 3 * math.sin(math.tau * phase + i * 1.7)))
-    for i in range(5):
-        ang = math.tau * i / 5 - math.tau / 5 * phase + 0.3
-        lumps.append((m + math.cos(ang) * 14, m + math.sin(ang) * 12, 16 + 2 * math.sin(math.tau * phase + i * 2)))
-    blob = lambda pts: lambda dr, f: [dr.ellipse((x - r, y - r, x + r, y + r), f) for x, y, r in pts]
-    sh = 4  # the shadow layer sits down and right of the lumps
-    c.part(blob([(x + sh, y + sh, r) for x, y, r in lumps]), OUTLINE, shade=False)
-    for x, y, r in sorted(lumps, key=lambda p: p[1]):  # back to front: lower lumps overlap the ones behind
-        c.part(E((x - r, y - r, x + r, y + r)), SHADOW)
-        if x + y < 2 * m + 10:  # light catching the tops facing up-left
-            c.flat(E((x - r * 0.55, y - r * 0.7, x - r * 0.1, y - r * 0.45)), STEEL_D)
-    for i in range(3):  # wisps rising off the top, shrinking as they go, one after another
-        w = (phase + i / 3) % 1.0
-        x = m - 24 + 24 * i + 4 * math.sin(math.tau * w)
-        y = m - 46 - 18 * w
-        r = round(6 * (1 - w))
-        if r >= 1:
-            c.part(E((x - r, y - r * 0.7, x + r, y + r * 0.7)), SHADOW, shade=False)
-    return outline(c.img)
 
 
 WARD_R = 46  # art px ring radius (x SPRITE_SCALE = SpecialFx.WARD_ART_RADIUS)
@@ -4507,7 +4473,6 @@ def strip(frames_: list[Image.Image]) -> Image.Image:
 FX = {
     "poof": lambda: strip([poof_frame(80, k, WHITE) for k in range(POOF_FRAMES)]),
     "poof_small": lambda: strip([poof_frame(48, k, WHITE) for k in range(POOF_FRAMES)]),
-    "smoke": lambda: strip([smoke_frame(k) for k in range(SMOKE_FRAMES)]),
     "blast": lambda: strip([blast_frame(k) for k in range(BLAST_FRAMES)]),
     "slam": lambda: strip([slam_frame(k) for k in range(SLAM_FRAMES)]),
     "slash": lambda: strip([slash_frame(k) for k in range(SLASH_FRAMES)]),

@@ -8,8 +8,8 @@ extends Resource
 ## DASH: burst of speed with i-frames. SHIELD: a force-field bubble round the player that blocks enemy shots (with `shield_reflect`, it sends them back as the owner's).
 ## TRANSFORM: a stronger form for a while
 ## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
-## SMOKE: a cloud where you stand; inside it
-## enemy auto-aim and bots can't lock on, and you move x`smoke_speed_scale` faster. VOLLEY: fires `volley_weapon` once (e.g. a ring of
+## SMOKE (Smoke Bomb): a poof, then you are invisible to enemies for `duration` (never drawn for them, auto-aim and bots skip you; you can
+## still be hit) and move x`smoke_speed_scale` faster; firing or using another special breaks it, with a second poof. VOLLEY: fires `volley_weapon` once (e.g. a ring of
 ## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
 ## WARD: a ring round you that moves with you and catches enemy projectiles (not beams or melee).
 ## GRAPPLE: a kunai on a chain thrown along the aim; if it bites a wall you're pulled straight to it (`grapple_iframes` of i-frames from the bite).
@@ -101,8 +101,7 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var swing_iframes: float = 0.15
 
 @export_group("Smoke")
-@export var smoke_radius: float = 90.0
-## Move speed multiplier while you stand inside your own cloud (hidden): the smoke is a place to reposition from, not just a blind.
+## Move speed multiplier while invisible: the smoke is a way to reposition, not a free-fire mode.
 @export var smoke_speed_scale: float = 1.0
 
 @export_group("Ward")
