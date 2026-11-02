@@ -427,35 +427,36 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     ax = g.ARM_X[0]
     arm(up, ax, KIM, SKIN)
     tekko(ax)
-    # ---- kimono-style wrap top over a short flared skirt (same colour, darker underside)
-    flare = [(20, 45), (44, 45), (46, 47), (42, 48.5 + sw_(t, 1.0, 1)), (37, 47.5), (33, 46), (29, 47.5), (24, 48.5 - sw_(t, 0.5, 1)), (19, 47)]
-    up.part(lambda d, f: (d.rounded_rectangle((20, 33, 44, 46), 3, f), d.polygon(flare, f)), KIM)
-    up.flat(R((20, 47, 46, 47)), SHADOW)
-    up.dither(R((36, 38, 45, 48)), SHADOW, "check", only_on=KIM)
-    up.flat(L([(21, 38), (21, 44)], 1), STEEL)
-    up.flat(L([(33, 46), (33, 48)], 1), SHADOW)  # skirt split
+    # ---- kimono-style wrap top over a short flared skirt (same colour, darker underside); the obi sits lower to open the V
+    flare = [(20, 47), (44, 47), (46, 49), (42, 50.5 + sw_(t, 1.0, 1)), (37, 49.5), (33, 48), (29, 49.5), (24, 50.5 - sw_(t, 0.5, 1)), (19, 49)]
+    up.part(lambda d, f: (d.rounded_rectangle((20, 33, 44, 48), 3, f), d.polygon(flare, f)), KIM)
+    up.flat(R((20, 49, 46, 49)), SHADOW)
+    up.dither(R((36, 38, 45, 50)), SHADOW, "check", only_on=KIM)
+    up.flat(L([(21, 38), (21, 46)], 1), STEEL)
+    up.flat(L([(33, 48), (33, 50)], 1), SHADOW)  # skirt split
     # slim neck scarf under her chin
     up.part(RR((22, 37, 43, 38), 1), RED)
     up.flat(L([(24, 37), (36, 37)], 1), ORANGE)
-    # collar V: a dark inner layer between two bold 2 px cream lapels that meet at the sternum
-    # the fishnet undershirt shows in the V: a dark mesh (dark cords with skin showing through), up to a mesh collar under the scarf
-    up.part(P([(27, 39), (41, 39), (34, 43.5)]), SHADOW, shade=False, line=False)
-    for yy in range(38, 45):
-        for xx in range(26, 43):
-            if up.at(xx, yy)[:3] == SHADOW and (xx + yy) % 2 == 0 and not ((xx - yy) % 4 == 0):
-                up.dot(xx, yy, SKIN_D)
-    up.flat(L([(26, 39), (34, 43)], 2), CREAM)
-    up.flat(L([(42, 39), (34, 43)], 2), CREAM)
-    up.flat(L([(26, 41), (33, 44)], 1), SHADOW)  # shadow under the lapels
-    up.flat(L([(42, 41), (35, 44)], 1), SHADOW)
+    # fishnet undershirt in a deep V: a mesh collar band under the scarf, then a dark base with a regular diamond lattice of
+    # skin dots, narrowing to the sternum just above the obi
+    up.part(P([(24, 39), (44, 39), (34, 45)]), SHADOW, shade=False, line=False)
+    for yy in range(39, 46):
+        for xx in range(23, 46):
+            if up.at(xx, yy)[:3] == SHADOW and (xx + yy) % 4 == 0 and (xx - yy) % 4 == 0:
+                up.dot(xx, yy, SKIN)
+    # two bold 2 px cream lapels from the shoulders, meeting at the sternum
+    up.flat(L([(24, 39), (34, 45)], 2), CREAM)
+    up.flat(L([(44, 39), (34, 45)], 2), CREAM)
+    up.flat(L([(23, 41), (33, 46)], 1), SHADOW)  # shadow under the lapels
+    up.flat(L([(45, 41), (35, 46)], 1), SHADOW)
     # red obi: one bold 3 px band with a lit top row, a knot and two hanging ends at her side
-    up.part(R((20, 43, 44, 45)), RED, line=False)
-    up.flat(R((20, 43, 44, 43)), ORANGE)
-    up.flat(R((20, 45, 44, 45)), MAROON)
-    up.part(P([(38, 46), (36, 50.5 + bw), (39, 49.5 + bw), (40, 46)]), RED)
-    up.part(P([(40, 46), (42, 50.5 + bw), (44, 48.5 + bw), (42, 46)]), RED)
-    up.part(E((37, 42, 42, 47)), RED)
-    up.dot(38, 43, ORANGE)
+    up.part(R((20, 45, 44, 47)), RED, line=False)
+    up.flat(R((20, 45, 44, 45)), ORANGE)
+    up.flat(R((20, 47, 44, 47)), MAROON)
+    up.part(P([(38, 48), (36, 52.5 + bw), (39, 51.5 + bw), (40, 48)]), RED)
+    up.part(P([(40, 48), (42, 52.5 + bw), (44, 50.5 + bw), (42, 48)]), RED)
+    up.part(E((37, 44, 42, 49)), RED)
+    up.dot(38, 45, ORANGE)
     fx = g.ARM_X[1]
     arm(up, fx, KIM, SKIN)
     tekko(fx)
@@ -538,7 +539,7 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         up.part(RR((41, 3, 48, 9), 2), RED)
         up.dot(43, 5, ORANGE)
     # the mask rides the far side of her face, diagonal; then the pins
-    fox_mask(up, 52, 17, -30)
+    fox_mask(up, 22, 19, 30)
     if hair == "H1":
         kunai_pin(up, (39, 0), (34, 3), (24, 8))
     elif hair == "H4":  # two crossed kunai through the bun like kanzashi
@@ -642,7 +643,7 @@ def scale_sheet(out_dir):
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v13_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v14_scale.png")
 
 
 def head_check(out_dir):
@@ -656,7 +657,7 @@ def head_check(out_dir):
     strip = Image.new("RGBA", (3 * 520 + 16, 590), (24, 24, 32, 255))
     for i, im in enumerate(heads):
         strip.alpha_composite(im.crop(box).resize((520, 590), Image.NEAREST), (i * 528, 0))
-    strip.convert("RGB").save(out_dir / "shade_A_v13_head.png")
+    strip.convert("RGB").save(out_dir / "shade_A_v14_head.png")
     worst = {}
     for y in range(oy + 3, oy + 23):
         run, last = 0, None
@@ -685,7 +686,7 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v13.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v14.png")
     head_check(out_dir)
     scale_sheet(out_dir)
 
