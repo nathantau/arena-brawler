@@ -80,7 +80,9 @@ func on_inputs(peer_id: int, batch: Array) -> void:
 
 func on_set_ready(peer_id: int, is_ready: bool) -> void:
 	if _queues.has(peer_id):
-		arena.referee.set_ready(peer_id, is_ready)
+		var holder: int = arena.try_ready(peer_id, is_ready)
+		if holder != 0:
+			session.rpc_lock_refused.rpc_id(peer_id, holder)
 
 
 ## Any player may switch the mode while in the lobby (until there are hosts/parties).

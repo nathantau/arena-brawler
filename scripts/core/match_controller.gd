@@ -20,6 +20,9 @@ var living_hp: Callable
 func set_mode(mode: MatchRules.Mode) -> void:
 	if state.phase != MatchState.Phase.LOBBY or mode == state.mode:
 		return
+	if mode == MatchRules.Mode.TEAMS or state.mode == MatchRules.Mode.TEAMS:  # READY means LOCK IN only in Teams
+		state.ready.clear()
+		state.locked.clear()
 	state.mode = mode
 	changed.emit()
 
@@ -41,6 +44,7 @@ func set_team(id: int, team: int) -> void:
 		state.teams.erase(id)
 	else:
 		state.teams[id] = team
+	_unlock_duplicates()
 	changed.emit()
 
 
@@ -89,14 +93,55 @@ func flag_capture(carrier_id: int, scores: ScoreBoard) -> void:
 	_end_round(MatchRules.other_team(flag), MatchRules.Reason.CAPTURE, scores)
 
 
-func set_ready(id: int, is_ready: bool) -> void:
+## READY. In Teams with a `fighter` it is the lock-in: refused (returns the teammate holding it) when a human
+## teammate already locked that fighter. The server handles requests one at a time, so the first one wins.
+func set_ready(id: int, is_ready: bool, fighter: StringName = &"") -> int:
 	if state.phase != MatchState.Phase.LOBBY or state.ready.has(id) == is_ready:
-		return
+		return 0
 	if is_ready:
+		if state.mode == MatchRules.Mode.TEAMS and fighter != &"":
+			var holder: int = MatchRules.lock_holder(lobby_teams(), _human_locks(), id, fighter)
+			if holder != 0:
+				return holder
+			state.locked[id] = fighter
 		state.ready.append(id)
 	else:
 		state.ready.erase(id)
+		state.locked.erase(id)
 	changed.emit()
+	return 0
+
+
+## Teams lobby: the team everyone would play on right now (picks kept, the rest balanced).
+func lobby_teams() -> Dictionary[int, int]:
+	return MatchRules.assign_teams(state.participants, state.teams)
+
+
+func _human_locks() -> Dictionary[int, StringName]:
+	var out: Dictionary[int, StringName] = {}
+	for id: int in state.locked:
+		if state.ready.has(id):
+			out[id] = state.locked[id]
+	return out
+
+
+## Teams lobby: a lock whose fighter a teammate locked first (after a team change) is released.
+func _unlock_duplicates() -> bool:
+	if state.mode != MatchRules.Mode.TEAMS:
+		return false
+	var teams: Dictionary[int, int] = lobby_teams()
+	var kept: Dictionary[int, StringName] = {}
+	var dropped: bool = false
+	for id: int in state.ready.duplicate():  # ready order = lock order
+		if not state.locked.has(id):
+			continue
+		if MatchRules.lock_holder(teams, kept, id, state.locked[id]) != 0:
+			state.ready.erase(id)
+			state.locked.erase(id)
+			dropped = true
+		else:
+			kept[id] = state.locked[id]
+	return dropped
 
 
 ## A player left (`humans` = the humans still connected). A running match ends right away if it drops below the
@@ -104,6 +149,7 @@ func set_ready(id: int, is_ready: bool) -> void:
 func remove_player(id: int, scores: ScoreBoard, humans: Array[int]) -> void:
 	var was_in: bool = state.participants.has(id) or state.ready.has(id)
 	state.ready.erase(id)
+	state.locked.erase(id)
 	state.participants.erase(id)
 	var held: int = state.carried_flag_of(id)
 	if held != 0:  # a carrier who leaves: the flag flies home
@@ -141,6 +187,7 @@ func tick(delta: float, humans: Array[int], bots: Array[int], scores: ScoreBoard
 			state.time_left -= delta
 			if state.time_left <= 0.0:
 				state.ready.clear()
+				state.locked.clear()
 				state.results = []
 				state.winner_id = 0
 				_reset_teams()
@@ -213,6 +260,8 @@ func _tick_lobby(humans: Array[int], bots: Array[int]) -> void:
 		blocker = "Need %d players" % Constants.MATCH_MIN_PLAYERS
 	if preview != state.participants or blocker != state.blocker:
 		state.participants = preview
+		if _unlock_duplicates():
+			blocker = MatchRules.start_blocker(humans, state.ready, state.mode)
 		state.blocker = blocker
 		changed.emit()
 	if blocker == "":

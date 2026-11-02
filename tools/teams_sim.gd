@@ -8,7 +8,8 @@ extends SceneTree
 var shot_frames: int = 330  ## physics frames after the countdown ends (the bots are mid fight by then)
 var _carrier: Player
 var win: bool = false  ## screenshot: the local player captures the flag, shot taken during the round-end banner
-var lobby: bool = false  ## screenshot: the loading room (nobody readies up)
+var lobby: bool = false
+var shared: int = 0  ## screenshot with lobby=1: 1 = P2 + P3 hover one card, 2 = P3 locked and P2 hovers that card  ## screenshot: the loading room (nobody readies up)
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
 
 var arena: Arena
@@ -34,6 +35,7 @@ func _initialize() -> void:
 				"carry": carry = kv[1] == "1"
 				"win": win = kv[1] == "1"
 				"lobby": lobby = kv[1] == "1"
+				"shared": shared = int(kv[1])
 	InputSetup.ensure_actions()
 	arena = Arena.new(Arena.Mode.OFFLINE, base_seed, MatchRules.Mode.TEAMS, round_secs)
 	arena.match_state.arena_index = 0
@@ -54,6 +56,20 @@ func _tick() -> void:
 			arena.camera.process_callback = Camera2D.CAMERA2D_PROCESS_IDLE
 		if not lobby:
 			arena.referee.set_ready(1, true)
+		else:  # hero select screenshot: two human teammates, one hovering, one locked in
+			arena.referee.set_team(1, MatchRules.TEAM_A)
+			for id: int in [2, 3]:
+				arena.add_player(id, id, BotBrain.new(arena, id))
+				arena.referee.set_team(id, MatchRules.TEAM_A)
+			arena.select_character(arena.get_player(2), &"bolt")
+			arena.select_character(arena.get_player(3), &"sakura")
+			arena.select_character(me, &"eden")
+			if shared == 1:  # both teammates eye Bolt
+				arena.select_character(arena.get_player(3), &"bolt")
+			elif shared == 2:  # P3 locks Sakura while P2 hovers it
+				arena.select_character(arena.get_player(2), &"sakura")
+			if shared != 1:
+				arena.try_ready(3, true)
 		arena.referee.round_ended.connect(_on_round_ended)
 	if lobby and shot_path != "" and frames == 60:
 		_shoot()
