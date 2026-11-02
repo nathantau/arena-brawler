@@ -375,16 +375,16 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     elif hair == "H9":  # long straight hair: narrow vertical panels peeking out beside the shoulders, behind the arms
         b = sw_(t, 1.2, 1) - 2.0 * mv
         off = lambda y: b * max(0.0, (y - 28) / 20)
-        left = [(22, 16), (14, 20), (12, 26), (11, 33), (11, 40), (12, 44), (14, 47.5), (16, 48.5), (18, 46), (19, 40), (19, 30), (21, 22)]
+        left = [(21, 16), (16, 18), (14, 24), (14, 34), (14, 42), (15, 46), (17, 48.5), (19, 47), (20, 42), (20, 32), (21, 22)]
         for side in (0, 1):
-            pts_ = [((x if side == 0 else 66 - x) + off(y), y) for x, y in left]
+            pts_ = [((x if side == 0 else 64 - x) + off(y), y) for x, y in left]
             up.part(P(ipts(pts_)), NAVY)
             for yy in range(16, 60):  # a darker navy toward the body
                 for xx in range(6, 62):
-                    near = (xx - 11) if side == 0 else (55 - xx)
+                    near = (xx - 14) if side == 0 else (50 - xx)
                     if near > 2.8 + 1.0 * math.sin(yy / 7.0) and up.at(xx, yy)[:3] == NAVY:
                         up.dot(xx, yy, SHADOW)
-            hx = 13 if side == 0 else 53  # one soft vertical highlight
+            hx = 15 if side == 0 else 49  # one soft vertical highlight
             for yy in range(27, 43):
                 if yy % 6:
                     up.dot(round(hx + off(yy)), yy, BLUE if 29 < yy < 40 else STEEL_D)
@@ -449,7 +449,7 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     tekko(fx)
     # ---- head: hair mass, face
     if hair in ("H5", "H7", "H8", "H9"):
-        up.part(E((17, 7, 49, 36) if hair == "H7" else ((13, 3, 53, 37) if hair == "H9" else (16, 4, 50, 36))), HAIR_A)
+        up.part(E((17, 7, 49, 36) if hair == "H7" else ((15, 4, 49, 37) if hair == "H9" else (16, 4, 50, 36))), HAIR_A)
     up.part(RR(FACE, FACE_R), SKIN)
     up.flat(L([(26, 35), (42, 36)], 1), SKIN_D)
     # side locks + fringe, per style
@@ -475,9 +475,9 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
             hair_band(up, strand(p0, (p1[0] + sh, p1[1]), (p2[0] + sh, p2[1]), (p3[0] + sh * 1.5, p3[1]), t, 0.8, k=2.0, lag=lag, n=12),
                       [4.2, 4.2, 4, 3.8, 3.5, 3.1, 2.7, 2.2, 1.7, 1.3, 1, 0.8, 0.6], clusters=((0.4, BLUE),))
         # bangs grow out of the crown seamlessly: one fill in the hair colour, outline only along the pointed tips
-        zig = [(19, 13), (19, 19), (23.5, 24), (26, 16.5), (29.5, 18.5), (32, 15.5), (34.5, 17.5), (36.5, 15.5), (38, 20.5), (40, 15.5),
-               (42.5, 17.5), (45, 15.5), (47.5, 22.5), (49, 17), (48.5, 12)]
-        up.part(P(ipts([(19, 9)] + zig + [(47, 9)])), HAIR_A, shade=False, line=False)
+        zig = [(20, 12), (19, 19), (23.5, 24), (26, 16.5), (29.5, 18.5), (32, 15.5), (34.5, 17.5), (36.5, 15.5), (38, 20.5), (40, 15.5),
+               (42.5, 17.5), (45, 15.5), (47.5, 22.5), (48, 17), (46.5, 12)]
+        up.part(P(ipts([(22, 9)] + zig + [(42, 9)])), HAIR_A, shade=False, line=False)
         up.flat(L(ipts(zig[2:-1]), 1), OUTLINE)
         pw = (37.0, 3.0)  # the parting / whorl the strands fan out from: separators and highlights follow arcs towards it
         for (vx, vy), f in (((26, 16.5), 0.5), ((32, 15.5), 0.68), ((36.5, 15.5), 0.42), ((40, 15.5), 0.6), ((45, 15.5), 0.36)):
@@ -485,9 +485,9 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
             up.flat(L(ipts([(vx, vy - 1), at(f)]), 1), OUTLINE)  # strand separation, starting at staggered heights
             up.flat(L(ipts([(at(0.1)[0] - 1.5, at(0.1)[1]), (at(f * 0.75)[0] - 1.5, at(f * 0.75)[1])]), 1), BLUE)  # staggered lit streak
         # rounded crown: soft curved highlights following the head from the top left (never a straight row)
-        up.flat(lambda d, f: d.arc((14, 4, 52, 36), 186, 246, f), STEEL_D)
-        up.flat(lambda d, f: d.arc((17, 7, 49, 33), 196, 240, f), BLUE)
-        up.flat(lambda d, f: d.arc((20, 10, 46, 30), 208, 232, f), STEEL)
+        up.flat(lambda d, f: d.arc((15, 4, 49, 37), 186, 246, f), STEEL_D)
+        up.flat(lambda d, f: d.arc((18, 7, 46, 34), 196, 240, f), BLUE)
+        up.flat(lambda d, f: d.arc((21, 10, 43, 31), 208, 232, f), STEEL)
         fringe = None
     elif hair in ("H8", "H9"):  # (H8) two long straight side locks to the collar; bangs as tapered strands with gaps
         for p0, p1, p2, p3, lag in ( (((21, 13), (17, 21), (21, 30), (20, 41), 0.5), ((48, 13), (53, 21), (49, 30), (50, 41), 0.2))[:2 if hair == "H8" else 0]):
