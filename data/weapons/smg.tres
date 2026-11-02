@@ -24,3 +24,6 @@ sfx = &"shot_light"
 screen_shake = 0.04
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"light"])
+spinup_time = 0.8
+spinup_slow = 2.0
+hook = "Spins up to full speed"

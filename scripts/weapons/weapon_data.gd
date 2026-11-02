@@ -59,6 +59,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var tags: Array[StringName] = []
 ## Projectiles pass through this many players before stopping (damaging each).
 @export var pierce: int = 0
+## One-line hook shown on the weapon card (empty = none).
+@export var hook: String = ""
 
 @export_group("Splash")
 ## > 0: explodes on impact / at end of life, damaging everyone (but the shooter) in range.
@@ -89,6 +91,32 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## A direct hit slows the victim to `snare_factor` x move speed for `snare_time` seconds (0 = no snare).
 @export var snare_time: float = 0.0
 @export_range(0.0, 1.0) var snare_factor: float = 1.0
+
+@export_group("Hooks")
+## > 0: a hit jumps once to the nearest other enemy within this many px for `chain_scale` x damage (Arc Zapper).
+@export var chain_range: float = 0.0
+@export_range(0.0, 1.0) var chain_scale: float = 0.7
+## Flies out to its range, then back to the shooter, hitting each enemy once per pass (Umbral Shuriken).
+@export var boomerang: bool = false
+## Each wall bounce adds this fraction of the base damage (Ricochet Six).
+@export var bounce_damage_gain: float = 0.0
+## A hit ignites the victim: `burn_damage` every `burn_interval` for `burn_time` s (refreshes, never stacks).
+@export var burn_damage: int = 0
+@export var burn_interval: float = 0.25
+@export var burn_time: float = 0.0
+## Hits from behind (the shot travels within Constants.BACKSTAB_ANGLE_DEG of the target's facing) do +this x damage, as a crit.
+@export var backstab_bonus: float = 0.0
+## On impact or end of flight, bursts into this many shards fanning onward, each `split_scale` x damage.
+@export var split_count: int = 0
+@export_range(0.0, 1.0) var split_scale: float = 0.35
+## Fire interval starts `spinup_slow` x longer and ramps to `fire_interval` over `spinup_time` s of continuous fire.
+@export var spinup_time: float = 0.0
+@export var spinup_slow: float = 2.0
+## Every Nth consecutive shot is a guaranteed crit with a brighter tracer (0 = off).
+@export var crit_every: int = 0
+## BEAM: damage ramps from x1 to x`beam_ramp_max` over `beam_ramp_time` s on the same target.
+@export var beam_ramp_time: float = 0.0
+@export var beam_ramp_max: float = 2.0
 
 @export_group("Melee")
 @export var melee_range: float = 64.0

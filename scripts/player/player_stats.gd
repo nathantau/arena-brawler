@@ -22,6 +22,14 @@ var slow_remaining: float = 0.0
 var slow_factor: float = 1.0
 ## Stun (Shadow Bind): can't move, fire or use specials while > 0. Set only on the authority, synced.
 var stun_remaining: float = 0.0
+## Burn (Ember Palm): `burn_damage` every `burn_interval` while burn_remaining > 0; one burn at a time, a new hit
+## refreshes it. Time is synced (it drives the ember flicker); the rest only matters to the authority.
+var burn_remaining: float = 0.0
+var burn_damage: int = 0
+var burn_interval: float = 0.25
+var burn_attacker: int = -1
+## Burn ticks that fell due in the last tick() (the Player applies them on the authority).
+var burn_due: int = 0
 
 
 func _init(
@@ -47,6 +55,8 @@ func reset() -> void:
 	slow_remaining = 0.0
 	slow_factor = 1.0
 	stun_remaining = 0.0
+	burn_remaining = 0.0
+	burn_due = 0
 
 
 func is_dead() -> bool:
@@ -84,6 +94,9 @@ func tick(delta: float) -> void:
 	spawn_protect = maxf(0.0, spawn_protect - delta)
 	slow_remaining = maxf(0.0, slow_remaining - delta)
 	stun_remaining = maxf(0.0, stun_remaining - delta)
+	var burn_before: float = burn_remaining
+	burn_remaining = maxf(0.0, burn_remaining - delta)
+	burn_due = ceili(burn_before / burn_interval) - ceili(burn_remaining / burn_interval)
 	if is_dead():
 		return
 	if energy < max_energy:
@@ -110,6 +123,14 @@ func tick(delta: float) -> void:
 func apply_slow(time: float, factor: float) -> void:
 	slow_remaining = time
 	slow_factor = factor
+
+
+## Sets the victim alight (refreshes a burn already running, never stacks).
+func ignite(time: float, damage: int, interval: float, attacker_id: int) -> void:
+	burn_remaining = time
+	burn_damage = damage
+	burn_interval = interval
+	burn_attacker = attacker_id
 
 
 ## A new stun never shortens the current one.

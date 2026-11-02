@@ -19,6 +19,10 @@ signal player_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, dam
 ## Cosmetic events, emitted on every peer.
 signal shot_spawned(owner_id: int, origin: Vector2, facing: Vector2, weapon: WeaponData)
 signal beam_drawn(owner_id: int, from: Vector2, to: Vector2, weapon: WeaponData)
+## A chain hit jumped from one enemy to the next (cosmetic, every peer).
+signal chained(from: Vector2, to: Vector2, color: Color)
+## A parry sent a shot back (cosmetic, every peer).
+signal deflected(at: Vector2, color: Color)
 signal swung(origin: Vector2, facing: Vector2, weapon: WeaponData)
 ## `art` false: a skill draws its own (Eruption's pillar of fire); keep just the sound, sparks and shake.
 signal exploded(at: Vector2, radius: float, color: Color, slam: bool, art: bool)
@@ -39,6 +43,8 @@ const CRIT_RADIUS_SCALE: float = 1.4
 const SPRITE_FPS: float = 12.0
 const CRIT_SPRITE_SCALE: float = 1.35
 const CRIT_FLASH: Color = Color(1.8, 1.8, 1.8)
+## A parried shot is drawn cool and bright.
+const REFLECT_TINT: Color = Color(0.55, 0.95, 1.6)
 const CRIT_SPARKLE_COLOR: Color = Color(1.0, 0.85, 0.35)
 ## Trail: this many art-pixel squares behind the bullet, shrinking.
 const TRAIL_DOTS: int = 3
@@ -78,6 +84,25 @@ class Slot:
 	## Clients let piercing pellets fly on after server hit events (they stop where they stop locally).
 	var piercing: bool = false
 	var sprite: Texture2D
+	## Weapon hooks (WeaponData "Hooks"), copied at spawn.
+	var chain_range: float = 0.0
+	var chain_scale: float = 0.0
+	var boomerang: bool = false
+	var returning: bool = false
+	var hit_ids: Array[int] = []
+	var base_damage: int = 0
+	var bounce_gain: float = 0.0
+	var bounced: int = 0
+	var burn_time: float = 0.0
+	var burn_damage: int = 0
+	var burn_interval: float = 0.0
+	var backstab: float = 0.0
+	var split_count: int = 0
+	var split_scale: float = 0.0
+	## A player this shot sails past (a split shard never re-hits the player its parent burst on).
+	var skip_id: int = -1
+	## Parried: drawn in the parrier's colour so it reads as theirs now.
+	var reflected: bool = false
 
 
 class Impact:
@@ -104,6 +129,10 @@ var _line_shape := RectangleShape2D.new()
 var _empty_exclude: Array[RID] = []
 var _shot_rng := RandomNumberGenerator.new()
 var _time: float = 0.0
+## Consecutive-shot streaks (WeaponData.crit_every): owner id -> Vector2(count, time of the last shot). Every peer counts.
+var _streaks: Dictionary = {}
+## Beam ramps (WeaponData.beam_ramp_time), authority only: owner id -> Vector3(target id, ramp start, last hit time).
+var _ramps: Dictionary = {}
 
 
 func _ready() -> void:
@@ -148,6 +177,8 @@ func kill_shot(owner_id: int, shot_seq: int, pellet: int, at: Vector2) -> void:
 func clear() -> void:
 	for s: Slot in _slots:
 		s.active = false
+	_streaks.clear()
+	_ramps.clear()
 
 
 ## Read-only view for tests / debugging.
@@ -167,6 +198,8 @@ func _volley(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: 
 		match_seed: int) -> void:
 	_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
 	var crit: bool = CombatRules.roll_crit(weapon, _shot_rng)
+	if weapon.crit_every > 0 and _streak_hit(owner_id, weapon.crit_every):
+		crit = true
 	var damage: int = CombatRules.damage_for(weapon, crit)
 	var dirs: PackedVector2Array = CombatRules.shot_directions(facing, weapon, _shot_rng)
 	for i: int in dirs.size():
@@ -174,6 +207,14 @@ func _volley(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: 
 			_beam(owner_id, seq, i, origin, dirs[i], weapon, damage, crit)
 		else:
 			_spawn_pellet(owner_id, seq, i, origin, weapon.muzzle_distance(), dirs[i], weapon, damage, crit)
+
+
+## Counts one more consecutive shot by `owner_id` (a streak resets after STREAK_RESET s idle); true on every `every`th.
+func _streak_hit(owner_id: int, every: int) -> bool:
+	var prev: Vector2 = _streaks.get(owner_id, Vector2.ZERO)
+	var n: int = int(prev.x) + 1 if _time - prev.y <= Constants.STREAK_RESET else 1
+	_streaks[owner_id] = Vector2(n, _time)
+	return n % every == 0
 
 
 ## Spawns from `origin` (the shooter's hand) at distance `muzzle_dist`. If a wall sits between
@@ -209,6 +250,23 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.piercing = weapon.pierce > 0
 	slot.snare_time = weapon.snare_time
 	slot.snare_factor = weapon.snare_factor
+	slot.chain_range = weapon.chain_range
+	slot.chain_scale = weapon.chain_scale
+	slot.boomerang = weapon.boomerang
+	slot.returning = false
+	slot.hit_ids.clear()
+	slot.piercing = slot.piercing or weapon.boomerang
+	slot.base_damage = damage
+	slot.bounce_gain = weapon.bounce_damage_gain
+	slot.bounced = 0
+	slot.burn_time = weapon.burn_time
+	slot.burn_damage = weapon.burn_damage
+	slot.burn_interval = weapon.burn_interval
+	slot.backstab = weapon.backstab_bonus
+	slot.split_count = weapon.split_count
+	slot.split_scale = weapon.split_scale
+	slot.skip_id = -1
+	slot.reflected = false
 	if not AutoAim.has_line_of_sight(space, _los_query, origin, muzzle):
 		_stop(slot, muzzle)
 
@@ -237,12 +295,25 @@ func _beam(owner_id: int, seq: int, pellet: int, origin: Vector2, dir: Vector2, 
 		if authoritative:
 			var target := collider as Player
 			if target != null:
+				if weapon.beam_ramp_time > 0.0:
+					damage = roundi(damage * _beam_ramp(owner_id, target.player_id, weapon))
 				_damage_player(target, owner_id, seq, pellet, damage, crit, dir * weapon.knockback, end)
 			elif collider is Crate:
 				(collider as Crate).take_damage(damage)
 		break
 	_add_impact(end, weapon.projectile_radius, weapon.color)
 	beam_drawn.emit(owner_id, from, end, weapon)
+
+
+## Damage multiplier of a ramping beam on `target_id`: 1 on a fresh target, up to beam_ramp_max after beam_ramp_time of
+## unbroken hits, back to 1 when the target changes or the beam lets go for BEAM_RAMP_GRACE.
+func _beam_ramp(owner_id: int, target_id: int, weapon: WeaponData) -> float:
+	var r: Vector3 = _ramps.get(owner_id, Vector3(-1.0, 0.0, -INF))
+	if int(r.x) != target_id or _time - r.z > Constants.BEAM_RAMP_GRACE:
+		r = Vector3(target_id, _time, _time)
+	r.z = _time
+	_ramps[owner_id] = r
+	return lerpf(1.0, weapon.beam_ramp_max, clampf((_time - r.y) / weapon.beam_ramp_time, 0.0, 1.0))
 
 
 func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData) -> void:
@@ -252,7 +323,10 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 		for s: Slot in _slots:
 			if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= reach + s.radius \
 					and CombatRules.in_arc(origin, facing, s.pos, weapon.melee_arc_deg):
-				s.vel = facing * s.vel.length()
+				s.vel = _toward_shooter(s, origin, facing) * s.vel.length()
+				s.color = weapon.color  # theirs became yours
+				s.reflected = true
+				deflected.emit(s.pos, weapon.color)
 				s.attacker_id = owner_id
 				s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
 	if weapon.splash_radius > 0.0:
@@ -277,6 +351,16 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 			_damage_player(target, owner_id, seq, 0, damage, crit, push, target.global_position)
 		elif collider is Crate:
 			(collider as Crate).take_damage(damage)
+
+
+## A parried shot goes back at whoever fired it (else the way the parrier faces).
+func _toward_shooter(s: Slot, origin: Vector2, facing: Vector2) -> Vector2:
+	for p: Player in targets:
+		if p.player_id == s.attacker_id and not p.dead:
+			var to: Vector2 = p.global_position - origin
+			if to.length_squared() > 1.0:
+				return to.normalized()
+	return facing
 
 
 ## Hammer-style melee: a blast centred at the tip of the reach (pulled in to the wielder if a
@@ -411,7 +495,11 @@ func _physics_process(delta: float) -> void:
 func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void:
 	if s.drag > 0.0:
 		s.vel *= exp(-s.drag * delta)
-	if s.homing > 0.0:
+	if s.boomerang and s.returning:
+		if not _steer_home(s):
+			s.active = false
+			return
+	elif s.homing > 0.0:
 		_steer(s, delta)
 	var to: Vector2 = s.pos + s.vel * delta
 	_query.from = s.pos
@@ -423,7 +511,11 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 			break
 		var collider: Object = hit.collider
 		var target := collider as Player
-		if target != null and not _ally(s.attacker_id, target) and target.can_be_hit():
+		if target != null and not _ally(s.attacker_id, target) and target.player_id != s.skip_id \
+				and target.can_be_hit():
+			if s.boomerang and s.hit_ids.has(target.player_id):  # already hit on this pass
+				_exclude(hit.rid)
+				continue
 			if target.ward() != null:
 				_catch(s, hit.position, target.ward())
 				return
@@ -432,11 +524,15 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 				_hit_bubble(s, hit.position, (s.pos - target.global_position).normalized(), bubble)
 				return
 			if s.splash_radius > 0.0:
+				s.skip_id = target.player_id
 				_stop(s, hit.position)
 			else:
-				if authoritative:
-					_damage_player(target, s.attacker_id, s.shot_seq, s.pellet, s.damage, s.crit,
-						s.vel.normalized() * s.knockback, hit.position, s.owner_id, s.snare_time, s.snare_factor)
+				_direct_hit(s, target, hit.position)
+				if s.boomerang:
+					s.hit_ids.append(target.player_id)
+					_add_impact(hit.position, s.radius, s.color)
+					_exclude(hit.rid)
+					continue
 				if s.pierce_left > 0:
 					s.pierce_left -= 1
 					_add_impact(hit.position, s.radius, s.color)
@@ -453,6 +549,10 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 		if collider is ShieldWall and (collider as ShieldWall).reflects:
 			_hit_bubble(s, hit.position, hit.normal, collider as ShieldWall)
 			return
+		if s.boomerang and not s.returning and not collider is ShieldWall:  # a wall sends it home
+			s.pos = hit.position + hit.normal * Constants.BOUNCE_EPSILON
+			_turn_back(s)
+			return
 		if s.bounces_left > 0 and not collider is ShieldWall:
 			if collider is Crate and authoritative and s.splash_radius <= 0.0:
 				(collider as Crate).take_damage(s.damage)  # ricochets still chip crates
@@ -460,15 +560,76 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 			return
 		if collider is Crate and authoritative and s.splash_radius <= 0.0:
 			(collider as Crate).take_damage(s.damage)
+		if s.split_count > 0:  # shards burst back off the wall
+			s.vel = s.vel.bounce(hit.normal)
 		_stop(s, hit.position)
 		return
 	s.pos = to
 	s.life -= delta
 	if s.life <= 0.0:
-		if s.splash_radius > 0.0:
+		if s.boomerang and not s.returning:
+			_turn_back(s)
+		elif s.splash_radius > 0.0:
 			_explode(s, s.pos)
 		else:
 			s.active = false
+
+
+## A boomerang reached the end of its outward flight (or a wall): it comes back, free to hit everyone again.
+func _turn_back(s: Slot) -> void:
+	s.returning = true
+	s.hit_ids.clear()
+	s.life = Constants.BOOMERANG_RETURN_LIFE
+
+
+## Points a returning boomerang at its thrower; false once it is caught (or the thrower is gone).
+func _steer_home(s: Slot) -> bool:
+	for p: Player in targets:
+		if p.player_id != s.owner_id:
+			continue
+		if p.dead:
+			return false
+		var to: Vector2 = p.global_position - s.pos
+		if to.length() <= Constants.PLAYER_RADIUS + s.radius:
+			return false
+		s.vel = to.normalized() * s.vel.length()
+		return true
+	return false
+
+
+## The direct hit of a non-splash shot: backstabs count as crits, burns ignite, chains jump on.
+func _direct_hit(s: Slot, target: Player, at: Vector2) -> void:
+	var damage: int = s.damage
+	var crit: bool = s.crit
+	if s.backstab > 0.0 and absf(target.facing.angle_to(s.vel)) < deg_to_rad(Constants.BACKSTAB_ANGLE_DEG):
+		damage = roundi(damage * (1.0 + s.backstab))
+		crit = true
+	if authoritative:
+		_damage_player(target, s.attacker_id, s.shot_seq, s.pellet, damage, crit, s.vel.normalized() * s.knockback, at,
+			s.owner_id, s.snare_time, s.snare_factor, s)
+	if s.chain_range > 0.0:
+		_chain(s, target, damage)
+
+
+## Lightning jumps from `from` to the nearest other enemy in sight within chain_range for chain_scale x damage.
+func _chain(s: Slot, from: Player, damage: int) -> void:
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var best: Player = null
+	var best_d: float = s.chain_range * s.chain_range
+	for p: Player in targets:
+		if p == from or _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden():
+			continue
+		var d: float = from.global_position.distance_squared_to(p.global_position)
+		if d < best_d and AutoAim.has_line_of_sight(space, _los_query, from.global_position, p.global_position):
+			best_d = d
+			best = p
+	if best == null:
+		return
+	chained.emit(from.global_position, best.global_position, s.color)
+	if authoritative:
+		var dir: Vector2 = (best.global_position - from.global_position).normalized()
+		_damage_player(best, s.attacker_id, s.shot_seq, s.pellet, maxi(1, roundi(damage * s.chain_scale)), false,
+			dir * s.knockback, best.global_position, s.owner_id)
 
 
 ## Turns toward the nearest enemy that can be hit and isn't hidden in smoke, at most `homing` rad/s.
@@ -529,6 +690,9 @@ func _bounce(s: Slot, at: Vector2, normal: Vector2, delta: float) -> void:
 	s.pos = at + normal * Constants.BOUNCE_EPSILON
 	s.vel = s.vel.bounce(normal) * s.bounce_damping
 	s.bounces_left -= 1
+	s.bounced += 1
+	if s.bounce_gain > 0.0:  # bank shots hit harder
+		s.damage = roundi(s.base_damage * (1.0 + s.bounce_gain * s.bounced))
 	s.life -= delta
 
 
@@ -574,6 +738,8 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 	exploded.emit(at, s.splash_radius, s.color, slam, art and s.burst_art == null)
 	if s.burst_art != null:
 		burst_shown.emit(at, s.splash_radius, s.burst_art, s.burst_art_radius)
+	if s.split_count > 0:
+		_spawn_shards(s, at)
 	if not authoritative:
 		return
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
@@ -596,6 +762,53 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 			var crate: Crate = collider
 			var cdist: float = maxf(0.0, crate.global_position.distance_to(at) - crate.size * 0.5)
 			crate.take_damage(CombatRules.splash_damage(s.damage, cdist, s.splash_radius, s.splash_edge))
+
+
+## Seed Sling: the burst throws `split_count` small shards fanning onward (along the shot's velocity).
+func _spawn_shards(s: Slot, at: Vector2) -> void:
+	var speed: float = s.vel.length()
+	if speed <= 0.0:
+		return
+	var dir: Vector2 = s.vel / speed
+	var fan: float = deg_to_rad(Constants.SPLIT_FAN_DEG)
+	for i: int in s.split_count:
+		var t: float = 0.0 if s.split_count == 1 else float(i) / float(s.split_count - 1) - 0.5
+		var shard: Slot = _next_free_slot()
+		shard.active = true
+		shard.pos = at
+		shard.vel = dir.rotated(t * fan) * speed
+		shard.life = Constants.SPLIT_RANGE / speed
+		shard.owner_id = s.owner_id
+		shard.shot_seq = s.shot_seq
+		shard.pellet = s.pellet + Constants.SPLIT_PELLET_BASE * (i + 1)
+		shard.attacker_id = s.attacker_id
+		shard.damage = maxi(1, roundi(s.damage * s.split_scale))
+		shard.base_damage = shard.damage
+		shard.crit = false
+		shard.knockback = s.knockback * s.split_scale
+		shard.radius = s.radius * Constants.SPLIT_RADIUS_SCALE
+		shard.color = s.color
+		shard.sprite = s.sprite
+		shard.splash_radius = 0.0
+		shard.bounces_left = 0
+		shard.bounce_damping = 1.0
+		shard.drag = 0.0
+		shard.homing = 0.0
+		shard.pierce_left = 0
+		shard.piercing = false
+		shard.snare_time = 0.0
+		shard.snare_factor = 1.0
+		shard.chain_range = 0.0
+		shard.boomerang = false
+		shard.returning = false
+		shard.hit_ids.clear()
+		shard.bounce_gain = 0.0
+		shard.bounced = 0
+		shard.burn_time = 0.0
+		shard.backstab = 0.0
+		shard.split_count = 0
+		shard.skip_id = s.skip_id
+		shard.reflected = false
 
 
 ## Storm Cloud: lightning strikes every other player within `radius` of `origin` that is in sight of it, pushed away from it.
@@ -648,11 +861,14 @@ func line_hit(owner_id: int, seq: int, from: Vector2, to: Vector2, half_width: f
 
 ## `key_owner`: the pellet key's owner (differs from the attacker after a reflection).
 func _damage_player(target: Player, attacker_id: int, seq: int, pellet: int, damage: int, crit: bool,
-		knockback: Vector2, at: Vector2, key_owner: int = -1, snare_time: float = 0.0, snare_factor: float = 1.0) -> void:
+		knockback: Vector2, at: Vector2, key_owner: int = -1, snare_time: float = 0.0, snare_factor: float = 1.0,
+		shot: Slot = null) -> void:
 	var dealt: int = target.take_hit(damage, crit, knockback, attacker_id)
 	if dealt > 0:
 		if snare_time > 0.0:
 			target.stats.apply_slow(snare_time, snare_factor)
+		if shot != null and shot.burn_time > 0.0 and not target.dead:
+			target.stats.ignite(shot.burn_time, shot.burn_damage, shot.burn_interval, attacker_id)
 		player_hit.emit(key_owner if key_owner >= 0 else attacker_id, seq, pellet, target.player_id, dealt, crit, at)
 
 
@@ -695,9 +911,17 @@ func _draw() -> void:
 		var h: float = s.sprite.get_height()
 		var frames: int = int(s.sprite.get_width() / h)
 		var scale_px: float = px * (CRIT_SPRITE_SCALE if s.crit else 1.0)
-		draw_set_transform(s.pos, s.vel.angle(), Vector2(scale_px, scale_px))
+		var angle: float = _time * Constants.BOOMERANG_SPIN if s.boomerang else s.vel.angle()
+		if s.boomerang:  # bigger, with a faint trail of fading afterimages
+			scale_px *= Constants.BOOMERANG_SCALE
+			for g: int in Constants.BOOMERANG_GHOSTS:
+				draw_set_transform(s.pos - s.vel * Constants.BOOMERANG_GHOST_GAP * (g + 1),
+					angle - Constants.BOOMERANG_SPIN * Constants.BOOMERANG_GHOST_GAP * (g + 1), Vector2(scale_px, scale_px))
+				draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
+					Color(1, 1, 1, Constants.BOOMERANG_GHOST_ALPHA / (g + 1)))
+		draw_set_transform(s.pos, angle, Vector2(scale_px, scale_px))
 		draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
-			CRIT_FLASH if s.crit and tick % 2 == 0 else Color.WHITE)
+			CRIT_FLASH if s.crit and tick % 2 == 0 else REFLECT_TINT if s.reflected else Color.WHITE)
 		draw_set_transform(Vector2.ZERO)
 	for imp: Impact in _impacts:
 		if imp.time_left <= 0.0:

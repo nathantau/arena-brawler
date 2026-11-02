@@ -24,3 +24,5 @@ pickup = false
 sfx = &"shot_light"
 screen_shake = 0.05
 sprite = ExtResource("2_sprite")
+crit_every = 3
+hook = "Every 3rd shot crits"

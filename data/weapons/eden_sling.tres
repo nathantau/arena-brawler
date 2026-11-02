@@ -29,3 +29,6 @@ splash_radius = 58.0
 splash_edge_scale = 0.5
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"eden"])
+split_count = 3
+split_scale = 0.35
+hook = "Bursts into 3 thorn shards"

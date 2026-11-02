@@ -21,3 +21,4 @@ melee_arc_deg = 140.0
 reflects = true
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"blade"])
+hook = "Parry: reflects shots at the shooter"

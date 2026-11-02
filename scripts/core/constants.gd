@@ -208,3 +208,26 @@ const AUTOPILOT_PROBE_DISTANCE: float = 70.0
 const AUTOPILOT_SKILL_EVERY_FRAMES: int = 150
 const AUTOPILOT_SPECIAL_EVERY_FRAMES: int = 420
 const AUTOPILOT_SPECIAL2_EVERY_FRAMES: int = 510
+
+## Backstab: the shot must travel within this angle of the target's facing.
+const BACKSTAB_ANGLE_DEG: float = 60.0
+## Split shards (Seed Sling): spread across this fan, fly this far, and are this fraction of the parent's radius.
+const SPLIT_FAN_DEG: float = 50.0
+const SPLIT_RANGE: float = 200.0
+const SPLIT_RADIUS_SCALE: float = 0.6
+## Shard pellet keys start here (parent pellet + this * (i + 1)) so they never match a normal pellet.
+const SPLIT_PELLET_BASE: int = 100
+## A beam's ramp survives this long between ticks that touch the same target.
+const BEAM_RAMP_GRACE: float = 0.3
+## Spin-up resets after the trigger is released this long.
+const FIRE_STREAK_GRACE: float = 0.2
+## Boomerang spin (rad/s).
+const BOOMERANG_SPIN: float = 22.0
+## A boomerang is drawn this much bigger than a bullet, trailed by BOOMERANG_GHOSTS afterimages BOOMERANG_GHOST_GAP s apart.
+const BOOMERANG_SCALE: float = 1.6
+const BOOMERANG_GHOSTS: int = 3
+const BOOMERANG_GHOST_GAP: float = 0.012
+const BOOMERANG_GHOST_ALPHA: float = 0.45
+## A returning boomerang flies this long at most; a consecutive-shot streak (Pocket Blaster) resets after this long idle.
+const BOOMERANG_RETURN_LIFE: float = 4.0
+const STREAK_RESET: float = 1.0

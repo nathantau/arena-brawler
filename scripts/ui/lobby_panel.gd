@@ -18,7 +18,7 @@ const FIGHTER_ART_SIZE: Vector2 = Vector2(120, 96)
 ## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
 const SKILL_ROW_SIZE: Vector2 = Vector2(320, 64)  # 7 rows (5 own + Dash + Barrier) fit above READY on a phone
 const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
-const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 124)
+const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 140)
 const WEAPON_ART_SCALE: float = 1.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 
@@ -238,7 +238,7 @@ func _build_weapon_cards(c: CharacterData) -> void:
 	for w: WeaponData in arena.weapons_for(c):
 		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, _art(w.sprite, WEAPON_ART_SCALE),
 			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
-				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost]])
+				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost], w.hook])
 		var id: StringName = w.id
 		_weapon_scroller.on_tap(card, func() -> void: arena.weapon_requested.emit(id))
 		_weapon_cards[id] = card
