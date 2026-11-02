@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://binjrpw6jcbcs"
-path="res://.godot/imported/pool_end.png-c2b58978c40d597a2cd4a049c212cc6c.ctex"
+uid="uid://kkw7603amj0s"
+path="res://.godot/imported/icon_kunai_rain.png-eb6d34a05a402def8ff4acc8e9c1716f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/fx/pool_end.png"
-dest_files=["res://.godot/imported/pool_end.png-c2b58978c40d597a2cd4a049c212cc6c.ctex"]
+source_file="res://assets/ui/icon_kunai_rain.png"
+dest_files=["res://.godot/imported/icon_kunai_rain.png-eb6d34a05a402def8ff4acc8e9c1716f.ctex"]
 
 [params]
 

@@ -8195,137 +8195,190 @@ def quake_scar_frame(k: int) -> Image.Image:
     return _clear_edge(c.img, 2)
 
 
-# --- Dark Pool: a hungry pool of shadow on the floor, tendrils lashing up at whoever stands in it -------
+# --- Kunai Rain: a faint target ring on the floor, kunai streaking down and sticking in the ground -------------------
 
-POOL_R = 56  # art px (storm_radius 84 / SPRITE_SCALE 1.5): SpecialFx.POOL_ART_RADIUS
-POOL_SIZE = 128
-POOL_FORM_FRAMES = 10
-POOL_LOOP_FRAMES = 12
-POOL_END_FRAMES = 10
-POOL_LASH_FRAMES = 10
-POOL_LASH_BASE = 52  # pool_lash: the row the tendrils are rooted on, in a 64 px frame
+RAIN_R = 54  # art px (storm_radius 84 / SPRITE_SCALE 1.5 = 56, a touch inside so the outer dashes clear the frame): SpecialFx.RAIN_ART_RADIUS
+RAIN_SIZE = 128
+RAIN_FORM_FRAMES = 8
+RAIN_LOOP_FRAMES = 8
+RAIN_END_FRAMES = 8
+RAIN_KUNAI_FRAMES = 16
+RAIN_BASE = 56  # rain_kunai: the row the kunai tip lands on, in a 64 px frame (SpecialFx.RAIN_KUNAI_BASE_Y)
+RAIN_DASHES = 30
 
 
-def pool_frame(radius: float, k: float, fade: float = 0.0, eyes: int = 1) -> Image.Image:
-    """The pool (128 px, centred): a ragged disc of black-violet with a lilac rim light, a void that deepens towards the middle,
-    three dithered spiral arms turning with k (0..1; three arms, so a third of a turn loops), a ripple ring drifting out, and a pair of
-    grinning eyes looking up out of it. `fade` dithers it away."""
-    n = POOL_SIZE
+def rain_ring_frame(kind: str, k: int) -> Image.Image:
+    """The target ring (128 px, centred on the spot, floor layer): an open dithered ring of steel dashes that turns slowly, an inner
+    broken ring, four red chevrons pointing in, a sparse navy dither inside and a tiny crosshair. The floor stays visible. 'form' sweeps
+    the dashes on round the circle while it settles into place, 'loop' (period 8) turns one dash, 'end' dithers it away shrinking a little."""
+    n = RAIN_SIZE
     m = n // 2
     c = Canvas(n)
-    if radius < 2:
-        return c.img
-    rng = random.Random(960)
-    pts = []
-    segs = 28
-    for i in range(segs):
-        a = math.tau * i / segs
-        j = 1.0 + 0.02 * math.sin(a * 5 + math.tau * k * 2) + 0.012 * math.sin(a * 3 - math.tau * k)
-        pts.append((m + math.cos(a) * radius * j, m + math.sin(a) * radius * j))
-    c.flat(P(pts), VIOLET_D)
-    for y in range(n):  # the void: darker towards the middle (dithered bands)
+    if kind == "form":
+        u = (k + 1) / RAIN_FORM_FRAMES
+        sweep = math.sin(u * math.pi / 2)
+        r = RAIN_R * (0.82 + 0.18 * sweep)
+        turn = (1 - u) * 0.6
+    elif kind == "end":
+        u = k / RAIN_END_FRAMES
+        sweep = 1.0
+        r = RAIN_R * (1 - 0.08 * u)
+        turn = -u * 0.4
+    else:
+        u = 0.0
+        sweep = 1.0
+        r = RAIN_R
+        turn = k / RAIN_LOOP_FRAMES
+    step = math.tau / RAIN_DASHES
+    for y in range(n):  # a sparse dither inside, thickest near the rim
         for x in range(n):
-            d = math.hypot(x - m, y - m) / max(radius, 1)
-            if d < 0.86 and BAYER[y % 4][x % 4] / 16 < (0.86 - d) * 1.5 - 0.1:
-                c.dot(x, y, OUTLINE)
-    for arm in range(3):  # spiral arms
-        for s in range(46):
-            t = s / 45
-            a = math.tau * (arm / 3 + k / 3) + t * 3.2
-            r = radius * (0.15 + 0.78 * t)
-            x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r)
-            if t > 0.05:
-                c.dot(x, y, VIOLET_L if t > 0.78 else VIOLET)
-                if t > 0.4 and s % 2 == 0:
-                    c.dot(x + 1, y, VIOLET_D)
-    c.flat(lambda d, f: d.ellipse((m - radius * 0.93, m - radius * 0.93, m + radius * 0.93, m + radius * 0.93), outline=f, width=1), VIOLET)
-    top = [(m + math.cos(a) * radius * 0.97, m + math.sin(a) * radius * 0.97) for a in (math.pi + 0.35 + 0.1 * i for i in range(20))]
-    c.flat(L([(round(x), round(y)) for x, y in top], 1), VIOLET_L)  # lit rim, upper left
-    if radius > 20:  # a ripple ring drifting out, dashed
-        rr = radius * (0.35 + 0.55 * ((k * 2) % 1.0))
-        for i in range(36):
-            if (i + round(k * 12)) % 3 == 0:
-                a = math.tau * i / 36
-                sdot2(c, round(m + math.cos(a) * rr), round(m + math.sin(a) * rr), VIOLET_L if rr > radius * 0.7 else VIOLET)
-    if eyes and radius >= 18:
-        e = max(2, round(radius * 0.09))
-        for sx in (-1, 1):
-            ex, ey = round(m + sx * radius * 0.17), m - 1
-            c.flat(R((ex - e // 2 - 1, ey - 1, ex + e // 2, ey + 1)), PINK_L)
-            c.dot(ex, ey - 1, WHITE)
-        c.flat(L([(m - round(radius * 0.2), m + 7), (m - 3, m + 9), (m + 3, m + 9), (m + round(radius * 0.2), m + 7)], 1), PINK_L)
-    if fade > 0:
+            d = math.hypot(x - m, y - m) / r
+            if 0.55 < d < 0.97 and BAYER[y % 4][x % 4] / 16 < 0.08 * (d - 0.5):
+                c.dot(x, y, NAVY if (x + y) % 3 else STEEL_D)
+    for i in range(RAIN_DASHES):
+        a0 = -math.pi / 2 + (i + turn) * step
+        if (i + 0.5) / RAIN_DASHES > sweep:
+            continue
+        pts = [(m + math.cos(a) * r, m + math.sin(a) * r) for a in (a0, a0 + step * 0.35, a0 + step * 0.7)]
+        light = math.cos(a0 + step * 0.35 + 2.4) > 0.2  # lit from the upper left
+        c.flat(L([(round(x), round(y)) for x, y in pts], 2 if light else 1), STEEL if light else STEEL_D)
+        if i % 5 == 0:
+            c.dot(round(pts[1][0]), round(pts[1][1]), WHITE)
+    r2 = r - 4  # the inner ring is broken into long arcs that turn the other way
+    for i in range(6):
+        a0 = -math.pi / 2 + (i / 6 - turn * 0.5) * math.tau
+        pts = [(m + math.cos(a0 + t) * r2, m + math.sin(a0 + t) * r2) for t in (0.0, 0.2, 0.4)]
+        if (i + 0.5) / 6 <= sweep:
+            c.flat(L([(round(x), round(y)) for x, y in pts], 1), NAVY)
+    if sweep > 0.9:  # red chevrons at the four compass points, pointing in
+        for j in range(4):
+            a = -math.pi / 2 + j * math.pi / 2
+            ux, uy = math.cos(a), math.sin(a)
+            px_, py_ = -uy, ux
+            bx, by = m + ux * (r + 3), m + uy * (r + 3)
+            tip = (m + ux * (r - 6), m + uy * (r - 6))
+            c.flat(P([(bx + px_ * 3, by + py_ * 3), tip, (bx - px_ * 3, by - py_ * 3), (bx + ux * -0.5, by + uy * -0.5)]), RED)
+            c.dot(round(tip[0]), round(tip[1]), WHITE if j == 0 else RED)
+    for dx, dy in ((-3, 0), (3, 0), (0, -3), (0, 3)):  # a tiny crosshair
+        c.dot(m + dx, m + dy, STEEL_D)
+    c.dot(m, m, RED)
+    if kind == "end":
         px = c.img.load()
+        for y in range(n):
+            for x in range(n):
+                if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < u * 1.1:
+                    px[x, y] = (0, 0, 0, 0)
+    return _clear_edge(c.img, 2)
+
+
+def _rain_kunai(c: Canvas, x: float, tip_y: float, length: float, lean: float) -> None:
+    """A kunai pointing down (tip at (x, tip_y)), `length` tall, leaning `lean` px per px up: a steel leaf blade with a lit edge and a
+    dark one, a small guard, a red cord-wrapped handle and a steel ring at the end."""
+    def at(t: float, off: float = 0.0) -> tuple:  # t = 0 at the tip .. 1 at the ring
+        return (x + lean * length * t + off, tip_y - length * t)
+    blade = 0.52
+    wid = 2.3
+    left = [at(0), at(0.18, -wid * 0.6), at(blade * 0.7, -wid), at(blade, -1.0)]
+    right = [at(blade, 1.0), at(blade * 0.7, wid), at(0.18, wid * 0.6)]
+    c.flat(P(left + right), STEEL)
+    c.flat(P([at(0), at(0.18, wid * 0.6), at(blade * 0.7, wid), at(blade, 1.0), at(blade, 0.0)]), STEEL_D)  # shaded right half
+    c.flat(L([(round(a), round(b)) for a, b in (at(0.04, -0.4), at(blade * 0.8, -wid * 0.8))], 1), WHITE)  # lit edge
+    c.flat(L([(round(a), round(b)) for a, b in (at(blade, -3), at(blade, 3))], 1), NAVY)  # guard
+    hx0, hy0 = at(blade)
+    hx1, hy1 = at(0.88)
+    c.flat(L([(round(hx0), round(hy0)), (round(hx1), round(hy1))], 2), MAROON)
+    for j in range(3):  # cord wraps
+        wx, wy = at(blade + 0.1 + j * 0.1)
+        c.flat(L([(round(wx - 1), round(wy)), (round(wx + 1), round(wy))], 1), RED)
+    rx, ry = at(0.95)
+    c.flat(lambda d, f: d.ellipse((rx - 2, ry - 2, rx + 2, ry + 2), outline=f, width=1), STEEL)
+    c.dot(round(rx - 1), round(ry - 1), WHITE)
+
+
+def rain_kunai_frame(k: int) -> Image.Image:
+    """One kunai's whole life (64 px, tip lands on row RAIN_BASE, centred across): it streaks down out of the sky with a short motion
+    trail (frame 0-3), lands in a small flash of sparks and a flat ripple of dust (4-6), wobbles and stands in the floor, then fades away
+    with a dither (11-15)."""
+    n = 64
+    m = n // 2
+    body = Canvas(n)
+    extra = Canvas(n)
+    rng = random.Random(1100 + k)
+    lean = 0.14
+    fall = 4  # frames spent falling
+    FALL = 30  # px dropped
+    if k < fall:
+        u = (k + 1) / fall
+        tip_y = RAIN_BASE - FALL * (1 - u * u)
+        length = 20
+        _rain_kunai(body, m - FALL * (1 - u * u) * lean, tip_y, length, lean)
+        trail = 6 + 3 * k
+        for i in range(trail):  # a short streak above it, thinning out and dithering away
+            tt = i / trail
+            ty = tip_y - length - i
+            tx = m - FALL * (1 - u * u) * lean + lean * (length + i)
+            if BAYER[round(ty) % 4][round(tx) % 4] / 16 < 1 - tt:
+                sdot(extra, round(tx), round(ty), WHITE if tt < 0.3 else STEEL if tt < 0.65 else STEEL_D)
+        if k == 0:  # it only appears at the top: dither the first frame
+            px = body.img.load()
+            for y in range(n):
+                for x in range(n):
+                    if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < 0.4:
+                        px[x, y] = (0, 0, 0, 0)
+    else:
+        j = k - fall
+        wob = (1, -1, 1, 0)[j] if j < 4 else 0
+        stuck = 17  # how much of it stands out of the floor
+        _rain_kunai(body, m + wob * 0.5, RAIN_BASE + 2 - (0 if j > 0 else 1), stuck, lean * 0.6)
+        if j <= 2:  # the flash: a star of light flat on the floor that grows, chips flying
+            r = (6, 10, 12)[j]
+            col = WHITE if j == 0 else STEEL
+            extra.flat(L([(m - r, RAIN_BASE), (m + r, RAIN_BASE)], 1), col)
+            extra.flat(L([(m - r * 0.6, RAIN_BASE - r * 0.45), (m + r * 0.6, RAIN_BASE + r * 0.45)], 1), col)
+            extra.flat(L([(m - r * 0.6, RAIN_BASE + r * 0.45), (m + r * 0.6, RAIN_BASE - r * 0.45)], 1), col)
+            extra.flat(L([(m, RAIN_BASE - r * 0.7), (m, RAIN_BASE + 1)], 1), col)
+            if j == 0:
+                extra.flat(E((m - 2, RAIN_BASE - 2, m + 2, RAIN_BASE + 2)), WHITE)
+            for q in range(8):
+                a = rng.uniform(math.pi * 1.05, math.pi * 1.95)
+                d = r * rng.uniform(0.9, 1.8)
+                sdot(extra, round(m + math.cos(a) * d * 1.3), round(RAIN_BASE + math.sin(a) * d), (WHITE, TEAL_L, STEEL)[q % 3])
+        if 0 <= j <= 6:
+            rr = 6 + j * 3.2
+            for i in range(30):
+                a = math.tau * i / 30
+                if (i + j) % 2 == 0 and j < 6 or (i % 3 == 0 and j == 6):
+                    sdot(extra, round(m + math.cos(a) * rr * 1.25), round(RAIN_BASE + 1 + math.sin(a) * rr * 0.45),
+                         STEEL if j < 3 else STEEL_D)
+    img = outline(body.img)
+    img.alpha_composite(extra.img)
+    fade = max(0.0, (k - 10) / 5.0)
+    if fade > 0:
+        px = img.load()
         for y in range(n):
             for x in range(n):
                 if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < fade:
                     px[x, y] = (0, 0, 0, 0)
-    return _clear_edge(outline(c.img), 2)
-
-
-def pool_strip_frame(kind: str, j: int) -> Image.Image:
-    if kind == "form":
-        u = (j + 1) / POOL_FORM_FRAMES
-        e = math.sin(u * math.pi / 2)  # eases out; the last frame is the loop's full size
-        r = POOL_R * (0.12 + 0.88 * e) * (1.0 + 0.07 * math.sin(u * math.pi))
-        img = pool_frame(min(r, POOL_R * 1.02), 0.0, fade=max(0.0, 0.5 - u * 0.7), eyes=1 if u > 0.6 else 0)
-        return img
-    if kind == "end":
-        u = j / POOL_END_FRAMES
-        r = POOL_R * (1 - 0.7 * u * u)
-        return pool_frame(r, (j * 0.09) % 1.0, fade=min(0.95, u * u * 1.1), eyes=1 if u < 0.5 else 0)
-    return pool_frame(POOL_R, j / POOL_LOOP_FRAMES, eyes=0 if j == 7 else 1)
-
-
-def pool_lash_frame(k: int) -> Image.Image:
-    """Shadow tendrils lashing up from the floor (64 px, rooted on row POOL_LASH_BASE): three curling arms of black-violet rise,
-    their tips flaring into claws, hold a moment and sink back, shedding wisps."""
-    n = 64
-    c = Canvas(n)
-    rng = random.Random(970)
-    base = POOL_LASH_BASE
-    u = k / (POOL_LASH_FRAMES - 1)
-    h = math.sin(min(1.0, u / 0.45) * math.pi / 2) if u < 0.55 else math.cos((u - 0.55) / 0.45 * math.pi / 2) ** 1.5
-    for i, (dx, hm, curl) in enumerate(((-9, 30, -1), (0, 40, 1), (9, 26, -1))):
-        hh = hm * h
-        if hh < 2:
-            continue
-        pts = []
-        for j in range(9):
-            t = j / 8
-            pts.append((32 + dx + curl * 7 * math.sin(t * 3.0 + u * 2 + i) * t, base - hh * t))
-        pts = [(round(x), round(y)) for x, y in pts]
-        w0 = max(2, round(4 * (0.5 + 0.5 * h)))
-        c.flat(L(pts, w0), VIOLET_D)
-        c.flat(L(pts[2:], max(1, w0 - 2)), VIOLET)
-        c.flat(L([(x - 1, y) for x, y in pts[1:6]], 1), VIOLET_L)
-        tx, ty = pts[-1]
-        c.flat(P([(tx - 3, ty + 2), (tx + curl * 3, ty - 4), (tx + 3, ty + 2)]), VIOLET)  # claw tip
-        c.dot(tx + curl * 3, ty - 4, PINK_L)
-    c.flat(E((32 - 14 * (0.4 + 0.6 * h), base - 2, 32 + 14 * (0.4 + 0.6 * h), base + 3)), VIOLET_D)  # the opening it comes out of
-    for j in range(6):  # wisps
-        if rng.random() < 0.5 + 0.5 * h:
-            x = 32 + rng.randint(-16, 16)
-            y = base - rng.randint(4, 40) * (0.4 + 0.6 * u)
-            sdot(c, x, round(y), VIOLET_L if j % 2 else VIOLET)
-    return _clear_edge(outline(c.img), 2)
+    return _clear_edge(img, 2)
 
 
 ICONS["thorn_quake"] = lambda c: (c.flat(E((0, 8, 12, 12)), GREEN_D), c.flat(E((1, 9, 11, 11)), BROWN),
                                   c.flat(P([(5, 9), (6, 0), (8, 9)]), BROWN), c.flat(L([(6, 1), (6, 8)], 1), WALNUT_L),
                                   c.flat(P([(1, 9), (2, 3), (4, 9)]), CHESTNUT), c.flat(P([(8, 9), (10, 4), (11, 9)]), WALNUT),
                                   c.dot(6, 0, CREAM), c.dot(2, 3, CREAM), c.dot(10, 4, CREAM), c.flat(L([(0, 10), (12, 10)], 1), GREEN_L))
-ICONS["dark_pool"] = lambda c: (c.flat(E((0, 2, 12, 11)), VIOLET_D), c.flat(E((2, 4, 10, 9)), OUTLINE),
-                                c.flat(L([(1, 5), (3, 3), (7, 2)], 1), VIOLET_L), c.flat(L([(3, 8), (6, 6), (8, 7)], 1), VIOLET),
-                                c.flat(R((3, 5, 4, 6)), PINK_L), c.flat(R((7, 5, 8, 6)), PINK_L), c.flat(L([(4, 8), (7, 8)], 1), PINK_L))
+ICONS["kunai_rain"] = lambda c: (c.flat(lambda d, f: d.ellipse((0, 7, 12, 12), outline=f, width=1), STEEL_D),
+                                 c.flat(P([(2, 5), (3, 8), (4, 5)]), STEEL), c.flat(L([(3, 0), (3, 4)], 1), RED),
+                                 c.flat(P([(6, 3), (7, 7), (8, 3)]), STEEL), c.flat(L([(7, 0), (7, 2)], 1), RED),
+                                 c.flat(P([(9, 5), (10, 8), (11, 5)]), STEEL), c.flat(L([(10, 1), (10, 4)], 1), RED),
+                                 c.dot(3, 8, WHITE), c.dot(7, 7, WHITE), c.dot(10, 8, WHITE))
 FX.update({
     "quake_mark": lambda: strip([quake_mark_frame(k) for k in range(QUAKE_MARK_FRAMES)]),
     "quake_burst": lambda: strip([quake_burst_frame(k) for k in range(QUAKE_FRAMES)]),
     "quake_scar": lambda: strip([quake_scar_frame(k) for k in range(QUAKE_FRAMES)]),
-    "pool_form": lambda: strip([pool_strip_frame("form", j) for j in range(POOL_FORM_FRAMES)]),
-    "pool_loop": lambda: strip([pool_strip_frame("loop", j) for j in range(POOL_LOOP_FRAMES)]),
-    "pool_end": lambda: strip([pool_strip_frame("end", j) for j in range(POOL_END_FRAMES)]),
-    "pool_lash": lambda: strip([pool_lash_frame(k) for k in range(POOL_LASH_FRAMES)]),
+    "rain_form": lambda: strip([rain_ring_frame("form", j) for j in range(RAIN_FORM_FRAMES)]),
+    "rain_loop": lambda: strip([rain_ring_frame("loop", j) for j in range(RAIN_LOOP_FRAMES)]),
+    "rain_end": lambda: strip([rain_ring_frame("end", j) for j in range(RAIN_END_FRAMES)]),
+    "rain_kunai": lambda: strip([rain_kunai_frame(k) for k in range(RAIN_KUNAI_FRAMES)]),
 })
 
 

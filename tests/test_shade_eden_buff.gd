@@ -1,6 +1,5 @@
 extends GutTest
-## The Shade / Eden buff pass: Eden's Thorn Quake (a telegraphed thorn blast that slows) and Shade's Dark Pool (a pool that hurts and
-## pulls), both reusing the Thunder Strike / Storm Cloud sim paths, plus the numbers the pass changed.
+## The Shade / Eden buff pass: Eden's Thorn Quake (a telegraphed thorn blast that slows) and Shade's Kunai Rain (a zone that hurts), both reusing the Thunder Strike / Storm Cloud sim paths, plus the numbers the pass changed.
 
 const DT: float = 1.0 / 60.0
 
@@ -60,9 +59,9 @@ func _run(p: Player, frames: int, replay: bool = false) -> void:
 
 func test_new_specials_belong_to_their_fighters() -> void:
 	var quake: SkillData = skills.get_skill(&"thorn_quake")
-	var pool: SkillData = skills.get_skill(&"dark_pool")
+	var pool: SkillData = skills.get_skill(&"kunai_rain")
 	assert_eq(quake.kind, SkillData.Kind.QUAKE)
-	assert_eq(pool.kind, SkillData.Kind.POOL)
+	assert_eq(pool.kind, SkillData.Kind.RAIN)
 	for sd: SkillData in [quake, pool]:
 		assert_not_null(sd.icon, sd.id)
 		assert_lte(sd.blurb.length(), 20, sd.id)
@@ -71,9 +70,9 @@ func test_new_specials_belong_to_their_fighters() -> void:
 		assert_eq(c.can_use_skill(quake), c.id == &"eden", String(c.id))
 		assert_eq(c.can_use_skill(pool), c.id == &"flicker", String(c.id))
 	assert_ne(Sfx.skill_sound(SkillData.Kind.QUAKE), &"dash")
-	assert_ne(Sfx.skill_sound(SkillData.Kind.POOL), &"dash")
+	assert_ne(Sfx.skill_sound(SkillData.Kind.RAIN), &"dash")
 	assert_gt(quake.thunder_blast.snare_time, 0.0, "the thorns slow")
-	assert_lt(pool.storm_knockback, 0.0, "the pool pulls")
+	assert_gte(pool.storm_knockback, 0.0, "no pull")
 
 
 # --- Thorn Quake -----------------------------------------------------------------
@@ -115,12 +114,12 @@ func test_thorn_quake_replay_fires_nothing() -> void:
 	assert_eq(foe.stats.slow_remaining, 0.0)
 
 
-# --- Dark Pool -------------------------------------------------------------------
+# --- Kunai Rain -------------------------------------------------------------------
 
-func test_dark_pool_hurts_and_pulls_whoever_stands_in_it() -> void:
+func test_kunai_rain_hurts_whoever_stands_in_it() -> void:
 	var w: Array = _world()
-	var d: SkillData = skills.get_skill(&"dark_pool")
-	var p: Player = _fighter(w[0], w[1], 1, &"flicker", &"dark_pool", Vector2(100, 300))
+	var d: SkillData = skills.get_skill(&"kunai_rain")
+	var p: Player = _fighter(w[0], w[1], 1, &"flicker", &"kunai_rain", Vector2(100, 300))
 	# The spot is d.storm_distance ahead at feet level (y 322); the foe stands a little beyond it, so a pull points back at the caster.
 	var foe: Player = _fighter(w[0], w[1], 2, &"eden", &"", Vector2(100 + d.storm_distance + 40.0, 322))
 	var far: Player = _fighter(w[0], w[1], 3, &"eden", &"", Vector2(100 + d.storm_distance, 322 + d.storm_radius + 50.0))
@@ -132,7 +131,7 @@ func test_dark_pool_hurts_and_pulls_whoever_stands_in_it() -> void:
 	_run(p, 6)
 	assert_eq(hits.size(), 1)
 	assert_eq(hits[0], [2, d.storm_damage])
-	assert_lt(foe.velocity.x, 0.0, "pulled towards the middle, not pushed out")
+	assert_gte(foe.velocity.x, 0.0, "not pulled in")
 	_run(p, ceili(d.duration / DT))
 	assert_eq(hits.size(), int(d.duration / d.storm_interval), "a tick every interval for its whole life")
 	assert_eq(far.stats.hp, far.stats.max_hp, "outside the pool")
@@ -143,10 +142,10 @@ func test_dark_pool_hurts_and_pulls_whoever_stands_in_it() -> void:
 	assert_gt(p.skills[1].cooldown_remaining, 0.0)
 
 
-func test_dark_pool_replay_hurts_nobody() -> void:
+func test_kunai_rain_replay_hurts_nobody() -> void:
 	var w: Array = _world()
-	var d: SkillData = skills.get_skill(&"dark_pool")
-	var p: Player = _fighter(w[0], w[1], 1, &"flicker", &"dark_pool", Vector2(100, 300))
+	var d: SkillData = skills.get_skill(&"kunai_rain")
+	var p: Player = _fighter(w[0], w[1], 1, &"flicker", &"kunai_rain", Vector2(100, 300))
 	var foe: Player = _fighter(w[0], w[1], 2, &"eden", &"", Vector2(100 + d.storm_distance, 322))
 	await wait_physics_frames(2)
 	var hits: Array = _hits(w[1])
@@ -165,8 +164,8 @@ func test_bots_use_the_new_specials_at_their_reach() -> void:
 	var qd: SkillData = skills.get_skill(&"thorn_quake")
 	assert_true(brain.slot_wanted(q, 1, qd.thunder_distance, true, false))
 	assert_false(brain.slot_wanted(q, 1, qd.thunder_distance + 500.0, true, false))
-	var s: Player = _fighter(w[0], w[1], 2, &"flicker", &"dark_pool", Vector2(300, 300))
-	var pd: SkillData = skills.get_skill(&"dark_pool")
+	var s: Player = _fighter(w[0], w[1], 2, &"flicker", &"kunai_rain", Vector2(300, 300))
+	var pd: SkillData = skills.get_skill(&"kunai_rain")
 	assert_true(brain.slot_wanted(s, 1, pd.storm_distance, true, false))
 	assert_false(brain.slot_wanted(s, 1, pd.storm_distance, false, false))
 

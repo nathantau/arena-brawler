@@ -308,22 +308,25 @@ const QUAKE_IMPACT_FRAME: float = 2.0
 const QUAKE_LEAD: float = QUAKE_IMPACT_FRAME / QUAKE_BURST_FPS
 const QUAKE_BASE_Y: float = 112.0
 const QUAKE_BURST_TIME: float = 14.0 / QUAKE_BURST_FPS
-## Shade's Dark Pool (generate.py POOL_*), the same shape as Storm Cloud: the pool opens (POOL_FORM_COUNT frames over POOL_FORM_TIME),
-## swirls while it lasts and closes over POOL_END_TIME; a tendril lashes up (rooted on row POOL_LASH_BASE_Y of a 64 px frame) at everyone
-## it hits on each tick.
-const POOL_FORM_ART: Texture2D = preload(FX_DIR + "pool_form.png")
-const POOL_LOOP_ART: Texture2D = preload(FX_DIR + "pool_loop.png")
-const POOL_END_ART: Texture2D = preload(FX_DIR + "pool_end.png")
-const POOL_LASH_ART: Texture2D = preload(FX_DIR + "pool_lash.png")
-const POOL_ART_RADIUS: float = 84.0  # world px: POOL_R 56 art px x the sprite scale
-const POOL_SIZE: float = 128.0
-const POOL_FORM_COUNT: int = 10
-const POOL_LOOP_COUNT: int = 12
-const POOL_FORM_TIME: float = 0.45
-const POOL_END_TIME: float = 0.5
-const POOL_FPS: float = 14.0
-const POOL_LASH_TIME: float = 0.45
-const POOL_LASH_BASE_Y: float = 52.0
+## Shade's Kunai Rain (generate.py RAIN_*), the same shape as Storm Cloud: a faint target ring on the floor (opens over RAIN_FORM_TIME, loops,
+## closes over RAIN_END_TIME) and, on every strike tick, kunai that streak down at each victim's feet plus a few more at spots inside the
+## ring (rooted on row RAIN_KUNAI_BASE_Y of a 64 px frame); each sticks in the floor for a moment and fades.
+const RAIN_FORM_ART: Texture2D = preload(FX_DIR + "rain_form.png")
+const RAIN_LOOP_ART: Texture2D = preload(FX_DIR + "rain_loop.png")
+const RAIN_END_ART: Texture2D = preload(FX_DIR + "rain_end.png")
+const RAIN_KUNAI_ART: Texture2D = preload(FX_DIR + "rain_kunai.png")
+const RAIN_ART_RADIUS: float = 84.0  # world px: RAIN_R 56 art px x the sprite scale
+const RAIN_SIZE: float = 128.0
+const RAIN_FORM_COUNT: int = 8
+const RAIN_LOOP_COUNT: int = 8
+const RAIN_FORM_TIME: float = 0.4
+const RAIN_END_TIME: float = 0.5
+const RAIN_FPS: float = 10.0
+const RAIN_EASE_IN: float = 0.3
+const RAIN_KUNAI_TIME: float = 0.6
+const RAIN_KUNAI_BASE_Y: float = 56.0
+## Extra kunai per tick at spots inside the ring (a victim always takes one).
+const RAIN_EXTRA: int = 3
 ## Godspeed (Player.godspeed, every peer): a flash of light and rays when it switches on, a thinning shell of glow when it ends.
 const GOD_FLASH_ART: Texture2D = preload(FX_DIR + "bolt_flash.png")
 const GOD_DOWN_ART: Texture2D = preload(FX_DIR + "bolt_down.png")
@@ -440,10 +443,10 @@ var _thunder_mark: CharacterSkill
 ## Thorn Quake: the burst has dropped / the slot while its ring shows (else null).
 var _quake_started: bool = false
 var _quake_mark: CharacterSkill
-## Dark Pool while it lasts (null = not): the slot, where it was, strikes seen.
-var _pool: CharacterSkill
-var _pool_spot: Vector2 = Vector2.ZERO
-var _pool_ticks: int = 0
+## Kunai Rain while it lasts (null = not): the slot, where it was, strike ticks seen.
+var _rain: CharacterSkill
+var _rain_spot: Vector2 = Vector2.ZERO
+var _rain_ticks: int = 0
 var _od_t: float = -1.0
 var _od_at: Vector2 = Vector2.ZERO
 var _od_ghosts: Array[Vector2] = []
@@ -551,7 +554,7 @@ func sync(p: Player) -> void:
 	_sync_godspeed(p)
 	_sync_thunder(p)
 	_sync_quake(p)
-	_sync_pool(p)
+	_sync_rain(p)
 	_sync_sapling(p)
 	_sync_storm(p)
 	_sync_eden(p)
@@ -763,25 +766,24 @@ func _sync_quake(p: Player) -> void:
 	_quake_mark = slot if on and slot.active_remaining > QUAKE_LEAD else null
 
 
-## Dark Pool: opens and closes from the synced active state, a tendril on every strike tick (every peer sees the same times; the
-## targets are whoever stands in it on this peer's view, else the pool's own middle).
-func _sync_pool(p: Player) -> void:
-	var slot: CharacterSkill = _slot(p, SkillData.Kind.POOL)
+## Kunai Rain: the ring opens and closes from the synced active state, a volley on every strike tick (every peer sees the same times; the
+## targets are whoever stands in it on this peer's view, and a few kunai also land at spots inside it, picked from the tick number).
+func _sync_rain(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.RAIN)
 	var open: CharacterSkill = slot if slot != null and slot.is_active() and not p.dead else null
 	if open != null:
 		var ticks: int = floori(open.elapsed() / open.data.storm_interval)
-		if _pool != null and ticks > _pool_ticks:
-			_lash(p, open)
-		_pool_ticks = ticks
-		_pool_spot = open.anchor
-	elif _pool != null and not p.dead:
-		_poof(_pool_spot, POOL_END_ART, POOL_END_TIME, _pool.data.storm_radius / POOL_ART_RADIUS, true)
-	_pool = open
+		if _rain != null and ticks > _rain_ticks:
+			_volley(p, open, ticks)
+		_rain_ticks = ticks
+		_rain_spot = open.anchor
+	elif _rain != null and not p.dead:
+		_poof(_rain_spot, RAIN_END_ART, RAIN_END_TIME, _rain.data.storm_radius / RAIN_ART_RADIUS, true)
+	_rain = open
 
 
-func _lash(p: Player, slot: CharacterSkill) -> void:
-	var lift := Vector2(0.0, (POOL_LASH_ART.get_height() * 0.5 - POOL_LASH_BASE_Y) * Constants.SPRITE_SCALE)
-	var hit: bool = false
+func _volley(p: Player, slot: CharacterSkill, tick: int) -> void:
+	var lift := Vector2(0.0, (RAIN_KUNAI_ART.get_height() * 0.5 - RAIN_KUNAI_BASE_Y) * Constants.SPRITE_SCALE)
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	var query := PhysicsRayQueryParameters2D.new()
 	for node: Node in p.get_parent().get_children():
@@ -789,10 +791,12 @@ func _lash(p: Player, slot: CharacterSkill) -> void:
 		if target != null and target != p and not target.dead \
 				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius \
 				and AutoAim.has_line_of_sight(space, query, slot.anchor, target.global_position):
-			_poof(target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y) + lift, POOL_LASH_ART, POOL_LASH_TIME)
-			hit = true
-	if not hit:
-		_poof(slot.anchor + lift, POOL_LASH_ART, POOL_LASH_TIME)
+			_poof(target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y) + lift, RAIN_KUNAI_ART, RAIN_KUNAI_TIME)
+	for i: int in RAIN_EXTRA:  # varied spots, the same on every peer (a hash of the tick), kept inside the ring
+		var h: float = fposmod(sin(float(tick * 7 + i * 13) * 12.9898 + slot.anchor.x * 0.01) * 43758.5453, 1.0)
+		var h2: float = fposmod(sin(float(tick * 5 + i * 31) * 78.233 + slot.anchor.y * 0.01) * 24634.6345, 1.0)
+		var at: Vector2 = slot.anchor + Vector2.from_angle(h * TAU) * (0.25 + 0.6 * h2) * slot.data.storm_radius
+		_poof(at + lift, RAIN_KUNAI_ART, RAIN_KUNAI_TIME)
 
 
 func _sync_godspeed(p: Player) -> void:
@@ -1157,14 +1161,15 @@ func _draw_floor() -> void:
 		var q_near: float = clampf(qt / maxf(_quake_mark.data.duration, 0.01), 0.0, 1.0)
 		_draw_frame(QUAKE_MARK_ART, int(qt * QUAKE_MARK_FPS) % (QUAKE_MARK_ART.get_width() / QUAKE_MARK_ART.get_height()),
 			QUAKE_MARK_ART.get_height(), _quake_mark.anchor, px * qk * lerpf(1.12, 1.0, q_near) * lerpf(0.9, 1.0, q_in), q_in, _floor)
-	if _pool != null:  # the pool opens, swirls, (closes: a floor poof)
-		var pt: float = _pool.elapsed()
-		var pk: float = px * _pool.data.storm_radius / POOL_ART_RADIUS
-		if pt < POOL_FORM_TIME:
-			_draw_frame(POOL_FORM_ART, mini(int(pt / POOL_FORM_TIME * POOL_FORM_COUNT), POOL_FORM_COUNT - 1), POOL_SIZE,
-				_pool.anchor, pk, 1.0, _floor)
+	if _rain != null:  # the target ring opens, loops (closes: a floor poof)
+		var rt: float = _rain.elapsed()
+		var rk: float = px * _rain.data.storm_radius / RAIN_ART_RADIUS
+		var ra: float = clampf(rt / RAIN_EASE_IN, 0.0, 1.0)
+		if rt < RAIN_FORM_TIME:
+			_draw_frame(RAIN_FORM_ART, mini(int(rt / RAIN_FORM_TIME * RAIN_FORM_COUNT), RAIN_FORM_COUNT - 1), RAIN_SIZE,
+				_rain.anchor, rk, ra, _floor)
 		else:
-			_draw_frame(POOL_LOOP_ART, int(pt * POOL_FPS) % POOL_LOOP_COUNT, POOL_SIZE, _pool.anchor, pk, 1.0, _floor)
+			_draw_frame(RAIN_LOOP_ART, int(rt * RAIN_FPS) % RAIN_LOOP_COUNT, RAIN_SIZE, _rain.anchor, rk, 1.0, _floor)
 	if _whirl_t >= 0.0:
 		_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
 			WHIRL_RING_ART.get_height(), _whirl_at, px * _whirl_radius / WHIRL_ART_RADIUS,

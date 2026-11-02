@@ -260,7 +260,7 @@ func slot_wanted(player: Player, slot: int, dist: float, in_sight: bool, pressur
 		SkillData.Kind.ERUPTION:
 			var r: float = sd.eruption_blast.splash_radius if sd.eruption_blast != null else 60.0
 			return in_sight and absf(dist - sd.eruption_distance) < r * ZONE_FIT
-		SkillData.Kind.STORM, SkillData.Kind.POOL:
+		SkillData.Kind.STORM, SkillData.Kind.RAIN:
 			return in_sight and absf(dist - sd.storm_distance) < sd.storm_radius * ZONE_FIT
 		SkillData.Kind.LIGHTNING:
 			return in_sight and dist < (sd.beam_weapon.projectile_range if sd.beam_weapon != null else NEAR_FIGHT) * ZONE_FIT
