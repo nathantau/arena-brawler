@@ -150,7 +150,8 @@ func _build_top_bar(box: BoxContainer) -> void:
 	_title = _label(titles, &"HeaderLabel")
 	_title.add_theme_font_size_override("font_size", UiStyle.SIZE_BODY + 2)
 	_rules = _label(titles, &"DimLabel")
-	_rules.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	_rules.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	_rules.add_theme_font_override("font", UiStyle.body_font())
 	for l: Label in [_title, _rules]:
 		l.clip_text = true
 		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -184,6 +185,7 @@ func _build_tabs(box: BoxContainer) -> void:
 	row.add_child(gap)
 	_join_hint = _label(row, &"Label")
 	_join_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	_join_hint.add_theme_font_override("font", UiStyle.body_font(true))
 	_join_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 	_join_hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
@@ -253,7 +255,8 @@ func _build_stage(mid: BoxContainer) -> void:
 ## A caption over a thin bar; returns [caption label, fill rect].
 func _stat_bar(parent: Node, color: Color) -> Array:
 	var cap := _label(parent, &"Label")
-	cap.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	cap.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL + 2)
+	cap.add_theme_font_override("font", UiStyle.body_font(true))
 	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bar := Control.new()
 	bar.custom_minimum_size = Vector2(0, 8)
@@ -305,7 +308,7 @@ func _build_fighter_panel() -> Control:
 		_fighter_tags[id] = tags
 		var badge: Label = _label(card, &"Label")
 		badge.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-		badge.add_theme_font_override("font", UiStyle.bold())
+		badge.add_theme_font_override("font", UiStyle.body_font(true))
 		# A strip across the foot of the portrait.
 		badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, SPACING)
 		badge.offset_top = SPACING + FIGHTER_ART_SIZE.y - BADGE_H
@@ -345,7 +348,7 @@ func _build_abilities_panel() -> Control:
 		var num := _label(chip, &"Label")
 		num.text = str(i + 1)
 		num.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-		num.add_theme_font_override("font", UiStyle.bold())
+		num.add_theme_font_override("font", UiStyle.body_font(true))
 		num.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 		num.position = Vector2(5, 0)
 		num.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -395,6 +398,7 @@ func _build_footer(box: BoxContainer) -> void:
 	info.add_child(_rows)
 	_blocker = _label(info, &"Label")
 	_blocker.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	_blocker.add_theme_font_override("font", UiStyle.body_font(true))
 	_blocker.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 	_blocker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -463,22 +467,26 @@ func _apply_step(animate: bool) -> void:
 
 ## Integer pixel scale that fits the sprite cell in what the info column leaves of the stage.
 static func preview_scale(stage: Vector2) -> int:
-	var cell: float = float(Constants.SPRITE_CELL_SIZE) * 0.8
-	var fit: float = minf((stage.x - PREVIEW_INFO_W) / cell, (stage.y - 20.0) / cell)
+	var cell: float = float(Constants.SPRITE_CELL_SIZE) * 0.9
+	var fit: float = minf((stage.x - 60.0) / cell, (stage.y - 40.0) / cell)
 	return clampi(floori(fit), 2, PREVIEW_MAX_SCALE)
 
 
 func _layout_stage() -> void:
 	var s: int = preview_scale(_stage.size)
 	_sprite.scale = Vector2.ONE * s
-	var room: float = _stage.size.x - PREVIEW_INFO_W
-	_pivot.position = Vector2(PREVIEW_INFO_W + room * 0.5, _stage.size.y * 0.56)
+	_pivot.position = Vector2(_stage.size.x * 0.5, _stage.size.y * 0.5 + 6.0 * s)
 	_stage.queue_redraw()
 
 
 ## A soft floor shadow under the fighter.
 func _draw_stage() -> void:
 	var s: float = _sprite.scale.x
+	# Spotlight: stacked translucent discs fading outward behind the fighter.
+	var glow_at: Vector2 = _pivot.position - Vector2(0.0, 4.0 * s)
+	var reach: float = minf(_stage.size.x, _stage.size.y) * 0.62
+	for i: int in 28:
+		_stage.draw_circle(glow_at, reach * (1.0 - i * 0.035), Color(0.32, 0.42, 0.78, 0.014))
 	var feet: Vector2 = _pivot.position + Vector2(0.0, 22.0 * s)
 	_stage.draw_set_transform(feet, 0.0, Vector2(1.0, 0.28))
 	var r: float = 16.0 * s
@@ -646,7 +654,8 @@ func _refresh() -> void:
 			var flow: HFlowContainer = _new_row_flow()
 			flows[t] = flow
 			var head: Label = _label(flow, &"Label")
-			head.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+			head.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+			head.add_theme_font_override("font", UiStyle.body_font(true))
 			head.add_theme_color_override("font_color", TEAM_ALLY_COLOR if t == my_team else UiStyle.C_RED)
 			head.text = "YOUR TEAM:" if t == my_team else "ENEMY:"
 	else:
@@ -666,7 +675,8 @@ func _refresh() -> void:
 			continue  # filler bots that don't play
 		var team: int = shown_teams.get(p.player_id, 0)
 		var row: Label = _label(flows.get(team, flows[flows.keys()[0]]), &"Label")
-		row.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+		row.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		row.add_theme_font_override("font", UiStyle.body_font())
 		if shown_teams.is_empty():
 			row.add_theme_color_override("font_color", p.display_color)
 			row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
@@ -772,7 +782,7 @@ func _pill(fighter: StringName, text: String, color: Color) -> void:
 	_fighter_tags[fighter].add_child(pill)
 	var l: Label = _label(pill, &"Label")
 	l.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-	l.add_theme_font_override("font", UiStyle.bold())
+	l.add_theme_font_override("font", UiStyle.body_font(true))
 	l.add_theme_color_override("font_color", UiStyle.C_OUTLINE if color.get_luminance() > 0.4 else UiStyle.C_WHITE)
 	l.text = text
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -867,11 +877,13 @@ func _skill_row(sk: SkillData) -> Button:
 	name_label.text = sk.display_name
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var cd_label: Label = _label(top, &"Label")
-	cd_label.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	cd_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	cd_label.add_theme_font_override("font", UiStyle.body_font(true))
 	cd_label.add_theme_color_override("font_color", UiStyle.C_TEAL_L)
 	cd_label.text = "%ds cooldown" % roundi(sk.cooldown)
 	var blurb_label: Label = _label(text, &"DimLabel")
-	blurb_label.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	blurb_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	blurb_label.add_theme_font_override("font", UiStyle.body_font())
 	blurb_label.text = sk.blurb
 	for l: Label in [name_label, blurb_label]:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -976,12 +988,19 @@ func _card(parent: Node, min_size: Vector2, art: Control, lines: Array[String]) 
 	box.add_child(art)
 	for i: int in lines.size():
 		var l: Label = _label(box, &"Label" if i == 0 else &"DimLabel")
+		var avail: float = min_size.x - SPACING * 2.0 - 8.0
 		if i == 0:
 			l.add_theme_font_override("font", UiStyle.bold())
-		else:
-			l.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-		var avail: float = min_size.x - SPACING * 2.0 - 8.0
-		UiStyle.fit_label(l, lines[i], avail, UiStyle.SIZE_BODY if i == 0 else UiStyle.SIZE_TINY, UiStyle.SIZE_TINY - 4, i == 0)
+			UiStyle.fit_label(l, lines[i], avail, UiStyle.SIZE_BODY, UiStyle.SIZE_TINY - 4, true)
+		else:  # stats / hook lines: the clean sans, shrunk to the card (never below the old 12)
+			l.add_theme_font_override("font", UiStyle.body_font())
+			l.text = lines[i]
+			l.clip_text = true
+			l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			var size: int = UiStyle.SIZE_SMALL
+			while size > UiStyle.SIZE_TINY - 4 and UiStyle.body_font().get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > avail:
+				size -= 1
+			l.add_theme_font_size_override("font_size", size)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return card

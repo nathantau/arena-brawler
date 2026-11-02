@@ -58,6 +58,8 @@ const NOTCH_INSETS: Vector4 = Vector4(111, 0, 111, 38)
 ## Current content scale (1 on desktop); the arena camera zooms by CAMERA_ZOOM / this.
 static var ui_scale: float = 1.0
 static var _bold: FontVariation
+static var _body: SystemFont
+static var _body_bold: SystemFont
 static var _textures: Dictionary[String, Texture2D] = {}
 
 
@@ -84,6 +86,18 @@ static func install_scaling(win: Window) -> void:
 		win.content_scale_factor = ui_scale
 	apply.call()
 	win.size_changed.connect(apply)
+
+
+## A clean sans for small text with numbers or sentences (stats, cooldowns, descriptions, roster): Pixelify's digits
+## blur together at 16-18 units (5 / S, 0 / O). Headings, names and buttons keep the pixel font.
+static func body_font(heavy: bool = false) -> Font:
+	if _body == null:
+		_body = SystemFont.new()
+		_body.font_names = PackedStringArray(["Helvetica Neue", "Helvetica", "Roboto", "Arial", "sans-serif"])
+		_body_bold = SystemFont.new()
+		_body_bold.font_names = _body.font_names
+		_body_bold.font_weight = 700
+	return _body_bold if heavy else _body
 
 
 static func bold() -> Font:
