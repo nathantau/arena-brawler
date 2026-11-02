@@ -22,7 +22,14 @@ const FIGHTER_ART_SIZE: Vector2 = Vector2(150, 112)
 ## Specials are rows (icon, name + cooldown, one-line description) in a column; 7 (5 own + Dash + Barrier) fit.
 const SKILL_ROW_H: float = 64.0
 const SKILL_ICON_SIZE: Vector2 = Vector2(38, 38)
-const SLOT_CHIP_SIZE: Vector2 = Vector2(52, 52)
+## Loadout pane: card height, and how an icon flies from its row into its slot (then the slot pops).
+const SLOT_CARD_H: float = 92.0
+const SLOT_ICON_SIZE: Vector2 = Vector2(64, 40)
+const FLY_TIME: float = 0.2
+const POP_TIME: float = 0.12
+const POP_SCALE: float = 1.12
+## The ability list gets two columns once it is at least this wide.
+const SKILL_TWO_COL_W: float = 700.0
 const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 140)
 const WEAPON_ART_SCALE: float = 1.5
 ## Teams hero select: the lock / bot strip across the foot of a fighter's portrait.
@@ -38,7 +45,7 @@ const ZOOM_FROM: float = 0.72
 const ZOOM_TIME: float = 0.25
 const SLIDE_TIME: float = 0.25
 ## The detail overlay: how much of the width its sheet takes, and how dark the scrim over the grid gets.
-const SHEET_FRACTION: float = 0.78
+const SHEET_FRACTION: float = 0.97
 const SCRIM_ALPHA: float = 0.6
 ## Seconds between the preview's idle and a short walk / attack loop.
 const FLAIR_GAP: Vector2 = Vector2(2.5, 4.5)
@@ -61,12 +68,10 @@ var _weapon_scroller: HScroller
 var _weapon_row: BoxContainer
 var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
-var _special_row: BoxContainer
+var _special_row: GridContainer
 var _special_cards: Dictionary[StringName, Button] = {}
 ## The "1" / "2" / "3" slot badge on each special row.
 var _special_badges: Dictionary[StringName, Label] = {}
-## The slot a newly tapped special replaces: the one set least recently.
-var _older_slot: int = 1
 var _rows: VBoxContainer
 var _blocker: Label
 ## READY / LOCK IN: one in the footer, one at the foot of the overlay.
@@ -88,8 +93,14 @@ var _overlay: Control
 var _scrim: ColorRect
 var _sheet: PanelContainer
 var _slide_tween: Tween
-var _slot_chips: Array[Panel] = []
+## The loadout pane: the three ability slot cards, then the weapon slot card.
+var _slot_cards: Array[Button] = []
 var _slot_icons: Array[TextureRect] = []
+var _slot_names: Array[Label] = []
+var _special_icons: Dictionary[StringName, TextureRect] = {}
+var _weapon_icons: Dictionary[StringName, TextureRect] = {}
+## Icons in flight into a slot (slot index -> [icon node, tween]); one per slot, a new pick replaces it.
+var _flyers: Dictionary[int, Array] = {}
 ## The big preview.
 var _stage: Panel
 var _pivot: Node2D
@@ -290,7 +301,7 @@ func _build_stage(body: BoxContainer) -> void:
 	_stage = Panel.new()
 	_stage.clip_contents = true
 	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_stage.size_flags_stretch_ratio = 0.9
+	_stage.size_flags_stretch_ratio = 0.8
 	var style := StyleBoxFlat.new()
 	style.bg_color = COLOR_STAGE
 	style.border_color = UiStyle.C_SHADOW
@@ -362,47 +373,98 @@ func _build_details(body: BoxContainer) -> void:
 	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	p.size_flags_stretch_ratio = 1.2
 	body.add_child(p)
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", SPACING)
-	p.add_child(head)
-	var title := _label(head, &"HeaderLabel")
-	title.text = "Abilities · pick 3"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	title.clip_text = true
-	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	for i: int in Constants.SKILL_SLOTS:
-		var chip := Panel.new()
-		chip.custom_minimum_size = SLOT_CHIP_SIZE
-		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		head.add_child(chip)
-		var pic := TextureRect.new()
-		pic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
-		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		chip.add_child(pic)
-		var num := _label(chip, &"Label")
-		num.text = str(i + 1)
-		num.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-		num.add_theme_font_override("font", UiStyle.body_font(true))
-		num.add_theme_color_override("font_color", UiStyle.C_YELLOW)
-		num.position = Vector2(5, 0)
-		num.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_slot_chips.append(chip)
-		_slot_icons.append(pic)
+	var pane := HBoxContainer.new()
+	pane.add_theme_constant_override("separation", SPACING)
+	p.add_child(pane)
+	for i: int in Constants.SKILL_SLOTS + 1:
+		_build_slot_card(pane, i)
+	var hint := _label(p, &"DimLabel")
+	hint.text = "Tap an ability to put it in the gold slot, or tap a slot first."
+	hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	hint.add_theme_font_override("font", UiStyle.body_font())
+	hint.clip_text = true
+	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_detail_scroller = HScroller.new(true)
 	_detail_scroller.fade_color = COLOR_BG
 	_detail_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	p.add_child(_detail_scroller)
-	_special_row = _detail_scroller.content
-	_special_row.add_theme_constant_override("separation", 4)
-	_label(p, &"HeaderLabel").text = "Weapon"
+	_special_row = GridContainer.new()
+	_special_row.columns = 1
+	_special_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_special_row.add_theme_constant_override("h_separation", SPACING)
+	_special_row.add_theme_constant_override("v_separation", 4)
+	_detail_scroller.content.add_child(_special_row)
+	_detail_scroller.resized.connect(func() -> void:
+		_special_row.columns = 2 if _detail_scroller.size.x >= SKILL_TWO_COL_W else 1)
+	var weapon_head := _label(p, &"HeaderLabel")
+	weapon_head.text = "Weapon"
+	weapon_head.add_theme_font_size_override("font_size", UiStyle.SIZE_BODY + 2)
 	_weapon_scroller = HScroller.new()
 	_weapon_scroller.fade_color = COLOR_BG
 	p.add_child(_weapon_scroller)
 	_weapon_row = _weapon_scroller.content
 	_weapon_row.add_theme_constant_override("separation", SPACING)
+
+
+## One loadout card: its number (or "Weapon"), the icon and the name. Ability cards are buttons that make their slot
+## the target for the next pick; the weapon card only shows.
+func _build_slot_card(parent: Node, i: int) -> void:
+	var weapon: bool = i >= Constants.SKILL_SLOTS
+	var card := Button.new()
+	card.custom_minimum_size = Vector2(0.0, SLOT_CARD_H)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.focus_mode = Control.FOCUS_NONE
+	card.theme_type_variation = &"Card"
+	if weapon:
+		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	else:
+		card.pressed.connect(func() -> void: _on_slot_pressed(i))
+	parent.add_child(card)
+	var box := VBoxContainer.new()
+	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 8)
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 2)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(box)
+	var pic := TextureRect.new()
+	pic.custom_minimum_size = SLOT_ICON_SIZE
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(pic)
+	var name_label := _label(box, &"Label")
+	name_label.add_theme_font_override("font", UiStyle.body_font(true))
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tag := _label(card, &"Label")  # "1" / "2" / "3" / "Weapon", top left
+	tag.text = "Weapon" if weapon else str(i + 1)
+	tag.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	tag.add_theme_font_override("font", UiStyle.body_font(true))
+	tag.add_theme_color_override("font_color", UiStyle.C_STEEL if weapon else UiStyle.C_YELLOW)
+	tag.position = Vector2(10, 4)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_slot_cards.append(card)
+	_slot_icons.append(pic)
+	_slot_names.append(name_label)
+
+
+func _on_slot_pressed(i: int) -> void:
+	_overlay_state.set_target(i)
+	_refresh_loadout()
+
+
+## Shrinks `label`'s text in the clean sans until it fits `max_w` (never below the old 12), ellipsis as last resort.
+func _fit_body(label: Label, text: String, max_w: float, size: int, heavy: bool = false) -> void:
+	label.text = text
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var font: Font = UiStyle.body_font(heavy)
+	var fit: int = size
+	while fit > UiStyle.SIZE_TINY - 4 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fit).x > max_w:
+		fit -= 1
+	label.add_theme_font_size_override("font_size", fit)
 
 
 ## Roster + blocker on the left, Leave and the always-visible READY on the right.
@@ -477,7 +539,9 @@ func _slide_overlay(animate: bool) -> void:
 		tween.tween_property(_scrim, "color:a", alpha, SLIDE_TIME)
 		tween.finished.connect(func() -> void:
 			_slide_tween = null
-			_overlay.visible = _overlay_state.is_open)
+			_overlay.visible = _overlay_state.is_open
+			if not _overlay_state.is_open:
+				_clear_flyers())
 	else:
 		_sheet.position.x = x
 		_scrim.color.a = alpha
@@ -651,7 +715,7 @@ func _refresh() -> void:
 		_outline_selected(_special_cards[id], slot >= 0)
 		_special_badges[id].visible = slot >= 0
 		_special_badges[id].text = str(slot + 1)
-	_refresh_slot_chips()
+	_refresh_loadout()
 
 	for child: Node in _rows.get_children():
 		child.queue_free()
@@ -818,19 +882,24 @@ func _badge(fighter: StringName, text: String, color: Color) -> void:
 func _build_weapon_cards(c: CharacterData) -> void:
 	_weapons_for = c.id
 	_weapon_cards.clear()
+	_weapon_icons.clear()
+	_clear_flyers()
 	for child: Node in _weapon_row.get_children():
 		child.queue_free()
 	for w: WeaponData in arena.weapons_for(c):
-		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, _art(w.sprite, WEAPON_ART_SCALE),
+		var art: TextureRect = _art(w.sprite, WEAPON_ART_SCALE)
+		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, art,
 			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
 				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost], w.hook])
 		var id: StringName = w.id
-		_weapon_scroller.on_tap(card, func() -> void: arena.weapon_requested.emit(id))
+		_weapon_scroller.on_tap(card, func() -> void: _on_weapon_pressed(id))
 		_weapon_cards[id] = card
+		_weapon_icons[id] = art
 
 	_special_cards.clear()
 	_special_badges.clear()
-	_older_slot = 1
+	_special_icons.clear()
+	_overlay_state.reset_target()
 	for child: Node in _special_row.get_children():
 		child.queue_free()
 	for sk: SkillData in SkillCatalog.shared().specials_for(c):
@@ -838,19 +907,86 @@ func _build_weapon_cards(c: CharacterData) -> void:
 		var sid: StringName = sk.id
 		_detail_scroller.on_tap(card, func() -> void: _on_special_pressed(sid))
 		_special_cards[sid] = card
-		var badge: Label = _label(card, &"HeaderLabel")
-		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING * 3)
+		var badge: Label = _label(card, &"Label")
+		badge.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
+		badge.add_theme_font_override("font", UiStyle.body_font(true))
+		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING * 2)
 		badge.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_special_badges[sid] = badge
 
 
-## An equipped special stays put; any other one replaces the slot set least recently.
+## An equipped special stays put; any other one goes into the target slot (gold card), which then moves on.
 func _on_special_pressed(id: StringName) -> void:
 	if _pick().slice(2).has(id):
 		return
-	arena.special_requested.emit(_older_slot, id)
-	_older_slot = (_older_slot + 1) % Constants.SKILL_SLOTS
+	var slot: int = _overlay_state.take_slot()
+	arena.special_requested.emit(slot, id)
+	if _special_icons.has(id):
+		_fly_icon(_special_icons[id], slot)
+	_refresh_loadout()
+
+
+func _on_weapon_pressed(id: StringName) -> void:
+	arena.weapon_requested.emit(id)
+	if _weapon_icons.has(id) and id != _shown_pick[1]:
+		_fly_icon(_weapon_icons[id], Constants.SKILL_SLOTS)
+
+
+## A copy of `from`'s icon flies from its row into slot card `slot` over FLY_TIME, then the slot pops. Replaces
+## whatever was still flying into that slot, so quick taps never leave stray icons.
+func _fly_icon(from: TextureRect, slot: int) -> void:
+	_clear_flyer(slot)
+	if from == null or from.texture == null or not _overlay.visible or not is_inside_tree():
+		return
+	var to: Control = _slot_icons[slot]
+	var origin: Vector2 = _overlay.get_global_rect().position
+	var fly := TextureRect.new()
+	fly.texture = from.texture
+	fly.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fly.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	fly.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	fly.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fly.position = from.get_global_rect().position - origin
+	fly.size = from.size
+	_overlay.add_child(fly)
+	var tween: Tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(fly, "position", to.get_global_rect().position - origin, FLY_TIME)
+	tween.tween_property(fly, "size", to.size, FLY_TIME)
+	tween.finished.connect(func() -> void:
+		_clear_flyer(slot)
+		_pop_slot(slot))
+	_slot_icons[slot].modulate.a = 0.0  # the slot shows its new icon only once the flying one lands
+	_flyers[slot] = [fly, tween]
+
+
+func _clear_flyer(slot: int) -> void:
+	if not _flyers.has(slot):
+		return
+	var entry: Array = _flyers[slot]
+	_flyers.erase(slot)
+	_slot_icons[slot].modulate.a = 1.0
+	(entry[1] as Tween).kill()
+	if is_instance_valid(entry[0]):
+		(entry[0] as Node).queue_free()
+
+
+func _clear_flyers() -> void:
+	for slot: int in _flyers.keys():
+		_clear_flyer(slot)
+
+
+## A quick scale pop on a slot card (replaces one still running).
+func _pop_slot(slot: int) -> void:
+	var card: Button = _slot_cards[slot]
+	if card.has_meta(&"pop"):
+		(card.get_meta(&"pop") as Tween).kill()
+	card.pivot_offset = card.size * 0.5
+	card.scale = Vector2.ONE
+	var tween: Tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(card, "scale", Vector2.ONE * POP_SCALE, POP_TIME * 0.5)
+	tween.tween_property(card, "scale", Vector2.ONE, POP_TIME * 0.5)
+	card.set_meta(&"pop", tween)
 
 
 ## A special row: icon, bold name with its cooldown on the right, one-line description below.
@@ -873,6 +1009,7 @@ func _skill_row(sk: SkillData) -> Button:
 	pic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(pic)
+	_special_icons[sk.id] = pic
 	var text := VBoxContainer.new()
 	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	text.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -892,7 +1029,7 @@ func _skill_row(sk: SkillData) -> Button:
 	cd_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 	cd_label.add_theme_font_override("font", UiStyle.body_font(true))
 	cd_label.add_theme_color_override("font_color", UiStyle.C_TEAL_L)
-	cd_label.text = "%ds cooldown" % roundi(sk.cooldown)
+	cd_label.text = "CD %ds" % roundi(sk.cooldown)
 	var blurb_label: Label = _label(text, &"DimLabel")
 	blurb_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 	blurb_label.add_theme_font_override("font", UiStyle.body_font())
@@ -905,30 +1042,32 @@ func _skill_row(sk: SkillData) -> Button:
 	return b
 
 
-## A picked special / weapon card: a blue outline and tint on top of the card style (removed again when unpicked).
-func _outline_selected(card: Button, on: bool) -> void:
+## A picked special / weapon card or the target slot: an outline and tint over the card style (removed when off).
+func _outline_selected(card: Button, on: bool, color: Color = TEAM_ALLY_COLOR) -> void:
 	for state: StringName in [&"normal", &"hover", &"pressed"]:
 		if not on:
 			card.remove_theme_stylebox_override(state)
 			continue
 		var box := StyleBoxFlat.new()
-		box.bg_color = Color(TEAM_ALLY_COLOR, 0.16)
-		box.border_color = TEAM_ALLY_COLOR
+		box.bg_color = Color(color, 0.16)
+		box.border_color = color
 		box.set_border_width_all(2)
 		box.set_corner_radius_all(3)
 		card.add_theme_stylebox_override(state, box)
 
 
-## The three slot chips above the list: what each slot holds now, the next one to be replaced outlined in gold.
-func _refresh_slot_chips() -> void:
-	for i: int in _slot_chips.size():
-		_slot_icons[i].texture = arena.local_player.skills[i].data.icon
-		var box := StyleBoxFlat.new()
-		box.bg_color = Color(0.0, 0.0, 0.0, 0.35)
-		box.set_corner_radius_all(4)
-		box.set_border_width_all(2)
-		box.border_color = UiStyle.C_YELLOW if i == _older_slot else UiStyle.C_STEEL_D
-		_slot_chips[i].add_theme_stylebox_override("panel", box)
+## The loadout pane: what each slot holds now (icon + name), the target ability slot outlined in gold.
+func _refresh_loadout() -> void:
+	var me: Player = arena.local_player
+	if me == null or _slot_cards.is_empty():
+		return
+	for i: int in Constants.SKILL_SLOTS:
+		_slot_icons[i].texture = me.skills[i].data.icon
+		_fit_body(_slot_names[i], me.skills[i].data.display_name, 140.0, UiStyle.SIZE_SMALL, true)
+		_outline_selected(_slot_cards[i], i == _overlay_state.target_slot, UiStyle.C_YELLOW)
+	var w: int = Constants.SKILL_SLOTS
+	_slot_icons[w].texture = me.weapon.data.sprite
+	_fit_body(_slot_names[w], me.weapon.data.display_name, 140.0, UiStyle.SIZE_SMALL, true)
 
 
 ## The preview's lock state: dimmed with "LOCKED · Px" when a teammate holds this fighter, gold when you locked in.
@@ -1009,13 +1148,7 @@ func _card(parent: Node, min_size: Vector2, art: Control, lines: Array[String]) 
 			UiStyle.fit_label(l, lines[i], avail, UiStyle.SIZE_BODY, UiStyle.SIZE_TINY - 4, true)
 		else:  # stats / hook lines: the clean sans, shrunk to the card (never below the old 12)
 			l.add_theme_font_override("font", UiStyle.body_font())
-			l.text = lines[i]
-			l.clip_text = true
-			l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-			var size: int = UiStyle.SIZE_SMALL
-			while size > UiStyle.SIZE_TINY - 4 and UiStyle.body_font().get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > avail:
-				size -= 1
-			l.add_theme_font_size_override("font_size", size)
+			_fit_body(l, lines[i], avail, UiStyle.SIZE_SMALL)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return card

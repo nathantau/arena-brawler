@@ -7,6 +7,11 @@ extends RefCounted
 var is_open: bool = false
 ## The fighter the overlay was last opened for.
 var fighter: StringName = &""
+## The ability slot (0-based) the next tapped ability goes into: the gold-outlined card. Starts on the second slot
+## (the first holds Dash by default) and moves on to the next slot after each placement.
+var target_slot: int = DEFAULT_TARGET
+
+const DEFAULT_TARGET: int = 1
 
 
 ## A fighter card was tapped. Returns true when the overlay has to slide in (it was closed or closing); tapping
@@ -30,3 +35,20 @@ func close() -> bool:
 func ready_pressed(will_be_ready: bool) -> void:
 	if will_be_ready:
 		is_open = false
+
+
+## A slot card was tapped: the next ability goes there.
+func set_target(slot: int, slots: int = Constants.SKILL_SLOTS) -> void:
+	target_slot = clampi(slot, 0, slots - 1)
+
+
+## An ability is being placed: returns the slot it goes into and moves the target on to the next slot.
+func take_slot(slots: int = Constants.SKILL_SLOTS) -> int:
+	var slot: int = target_slot
+	target_slot = (slot + 1) % slots
+	return slot
+
+
+## The fighter changed: the slots are theirs again, so the target starts over.
+func reset_target() -> void:
+	target_slot = DEFAULT_TARGET
