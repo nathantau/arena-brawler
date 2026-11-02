@@ -579,7 +579,7 @@ func test_bots_rotate_through_his_whole_kit_and_leave_others_alone() -> void:
 		seen[p.skills[1].data.id] = true
 		p.skills[1].cooldown_remaining = 5.0
 		brain._rotate_kit(p)  # on cooldown
-	assert_eq(seen.size(), 3, "all three specials get used")
+	assert_eq(seen.size(), 5, "all five specials get used")
 	var flicker: Player = _shadow(w[0], null, &"great_ape", 2, Vector2(300, 300), &"wukong")
 	var other := BotBrain.new(null, 3)
 	for i: int in 20:

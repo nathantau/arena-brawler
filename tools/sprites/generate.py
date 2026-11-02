@@ -8520,6 +8520,629 @@ FX.update({
 })
 
 
+# --- More abilities: Void Rift + Umbral Spikes (Shadow), Tesla Coil + Arc Dash (Bolt), Thorn Burst (Eden) ----------
+
+def _ease(u: float) -> float:
+    u = min(max(u, 0.0), 1.0)
+    return u * u * (3 - 2 * u)
+
+
+def _tube(c: Canvas, pts, widths, dark, mid, light) -> None:
+    """A tapering rounded tube through `pts` (floats) of radii `widths`: dark body, mid lit side, light rim, drawn as three passes so
+    the highlight runs unbroken along the whole length."""
+    for (x, y), w in zip(pts, widths):
+        c.flat(E((x - w, y - w, x + w, y + w)), dark)
+    for (x, y), w in zip(pts, widths):
+        if w >= 1.4:
+            c.flat(E((x - w * 0.95, y - w * 0.9, x + w * 0.35, y + w * 0.45)), mid)
+    for (x, y), w in zip(pts, widths):
+        if w >= 2.2:
+            sdot(c, round(x - w * 0.55), round(y - w * 0.45), light)
+
+
+# ---- Void Rift (Shadow): a dark tear in the floor with shadow tendrils whipping up out of it -------------------------
+RIFT_R = 54  # art px, like RAIN_R (SpecialFx.RAIN_ART_RADIUS)
+RIFT_FORM_FRAMES = 8
+RIFT_LOOP_FRAMES = 8
+RIFT_END_FRAMES = 8
+RIFT_DROP_FRAMES = 16
+RIFT_BASE = 56  # rift_lash: the row the tendril grows from (SpecialFx.RAIN_KUNAI_BASE_Y), in a 64 px frame
+RIFT_DASHES = 28
+
+
+def rift_ring_frame(kind: str, k: int) -> Image.Image:
+    """The rift (128 px, centred on the spot, floor layer): a dithered whirlpool of black and violet spiral arms that turns (period 8),
+    ringed by turning violet dashes with lit tops, an inner broken ring and a few stars twinkling in the void. The floor shows through
+    the dither. 'form' opens it from the middle (dashes sweep on), 'end' dithers it away shrinking."""
+    n = RAIN_SIZE
+    m = n // 2
+    c = Canvas(n)
+    u = 0.0
+    if kind == "form":
+        u = (k + 1) / RIFT_FORM_FRAMES
+        grow = math.sin(u * math.pi / 2)
+        r = RIFT_R * (0.45 + 0.55 * grow)
+        turn = (1 - u) * 1.5
+    elif kind == "end":
+        u = k / RIFT_END_FRAMES
+        grow = 1.0
+        r = RIFT_R * (1 - 0.3 * u)
+        turn = -u * 0.8
+    else:
+        grow = 1.0
+        r = RIFT_R
+        turn = k / RIFT_LOOP_FRAMES
+    for y in range(n):
+        for x in range(n):
+            dx, dy = (x - m), (y - m) / 0.82  # a flat floor disc
+            d = math.hypot(dx, dy) / r
+            if d >= 0.97:
+                continue
+            a = math.atan2(dy, dx)
+            ph = (a / math.tau * 3 + d * 1.7 - turn) % 1.0
+            cover = (1.0 - d) ** 0.55 * 0.95 * grow
+            col = None
+            if d < 0.26:
+                col = OUTLINE
+                cover = grow
+            elif ph < 0.42:
+                col = VIOLET_D if (ph > 0.1 or d <= 0.5) else VIOLET
+            elif d > 0.55:
+                col = SHADOW
+                cover *= 0.45
+            if col is not None and BAYER[y % 4][x % 4] / 16 < cover:
+                c.dot(x, y, col)
+    step = math.tau / RIFT_DASHES
+    t0 = turn * step * 2
+    for i in range(RIFT_DASHES):
+        if (i + 0.5) / RIFT_DASHES > grow:
+            continue
+        a0 = -math.pi / 2 + i * step + t0
+        pts = [(m + math.cos(a) * r, m + math.sin(a) * r * 0.82) for a in (a0, a0 + step * 0.35, a0 + step * 0.7)]
+        lit = math.cos(a0 + step * 0.35 + 2.4) > 0.1
+        c.flat(L([(round(x), round(y)) for x, y in pts], 2 if lit else 1), VIOLET_L if lit else VIOLET)
+        if i % 4 == 0:
+            c.dot(round(pts[1][0]), round(pts[1][1]), PINK_L)
+    r2 = r - 5  # an inner broken ring turning the other way
+    for i in range(7):
+        a0 = -math.pi / 2 + (i / 7 - turn * 0.5) * math.tau
+        if (i + 0.5) / 7 <= grow:
+            pts = [(m + math.cos(a0 + q) * r2, m + math.sin(a0 + q) * r2 * 0.82) for q in (0.0, 0.18, 0.36)]
+            c.flat(L([(round(x), round(y)) for x, y in pts], 1), VIOLET_D)
+    rng = random.Random(77)
+    for i in range(9):  # stars twinkling in the void
+        a, dd = rng.uniform(0, math.tau), rng.uniform(0.1, 0.55) * r
+        if (k + i) % 4 < 2 and grow > 0.6:
+            sdot(c, round(m + math.cos(a) * dd), round(m + math.sin(a) * dd * 0.82), WHITE if i % 3 == 0 else PINK_L)
+    img = c.img
+    if kind == "end":
+        img = dither_out(img, u * 1.1)
+    return _clear_edge(img, 2)
+
+
+def rift_lash_frame(k: int) -> Image.Image:
+    """One tendril's life (64 px, rooted on row RIFT_BASE, centred across): a ripple opens in the floor and a black-violet tentacle
+    whips up out of it (frame 0-5, overshooting and curling its tip), lashes at the top (6-9), then sinks back shedding wisps (10-15)."""
+    n = 64
+    m = n // 2
+    body = Canvas(n)
+    extra = Canvas(n)
+    rng = random.Random(900 + k)
+    h_tab = (6, 15, 26, 36, 43, 40, 38, 38, 37, 36, 32, 25, 17, 10, 4, 0)
+    h = h_tab[k]
+    sway_t = k / 5.0
+    # the pool it grows from
+    pool = 8 + min(k, 6) * 1.3
+    if k < 14:
+        body.flat(E((m - pool, RIFT_BASE - pool * 0.28, m + pool, RIFT_BASE + pool * 0.28)), VIOLET_D)
+        body.flat(E((m - pool * 0.55, RIFT_BASE - pool * 0.15, m + pool * 0.55, RIFT_BASE + pool * 0.15)), OUTLINE)
+    if h > 1:
+        samples = 28
+        pts, widths, back = [], [], []
+        lean = 7 * math.sin(sway_t) if k < 10 else 5 * math.sin(sway_t) * (1 - (k - 10) / 8)
+        curl = 5 if 3 <= k <= 9 else 2
+        for i in range(samples):
+            s = i / (samples - 1)
+            x = m + lean * s * s + 3 * math.sin(s * 3.2 + k * 0.7) * s + curl * max(0.0, s - 0.78) ** 1.5 * 9
+            pts.append((x, RIFT_BASE - h * s))
+            widths.append(max(0.7, 4.6 * (1 - s) ** 0.75 + 0.5))
+            back.append((m - 5 - 3 * math.sin(sway_t + 1) * s, RIFT_BASE - h * 0.55 * s))
+        _tube(body, back, [max(0.6, w * 0.75) for w in widths], SHADOW, VIOLET_D, VIOLET_D)
+        _tube(body, pts, widths, VIOLET_D, VIOLET, VIOLET_L)
+    img = outline(body.img)
+    if k <= 7:  # the ripple ring on the floor
+        rr = 6 + k * 2.4
+        for q in range(26):
+            a = math.tau * q / 26
+            if (q + k) % 2 == 0:
+                sdot(extra, round(m + math.cos(a) * rr * 1.25), round(RIFT_BASE + math.sin(a) * rr * 0.4), VIOLET_L if k < 4 else VIOLET)
+    if 2 <= k <= 4:  # a flash where it breaks the surface
+        r = (5, 9, 6)[k - 2]
+        extra.flat(L([(m - r, RIFT_BASE), (m + r, RIFT_BASE)], 1), WHITE if k == 2 else PINK_L)
+        extra.flat(L([(m, RIFT_BASE - r * 0.7), (m, RIFT_BASE + 1)], 1), PINK_L)
+    if k >= 6:  # wisps rising off it
+        for i in range(5):
+            wx = m + rng.uniform(-7, 7) + 3 * math.sin(k + i)
+            wy = RIFT_BASE - h * rng.uniform(0.2, 0.9) - (k - 6) * rng.uniform(0.5, 1.6)
+            if rng.random() < 0.8:
+                sdot(extra, round(wx), round(wy), (VIOLET, VIOLET_L, VIOLET_D)[i % 3])
+    img.alpha_composite(extra.img)
+    if k >= 12:
+        img = dither_out(img, (k - 11) / 5.0)
+    return _clear_edge(img, 2)
+
+
+# ---- Umbral Spikes (Shadow): dark crystal spikes burst up out of the floor where he marked --------------------------
+SPIKE_R = 48  # the ring radius in art px (SpecialFx.THUNDER_ART_RADIUS 72 world / 1.5): the blast radius scales it
+SPIKE_MARK_FRAMES = 8
+SPIKE_FRAMES = 10  # THUNDER_BOLT_FRAMES: the burst lands on frame 2
+SPIKE_BASE = 112  # the row the field is centred on (SpecialFx.THUNDER_BASE_Y), in a 128 px frame
+# (dx, dy, height, half width, lean, delay) of the spikes, in art px about the spot: one tall, a ring, an outer scatter
+SPIKES = [(0, 0, 76, 7, 0.0, 0), (-16, -4, 58, 6, -0.12, 0), (15, -5, 62, 6, 0.1, 0), (-8, 10, 48, 5, -0.08, 0), (10, 10, 54, 6, 0.12, 0),
+          (-30, 2, 38, 5, -0.2, 1), (29, 3, 42, 5, 0.18, 1), (-22, -13, 32, 4, -0.1, 1), (22, -14, 34, 4, 0.12, 1),
+          (0, -17, 36, 4, 0.0, 1), (-3, 17, 30, 4, -0.05, 1), (-38, -4, 22, 3, -0.25, 2), (37, -3, 24, 3, 0.25, 2)]
+SPIKE_GROW = (0.18, 0.7, 1.0, 1.0, 0.97, 0.9, 0.68, 0.42, 0.2, 0.0)
+
+
+def spike_mark_frame(k: int) -> Image.Image:
+    """The telegraph (112 px, centred on the spot, a loop of SPIKE_MARK_FRAMES): a ring of violet dashes turning round the reach with a
+    pale lit side, a dithered dark pool inside it, a ring of small teeth pointing in that breathe in and out, and stars at the rim."""
+    n = 112
+    c = Canvas(n)
+    m = n // 2
+    rng = random.Random(1400 + k)
+    ph = k / SPIKE_MARK_FRAMES
+    for y in range(n):
+        for x in range(n):
+            d = math.hypot(x - m, (y - m) / 0.9) / SPIKE_R
+            if d < 0.94 and BAYER[y % 4][x % 4] / 16 < 0.1 + 0.1 * math.sin(ph * math.tau + d * 3) ** 2 * (1 - d * 0.5):
+                c.dot(x, y, VIOLET_D if d > 0.35 else OUTLINE)
+    segs = 24
+    for i in range(segs):
+        a0 = math.tau * (i + 0.12) / segs + ph * math.tau / segs * 2
+        a1 = math.tau * (i + 0.66) / segs + ph * math.tau / segs * 2
+        pts = [(m + math.cos(a) * SPIKE_R, m + math.sin(a) * SPIKE_R * 0.9) for a in (a0, (a0 + a1) / 2, a1)]
+        lit = math.cos((a0 + a1) / 2 + 2.4) > 0.1
+        c.flat(L([(round(x), round(y)) for x, y in pts], 2 if lit else 1), VIOLET_L if lit else VIOLET)
+        if i % 6 == 0:
+            c.dot(round(pts[1][0]), round(pts[1][1]), PINK_L)
+    for j in range(8):  # teeth pointing in, breathing
+        a = math.tau * j / 8 + math.pi / 8
+        ln = 5 + 3 * math.sin(ph * math.tau + j)
+        ux, uy = math.cos(a), math.sin(a) * 0.9
+        bx, by = m + ux * (SPIKE_R - 4), m + uy * (SPIKE_R - 4)
+        tx, ty = m + ux * (SPIKE_R - 4 - ln), m + uy * (SPIKE_R - 4 - ln)
+        px_, py_ = -uy * 2.2, ux * 2.2
+        c.flat(P([(round(bx + px_), round(by + py_)), (round(tx), round(ty)), (round(bx - px_), round(by - py_))]), VIOLET)
+        sdot(c, round(tx), round(ty), PINK_L)
+    for _ in range(4):
+        a, r = rng.uniform(0, math.tau), SPIKE_R + rng.uniform(-3, 3)
+        sdot(c, round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.9), rng.choice((WHITE, VIOLET_L, PINK_L)))
+    c.dot(m, m, PINK_L)
+    return _clear_edge(c.img, 2)
+
+
+def _spike(c: Canvas, x: float, y: float, h: float, hw: float, lean: float, bright: float) -> None:
+    """One crystal spike with its foot at (x, y): a lit left face, a dark right face, a pale rim along the lit edge and a hot tip."""
+    if h < 2:
+        return
+    tip = (x + lean * h, y - h)
+    kink = (x + lean * h * 0.35, y - h * 0.42)  # the edge bows a little, so it reads as a crystal rather than a triangle
+    c.flat(P([(x - hw, y), (kink[0] - hw * 0.72, kink[1]), tip, (x, y - 1)]), VIOLET)
+    c.flat(P([(x, y - 1), tip, (kink[0] + hw * 0.7, kink[1]), (x + hw, y)]), VIOLET_D)
+    c.flat(L([(round(x - hw + 1), round(y - 1)), (round(kink[0] - hw * 0.6), round(kink[1])), (round(tip[0]), round(tip[1]) + 1)], 1), VIOLET_L)
+    c.flat(L([(round(x + 1), round(y - 2)), (round(kink[0] + 1), round(kink[1]))], 1), OUTLINE if bright < 0.5 else SHADOW)
+    if bright > 0.5:
+        sdot(c, round(tip[0]), round(tip[1]), WHITE)
+        sdot(c, round(tip[0]), round(tip[1]) + 1, PINK_L)
+
+
+def spike_burst_frame(k: int) -> Image.Image:
+    """The strike (128 px, field centred on row SPIKE_BASE, impact on frame 2 like the thunder bolt): the floor splits and short black
+    tips push through (frame 0-1), a thicket of crystal spikes lunges up with a pale flash and a ring racing over the floor (2-4), holds
+    a beat, then cracks, shrinks and falls apart into shards (5-9). Spikes are drawn back to front."""
+    n, m = 128, 64
+    c = Canvas(n)
+    ov = Canvas(n)
+    rng = random.Random(1500 + k * 7)
+    if k >= 2:  # flash and shock ring on the floor
+        r = (0, 0, 30, 24, 16, 8, 0, 0, 0, 0)[k]
+        if r:
+            c.flat(E((m - r, SPIKE_BASE - r * 0.5, m + r, SPIKE_BASE + r * 0.5)), PINK_L if k > 2 else WHITE)
+        rr = 16 + (k - 2) * 9
+        if k <= 6:
+            c.flat(lambda d, f: d.ellipse((m - rr, SPIKE_BASE - rr * 0.38, m + rr, SPIKE_BASE + rr * 0.38), outline=f, width=3 if k < 4 else 1),
+                   VIOLET_L if k < 5 else VIOLET)
+    for dx, dy, hh, hw, lean, delay in sorted(SPIKES, key=lambda s: s[1]):
+        kk = k - delay
+        if kk < 0:
+            continue
+        g = SPIKE_GROW[min(kk, SPIKE_FRAMES - 1)]
+        if k < 2:  # the first frames: only the tall ones poke through
+            g = (0.12, 0.35)[k] if delay == 0 else 0.0
+        jitter = rng.uniform(-1, 1) if k >= 6 else 0
+        _spike(c, m + dx + jitter, SPIKE_BASE + dy * 0.8, hh * g, hw * (0.6 + 0.4 * min(1.0, g * 1.5)), lean, 1.0 if k <= 4 else 0.0)
+    img = outline(c.img)
+    for j in range(16 if k >= 2 else 0):  # shards thrown up and falling
+        a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
+        r = (k - 1) * rng.uniform(3.0, 7.5)
+        life = max(0.0, 1 - k / SPIKE_FRAMES)
+        if r > 0 and rng.random() < life + 0.3:
+            sdot(ov, round(m + math.cos(a) * r * 1.5), round(SPIKE_BASE - 12 + math.sin(a) * r * 1.1 + (k - 3) * 2.0),
+                 (WHITE, PINK_L, VIOLET_L, VIOLET)[j % 4])
+    if k < 2:
+        for j in range(8):  # cracks glowing in the floor before it splits
+            a = rng.uniform(0, math.tau)
+            ln = rng.uniform(8, 26) * (0.6 + 0.5 * k)
+            ov.flat(L([(m, SPIKE_BASE), (round(m + math.cos(a) * ln * 1.3), round(SPIKE_BASE + math.sin(a) * ln * 0.5))], 1), VIOLET_L if j % 2 else PINK_L)
+    img.alpha_composite(ov.img)
+    if k >= 7:
+        img = dither_out(img, (k - 6) / 4.0 * 0.6)
+    return _clear_edge(img, 2)
+
+
+def spike_scorch_frame(k: int) -> Image.Image:
+    """The floor after the burst (112 px, centred on the spot, nothing before frame 2): a flash that cools to violet over a cracked black
+    stain whose cracks glow pink, then violet, then go dark, and which dithers away."""
+    n = 112
+    m = n // 2
+    c = Canvas(n)
+    if k < 2:
+        return c.img
+    rng = random.Random(1600)
+    r0 = 30
+    pts = []
+    for i in range(14):
+        a = math.tau * i / 14
+        j = rng.uniform(0.7, 1.15)
+        pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.8))
+    heat = k - 2
+    if heat < 2:
+        c.flat(E((m - 30, m - 22, m + 30, m + 22)), PINK_L if heat == 0 else VIOLET_L)
+    c.flat(P(pts), VIOLET_D)
+    c.flat(P([(m + (x - m) * 0.62, m + (y - m) * 0.62) for x, y in pts]), OUTLINE)
+    for _ in range(8):
+        a = rng.uniform(0, math.tau)
+        ln = rng.uniform(r0 * 0.7, r0 * 1.5)
+        mid = (m + math.cos(a + rng.uniform(-0.3, 0.3)) * ln * 0.55, m + math.sin(a) * ln * 0.45)
+        end = (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.8)
+        c.flat(L([(m + math.cos(a) * 6, m + math.sin(a) * 5), mid, end], 1),
+               (PINK_L, PINK_L, VIOLET_L, VIOLET_L, VIOLET, VIOLET, VIOLET_D, VIOLET_D)[min(heat, 7)])
+    return dither_out(c.img, max(0.0, (k - 5) / 5.0))
+
+
+# ---- Tesla Coil (Bolt): a steel and copper coil that rises out of the floor and zaps the nearest enemy -------------
+COIL_W = 64
+COIL_BASE = 56  # SpecialFx.SAPLING_BASE_Y
+COIL_GROW_FRAMES = 16
+COIL_IDLE_FRAMES = 8
+COIL_FIRE_FRAMES = 8
+COIL_WILT_FRAMES = 16
+COIL_H = 22
+
+
+def coil_frame(ext: float = 1.0, glow: float = 0.0, k: int = 0, arcs: int = 0, arc_len: float = 11.0, squash: int = 0,
+               flash: float = 0.0, sag: float = 0.0, smoke: float = 0.0, seed: int = 0, dust: float = 0.0) -> Image.Image:
+    """The coil (64 px, foot on row COIL_BASE): a round steel plate, a navy pole wound with copper rings and a steel topload whose halo
+    and arcs show the charge. `ext` raises the pole (0 = just the plate), `glow` lights the rings in a chase and fills the halo,
+    `arcs` / `arc_len` are the sparks off the ball, `flash` a white burst at the ball, `squash` sinks it a px, `sag` droops it."""
+    n = COIL_W
+    m = n // 2
+    c = Canvas(n)
+    ov = Canvas(n)
+    rng = random.Random(seed * 31 + 5)
+    base = COIL_BASE - squash
+    c.flat(E((m - 12, base - 3, m + 12, base + 4)), STEEL_D)  # the plate: a flat steel disc with a lit rim and bolts
+    c.flat(E((m - 12, base - 4, m + 12, base + 2)), STEEL)
+    c.flat(E((m - 9, base - 3, m + 9, base + 1)), STEEL_D)
+    for bx in (-8, 8):
+        c.dot(m + bx, base - 1, WHITE)
+    c.dot(m - 2, base - 3, WHITE)
+    h = round(COIL_H * ext)
+    ball = (m, base - 6)
+    if h >= 3:
+        top = base - 3 - h
+        lean = round(sag * 5)
+        c.flat(R((m - 3, top + lean // 2, m + 3, base - 2)), NAVY)  # the pole
+        c.flat(R((m - 3, top + lean // 2, m - 2, base - 2)), STEEL_D)
+        c.flat(R((m + 2, top + lean // 2, m + 3, base - 2)), SHADOW)
+        for i in range(max(1, h // 4)):  # copper rings, lit in a chase
+            ry = base - 4 - i * 4
+            if ry < top + 3:
+                break
+            lit = glow > 0.35 and (i - k) % 3 == 0
+            col = WHITE if lit and glow > 0.8 else YELLOW if (lit or (glow > 0.35 and i % 2 == 0)) else ORANGE
+            c.flat(R((m - 5, ry - 1, m + 5, ry)), col)
+            c.flat(R((m - 5, ry, m + 5, ry)), ORANGE if lit else DARKER[col])
+            c.dot(m - 5, ry - 1, WHITE if lit else YELLOW)
+        if ext > 0.55:  # the topload, a steel sphere
+            r = 6 if ext > 0.8 else 4
+            cy = top - 3 + lean
+            c.flat(E((m - r, cy - r, m + r, cy + r)), STEEL_D)
+            c.flat(E((m - r, cy - r, m + r - 2, cy + r - 2)), STEEL)
+            c.flat(E((m - r + 2, cy - r + 1, m + 1, cy - r + 4)), WHITE)
+            if glow > 0.3:
+                c.flat(lambda d, f: d.ellipse((m - r - 1, cy - r - 1, m + r + 1, cy + r + 1), outline=f, width=1), TEAL_L)
+            ball = (m, cy)
+        else:
+            ball = (m, top - 1)
+    img = outline(c.img)
+    bx, by = ball
+    if glow > 0.2 and ext > 0.55:  # a dithered halo round the ball
+        hr = 12 + 5 * glow
+        for y in range(max(0, by - 18), min(n, by + 18)):
+            for x in range(max(0, bx - 18), min(n, bx + 18)):
+                d = math.hypot(x - bx, y - by)
+                if 7 < d < hr and BAYER[y % 4][x % 4] / 16 < 0.22 * glow * (1 - (d - 7) / (hr - 7)) and not img.getpixel((x, y))[3]:
+                    ov.dot(x, y, TEAL_L)
+    for i in range(arcs):  # arcs leaping off the ball
+        a = rng.uniform(-math.pi * 1.1, math.pi * 0.1) if i % 2 == 0 else rng.uniform(-math.pi, 0)
+        ln = arc_len * rng.uniform(0.6, 1.1)
+        end = (bx + math.cos(a) * ln, by + math.sin(a) * ln)
+        pts = zap_zig(rng, (bx + math.cos(a) * 6, by + math.sin(a) * 6), end, 3 if ln < 12 else 4, 2.4)
+        zap_arc(ov, pts, TEAL_L, WHITE, tip=YELLOW)
+        if ln > 14 and rng.random() < 0.7:
+            fx, fy = pts[len(pts) // 2]
+            a2 = a + rng.choice((-1, 1)) * 0.8
+            zap_arc(ov, zap_zig(rng, (fx, fy), (fx + math.cos(a2) * ln * 0.45, fy + math.sin(a2) * ln * 0.45), 2, 1.6), TEAL_L, WHITE)
+    if flash > 0:
+        r = round(8 * flash)
+        ov.flat(E((bx - r, by - r, bx + r, by + r)), TEAL_L if flash < 0.6 else WHITE)
+        ov.flat(E((bx - r + 2, by - r + 2, bx + r - 2, by + r - 2)), WHITE)
+    if dust > 0:  # dust and sparks kicked up at the foot
+        for i in range(10):
+            a = rng.uniform(math.pi * 1.05, math.pi * 1.95)
+            d = (4 + dust * 14) * rng.uniform(0.6, 1.1)
+            sdot(ov, round(m + math.cos(a) * d * 1.5), round(COIL_BASE + math.sin(a) * d * 0.7), (STEEL, WHITE, YELLOW, STEEL_D)[i % 4])
+    if smoke > 0:  # smoulder rising off the topload
+        for i in range(6):
+            sdot(ov, round(bx + rng.uniform(-3, 3) + 2 * math.sin(k + i)), round(by - 4 - smoke * rng.uniform(4, 14)), (STEEL_D, SHADOW, STEEL)[i % 3])
+    img.alpha_composite(ov.img)
+    return _clear_edge(img, 2)
+
+
+def coil_grow_frame(k: int) -> Image.Image:
+    if k < 3:  # the plate slams down in a puff of sparks
+        return coil_frame(ext=0.0, dust=0.3 + 0.35 * k, squash=(2, 1, 0)[k], k=k, seed=100 + k)
+    if k < 11:
+        e = _ease((k - 2) / 9)
+        return coil_frame(ext=e, glow=0.0 if e < 0.7 else 0.4, k=k, seed=100 + k, dust=max(0.0, 0.8 - (k - 2) * 0.2))
+    j = min(k - 11, 4)
+    return coil_frame(ext=1.0, glow=(0.7, 1.0, 0.9, 0.7, 0.5)[j], k=k, arcs=(4, 3, 2, 1, 1)[j], arc_len=16 - 2 * j,
+                      flash=(1.0, 0.7, 0.4, 0.2, 0.0)[j], squash=1 if j == 0 else 0, seed=120 + k)
+
+
+def coil_idle_frame(k: int) -> Image.Image:
+    g = 0.55 + 0.25 * math.sin(k / COIL_IDLE_FRAMES * math.tau)
+    return coil_frame(ext=1.0, glow=g, k=k, arcs=1 + (k % 3 == 0) + (k % 4 == 1), arc_len=9 + (k % 3) * 2, seed=140 + k)
+
+
+def coil_fire_frame(k: int) -> Image.Image:
+    return coil_frame(ext=1.0, glow=(1.0, 1.0, 1.0, 0.9, 0.8, 0.7, 0.6, 0.55)[k], k=k * 2, arcs=(6, 5, 4, 3, 2, 2, 1, 1)[k],
+                      arc_len=(24, 22, 19, 16, 13, 11, 10, 9)[k], flash=(1.0, 0.9, 0.6, 0.3, 0, 0, 0, 0)[k], squash=1 if k in (0, 1) else 0,
+                      seed=160 + k)
+
+
+def coil_wilt_frame(k: int) -> Image.Image:
+    if k < 6:  # it stutters: sparks die down, the glow flickers
+        return coil_frame(ext=1.0, glow=(0.6, 0.15, 0.55, 0.1, 0.3, 0.0)[k], k=k, arcs=(2, 1, 1, 0, 1, 0)[k], arc_len=8, seed=180 + k, sag=k * 0.04)
+    u = (k - 6) / 9
+    out = coil_frame(ext=max(0.0, 1.0 - _ease(u * 1.1)), glow=0.0, k=k, sag=0.3 * (1 - u), smoke=max(0.0, 1 - u * 1.2), seed=190 + k)
+    if k >= 12:
+        out = dither_out(out, (k - 11) / 4.0)
+    return out
+
+
+def coil_shot(c: Canvas, f: int) -> None:  # Tesla Coil zap: a hot white dart in a teal sheath, jagged
+    m = PROJ // 2
+    s = -1 if f else 1
+    pts = [(3, m), (5, m - 2 * s), (8, m + 2 * s), (11, m - 2 * s), (14, m + s), (17, m)]
+    c.flat(L(pts, 3), TEAL_L)
+    c.flat(L(pts, 1), WHITE)
+    c.dot(17, m, YELLOW)
+    c.dot(3 + f, m, YELLOW)
+
+
+# ---- Arc Dash (Bolt): a crackling lightning trail along the run, a flash at the start and a shock where he lands -----
+ARC_TILE = 32
+ARC_STEP = 25  # tiles overlap so the bolt joins up: its ends sit at x = 3 and 28 (SpecialFx.ARC_TILE_STEP)
+ARC_TRAIL_FRAMES = 8
+ARC_BURST_FRAMES = 10
+
+
+def arc_trail_frame(k: int) -> Image.Image:
+    """One tile of the trail (32 px): a jagged bolt from (3, 16) to (28, 16) that re-kinks every frame, a halo of teal dither round it and
+    a few loose sparks. Neighbouring tiles overlap by 7 px so the ends meet."""
+    n = ARC_TILE
+    c = Canvas(n)
+    ov = Canvas(n)
+    rng = random.Random(2000 + k * 13)
+    xs = [3, 8, 13, 18, 23, 28]
+    ys = [16] + [16 + rng.choice((-1, 1)) * rng.randint(2, 5) for _ in range(4)] + [16]
+    pts = list(zip(xs, ys))
+    for y in range(n):
+        for x in range(3, 29):
+            near = min(range(len(xs)), key=lambda i: abs(xs[i] - x))
+            d = abs(y - ys[near])
+            if 2 < d < 8 and BAYER[y % 4][x % 4] / 16 < 0.2 * (1 - d / 8):
+                ov.dot(x, y, TEAL_L)
+    c.flat(L(pts, 3), ORANGE)
+    c.flat(L(pts, 2), YELLOW)
+    c.flat(L(pts, 1), WHITE)
+    if k % 2 == 0:  # a fork
+        i = rng.randint(1, 3)
+        fx, fy = pts[i]
+        side = 1 if ys[i] >= 16 else -1
+        c.flat(L([(fx, fy), (fx + 3, fy + side * 4), (fx + 2, fy + side * 7)], 1), YELLOW)
+        sdot(ov, fx + 2, fy + side * 7, WHITE)
+    for _ in range(3):
+        sdot(ov, rng.randint(4, 27), rng.choice((rng.randint(6, 10), rng.randint(22, 26))), rng.choice((WHITE, YELLOW, TEAL_L)))
+    img = c.img
+    img.alpha_composite(ov.img)
+    return img
+
+
+def arc_burst_frame(kind: str, k: int) -> Image.Image:
+    """The start flash / the landing shock (64 px, centred on the body): `go` is a white star with arcs flung out and a core that
+    shrinks; `land` is a flat ring of lightning that races out over the floor, short arcs and sparks thrown up."""
+    n = 64
+    m = n // 2
+    c = Canvas(n)
+    ov = Canvas(n)
+    rng = random.Random(2100 + k * 3 + (7 if kind == "land" else 0))
+    u = k / (ARC_BURST_FRAMES - 1)
+    if kind == "go":
+        r = (4, 11, 14, 12, 9, 6, 3, 0, 0, 0)[k]
+        if r:
+            c.flat(E((m - r, m - r, m + r, m + r)), TEAL_L if k > 1 else WHITE)
+            c.flat(E((m - r + 3, m - r + 3, m + r - 3, m + r - 3)), WHITE)
+        for i in range(7):  # spokes
+            a = math.tau * (i + 0.5) / 7 + k * 0.2
+            ln = (6 + 20 * math.sin(min(1.0, u * 1.5) * math.pi / 2)) * (1 - u * 0.5) * (0.7 + 0.3 * ((i * 5) % 3) / 2)
+            if ln > 3 and k < 8:
+                pts = zap_zig(rng, (m + math.cos(a) * 5, m + math.sin(a) * 5), (m + math.cos(a) * ln, m + math.sin(a) * ln), 3, 2.0)
+                zap_arc(ov, pts, YELLOW if k < 4 else ORANGE, WHITE, tip=WHITE)
+    else:
+        fy = m + 6
+        rr = 5 + u * 26
+        if k < 8:
+            c.flat(lambda d, f: d.ellipse((m - rr, fy - rr * 0.4, m + rr, fy + rr * 0.4), outline=f, width=2 if k < 4 else 1),
+                   YELLOW if k < 5 else ORANGE)
+            c.flat(lambda d, f: d.ellipse((m - rr * 0.65, fy - rr * 0.26, m + rr * 0.65, fy + rr * 0.26), outline=f, width=1),
+                   WHITE if k < 4 else TEAL_L)
+            for i in range(8):
+                a = math.tau * i / 8 + 0.2
+                ln = rr * rng.uniform(0.6, 1.0)
+                pts = zap_zig(rng, (m + math.cos(a) * rr * 0.5, fy + math.sin(a) * rr * 0.2),
+                              (m + math.cos(a) * ln, fy + math.sin(a) * ln * 0.4 - 3 * math.sin(u * math.pi)), 3, 1.8)
+                zap_arc(ov, pts, TEAL_L, WHITE)
+        if k < 3:
+            r = (9, 12, 7)[k]
+            c.flat(E((m - r, fy - r * 0.5, m + r, fy + r * 0.5)), WHITE)
+    for j in range(10 if k < 8 else 0):
+        a = rng.uniform(-math.pi, 0)
+        d = (k + 1) * rng.uniform(1.5, 3.2)
+        sdot(ov, round(m + math.cos(a) * d * 1.3), round((m if kind == "go" else m + 6) + math.sin(a) * d), (WHITE, YELLOW, TEAL_L)[j % 3])
+    img = outline(c.img)
+    img.alpha_composite(ov.img)
+    return _clear_edge(img, 2)
+
+
+# ---- Thorn Burst (Eden): a ring of thorns fired out all round her ----------------------------------------------------
+THORN_FRAMES = 14
+THORN_COUNT = 14
+
+
+def thorn_shot(c: Canvas, f: int) -> None:  # a barbed thorn, point first: dark bark body, pale tip, a leaf at its base
+    m = PROJ // 2
+    t = f % 2
+    c.part(P([(5, m - 3 + t), (PROJ - 3, m), (5, m + 3 - t)]), WALNUT)
+    c.flat(P([(7, m - 1), (PROJ - 4, m), (7, m + 1)]), WALNUT_L)
+    c.flat(L([(PROJ - 6, m), (PROJ - 3, m)], 1), CREAM)
+    c.dot(PROJ - 3, m, WHITE)
+    c.flat(P([(3, m - 2), (7, m), (3, m + 1 + t)]), GREEN)
+    c.dot(4, m - 1, GREEN_L)
+    c.dot(11 + t, m - 2 + t, CREAM_D)
+
+
+def thorn_burst_frame(k: int) -> Image.Image:
+    """The burst (128 px, centred on Eden): a green-white flash at her middle (0-3), THORN_COUNT bark thorns with pale tips shoot out all
+    round and shorten as they go, leaves tumble off them (to 9), then a last ring of motes drifts out and fades (10-13)."""
+    n = 128
+    m = n // 2
+    c = Canvas(n)
+    ov = Canvas(n)
+    rng = random.Random(2200 + k * 5)
+    u = k / (THORN_FRAMES - 1)
+    if k < 4:
+        r = (6, 12, 14, 9)[k]
+        c.flat(E((m - r, m - r, m + r, m + r)), GREEN_L if k else WHITE)
+        c.flat(E((m - r + 3, m - r + 3, m + r - 3, m + r - 3)), WHITE if k < 3 else GREEN_L)
+        ov.flat(lambda d, f: d.ellipse((m - r * 2.4, m - r * 2.4, m + r * 2.4, m + r * 2.4), outline=f, width=1), GREEN_L)
+    for i in range(THORN_COUNT):
+        a = math.tau * i / THORN_COUNT + 0.11
+        t = max(0.0, min(1.0, (u - 0.04 * (i % 3)) / 0.55))
+        if t <= 0.0 or k > 9:
+            continue
+        reach = 52 * (1 - (1 - t) ** 2)
+        ln = 12 - 4 * max(0.0, t - 0.6) / 0.4
+        x0, y0 = m + math.cos(a) * max(0.0, reach - ln), m + math.sin(a) * max(0.0, reach - ln)
+        x1, y1 = m + math.cos(a) * reach, m + math.sin(a) * reach
+        px_, py_ = -math.sin(a) * 2.1, math.cos(a) * 2.1
+        c.part(P([(x0 + px_, y0 + py_), (x1, y1), (x0 - px_, y0 - py_)]), WALNUT, shade=False)
+        c.flat(L([(round(x0), round(y0)), (round(x0 + (x1 - x0) * 0.8), round(y0 + (y1 - y0) * 0.8))], 1), WALNUT_L)
+        sdot(c, round(x1), round(y1), CREAM)
+        if t < 0.8:  # trailing motes
+            for q in range(2):
+                sdot(ov, round(x0 - math.cos(a) * (3 + q * 3) + rng.uniform(-1, 1)), round(y0 - math.sin(a) * (3 + q * 3) + rng.uniform(-1, 1)),
+                     (GREEN_L, GREEN)[q])
+    for i in range(7):  # leaves flung off, tumbling
+        a = math.tau * (i + 0.4) / 7
+        t = (u - (0.08 + 0.04 * i)) / 0.7
+        if 0 < t < 1:
+            d = 14 + 40 * t
+            draw_leaf(c, m + math.cos(a) * d, m + math.sin(a) * d, a + t * 6 * (1 if i % 2 else -1), 7, 2.4,
+                      (GREEN, GREEN_L, GREEN_D)[i % 3], shade=True, rib=GREEN_D)
+    img = outline(c.img)
+    img.alpha_composite(ov.img)
+    if k >= 10:
+        rr = 40 + (k - 9) * 4
+        for i in range(18):
+            if (i + k) % 2 == 0:
+                a = math.tau * i / 18 + 0.2
+                x, y = round(m + math.cos(a) * rr), round(m + math.sin(a) * rr)
+                img.putpixel((x, y), (GREEN_L if k < 12 else GREEN) + (255,))
+        img = dither_out(img, (k - 9) / 5.0 * 0.7)
+    return _clear_edge(img, 2)
+
+
+ICONS["void_rift"] = lambda c: (c.flat(E((0, 6, 12, 12)), VIOLET_D), c.flat(E((2, 7, 10, 11)), OUTLINE),
+                                c.flat(lambda d, f: d.arc((3, 7, 9, 11), 200, 20, f, 1), VIOLET_L),
+                                c.flat(L([(6, 9), (4, 6), (7, 3), (6, 0)], 2), VIOLET),
+                                c.flat(L([(6, 8), (5, 6), (7, 3)], 1), VIOLET_L),
+                                c.dot(6, 0, PINK_L), c.dot(3, 9, WHITE), c.dot(9, 8, PINK_L))
+ICONS["umbral_spikes"] = lambda c: (c.flat(E((0, 9, 12, 12)), VIOLET_D),
+                                    c.flat(P([(1, 10), (2, 4), (5, 10)]), VIOLET), c.flat(P([(4, 10), (6, 0), (9, 10)]), VIOLET_L),
+                                    c.flat(P([(6, 0), (9, 10), (7, 10)]), VIOLET), c.flat(P([(8, 10), (10, 3), (12, 10)]), VIOLET_D),
+                                    c.dot(6, 0, WHITE), c.dot(2, 4, PINK_L), c.dot(10, 3, PINK_L), c.flat(L([(0, 10), (12, 10)], 1), OUTLINE))
+ICONS["tesla_coil"] = lambda c: (c.flat(E((1, 9, 11, 12)), STEEL_D), c.flat(R((5, 4, 7, 10)), NAVY),
+                                 c.flat(R((4, 6, 8, 6)), YELLOW), c.flat(R((4, 8, 8, 8)), ORANGE),
+                                 c.flat(E((3, 0, 9, 5)), STEEL), c.dot(4, 1, WHITE),
+                                 c.flat(L([(9, 2), (11, 1), (12, 3)], 1), YELLOW), c.flat(L([(3, 2), (1, 1), (0, 4)], 1), TEAL_L),
+                                 c.dot(12, 3, WHITE), c.dot(0, 4, WHITE))
+ICONS["arc_dash"] = lambda c: (c.flat(L([(0, 3), (3, 3)], 1), TEAL_L), c.flat(L([(0, 9), (4, 9)], 1), TEAL_L),
+                               c.flat(L([(1, 6), (4, 6)], 1), TEAL_L),
+                               c.flat(L([(3, 7), (6, 3), (7, 8), (11, 5)], 2), YELLOW), c.flat(L([(3, 7), (6, 3), (7, 8), (11, 5)], 1), WHITE),
+                               c.flat(P([(12, 5), (9, 2), (9, 8)]), ORANGE), c.dot(12, 5, WHITE))
+ICONS["thorn_burst"] = lambda c: (c.flat(E((4, 4, 8, 8)), GREEN_L), c.dot(5, 5, WHITE),
+                                  c.flat(P([(5, 4), (6, 0), (7, 4)]), WALNUT), c.flat(P([(5, 8), (6, 12), (7, 8)]), WALNUT),
+                                  c.flat(P([(4, 5), (0, 6), (4, 7)]), WALNUT), c.flat(P([(8, 5), (12, 6), (8, 7)]), WALNUT),
+                                  c.flat(P([(4, 4), (1, 1), (3, 5)]), WALNUT_L), c.flat(P([(8, 4), (11, 1), (9, 5)]), WALNUT_L),
+                                  c.flat(P([(4, 8), (1, 11), (3, 7)]), WALNUT_L), c.flat(P([(8, 8), (11, 11), (9, 7)]), WALNUT_L),
+                                  c.dot(6, 0, CREAM), c.dot(6, 12, CREAM), c.dot(0, 6, CREAM), c.dot(12, 6, CREAM),
+                                  c.dot(1, 1, CREAM), c.dot(11, 1, CREAM), c.dot(1, 11, CREAM), c.dot(11, 11, CREAM))
+PROJECTILES["coil_zap"] = coil_shot
+PROJECTILES["thorn_burst"] = thorn_shot
+FX.update({
+    "rift_form": lambda: strip([rift_ring_frame("form", j) for j in range(RIFT_FORM_FRAMES)]),
+    "rift_loop": lambda: strip([rift_ring_frame("loop", j) for j in range(RIFT_LOOP_FRAMES)]),
+    "rift_end": lambda: strip([rift_ring_frame("end", j) for j in range(RIFT_END_FRAMES)]),
+    "rift_lash": lambda: strip([rift_lash_frame(k) for k in range(RIFT_DROP_FRAMES)]),
+    "spike_mark": lambda: strip([spike_mark_frame(k) for k in range(SPIKE_MARK_FRAMES)]),
+    "spike_burst": lambda: strip([spike_burst_frame(k) for k in range(SPIKE_FRAMES)]),
+    "spike_scorch": lambda: strip([spike_scorch_frame(k) for k in range(SPIKE_FRAMES)]),
+    "coil_grow": lambda: strip([coil_grow_frame(k) for k in range(COIL_GROW_FRAMES)]),
+    "coil_idle": lambda: strip([coil_idle_frame(k) for k in range(COIL_IDLE_FRAMES)]),
+    "coil_fire": lambda: strip([coil_fire_frame(k) for k in range(COIL_FIRE_FRAMES)]),
+    "coil_wilt": lambda: strip([coil_wilt_frame(k) for k in range(COIL_WILT_FRAMES)]),
+    "arc_trail": lambda: strip([arc_trail_frame(k) for k in range(ARC_TRAIL_FRAMES)]),
+    "arc_go": lambda: strip([arc_burst_frame("go", k) for k in range(ARC_BURST_FRAMES)]),
+    "arc_land": lambda: strip([arc_burst_frame("land", k) for k in range(ARC_BURST_FRAMES)]),
+    "thorn_burst": lambda: strip([thorn_burst_frame(k) for k in range(THORN_FRAMES)]),
+})
+
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():

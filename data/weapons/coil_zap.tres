@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/coil_zap.png" id="9_proj"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+id = &"coil_zap"
+display_name = "Coil Zap"
+pickup = false
+damage = 7
+fire_interval = 0.6
+projectile_speed = 900.0
+projectile_range = 340.0
+projectile_radius = 4.0
+energy_cost = 0
+knockback = 0.0
+color = Color(0.49, 0.88, 0.81, 1)
+screen_shake = 0.0
+sfx = &"shot_light"
+tags = Array[StringName]([&"bolt_coil"])
