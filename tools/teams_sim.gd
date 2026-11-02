@@ -12,6 +12,7 @@ var lobby: bool = false
 var shared: int = 0  ## screenshot with lobby=1: 1 = P2 + P3 hover one card, 2 = P3 locked and P2 hovers that card  ## screenshot: the loading room (nobody readies up)
 var step: int = 0  ## screenshot with lobby=1: which character select step is showing (0 the fighter grid, 1 the detail overlay open)
 var toggle: bool = false  ## screenshot with lobby=1 strip=1 fly=1: first remove an equipped ability, then add one
+var tab: int = 0  ## screenshot with lobby=1 step>=1: 1 = the Weapon tab
 var sheet: bool = false  ## screenshot with lobby=1: a contact sheet of the showcase backdrop of all nine fighters
 var pick: StringName = &"eden"  ## screenshot with lobby=1 step=1: the fighter the overlay opens on
 var fly: bool = false  ## screenshot with lobby=1 strip=1: capture an ability flying into a slot instead of the slide-in
@@ -47,6 +48,7 @@ func _initialize() -> void:
 				"fly": fly = kv[1] == "1"
 				"char": pick = StringName(kv[1])
 				"backdrops": sheet = kv[1] == "1"
+				"tab": tab = int(kv[1])
 				"toggle": toggle = kv[1] == "1"
 	InputSetup.ensure_actions()
 	if lobby and shot_path != "":
@@ -198,6 +200,9 @@ func _shoot_lobby() -> void:
 		return
 	if strip:
 		lp._on_fighter_pressed(&"bolt")
+		var ids: Array = lp._special_cards.keys()
+		for k: int in Constants.SKILL_SLOTS:  # a fresh pick has empty slots: equip three to toggle
+			arena.select_special(arena.get_player(1), k, ids[k])
 		if fly:  # let the slide finish
 			for i: int in 24:
 				await process_frame
@@ -230,8 +235,11 @@ func _shoot_lobby() -> void:
 	if step > 0:
 		lp._on_fighter_pressed(pick)
 		lp._slide_overlay(false)
-		if step == 2:  # one ability slot emptied
-			lp._on_special_pressed(lp._pick()[3])
+		if step == 2:  # two abilities picked, the third slot still empty
+			for k: int in 2:
+				lp._on_special_pressed(lp._special_cards.keys()[k])
+		if tab == 1:
+			lp._show_tab(LobbyOverlay.Tab.WEAPON, false)
 	for i: int in 10:
 		await process_frame
 	var img: Image = root.get_texture().get_image()

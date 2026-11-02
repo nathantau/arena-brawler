@@ -5,6 +5,8 @@ extends RefCounted
 ## readable on a phone, outlined text for drawing over the game, and safe-area insets.
 
 const FONT: FontFile = preload("res://assets/fonts/PixelifySans.ttf")
+const BODY_FONT: FontFile = preload("res://assets/fonts/Tiny5.ttf")
+const BODY_EMBOLDEN: float = 0.3
 const UI_DIR: String = "res://assets/ui/"
 ## 9-slice margins of the pre-scaled kit (generate.py, x UI_SLICE_SCALE 2): 3 art px of edge and
 ## bevel, and up to 5 at the bottom where the button lip sits (so the lip never stretches).
@@ -58,8 +60,8 @@ const NOTCH_INSETS: Vector4 = Vector4(111, 0, 111, 38)
 ## Current content scale (1 on desktop); the arena camera zooms by CAMERA_ZOOM / this.
 static var ui_scale: float = 1.0
 static var _bold: FontVariation
-static var _body: SystemFont
-static var _body_bold: SystemFont
+static var _body: FontVariation
+static var _body_bold: FontVariation
 static var _textures: Dictionary[String, Texture2D] = {}
 
 
@@ -88,15 +90,16 @@ static func install_scaling(win: Window) -> void:
 	win.size_changed.connect(apply)
 
 
-## A clean sans for small text with numbers or sentences (stats, cooldowns, descriptions, roster): Pixelify's digits
-## blur together at 16-18 units (5 / S, 0 / O). Headings, names and buttons keep the pixel font.
+## Small text with numbers or sentences (stats, cooldowns, descriptions, roster): Tiny5 (OFL, assets/fonts), a pixel
+## font whose digits and letters stay distinct at 16-18 units (Pixelify's 5 / S, 0 / O, B / G blur together there).
+## Headings, names and buttons keep Pixelify. `heavy` emboldens it a little.
 static func body_font(heavy: bool = false) -> Font:
 	if _body == null:
-		_body = SystemFont.new()
-		_body.font_names = PackedStringArray(["Helvetica Neue", "Helvetica", "Roboto", "Arial", "sans-serif"])
-		_body_bold = SystemFont.new()
-		_body_bold.font_names = _body.font_names
-		_body_bold.font_weight = 700
+		_body = FontVariation.new()
+		_body.base_font = BODY_FONT
+		_body_bold = FontVariation.new()
+		_body_bold.base_font = BODY_FONT
+		_body_bold.variation_embolden = BODY_EMBOLDEN
 	return _body_bold if heavy else _body
 
 

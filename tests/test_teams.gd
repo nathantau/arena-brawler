@@ -643,11 +643,11 @@ func test_round_banner_and_result_text_are_viewer_relative() -> void:
 
 
 func test_every_weapon_hook_fits_its_lobby_card() -> void:
-	var avail: float = LobbyPanel.WEAPON_CARD_SIZE.x - LobbyPanel.SPACING * 2.0 - 8.0
+	var avail: float = LobbyPanel.WEAPON_TEXT_W
 	for file: String in DirAccess.get_files_at("res://data/weapons"):
 		if not file.ends_with(".tres"):
 			continue
 		var w: WeaponData = load("res://data/weapons/" + file)
 		if w == null or w.hook == "":
 			continue
-		assert_lte(UiStyle.text_width(w.hook, UiStyle.SIZE_TINY - 4), avail, "%s hook fits the card: %s" % [file, w.hook])
+		assert_lte(UiStyle.body_font().get_string_size(w.hook, HORIZONTAL_ALIGNMENT_LEFT, -1, LobbyPanel.LIST_TEXT_SIZE).x, avail, "%s hook fits the card: %s" % [file, w.hook])

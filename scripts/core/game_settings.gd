@@ -10,6 +10,8 @@ static var music: float = 0.7
 static var sfx: float = 1.0
 static var haptics: bool = true
 static var howto_seen: bool = false
+## The game mode picked on the home screen (a `MatchRules.Mode`), kept between launches.
+static var mode: MatchRules.Mode = MatchRules.Mode.FFA
 static var _loaded: bool = false
 
 
@@ -28,6 +30,7 @@ static func load_from(path: String) -> void:
 	sfx = clampf(float(cfg.get_value("audio", "sfx", sfx)), 0.0, 1.0)
 	haptics = bool(cfg.get_value("input", "haptics", haptics))
 	howto_seen = bool(cfg.get_value("ui", "howto_seen", howto_seen))
+	mode = clampi(int(cfg.get_value("ui", "mode", mode)), 0, MatchRules.Mode.size() - 1) as MatchRules.Mode
 
 
 static func save_to(path: String) -> Error:
@@ -36,6 +39,7 @@ static func save_to(path: String) -> Error:
 	cfg.set_value("audio", "sfx", sfx)
 	cfg.set_value("input", "haptics", haptics)
 	cfg.set_value("ui", "howto_seen", howto_seen)
+	cfg.set_value("ui", "mode", mode)
 	return cfg.save(path)
 
 

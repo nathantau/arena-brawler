@@ -69,3 +69,46 @@ func test_remove_then_add_round_trip() -> void:
 	r = LobbyOverlay.toggle(slots, &"barrier")
 	assert_eq(r["kind"], "add")
 	assert_eq(r["slot"], 1, "the freed slot")
+
+
+func test_opens_on_the_abilities_tab() -> void:
+	var o := LobbyOverlay.new()
+	o.open_for(&"eden")
+	assert_eq(o.tab, LobbyOverlay.Tab.ABILITIES)
+	o.show_tab(LobbyOverlay.Tab.WEAPON)
+	o.close()
+	o.open_for(&"eden")
+	assert_eq(o.tab, LobbyOverlay.Tab.ABILITIES, "reopening starts on abilities again")
+
+
+func test_another_fighter_resets_the_tab_but_the_same_one_keeps_it() -> void:
+	var o := LobbyOverlay.new()
+	o.open_for(&"eden")
+	o.show_tab(LobbyOverlay.Tab.WEAPON)
+	o.open_for(&"eden")
+	assert_eq(o.tab, LobbyOverlay.Tab.WEAPON)
+	o.open_for(&"bolt")
+	assert_eq(o.tab, LobbyOverlay.Tab.ABILITIES)
+
+
+func test_show_tab_reports_a_change() -> void:
+	var o := LobbyOverlay.new()
+	assert_false(o.show_tab(LobbyOverlay.Tab.ABILITIES))
+	assert_true(o.show_tab(LobbyOverlay.Tab.WEAPON))
+
+
+func test_the_third_ability_switches_to_the_weapon_tab() -> void:
+	var o := LobbyOverlay.new()
+	o.open_for(&"eden")
+	assert_false(o.ability_added([&"a", &"", &""]))
+	assert_false(o.ability_added([&"a", &"b", &""]))
+	assert_eq(o.tab, LobbyOverlay.Tab.ABILITIES)
+	assert_true(o.ability_added([&"a", &"b", &"c"]))
+	assert_eq(o.tab, LobbyOverlay.Tab.WEAPON)
+
+
+func test_no_auto_switch_when_already_on_weapons() -> void:
+	var o := LobbyOverlay.new()
+	o.open_for(&"eden")
+	o.show_tab(LobbyOverlay.Tab.WEAPON)
+	assert_false(o.ability_added([&"a", &"b", &"c"]))

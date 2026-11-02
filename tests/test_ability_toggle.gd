@@ -53,10 +53,36 @@ func test_ready_is_refused_while_a_slot_is_empty() -> void:
 	assert_true(arena.match_state.ready.has(1))
 
 
-func test_a_new_fighter_resets_the_gaps() -> void:
-	arena.select_special(me, 0, &"")
+func test_a_new_fighter_starts_with_every_slot_empty() -> void:
 	arena.select_character(me, &"eden")
+	for slot: int in Constants.SKILL_SLOTS:
+		assert_true(arena.match_state.slot_empty(1, slot), "slot %d empty" % slot)
+	arena.try_ready(1, true)
+	assert_false(arena.match_state.ready.has(1), "pick three first")
+	for slot: int in Constants.SKILL_SLOTS:
+		arena.select_special(me, slot, Player.default_skills(me.character)[slot].id)
 	assert_false(arena.match_state.has_gap(1))
+	arena.try_ready(1, true)
+	assert_true(arena.match_state.ready.has(1))
+
+
+func test_the_first_pick_empties_slots_even_for_the_default_fighter() -> void:
+	arena.select_character(me, me.character.id)
+	assert_eq(arena.match_state.gaps.get(1, 0), 7)
+	arena.select_special(me, 0, &"dash")
+	arena.select_character(me, me.character.id)  # tapping the same fighter again keeps the picks
+	assert_false(arena.match_state.slot_empty(1, 0))
+
+
+func test_the_weapon_still_defaults_to_the_signature() -> void:
+	arena.select_character(me, &"eden")
+	assert_eq(me.chosen_weapon.id if me.chosen_weapon != null else me.character.signature_weapon.id, me.character.signature_weapon.id)
+
+
+func test_bots_keep_their_default_abilities() -> void:
+	var bot: Player = arena.add_bot(Constants.BOT_ID_BASE, 1)
+	arena.select_character(bot, &"eden")
+	assert_false(arena.match_state.has_gap(bot.player_id))
 
 
 func test_picking_an_ability_held_by_an_empty_slot_swaps_cleanly() -> void:

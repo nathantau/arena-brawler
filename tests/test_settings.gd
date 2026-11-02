@@ -6,7 +6,7 @@ var _saved: Array = []
 
 
 func before_each() -> void:
-	_saved = [GameSettings.music, GameSettings.sfx, GameSettings.haptics, GameSettings.howto_seen]
+	_saved = [GameSettings.music, GameSettings.sfx, GameSettings.haptics, GameSettings.howto_seen, GameSettings.mode]
 
 
 func after_each() -> void:
@@ -14,6 +14,7 @@ func after_each() -> void:
 	GameSettings.sfx = _saved[1]
 	GameSettings.haptics = _saved[2]
 	GameSettings.howto_seen = _saved[3]
+	GameSettings.mode = _saved[4]
 	DirAccess.remove_absolute(TMP)
 
 
@@ -65,3 +66,25 @@ func test_music_loop_is_seamless_length() -> void:
 	var wav: AudioStreamWAV = Music.synthesize()
 	assert_eq(wav.loop_end * 2, wav.data.size())
 	assert_eq(wav.loop_mode, AudioStreamWAV.LOOP_FORWARD)
+
+
+func test_the_home_screen_mode_is_remembered() -> void:
+	GameSettings.mode = MatchRules.Mode.TEAMS
+	assert_eq(GameSettings.save_to(TMP), OK)
+	GameSettings.mode = MatchRules.Mode.DUEL
+	GameSettings.load_from(TMP)
+	assert_eq(GameSettings.mode, MatchRules.Mode.TEAMS)
+
+
+func test_a_bad_saved_mode_is_clamped() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("ui", "mode", 99)
+	cfg.save(TMP)
+	GameSettings.load_from(TMP)
+	assert_eq(GameSettings.mode, MatchRules.Mode.size() - 1)
+
+
+func test_every_mode_has_a_home_screen_rule() -> void:
+	assert_eq(MainMenu.MODE_RULES.size(), MatchRules.Mode.size())
+	for m: int in MatchRules.Mode.size():
+		assert_true((MainMenu.MODE_RULES[m] % MatchRules.kill_target(m as MatchRules.Mode)).length() > 0)

@@ -46,6 +46,8 @@ func _tick() -> void:
 		arena.select_character(me, &"flint")
 		arena.select_special(me, 1, &"blaze_run")
 		st.phase = phase
+		for pl: Player in arena.players:
+			arena.fill_gaps(pl)  # the lobby starts with empty ability slots
 		arena.referee.set_ready(1, true)
 	if frames == 420:
 		home = me.global_position

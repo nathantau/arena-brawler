@@ -20,8 +20,13 @@ const SPACING: int = 10
 const SHOT_FLAG: String = "--home-shot="
 const SHOT_DELAY: float = 2.0
 const GAME_LABEL_W: float = 430.0
+## One-line rule per mode, shown under the mode buttons for the picked one.
+const MODE_RULES: Array[String] = ["1v1 · first to %d kills", "Free-for-all · first to %d kills",
+	"3v3 · Capture the flag, first to %d"]
 
 var _status: Label
+var _mode_buttons: Array[Button] = []
+var _mode_rule: Label
 var _address: LineEdit
 var _join: Button
 var _host: Button
@@ -62,6 +67,7 @@ func _ready() -> void:
 	box.add_child(offline_row)
 	_hide_while_typing.append(offline_row)
 	box.add_child(_status)
+	box.add_child(_build_mode_picker())
 
 	_games_box = VBoxContainer.new()
 	_games_box.add_theme_constant_override("separation", SPACING)
@@ -106,6 +112,45 @@ func _ready() -> void:
 	box.add_child(_ip_row)
 	add_child(IntroSplash.new(backdrop, box))  # first-launch opening; skippable
 	_maybe_shoot()
+
+
+## Duel / FFA / 3v3 as a segmented row with the picked mode's rule under it; the pick is saved for next launch and
+## read by Main when Play or Host starts a match.
+func _build_mode_picker() -> Control:
+	GameSettings.ensure_loaded()
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", SPACING)
+	var size := Vector2((PLAY_SIZE.x - SPACING * 2.0) / 3.0, ROW_H)
+	for m: int in MatchRules.Mode.size():
+		var b: Button = _button(MatchRules.SHORT_NAMES[m], size)
+		b.pressed.connect(func() -> void: _pick_mode(m as MatchRules.Mode))
+		row.add_child(b)
+		_mode_buttons.append(b)
+	col.add_child(_centered(row))
+	_mode_rule = Label.new()
+	_mode_rule.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mode_rule.add_theme_font_override("font", UiStyle.body_font(true))
+	_mode_rule.add_theme_font_size_override("font_size", UiStyle.SIZE_BODY)
+	_mode_rule.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+	col.add_child(_mode_rule)
+	_hide_while_typing.append(col)
+	_style_modes()
+	return col
+
+
+func _pick_mode(m: MatchRules.Mode) -> void:
+	GameSettings.mode = m
+	GameSettings.save()
+	_style_modes()
+
+
+## The picked button wears the primary style; the rule line follows it.
+func _style_modes() -> void:
+	for i: int in _mode_buttons.size():
+		_mode_buttons[i].theme_type_variation = &"PrimaryButton" if i == GameSettings.mode else &"Button"
+	_mode_rule.text = MODE_RULES[GameSettings.mode] % MatchRules.kill_target(GameSettings.mode)
 
 
 ## Centred column right under the logo + tagline (the backdrop owns that spacing).

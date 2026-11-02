@@ -79,6 +79,8 @@ func _tick() -> void:
 		arena.select_character(a, &"flicker")
 		arena.select_character(b, &"eden")
 		st.phase = phase
+		for pl: Player in arena.players:
+			arena.fill_gaps(pl)  # the lobby starts with empty ability slots
 		arena.referee.set_ready(1, true)  # leaves the loading room: the match counts down, then plays
 	if me == null or frames < START_FRAME:
 		return

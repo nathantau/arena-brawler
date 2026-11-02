@@ -65,4 +65,5 @@ func _tick() -> void:
 			arena.select_special(me, 1, combos[idx][1])
 		if combos[idx][2] != &"":
 			arena.select_weapon(me, combos[idx][2])
+		arena.fill_gaps(me)  # a fresh pick starts with empty slots
 		st.phase = phase

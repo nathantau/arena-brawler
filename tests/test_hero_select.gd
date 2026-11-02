@@ -128,6 +128,7 @@ func test_bot_switches_away_when_a_human_locks_its_fighter() -> void:
 	assert_ne(mate, 0)
 	var want: StringName = arena.get_player(mate).character.id
 	arena.select_character(arena.get_player(1), want)
+	arena.fill_gaps(arena.get_player(1))  # a fresh pick has empty ability slots: READY needs them filled
 	assert_eq(arena.try_ready(1, true), 0, "a human beats a bot")
 	_step(arena, 3)
 	assert_ne(arena.get_player(mate).character.id, want, "the bot moved")
@@ -160,6 +161,8 @@ func test_two_teammates_hover_the_same_fighter_first_to_lock_wins() -> void:
 		arena.referee.set_team(id, A)
 	arena.select_character(arena.get_player(2), EDEN)
 	arena.select_character(arena.get_player(3), EDEN)
+	for id: int in [2, 3]:
+		arena.fill_gaps(arena.get_player(id))  # empty ability slots refuse READY
 	_step(arena, 3)
 	var st: MatchState = arena.match_state
 	var hovers: Dictionary = {1: arena.get_player(1).character.id, 2: EDEN, 3: EDEN}
