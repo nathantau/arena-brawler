@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_tesla_coil.png" id="2_icon"]
+[ext_resource type="Resource" path="res://data/weapons/coil_zap.tres" id="3_zap"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"tesla_coil"
+display_name = "Tesla Coil"
+kind = 18
+special = true
+blurb = "Zapping turret"
+tags = Array[StringName]([&"bolt"])
+cooldown = 11.0
+duration = 7.0
+sapling_range = 300.0
+sapling_interval = 0.6
+sapling_muzzle_height = 40.0
+sapling_weapon = ExtResource("3_zap")

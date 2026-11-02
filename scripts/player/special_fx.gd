@@ -310,6 +310,34 @@ const THUNDER_IMPACT_FRAME: float = 2.0
 const THUNDER_LEAD: float = THUNDER_IMPACT_FRAME / THUNDER_BOLT_FPS
 const THUNDER_BASE_Y: float = 112.0
 const THUNDER_BOLT_TIME: float = 0.5
+## Shadow's Umbral Spikes share Thunder Strike's path (same frame layout, ring 48 art px, impact on frame 2): the strips are picked by skill id.
+const SPIKE_MARK_ART: Texture2D = preload(FX_DIR + "spike_mark.png")
+const SPIKE_BURST_ART: Texture2D = preload(FX_DIR + "spike_burst.png")
+const SPIKE_SCORCH_ART: Texture2D = preload(FX_DIR + "spike_scorch.png")
+const THUNDER_DEFAULT_ART: Array[Texture2D] = [THUNDER_MARK_ART, THUNDER_BOLT_ART, THUNDER_SCORCH_ART]
+const THUNDER_ART_SETS: Dictionary = {&"umbral_spikes": [SPIKE_MARK_ART, SPIKE_BURST_ART, SPIKE_SCORCH_ART]}
+## Shadow's Void Rift shares Kunai Rain's path (128 px ring strips, 64 px lashes rooted on row RAIN_KUNAI_BASE_Y): [form, loop, end, lash].
+const RIFT_FORM_ART: Texture2D = preload(FX_DIR + "rift_form.png")
+const RIFT_LOOP_ART: Texture2D = preload(FX_DIR + "rift_loop.png")
+const RIFT_END_ART: Texture2D = preload(FX_DIR + "rift_end.png")
+const RIFT_LASH_ART: Texture2D = preload(FX_DIR + "rift_lash.png")
+const RAIN_ART_SETS: Dictionary = {&"void_rift": [RIFT_FORM_ART, RIFT_LOOP_ART, RIFT_END_ART, RIFT_LASH_ART]}
+## Bolt's Tesla Coil shares Cherry Sapling's path (64 px strips, foot on row SAPLING_BASE_Y): [grow, idle, fire, wilt].
+const COIL_ART_SETS: Dictionary = {&"tesla_coil": [preload(FX_DIR + "coil_grow.png"), preload(FX_DIR + "coil_idle.png"),
+	preload(FX_DIR + "coil_fire.png"), preload(FX_DIR + "coil_wilt.png")]}
+## Bolt's Arc Dash (a DASH-kind special): a lightning trail tiled from the takeoff to him (ARC_TILE art px tiles ARC_STEP apart, the bolt's ends
+## 3 px in so neighbours join), a flash at takeoff and a shock where he lands; the trail fades over ARC_FADE_TIME once he stops.
+const ARC_TRAIL_ART: Texture2D = preload(FX_DIR + "arc_trail.png")
+const ARC_GO_ART: Texture2D = preload(FX_DIR + "arc_go.png")
+const ARC_LAND_ART: Texture2D = preload(FX_DIR + "arc_land.png")
+const ARC_TILE: float = 32.0
+const ARC_STEP: float = 25.0
+const ARC_FPS: float = 24.0
+const ARC_FADE_TIME: float = 0.3
+const ARC_BURST_TIME: float = 0.4
+## Eden's Thorn Burst (a VOLLEY): a flourish centred on her when the ring of thorns leaves.
+const THORN_BURST_ART: Texture2D = preload(FX_DIR + "thorn_burst.png")
+const THORN_BURST_TIME: float = 0.45  # a floor layer centred on her feet (behind her), withering fast
 ## Eden's Thorn Quake (generate.py QUAKE_*), the same shape as Thunder Strike: a ring of roots with thorn tips marks the spot (floor layer),
 ## then a thicket of bark thorns bursts up (impact on frame 2) over a scar in the ground that heals away.
 const QUAKE_MARK_ART: Texture2D = preload(FX_DIR + "quake_mark.png")
@@ -382,6 +410,13 @@ var _erupt_started: bool = false
 var _sapling: CharacterSkill
 var _sapling_shots: int = 0
 var _sapling_fire_t: float = -1.0
+var _sapling_fire_art: Texture2D = SAPLING_FIRE_ART
+## Arc Dash: the slot while he runs (else null), where the run began, where the trail ends (he, then where he stopped), seconds into its fade (-1 = none).
+var _arc: CharacterSkill
+var _arc_from: Vector2 = Vector2.ZERO
+var _arc_to: Vector2 = Vector2.ZERO
+var _arc_fade: float = -1.0
+var _thorn_was: bool = false
 ## The eruption slot while its crack shows (else null).
 var _crack: CharacterSkill
 var _last_points := PackedVector2Array()
@@ -579,6 +614,12 @@ func sync(p: Player) -> void:
 	if bursting and not _supernova_was:
 		_poof(p.global_position + p.visual_offset, SUPERNOVA_ART, SUPERNOVA_TIME)
 	_supernova_was = bursting
+	var thorn: CharacterSkill = _slot_id(p, &"thorn_burst")
+	var thorning: bool = thorn != null and thorn.is_active() and not p.dead
+	if thorning and not _thorn_was:
+		_poof(p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y), THORN_BURST_ART, THORN_BURST_TIME, 1.0, true)
+	_thorn_was = thorning
+	_sync_arc(p)
 	_flare_at = p.global_position + p.visual_offset
 	_flare_flip = p.facing.x < 0.0
 	_sync_swing(p)
@@ -714,6 +755,51 @@ func _draw_moss() -> void:
 		Constants.SPRITE_SCALE * k, 1.0, _floor)
 
 
+## Arc Dash: remembers where the run began (the first frame the slot is seen active) and where he is, flashes at takeoff and landing.
+func _sync_arc(p: Player) -> void:
+	var slot: CharacterSkill = _slot_id(p, &"arc_dash")
+	var here: Vector2 = p.global_position + p.visual_offset
+	var on: bool = slot != null and slot.is_active() and not p.dead
+	if on and _arc == null:
+		_arc_from = here
+		_arc_fade = -1.0
+		_poof(here, ARC_GO_ART, ARC_BURST_TIME)
+	elif _arc != null and not on:
+		_arc_fade = 0.0
+		if not p.dead:
+			_poof(_arc_to + Vector2(0.0, Player.FOOT_RING_Y - 9.0), ARC_LAND_ART, ARC_BURST_TIME)
+	if on:
+		_arc_to = here
+	_arc = slot if on else null
+
+
+func _draw_arc() -> void:
+	if _arc == null and _arc_fade < 0.0:
+		return
+	var vec: Vector2 = _arc_to - _arc_from
+	var px: float = Constants.SPRITE_SCALE
+	var length: float = vec.length() / px
+	if length < 4.0:
+		return
+	var alpha: float = 1.0 if _arc != null else clampf(1.0 - _arc_fade / ARC_FADE_TIME, 0.0, 1.0)
+	var frames: int = ARC_TRAIL_ART.get_width() / ARC_TRAIL_ART.get_height()
+	draw_set_transform(_arc_from, vec.angle(), Vector2.ONE)
+	var x: float = 0.0
+	var i: int = 0
+	while x < length:  # each tile's bolt starts 3 px in, so tile i begins 3 px before its x
+		var w: float = minf(ARC_TILE, length - x + 3.0)
+		draw_texture_rect_region(ARC_TRAIL_ART, Rect2(Vector2(x - 3.0, -ARC_TILE * 0.5) * px, Vector2(w, ARC_TILE) * px),
+			Rect2(((int(_time * ARC_FPS) + i * 3) % frames) * ARC_TILE, 0.0, w, ARC_TILE), Color(1, 1, 1, alpha))
+		x += ARC_STEP
+		i += 1
+	draw_set_transform(Vector2.ZERO)
+
+
+## The art strips of a Sapling-path slot: [grow, idle, fire, wilt].
+static func _sapling_art(slot: CharacterSkill) -> Array:
+	return COIL_ART_SETS.get(slot.data.id, [SAPLING_GROW_ART, SAPLING_IDLE_ART, SAPLING_FIRE_ART, SAPLING_WILT_ART])
+
+
 ## The tree is drawn from the synced skill time (grow, idle loop, wilt over the last strip's length); a flourish
 ## plays each time a shot falls due.
 func _sync_sapling(p: Player) -> void:
@@ -723,6 +809,7 @@ func _sync_sapling(p: Player) -> void:
 		_sapling_shots = 0
 		_sapling_fire_t = -1.0
 		return
+	_sapling_fire_art = _sapling_art(_sapling)[2]
 	var shots: int = floori((_sapling.elapsed() + CharacterSkill.WHIRL_EPSILON) / _sapling.data.sapling_interval)
 	if shots > _sapling_shots:
 		_sapling_fire_t = 0.0
@@ -780,9 +867,11 @@ func _sync_thunder(p: Player) -> void:
 	var slot: CharacterSkill = _slot(p, SkillData.Kind.THUNDER)
 	var on: bool = slot != null and slot.is_active() and not p.dead
 	if on and not _thunder_started and slot.active_remaining <= THUNDER_LEAD:  # the bolt drops
-		var lift: float = (THUNDER_BOLT_ART.get_height() * 0.5 - THUNDER_BASE_Y) * Constants.SPRITE_SCALE
-		_poof(slot.anchor + Vector2(0.0, lift), THUNDER_BOLT_ART, THUNDER_BOLT_TIME)
-		_poof(slot.anchor, THUNDER_SCORCH_ART, THUNDER_BOLT_TIME, slot.data.thunder_blast.splash_radius / THUNDER_ART_RADIUS, true)
+		var art: Array = THUNDER_ART_SETS.get(slot.data.id, THUNDER_DEFAULT_ART)
+		var bolt_art: Texture2D = art[1]
+		var lift: float = (bolt_art.get_height() * 0.5 - THUNDER_BASE_Y) * Constants.SPRITE_SCALE
+		_poof(slot.anchor + Vector2(0.0, lift), bolt_art, THUNDER_BOLT_TIME)
+		_poof(slot.anchor, art[2], THUNDER_BOLT_TIME, slot.data.thunder_blast.splash_radius / THUNDER_ART_RADIUS, true)
 	_thunder_started = on and (_thunder_started or slot.active_remaining <= THUNDER_LEAD)
 	_thunder_mark = slot if on and slot.active_remaining > THUNDER_LEAD else null
 
@@ -811,12 +900,14 @@ func _sync_rain(p: Player) -> void:
 		_rain_ticks = ticks
 		_rain_spot = open.anchor
 	elif _rain != null and not p.dead:
-		_poof(_rain_spot, RAIN_END_ART, RAIN_END_TIME, _rain.data.storm_radius / RAIN_ART_RADIUS, true)
+		var end_art: Texture2D = RAIN_ART_SETS.get(_rain.data.id, [null, null, RAIN_END_ART])[2]
+		_poof(_rain_spot, end_art, RAIN_END_TIME, _rain.data.storm_radius / RAIN_ART_RADIUS, true)
 	_rain = open
 
 
 func _volley(p: Player, slot: CharacterSkill, tick: int) -> void:
-	var lift := Vector2(0.0, (RAIN_KUNAI_ART.get_height() * 0.5 - RAIN_KUNAI_BASE_Y) * Constants.SPRITE_SCALE)
+	var drop: Texture2D = RAIN_ART_SETS.get(slot.data.id, [null, null, null, RAIN_KUNAI_ART])[3]
+	var lift := Vector2(0.0, (drop.get_height() * 0.5 - RAIN_KUNAI_BASE_Y) * Constants.SPRITE_SCALE)
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	var query := PhysicsRayQueryParameters2D.new()
 	for node: Node in p.get_parent().get_children():
@@ -824,12 +915,12 @@ func _volley(p: Player, slot: CharacterSkill, tick: int) -> void:
 		if target != null and target != p and not target.dead \
 				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius \
 				and AutoAim.has_line_of_sight(space, query, slot.anchor, target.global_position):
-			_poof(target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y) + lift, RAIN_KUNAI_ART, RAIN_KUNAI_TIME)
+			_poof(target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y) + lift, drop, RAIN_KUNAI_TIME)
 	for i: int in RAIN_EXTRA:  # varied spots, the same on every peer (a hash of the tick), kept inside the ring
 		var h: float = fposmod(sin(float(tick * 7 + i * 13) * 12.9898 + slot.anchor.x * 0.01) * 43758.5453, 1.0)
 		var h2: float = fposmod(sin(float(tick * 5 + i * 31) * 78.233 + slot.anchor.y * 0.01) * 24634.6345, 1.0)
 		var at: Vector2 = slot.anchor + Vector2.from_angle(h * TAU) * (0.25 + 0.6 * h2) * slot.data.storm_radius
-		_poof(at + lift, RAIN_KUNAI_ART, RAIN_KUNAI_TIME)
+		_poof(at + lift, drop, RAIN_KUNAI_TIME)
 
 
 func _sync_godspeed(p: Player) -> void:
@@ -1013,9 +1104,13 @@ func _process(delta: float) -> void:
 		_body_a = maxf(0.0, _body_a - delta / BODY_FADE_OUT)
 	else:
 		_body_a = 1.0
+	if _arc_fade >= 0.0:
+		_arc_fade += delta
+		if _arc_fade > ARC_FADE_TIME:
+			_arc_fade = -1.0
 	if _sapling_fire_t >= 0.0:
 		_sapling_fire_t += delta
-		if _sapling_fire_t > SAPLING_FIRE_ART.get_width() / SAPLING_FIRE_ART.get_height() / SAPLING_FIRE_FPS:
+		if _sapling_fire_t > _sapling_fire_art.get_width() / _sapling_fire_art.get_height() / SAPLING_FIRE_FPS:
 			_sapling_fire_t = -1.0
 	if _vine_t >= 0.0:
 		_vine_t += delta
@@ -1156,6 +1251,7 @@ func _draw() -> void:
 	_draw_gust()
 	_draw_snare()
 	_draw_sapling()
+	_draw_arc()
 	_draw_blaze()
 	_draw_storm()
 	_draw_shadow()
@@ -1190,8 +1286,9 @@ func _draw_floor() -> void:
 		var tk: float = _thunder_mark.data.thunder_blast.splash_radius / THUNDER_ART_RADIUS
 		var ease_in: float = clampf(tt / THUNDER_EASE_IN, 0.0, 1.0)
 		var near: float = clampf(tt / maxf(_thunder_mark.data.duration, 0.01), 0.0, 1.0)
-		_draw_frame(THUNDER_MARK_ART, int(tt * THUNDER_MARK_FPS) % (THUNDER_MARK_ART.get_width() / THUNDER_MARK_ART.get_height()),
-			THUNDER_MARK_ART.get_height(), _thunder_mark.anchor, px * tk * lerpf(1.15, 1.0, near) * lerpf(0.9, 1.0, ease_in),
+		var mark_art: Texture2D = THUNDER_ART_SETS.get(_thunder_mark.data.id, THUNDER_DEFAULT_ART)[0]
+		_draw_frame(mark_art, int(tt * THUNDER_MARK_FPS) % (mark_art.get_width() / mark_art.get_height()),
+			mark_art.get_height(), _thunder_mark.anchor, px * tk * lerpf(1.15, 1.0, near) * lerpf(0.9, 1.0, ease_in),
 			ease_in, _floor)
 	if _quake_mark != null:  # the root ring, easing in and tightening as the thorns near
 		var qt: float = _quake_mark.elapsed()
@@ -1204,11 +1301,12 @@ func _draw_floor() -> void:
 		var rt: float = _rain.elapsed()
 		var rk: float = px * _rain.data.storm_radius / RAIN_ART_RADIUS
 		var ra: float = clampf(rt / RAIN_EASE_IN, 0.0, 1.0)
+		var rain_art: Array = RAIN_ART_SETS.get(_rain.data.id, [RAIN_FORM_ART, RAIN_LOOP_ART])
 		if rt < RAIN_FORM_TIME:
-			_draw_frame(RAIN_FORM_ART, mini(int(rt / RAIN_FORM_TIME * RAIN_FORM_COUNT), RAIN_FORM_COUNT - 1), RAIN_SIZE,
+			_draw_frame(rain_art[0], mini(int(rt / RAIN_FORM_TIME * RAIN_FORM_COUNT), RAIN_FORM_COUNT - 1), RAIN_SIZE,
 				_rain.anchor, rk, ra, _floor)
 		else:
-			_draw_frame(RAIN_LOOP_ART, int(rt * RAIN_FPS) % RAIN_LOOP_COUNT, RAIN_SIZE, _rain.anchor, rk, 1.0, _floor)
+			_draw_frame(rain_art[1], int(rt * RAIN_FPS) % RAIN_LOOP_COUNT, RAIN_SIZE, _rain.anchor, rk, 1.0, _floor)
 	if _whirl_t >= 0.0:
 		_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
 			WHIRL_RING_ART.get_height(), _whirl_at, px * _whirl_radius / WHIRL_ART_RADIUS,
@@ -1296,24 +1394,26 @@ func _draw_bubble() -> void:
 func _draw_sapling() -> void:
 	if _sapling == null:
 		return
-	var art: Texture2D = SAPLING_IDLE_ART
+	var set: Array = _sapling_art(_sapling)
+	var idle_art: Texture2D = set[1]
+	var art: Texture2D = idle_art
 	var frame: int = int(_time * SAPLING_IDLE_FPS)
 	var t: float = _sapling.elapsed()
-	var grow_time: float = SAPLING_GROW_ART.get_width() / SAPLING_GROW_ART.get_height() / SAPLING_FPS
-	var wilt_time: float = SAPLING_WILT_ART.get_width() / SAPLING_WILT_ART.get_height() / SAPLING_FPS
+	var grow_time: float = set[0].get_width() / set[0].get_height() / SAPLING_FPS
+	var wilt_time: float = set[3].get_width() / set[3].get_height() / SAPLING_FPS
 	if t < grow_time:
-		art = SAPLING_GROW_ART
+		art = set[0]
 		frame = int(t * SAPLING_FPS)
 	elif _sapling.active_remaining < wilt_time:
-		art = SAPLING_WILT_ART
+		art = set[3]
 		frame = int((wilt_time - _sapling.active_remaining) * SAPLING_FPS)
 	elif _sapling_fire_t >= 0.0:
-		art = SAPLING_FIRE_ART
+		art = set[2]
 		frame = int(_sapling_fire_t * SAPLING_FIRE_FPS)
 	var n: int = art.get_width() / art.get_height()
 	var px: float = Constants.SPRITE_SCALE
 	var up: float = (art.get_height() * 0.5 - SAPLING_BASE_Y) * px
-	_draw_frame(art, mini(frame, n - 1) if art != SAPLING_IDLE_ART else frame % n, art.get_height(),
+	_draw_frame(art, mini(frame, n - 1) if art != idle_art else frame % n, art.get_height(),
 		_sapling.anchor + Vector2(0.0, up), px)
 
 
