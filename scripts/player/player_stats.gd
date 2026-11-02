@@ -22,6 +22,12 @@ var slow_remaining: float = 0.0
 var slow_factor: float = 1.0
 ## Stun (Shadow Bind): can't move, fire or use specials while > 0. Set only on the authority, synced.
 var stun_remaining: float = 0.0
+## Soak (Splash Soaker): slowed by Constants.SOAK_SLOW, drips, can't burn while > 0. Set only on the authority, synced.
+var soak_remaining: float = 0.0
+## Bubble trap (Bubble Wand): can't move (can aim and shoot) while > 0, synced; `trap_cooldown` (authority only) is the
+## per-target lockout (from the moment of the trap) before the next one.
+var trap_remaining: float = 0.0
+var trap_cooldown: float = 0.0
 ## Burn (Ember Palm): `burn_damage` every `burn_interval` while burn_remaining > 0; one burn at a time, a new hit
 ## refreshes it. Time is synced (it drives the ember flicker); the rest only matters to the authority.
 var burn_remaining: float = 0.0
@@ -55,6 +61,9 @@ func reset() -> void:
 	slow_remaining = 0.0
 	slow_factor = 1.0
 	stun_remaining = 0.0
+	soak_remaining = 0.0
+	trap_remaining = 0.0
+	trap_cooldown = 0.0
 	burn_remaining = 0.0
 	burn_due = 0
 
@@ -94,6 +103,9 @@ func tick(delta: float) -> void:
 	spawn_protect = maxf(0.0, spawn_protect - delta)
 	slow_remaining = maxf(0.0, slow_remaining - delta)
 	stun_remaining = maxf(0.0, stun_remaining - delta)
+	soak_remaining = maxf(0.0, soak_remaining - delta)
+	trap_remaining = maxf(0.0, trap_remaining - delta)
+	trap_cooldown = maxf(0.0, trap_cooldown - delta)
 	var burn_before: float = burn_remaining
 	burn_remaining = maxf(0.0, burn_remaining - delta)
 	burn_due = ceili(burn_before / burn_interval) - ceili(burn_remaining / burn_interval)
@@ -127,10 +139,32 @@ func apply_slow(time: float, factor: float) -> void:
 
 ## Sets the victim alight (refreshes a burn already running, never stacks).
 func ignite(time: float, damage: int, interval: float, attacker_id: int) -> void:
+	if soak_remaining > 0.0:  # wet things don't burn
+		return
 	burn_remaining = time
 	burn_damage = damage
 	burn_interval = interval
 	burn_attacker = attacker_id
+
+
+## Soaks the victim (refreshes) and puts out any burn.
+func soak(time: float) -> void:
+	soak_remaining = time
+	burn_remaining = 0.0
+	burn_due = 0
+
+
+## Traps the victim in a bubble unless the per-target cooldown still runs. True if it caught.
+func trap(time: float, cooldown: float) -> bool:
+	if trap_cooldown > 0.0 or trap_remaining > 0.0:
+		return false
+	trap_remaining = time
+	trap_cooldown = maxf(time, cooldown)
+	return true
+
+
+func is_trapped() -> bool:
+	return trap_remaining > 0.0
 
 
 ## A new stun never shortens the current one.
@@ -143,7 +177,8 @@ func is_stunned() -> bool:
 
 
 func speed_scale() -> float:
-	return slow_factor if slow_remaining > 0.0 else 1.0
+	var scale: float = slow_factor if slow_remaining > 0.0 else 1.0
+	return minf(scale, Constants.SOAK_SLOW) if soak_remaining > 0.0 else scale
 
 
 func try_spend_energy(cost: int) -> bool:

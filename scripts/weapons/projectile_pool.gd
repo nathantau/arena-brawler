@@ -29,6 +29,9 @@ signal exploded(at: Vector2, radius: float, color: Color, slam: bool, art: bool)
 ## A splash weapon with its own burst strip (WeaponData.burst_art): `art_radius` = art px to the splash edge.
 signal burst_shown(at: Vector2, radius: float, art: Texture2D, art_radius: float)
 
+## A fun weapon's shot ended (hit, wall or end of range): play its impact strip / floor decal (cosmetic, every peer).
+signal fx_spawned(at: Vector2, weapon: WeaponData, seed: int)
+
 ## Slam lines reach this far past their end so a crate that stopped them is struck.
 const LINE_END_REACH: float = 6.0
 const TRAIL_TIME: float = 0.025
@@ -53,6 +56,12 @@ const SPLASH_QUERY_MAX: int = 32
 ## Bouncing projectiles pulse so they read as "about to blow".
 const FUSE_PULSE_SPEED: float = 18.0
 const FUSE_PULSE_SCALE: float = 0.2
+## Fun weapons: sparkle colours of a rainbow trail, a bee's wing-beat speed-up, the lob shadow.
+const RAINBOW: Array[Color] = [Color8(217, 71, 75), Color8(245, 210, 86), Color8(126, 224, 207), Color8(226, 110, 160),
+	Color8(172, 210, 104), Color8(240, 138, 62)]
+const FLAP_FPS_SCALE: float = 2.5
+const LOB_SHADOW: Color = Color(0, 0, 0, 0.28)
+const LOB_SHADOW_SIZE: Vector2 = Vector2(0.9, 0.4)
 const HIT_MASK: int = Constants.LAYER_WALLS | Constants.LAYER_PLAYERS | Constants.LAYER_SHIELDS | Constants.LAYER_CRATES
 
 
@@ -103,6 +112,17 @@ class Slot:
 	var skip_id: int = -1
 	## Parried: drawn in the parrier's colour so it reads as theirs now.
 	var reflected: bool = false
+	## The weapon, for the fun hooks (wobble, growth, soak, trap, sting, fx). Null for shards and blasts.
+	var weapon: WeaponData
+	var age: float = 0.0
+	var total_life: float = 1.0
+	var travelled: float = 0.0
+	var base_radius: float = 0.0
+	## Bee hover: time left circling the target (< 0 = not started), and whether it already stung / circled.
+	var hover_left: float = -1.0
+	var hovered: bool = false
+	## Shards with a strip show this fixed frame (-1 = flicker through the frames).
+	var frame_lock: int = -1
 
 
 class Impact:
@@ -267,8 +287,22 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.split_scale = weapon.split_scale
 	slot.skip_id = -1
 	slot.reflected = false
+	slot.weapon = weapon if _is_fun(weapon) else null
+	slot.age = 0.0
+	slot.total_life = slot.life
+	slot.travelled = 0.0
+	slot.base_radius = slot.radius
+	slot.hover_left = -1.0
+	slot.hovered = false
+	slot.frame_lock = -1
 	if not AutoAim.has_line_of_sight(space, _los_query, origin, muzzle):
 		_stop(slot, muzzle)
+
+
+## Whether a weapon uses any of the "Fun" hooks (so its slots keep a weapon reference).
+static func _is_fun(w: WeaponData) -> bool:
+	return w.lob_height > 0.0 or w.curve_deg != 0.0 or w.wobble_amp > 0.0 or w.grow_max > 0.0 or w.soak_time > 0.0 \
+		or w.trap_time > 0.0 or w.sting_delay > 0.0 or w.rainbow_trail or w.impact_art != null or w.splat_art != null
 
 
 func _beam(owner_id: int, seq: int, pellet: int, origin: Vector2, dir: Vector2, weapon: WeaponData,
@@ -495,11 +529,13 @@ func _physics_process(delta: float) -> void:
 func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void:
 	if s.drag > 0.0:
 		s.vel *= exp(-s.drag * delta)
+	if s.weapon != null:
+		_step_fun(s, delta)
 	if s.boomerang and s.returning:
 		if not _steer_home(s):
 			s.active = false
 			return
-	elif s.homing > 0.0:
+	elif s.homing > 0.0 and s.hover_left <= 0.0:  # (a bee circling its target steers itself)
 		_steer(s, delta)
 	var to: Vector2 = s.pos + s.vel * delta
 	_query.from = s.pos
@@ -572,7 +608,61 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 		elif s.splash_radius > 0.0:
 			_explode(s, s.pos)
 		else:
-			s.active = false
+			_finish(s, s.pos, false)
+
+
+## The "Fun" hooks of one step: arc, wobble, growth, and a bee circling its target. All a pure function of the slot's own state.
+func _step_fun(s: Slot, delta: float) -> void:
+	var w: WeaponData = s.weapon
+	s.age += delta
+	s.travelled += s.vel.length() * delta
+	if w.curve_deg != 0.0:
+		s.vel = s.vel.rotated(deg_to_rad(w.curve_deg) * delta)
+	if w.wobble_amp > 0.0:
+		var phase: float = float(posmod(s.shot_seq * 7 + s.pellet * 13, 64)) * 0.37
+		s.vel = s.vel.rotated(w.wobble_amp * delta * sin(s.age * TAU * w.wobble_hz + phase))
+	if w.grow_max > 0.0:
+		var k: float = clampf(s.travelled / w.projectile_range, 0.0, 1.0)
+		var grow: float = lerpf(1.0, w.grow_max, k)
+		s.damage = maxi(1, roundi(s.base_damage * grow))
+		s.radius = s.base_radius * grow
+	if w.sting_delay > 0.0:
+		_step_bee(s, delta)
+
+
+## Hive Gun: a bee close to its target buzzes round it for `sting_delay` (passing through it), then dives to sting.
+func _step_bee(s: Slot, delta: float) -> void:
+	if s.hovered:
+		return
+	if s.hover_left < 0.0:
+		var best: Player = _nearest_enemy(s)
+		if best != null and best.global_position.distance_to(s.pos) <= Constants.BEE_ORBIT_RADIUS:
+			s.hover_left = s.weapon.sting_delay
+			s.skip_id = best.player_id
+			s.life += s.weapon.sting_delay
+		return
+	s.hover_left -= delta
+	var side: float = 1.0 if s.pellet % 2 == 0 else -1.0
+	s.vel = s.vel.rotated(Constants.BEE_ORBIT_RATE * side * delta)
+	if s.hover_left <= 0.0:  # done buzzing: dive straight at the target
+		s.hovered = true
+		s.skip_id = -1
+		var prey: Player = _nearest_enemy(s)
+		if prey != null:
+			s.vel = (prey.global_position - s.pos).normalized() * s.vel.length() * Constants.BEE_DIVE_SCALE
+
+
+func _nearest_enemy(s: Slot) -> Player:
+	var best: Player = null
+	var best_d: float = INF
+	for p: Player in targets:
+		if _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden():
+			continue
+		var d: float = s.pos.distance_squared_to(p.global_position)
+		if d < best_d:
+			best_d = d
+			best = p
+	return best
 
 
 ## A boomerang reached the end of its outward flight (or a wall): it comes back, free to hit everyone again.
@@ -728,9 +818,15 @@ func _catch(s: Slot, at: Vector2, ward: ShieldWall) -> void:
 	ward.caught.emit(at)
 
 
-func _finish(s: Slot, at: Vector2) -> void:
+func _finish(s: Slot, at: Vector2, pop: bool = true) -> void:
 	s.active = false
-	_add_impact(at, s.radius, s.color)
+	if s.weapon != null and (s.weapon.impact_art != null or s.weapon.splat_art != null):
+		if (s.shot_seq + s.pellet) % maxi(1, s.weapon.fx_every) == 0:
+			fx_spawned.emit(at, s.weapon, s.shot_seq * 31 + s.pellet)
+		if s.weapon.impact_art != null:
+			return  # the strip is the pop
+	if pop:
+		_add_impact(at, s.radius, s.color)
 
 
 func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> void:
@@ -770,14 +866,20 @@ func _spawn_shards(s: Slot, at: Vector2) -> void:
 	if speed <= 0.0:
 		return
 	var dir: Vector2 = s.vel / speed
-	var fan: float = deg_to_rad(Constants.SPLIT_FAN_DEG)
+	var w: WeaponData = s.weapon
+	if w != null and w.split_speed > 0.0:
+		speed = w.split_speed
+	var ring: bool = w != null and w.split_fan_deg >= 360.0
+	var fan: float = deg_to_rad(w.split_fan_deg if w != null and w.split_fan_deg > 0.0 else Constants.SPLIT_FAN_DEG)
+	var reach: float = w.split_range if w != null and w.split_range > 0.0 else Constants.SPLIT_RANGE
 	for i: int in s.split_count:
 		var t: float = 0.0 if s.split_count == 1 else float(i) / float(s.split_count - 1) - 0.5
+		var turn: float = TAU * float(i) / float(s.split_count) if ring else t * fan
 		var shard: Slot = _next_free_slot()
 		shard.active = true
 		shard.pos = at
-		shard.vel = dir.rotated(t * fan) * speed
-		shard.life = Constants.SPLIT_RANGE / speed
+		shard.vel = dir.rotated(turn) * speed
+		shard.life = reach / speed
 		shard.owner_id = s.owner_id
 		shard.shot_seq = s.shot_seq
 		shard.pellet = s.pellet + Constants.SPLIT_PELLET_BASE * (i + 1)
@@ -788,7 +890,12 @@ func _spawn_shards(s: Slot, at: Vector2) -> void:
 		shard.knockback = s.knockback * s.split_scale
 		shard.radius = s.radius * Constants.SPLIT_RADIUS_SCALE
 		shard.color = s.color
-		shard.sprite = s.sprite
+		shard.sprite = w.split_sprite if w != null and w.split_sprite != null else s.sprite
+		shard.frame_lock = i if w != null and w.split_sprite != null else -1
+		shard.weapon = null
+		shard.age = 0.0
+		shard.hover_left = -1.0
+		shard.hovered = false
 		shard.splash_radius = 0.0
 		shard.bounces_left = 0
 		shard.bounce_damping = 1.0
@@ -869,6 +976,11 @@ func _damage_player(target: Player, attacker_id: int, seq: int, pellet: int, dam
 			target.stats.apply_slow(snare_time, snare_factor)
 		if shot != null and shot.burn_time > 0.0 and not target.dead:
 			target.stats.ignite(shot.burn_time, shot.burn_damage, shot.burn_interval, attacker_id)
+		if shot != null and shot.weapon != null and not target.dead:
+			if shot.weapon.soak_time > 0.0:
+				target.stats.soak(shot.weapon.soak_time)
+			if shot.weapon.trap_time > 0.0:
+				target.stats.trap(shot.weapon.trap_time, shot.weapon.trap_cooldown)
 		player_hit.emit(key_owner if key_owner >= 0 else attacker_id, seq, pellet, target.player_id, dealt, crit, at)
 
 
@@ -901,13 +1013,26 @@ func _draw() -> void:
 			draw_line(s.pos - s.vel * TRAIL_TIME, s.pos, trail_color, s.radius * TRAIL_WIDTH_SCALE)
 			draw_circle(s.pos, s.radius * (pulse if fused else 1.0), s.color)
 			continue
-		var tick: int = int(_time * SPRITE_FPS * (2.0 if fused else 1.0)) + s.pellet
+		var fps: float = SPRITE_FPS * (2.0 if fused else 1.0)
+		var w: WeaponData = s.weapon
+		if w != null and w.sting_delay > 0.0:
+			fps *= FLAP_FPS_SCALE
+		var tick: int = int(_time * fps) + s.pellet
 		var back: Vector2 = -s.vel.normalized()
-		for i: int in TRAIL_DOTS:  # pixel trail, crits in gold
-			var size: float = px * (TRAIL_DOTS - i)
-			var at: Vector2 = ((s.pos + back * px * 4.0 * (i + 2)) / px).floor() * px
+		var rainbow: bool = w != null and w.rainbow_trail
+		var lift: Vector2 = Vector2.ZERO
+		if w != null and w.lob_height > 0.0:  # drawn above its ground spot; a shadow stays on the floor
+			var u: float = clampf(s.age / maxf(s.total_life, 0.001), 0.0, 1.0)
+			lift = Vector2(0.0, -w.lob_height * 4.0 * u * (1.0 - u))
+			draw_set_transform(s.pos, 0.0, LOB_SHADOW_SIZE)
+			draw_circle(Vector2.ZERO, s.radius * 1.2, LOB_SHADOW)
+			draw_set_transform(Vector2.ZERO)
+		for i: int in TRAIL_DOTS * (2 if rainbow else 1):  # pixel trail, crits in gold
+			var size: float = px * (TRAIL_DOTS - i % TRAIL_DOTS)
+			var jitter: Vector2 = Vector2(sin(_time * 40.0 + i * 2.3 + s.pellet), cos(_time * 33.0 + i * 1.7)) * px * 2.0 if rainbow else Vector2.ZERO
+			var at: Vector2 = ((s.pos + lift + back * px * 4.0 * (i + 2) * (0.5 if rainbow else 1.0) + jitter) / px).floor() * px
 			draw_rect(Rect2(at - Vector2(size, size) * 0.5, Vector2(size, size)),
-				CRIT_SPARKLE_COLOR if s.crit and (tick + i) % 2 == 0 else s.color)
+				CRIT_SPARKLE_COLOR if s.crit and (tick + i) % 2 == 0 else RAINBOW[(tick + i + s.pellet) % RAINBOW.size()] if rainbow else s.color)
 		var h: float = s.sprite.get_height()
 		var frames: int = int(s.sprite.get_width() / h)
 		var scale_px: float = px * (CRIT_SPRITE_SCALE if s.crit else 1.0)
@@ -919,8 +1044,11 @@ func _draw() -> void:
 					angle - Constants.BOOMERANG_SPIN * Constants.BOOMERANG_GHOST_GAP * (g + 1), Vector2(scale_px, scale_px))
 				draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
 					Color(1, 1, 1, Constants.BOOMERANG_GHOST_ALPHA / (g + 1)))
-		draw_set_transform(s.pos, angle, Vector2(scale_px, scale_px))
-		draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
+		if w != null and w.grow_max > 0.0 and s.base_radius > 0.0:
+			scale_px *= s.radius / s.base_radius
+		var frame: int = s.frame_lock if s.frame_lock >= 0 else tick % frames
+		draw_set_transform(s.pos + lift, angle, Vector2(scale_px, scale_px))
+		draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((frame % frames) * h, 0, h, h),
 			CRIT_FLASH if s.crit and tick % 2 == 0 else REFLECT_TINT if s.reflected else Color.WHITE)
 		draw_set_transform(Vector2.ZERO)
 	for imp: Impact in _impacts:

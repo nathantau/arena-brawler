@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/splash_soaker.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/splash_soaker.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/water_splash.png" id="10_x"]
+[ext_resource type="Texture2D" path="res://assets/fx/water_splat.png" id="11_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"splash_soaker"
+display_name = "Splash Soaker"
+muzzle_x = 40.0
+pickup = true
+damage = 3
+fire_interval = 0.07
+spread_deg = 5.0
+projectile_speed = 640.0
+projectile_range = 260.0
+projectile_radius = 3.0
+energy_cost = 7
+knockback = 6.0
+color = Color(0.45, 0.78, 1, 1)
+screen_shake = 0.0
+sfx = &"shot_light"
+drag = 0.8
+soak_time = 2.0
+lob_height = 7.0
+curve_deg = 22.0
+impact_art = ExtResource("10_x")
+splat_art = ExtResource("11_x")
+fx_every = 3
+hook = "Soaks: slow, snuffs fire"

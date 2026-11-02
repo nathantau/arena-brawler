@@ -25,3 +25,4 @@ screen_shake = 0.3
 sfx = &"shot_sniper"
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"precision"])
+pickup = false

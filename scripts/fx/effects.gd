@@ -114,6 +114,29 @@ const NUMBER_POP_TIME: float = 0.12
 const NUMBER_POP_SCALE: float = 1.45
 
 
+## Fun weapons: floor decals (a puddle, a snow splat) that fade, soak drips, the bubble-trap pop.
+const SPLAT_POOL: int = 64
+const SPLAT_TIME: float = 2.4
+const SPLAT_FADE_SHARE: float = 0.5
+const SPLAT_JITTER: float = 6.0
+const IMPACT_STRIP_TIME: float = 0.35
+const DRIP_COLORS: Array[Color] = [Color8(60, 111, 209), Color8(126, 224, 207), Color8(242, 240, 230)]
+const DRIP_SIZE: float = 4.0
+const DRIP_LIFE: float = 0.55
+const DRIP_SPEED: float = 50.0
+const DRIP_SPREAD_X: float = 12.0
+const POP_ART: Texture2D = preload("res://assets/fx/bubble_pop.png")
+const POP_TIME: float = 0.4
+
+
+class Splat:
+	var life: float = 0.0
+	var pos: Vector2 = Vector2.ZERO
+	var art: Texture2D
+	var frame: int = 0
+	var flip: bool = false
+
+
 class Particle:
 	var life: float = 0.0
 	var max_life: float = 1.0
@@ -229,6 +252,8 @@ var _nc: int = 0
 var _bc: int = 0
 var _sc: int = 0
 var _rc: int = 0
+var _splats: Array[Splat] = []
+var _splat_cursor: int = 0
 var _rng := RandomNumberGenerator.new()
 
 
@@ -261,6 +286,8 @@ func _ready() -> void:
 		_swings.append(Swing.new())
 	for i: int in RING_POOL:
 		_rings.append(Ring.new())
+	for i: int in SPLAT_POOL:
+		_splats.append(Splat.new())
 
 
 ## `dir` zero = all directions, else a cone of `spread` radians around it.
@@ -297,6 +324,8 @@ func clear() -> void:
 		r.life = 0.0
 	for m: Marker in _markers:
 		m.life = 0.0
+	for sp: Splat in _splats:
+		sp.life = 0.0
 	_held.clear()
 
 
@@ -376,6 +405,40 @@ func ember(at: Vector2) -> void:
 	for i: int in EMBER_COUNT:
 		var from: Vector2 = at + Vector2(_rng.randf_range(-EMBER_SPREAD_X, EMBER_SPREAD_X), _rng.randf_range(-EMBER_SPREAD_Y, EMBER_SPREAD_Y))
 		burst(from, EMBER_COLORS[_rng.randi() % EMBER_COLORS.size()], 1, EMBER_SPEED, EMBER_SIZE, EMBER_LIFE, Vector2.UP, 0.9)
+
+
+## A fun weapon's shot ended at `at`: its impact strip (one art px = SPRITE_SCALE) and a fading floor decal.
+func fun_impact(at: Vector2, w: WeaponData, seed: int) -> void:
+	if w.impact_art != null:
+		play_strip(at, w.impact_art, IMPACT_STRIP_TIME)
+	if w.splat_art != null:
+		var sp: Splat = _splats[_splat_cursor]
+		_splat_cursor = (_splat_cursor + 1) % _splats.size()
+		var h: int = w.splat_art.get_height()
+		sp.art = w.splat_art
+		sp.frame = posmod(seed, maxi(1, w.splat_art.get_width() / h))
+		sp.flip = posmod(seed / 3, 2) == 1
+		sp.pos = at + Vector2(posmod(seed * 7, 13) - 6, posmod(seed * 5, 11) - 5) * SPLAT_JITTER / 6.0
+		sp.life = SPLAT_TIME
+
+
+## Plays a strip of square frames once, centred on `at`, at the art's own pixel size.
+func play_strip(at: Vector2, art: Texture2D, duration: float = RING_TIME) -> void:
+	var half: float = art.get_height() * 0.5
+	burst_strip(at, half * Constants.SPRITE_SCALE, art, half)
+	_rings[(_rc + _rings.size() - 1) % _rings.size()].duration = duration
+	_rings[(_rc + _rings.size() - 1) % _rings.size()].life = duration
+
+
+## The bubble round a trapped fighter popped.
+func bubble_pop(at: Vector2) -> void:
+	play_strip(at, POP_ART, POP_TIME)
+
+
+## A soaked fighter sheds a droplet.
+func drip(at: Vector2) -> void:
+	burst(at + Vector2(_rng.randf_range(-DRIP_SPREAD_X, DRIP_SPREAD_X), 0.0), DRIP_COLORS[_rng.randi() % DRIP_COLORS.size()],
+		1, DRIP_SPEED, DRIP_SIZE, DRIP_LIFE, Vector2.DOWN, 0.6)
 
 
 func beam(from: Vector2, to: Vector2, color: Color, width: float) -> void:
@@ -521,6 +584,8 @@ func _process(delta: float) -> void:
 		r.life -= delta
 	for m: Marker in _markers:
 		m.life -= delta
+	for sp: Splat in _splats:
+		sp.life -= delta
 	queue_redraw()
 	_ground.queue_redraw()
 
@@ -574,6 +639,16 @@ func _draw() -> void:
 
 
 func _draw_slams() -> void:
+	for sp: Splat in _splats:
+		if sp.life <= 0.0:
+			continue
+		var h: float = sp.art.get_height()
+		var fade: float = clampf(sp.life / (SPLAT_TIME * SPLAT_FADE_SHARE), 0.0, 1.0)
+		var size: float = h * Constants.SPRITE_SCALE
+		_ground.draw_set_transform(sp.pos, 0.0, Vector2(-1.0 if sp.flip else 1.0, 1.0))
+		_ground.draw_texture_rect_region(sp.art, Rect2(-size * 0.5, -size * 0.5, size, size),
+			Rect2(sp.frame * h, 0.0, h, h), Color(1, 1, 1, fade))
+		_ground.draw_set_transform(Vector2.ZERO)
 	for r: Ring in _rings:
 		if r.life > 0.0 and r.art == null:
 			var k: float = 1.0 - r.life / r.duration

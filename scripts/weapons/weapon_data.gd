@@ -118,6 +118,36 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var beam_ramp_time: float = 0.0
 @export var beam_ramp_max: float = 2.0
 
+@export_group("Fun")
+## Cosmetic lob: the bullet is drawn this many px above its ground spot at mid flight (a shadow stays on the floor).
+@export var lob_height: float = 0.0
+## Constant bend of the flight (deg/s, a slight arc; Splash Soaker).
+@export var curve_deg: float = 0.0
+## Sine wobble: the heading swings by up to `wobble_amp` rad/s at `wobble_hz`, phase per pellet (bubbles, bees).
+@export var wobble_amp: float = 0.0
+@export var wobble_hz: float = 0.0
+## > 0: damage and size grow from x1 to x`grow_max` over the shot's range (Snowball Cannon).
+@export var grow_max: float = 0.0
+## A hit soaks the victim this long: slowed, drips, can't burn (PlayerStats.soak).
+@export var soak_time: float = 0.0
+## A hit traps the victim in a bubble (can't move, can aim and shoot) for `trap_time`, at most once per `trap_cooldown` s per target.
+@export var trap_time: float = 0.0
+@export var trap_cooldown: float = 0.0
+## A homing shot that gets near its target circles it for this long before stinging (Hive Gun).
+@export var sting_delay: float = 0.0
+## Split shards: fan (360 = an even ring), range (0 = Constants.SPLIT_RANGE), art (a strip; shard i shows frame i) and speed scale.
+@export var split_fan_deg: float = 0.0
+@export var split_range: float = 0.0
+@export var split_speed: float = 0.0
+@export var split_sprite: Texture2D
+## The trail sparkles in rotating colours (Firework Launcher).
+@export var rainbow_trail: bool = false
+## Cosmetic end-of-flight FX (every peer): a strip of square frames played at the end, and a fading floor decal (variants side by side).
+## Only every `fx_every`th pellet shows them.
+@export var impact_art: Texture2D
+@export var splat_art: Texture2D
+@export var fx_every: int = 1
+
 @export_group("Melee")
 @export var melee_range: float = 64.0
 @export var melee_arc_deg: float = 120.0

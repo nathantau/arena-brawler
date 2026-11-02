@@ -79,7 +79,10 @@ func test_catalog_has_the_mvp_eight() -> void:
 	assert_false(pickups.has(&"pistol"), "sidearm isn't a pickup")
 	assert_false(pickups.has(&"bot_blaster"))
 	assert_false(pickups.has(&"rocket"), "Boomtube retired (Hopper covers explosive)")
-	assert_eq(pickups.size(), 6, "signature weapons are not pickups")
+	assert_eq(pickups.size(), 5, "signature weapons and the retired shared ones are not pickups")
+	for id: StringName in [&"smg", &"shotgun", &"sniper", &"grenade", &"laser", &"sword"]:
+		assert_false(pickups.has(id), "%s is hidden for now" % id)
+		assert_not_null(_w(id), "%s stays loadable" % id)
 	for w: WeaponData in catalog._by_id.values():
 		if w.kind == WeaponData.Kind.PROJECTILE and not w.blast:
 			assert_not_null(w.projectile_sprite, "%s has bullet art" % w.id)
@@ -377,17 +380,13 @@ func test_signature_weapons_belong_to_their_character_only() -> void:
 			assert_eq(other.can_use(sig), other == c, "%s using %s" % [other.id, sig.id])
 
 
-func test_pickup_weapons_are_many_to_many() -> void:
-	var users_per_weapon: Dictionary[StringName, int] = {}
+func test_pickup_weapons_are_usable_by_everyone() -> void:
+	for id: StringName in [&"splash_soaker", &"bubble_wand", &"snowball_cannon", &"firework_launcher", &"hive_gun"]:
+		assert_true(catalog.pickup_ids().has(id), "%s is a pickup" % id)
+		assert_true(_w(id).tags.is_empty(), "%s has no character restriction" % id)
 	for c: CharacterData in characters.all():  # the roster's data, benched characters too
-		var usable: int = 0
 		for id: StringName in catalog.pickup_ids():
-			if c.can_use(_w(id)):
-				usable += 1
-				users_per_weapon[id] = users_per_weapon.get(id, 0) + 1
-		assert_between(usable, 2, catalog.pickup_ids().size() - 1, "%s: some weapons, not all" % c.id)
-	for id: StringName in catalog.pickup_ids():
-		assert_true(users_per_weapon.get(id, 0) >= 2, "%s is shared by 2+ characters" % id)
+			assert_true(c.can_use(_w(id)), "%s can use %s" % [c.id, id])
 
 
 func test_untagged_weapons_are_universal() -> void:

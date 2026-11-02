@@ -14,6 +14,10 @@ signal healed(user: Player, amount: int)
 signal spawned(user: Player)
 ## A burning player sheds an ember now and then (cosmetic, every peer, from the synced burn time).
 signal burning(user: Player)
+## A soaked player drips (cosmetic, every peer, from the synced soak time).
+signal dripping(user: Player)
+## A bubble trap ran out (or its victim died): pop it at `at` (cosmetic, every peer).
+signal trap_popped(at: Vector2)
 
 ## Layout of capture_state() / apply_state() arrays sent in snapshots.
 enum StateField {
@@ -22,7 +26,7 @@ enum StateField {
 	CHARACTER, SKILL_IDS, SKILL_COOLDOWNS, SKILL_ACTIVE, SKILL_DIRECTIONS, SKILL_ANCHORS, SKILL_WEAPON_COOLDOWNS,
 	SKILL_HITS,
 	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ, SLOW_REMAINING, SLOW_FACTOR,
-	STUN_REMAINING, SPAWN_PROTECT, WEAPON_RAMP, BURN_REMAINING,
+	STUN_REMAINING, SPAWN_PROTECT, WEAPON_RAMP, BURN_REMAINING, SOAK_REMAINING, TRAP_REMAINING,
 	COUNT,
 }
 
@@ -48,6 +52,13 @@ const GUN_FADE_TIME: float = 0.12
 const GHOST_FADE_TIME: float = 0.15
 ## A burning player sheds an ember this often.
 const EMBER_INTERVAL: float = 0.25
+## Bubble trap look: the bubble art (6-frame loop, 64 px frames) fills this many world px, swells in over TRAP_IN s.
+const TRAP_ART: Texture2D = preload("res://assets/fx/bubble_trap.png")
+const TRAP_FPS: float = 10.0
+const TRAP_IN: float = 0.12
+const TRAP_BODY_Y: float = -6.0
+## Soak look: a cool tint and drips at this interval.
+const SOAK_GLOW: Color = Color(0.72, 0.88, 1.12)
 ## Burning look: a warm tint pulsing at BURN_PULSE_HZ and BURN_LICKS small flame licks at a time rising off the body at
 ## the BURN_ROOTS (px from the node origin: head, shoulders, torso, hips), each living BURN_LICK_LIFE s.
 const BURN_PULSE_HZ: float = 3.0
@@ -151,6 +162,8 @@ var fallback_weapon: WeaponData
 var skills: Array[CharacterSkill] = []
 var facing: Vector2 = Vector2.RIGHT
 var _ember_left: float = 0.0
+var _trap_prev: float = 0.0
+var _trap_age: float = 0.0
 ## Null for client-side remote players (they are positioned by interpolation).
 var controller: PlayerController
 var projectiles: ProjectilePool
@@ -367,6 +380,12 @@ func _process(delta: float) -> void:
 		_ember_left = EMBER_INTERVAL
 		if stats.burn_remaining > 0.0 and not dead:
 			burning.emit(self)
+		if stats.soak_remaining > 0.0 and not dead:
+			dripping.emit(self)
+	if _trap_prev > 0.0 and stats.trap_remaining <= 0.0 and not dead:
+		trap_popped.emit(global_position + visual_offset + Vector2(0.0, TRAP_BODY_Y))
+	_trap_age = _trap_age + delta if stats.trap_remaining > 0.0 else 0.0
+	_trap_prev = stats.trap_remaining
 	_god_linger = godspeed_linger(_god_linger, _any_skill_active() and not dead, delta)
 	godspeed = character.has_godspeed() and _god_linger > 0.0 and not dead
 	god_level = 0.0 if dead or not character.has_godspeed() else god_level_step(god_level, godspeed, delta)
@@ -410,6 +429,8 @@ func _process(delta: float) -> void:
 		var glow: Color = Color.WHITE.lerp(BURN_GLOW, BURN_GLOW_MAX * heat)  # a light warm wash, never a muddy multiply
 		glow.a = _sprite.modulate.a
 		_sprite.modulate = glow
+	elif stats.soak_remaining > 0.0 and _sprite.modulate.a > 0.0:
+		_sprite.modulate = Color(SOAK_GLOW.r, SOAK_GLOW.g, SOAK_GLOW.b, _sprite.modulate.a)
 	if stats.spawn_protect > 0.0 and _sprite.modulate.a > 0.0:
 		# Spawn protection: flickers (faster as it runs out) with a cool shimmer sweeping through the tint.
 		var phase: float = Time.get_ticks_msec() * 0.001
@@ -525,7 +546,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		velocity = Vector2.ZERO
 	elif grapple != null:
 		_pull(grapple, delta)
-	elif rooted:
+	elif rooted or stats.is_trapped():  # (a bubble holds him still but he can aim and shoot)
 		velocity = Vector2.ZERO
 	elif _trail_dash(delta) != null:  # runs the burning line, walls were measured at takeoff
 		var run: CharacterSkill = _trail_dash(delta)
@@ -1292,6 +1313,8 @@ func capture_state() -> Array:
 	s[StateField.SPAWN_PROTECT] = stats.spawn_protect
 	s[StateField.WEAPON_RAMP] = Vector2(weapon.spin, weapon.idle)
 	s[StateField.BURN_REMAINING] = stats.burn_remaining
+	s[StateField.SOAK_REMAINING] = stats.soak_remaining
+	s[StateField.TRAP_REMAINING] = stats.trap_remaining
 	return s
 
 
@@ -1347,6 +1370,8 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	weapon.spin = ramp.x
 	weapon.idle = ramp.y
 	stats.burn_remaining = s[StateField.BURN_REMAINING]
+	stats.soak_remaining = s[StateField.SOAK_REMAINING]
+	stats.trap_remaining = s[StateField.TRAP_REMAINING]
 	_set_dead(s[StateField.DEAD])
 	_sync_shields()
 	return true
@@ -1389,8 +1414,21 @@ func _draw_overlay() -> void:
 	_overlay.draw_set_transform(visual_offset)
 	if stats.burn_remaining > 0.0 and not dead and not is_concealed():
 		_draw_burn(_overlay)
+	if stats.trap_remaining > 0.0 and not dead and not is_concealed():
+		_draw_trap(_overlay)
 	if not is_local and not is_concealed():
 		_draw_bars(Constants.PLAYER_RADIUS)
+
+
+## The bubble round a trapped fighter: swells in, then a shimmering loop.
+func _draw_trap(ci: CanvasItem) -> void:
+	var h: float = TRAP_ART.get_height()
+	var frames: int = int(TRAP_ART.get_width() / h)
+	var k: int = int(_trap_age * TRAP_FPS) % frames
+	var swell: float = 1.0 - pow(1.0 - clampf(_trap_age / TRAP_IN, 0.0, 1.0), 2.0)
+	var size: float = h * Constants.SPRITE_SCALE * swell
+	ci.draw_texture_rect_region(TRAP_ART, Rect2(Vector2(-size, -size) * 0.5 + Vector2(0.0, TRAP_BODY_Y), Vector2(size, size)),
+		Rect2(Vector2(k * h, 0.0), Vector2(h, h)))
 
 
 ## Small flame licks rising off the body: each grows from its root, sways, thins to a tip and dithers out, snapped to art pixels

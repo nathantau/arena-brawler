@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/snowball_cannon.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/snowball_cannon.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/snow_puff.png" id="10_x"]
+[ext_resource type="Texture2D" path="res://assets/fx/snow_splat.png" id="11_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"snowball_cannon"
+display_name = "Snowball Cannon"
+muzzle_x = 40.0
+pickup = true
+damage = 16
+fire_interval = 0.7
+spread_deg = 3.0
+projectile_speed = 520.0
+projectile_range = 540.0
+projectile_radius = 6.0
+energy_cost = 70
+knockback = 140.0
+color = Color(0.9, 0.95, 1, 1)
+screen_shake = 0.12
+sfx = &"shot_launcher"
+snare_time = 1.0
+snare_factor = 0.7
+grow_max = 1.8
+lob_height = 20.0
+impact_art = ExtResource("10_x")
+splat_art = ExtResource("11_x")
+hook = "Grows as it flies, chills"

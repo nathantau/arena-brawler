@@ -1955,7 +1955,10 @@ WEAPON_ANIMS = {"flint_palm": ember_palm}
 def weapon_image(draw) -> Image.Image:
     c = Canvas()
     draw(c)
-    return outline(c.img).crop((0, 0, WEAPON_W, WEAPON_H))
+    img = outline(c.img)
+    for fn in getattr(c, "after", ()):  # crisp overlays drawn after the outline (see "Fun weapons")
+        fn(img)
+    return img.crop((0, 0, WEAPON_W, WEAPON_H))
 
 
 # --- arenas: 32x32 tiles drawn at the characters' pixel scale (48 px world tiles) ---------
@@ -4377,7 +4380,10 @@ def projectile_strip(draw, n: int = 2) -> Image.Image:
     for f in range(n):
         c = Canvas(PROJ)
         draw(c, f)
-        frames_.append(outline(c.img))
+        img = outline(c.img)
+        for fn in getattr(c, "after", ()):
+            fn(img)
+        frames_.append(img)
     return strip(frames_)
 
 
@@ -9843,6 +9849,492 @@ FX.update({
 })
 
 
+# --- Fun weapons: Splash Soaker, Bubble Wand, Snowball Cannon, Firework Launcher, Hive Gun ---------------------
+# Held guns (48x24, grip at GRIP), bullets (PROJ cells), impact strips and floor decals (assets/fx). Pieces that must stay
+# crisp and unoutlined (bubble films, sparkles) are drawn AFTER outline() through `c.after` callables.
+
+def put(img: Image.Image, x: int, y: int, col) -> None:
+    """One opaque pixel, ignored outside the image (used by the after-outline overlays)."""
+    if 0 <= x < img.width and 0 <= y < img.height:
+        img.putpixel((x, y), tuple(col) + (255,))
+
+
+def clear_disc(c: Canvas, cx: float, cy: float, r: float) -> None:
+    for y in range(c.size):
+        for x in range(c.size):
+            if math.hypot(x - cx, y - cy) < r:
+                c.px[x, y] = (0, 0, 0, 0)
+
+
+def after(c: Canvas, fn) -> None:
+    if not hasattr(c, "after"):
+        c.after = []
+    c.after.append(fn)
+
+
+def star4(img: Image.Image, x: int, y: int, r: int, col, core=WHITE) -> None:
+    """A little four-point sparkle: a core, arms of length r, dimmer diagonal specks on the big ones."""
+    put(img, x, y, core)
+    for d in range(1, r + 1):
+        k = col if d < r else DARKER.get(col, col) if r > 1 else col
+        for dx, dy in ((d, 0), (-d, 0), (0, d), (0, -d)):
+            put(img, x + dx, y + dy, k)
+    if r >= 2:
+        for dx, dy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
+            put(img, x + dx, y + dy, DARKER.get(col, col))
+
+
+def splash_soaker(c: Canvas, t: int = 0) -> None:
+    """A chunky toy super-soaker: a big see-through water tank over a blue body, orange pistol grip, a red pump."""
+    c.part(P([(5, 14), (11, 14), (10, 21), (4, 21)]), ORANGE)  # grip
+    c.flat(L([(6, 17), (9, 17)], 1), RED)
+    c.flat(L([(5, 19), (8, 19)], 1), RED)
+    c.part(RR((9, 3, 31, 10), 3), TEAL_L)  # the tank
+    c.flat(RR((10, 6, 30, 9), 2), BLUE)  # water
+    c.flat(L([(11, 5), (28, 5)], 1), WHITE)  # waterline glint
+    c.flat(L([(12, 4), (16, 4)], 1), WHITE)  # glass highlight
+    for x, y in ((14, 8), (19, 7), (25, 8)):
+        c.dot(x, y, TEAL_L)  # bubbles
+    c.part(RR((13, 2, 19, 5), 1), YELLOW)  # fill cap
+    c.flat(L([(14, 3), (18, 3)], 1), WHITE)
+    c.part(RR((4, 9, 33, 16), 3), BLUE)  # body
+    c.flat(L([(6, 10), (22, 10)], 1), TEAL_L)
+    c.flat(R((7, 13, 27, 13)), NAVY)
+    c.part(R((33, 10, 40, 13)), STEEL)  # barrel
+    c.part(R((40, 9, 43, 14)), ORANGE)  # nozzle
+    c.flat(R((43, 10, 43, 13)), OUTLINE)
+    c.part(RR((17, 16, 29, 20), 2), RED)  # pump
+    for x in (19, 22, 25, 28):
+        c.flat(L([(x, 17), (x, 19)], 1), MAROON)
+    c.flat(R((12, 16, 13, 18)), YELLOW)  # trigger
+    after(c, lambda img: (put(img, 45, 11, TEAL_L), put(img, 46, 13, BLUE)))
+
+
+def bubble_wand(c: Canvas, t: int = 1) -> None:
+    """A candy-striped wand with a ring; a soap film swells in the ring, bulges into a bubble and lets go (t 0..3)."""
+    c.part(L([(5, 17), (29, 14)], 4), PINK_L)  # handle
+    for i in range(4):
+        x = 5 + 6 * i
+        c.flat(L([(x, 17 - (x - 5) // 9), (x + 2, 14 - (x - 5) // 9)], 1), RED)
+    c.part(E((2, 15, 7, 20)), PINK)  # end knob
+    c.part(E((27, 3, 44, 20)), PINK)  # ring
+    clear_disc(c, 35.5, 11.5, 5.4)
+    c.flat(L([(30, 6), (33, 4)], 1), WHITE)  # ring glint
+    c.dot(40, 5, PINK_L)
+
+    def film(img: Image.Image) -> None:
+        cx, cy = 35.5, 11.5
+        for y in range(img.height):
+            for x in range(img.width):
+                if math.hypot(x - cx, y - cy) < 5.4:
+                    img.putpixel((x, y), (0, 0, 0, 0))
+        rx, ry, ox = ((4.6, 4.6, 0), (4.8, 5.2, 1.5), (5.6, 5.0, 3.0), (5.2, 5.2, 5.5))[t % 4]
+        for y in range(int(cy) - 8, int(cy) + 9):
+            for x in range(26, 47):
+                d = math.hypot((x - cx - ox) / rx, (y - cy) / ry)
+                if d > 1.0:
+                    if d <= 1.0 + 1.1 / min(rx, ry) and t >= 1 and math.hypot(x - cx, y - cy) > 5.4:
+                        put(img, x, y, OUTLINE)
+                    continue
+                inner = d < 1 - 1.15 / min(rx, ry)
+                ang = math.atan2(y - cy, x - cx - ox)
+                if not inner:  # rim, iridescent: teal bottom-left, pink top-right, white glint top-left
+                    put(img, x, y, WHITE if -2.5 < ang < -1.9 else PINK_L if -1.4 < ang < 0.5 else TEAL_L)
+                elif (x * 3 + y * 5 + t) % 5 == 0:
+                    put(img, x, y, PINK_L if (x + y) % 2 else TEAL_L)
+                elif t == 0 and (x + y) % 2 == 0:
+                    put(img, x, y, TEAL_L)  # the flat film across the ring
+        put(img, int(cx + ox - rx * 0.45), int(cy - ry * 0.5), WHITE)
+    after(c, film)
+
+
+def snowball_cannon(c: Canvas, t: int = 0) -> None:
+    """A stubby ice-blue cannon with snow piled on top, icicles underneath and a packed snowball in the mouth."""
+    c.part(P([(5, 15), (11, 15), (10, 21), (4, 21)]), BROWN)  # grip
+    c.part(RR((6, 6, 35, 17), 3), BLUE)  # barrel
+    c.flat(L([(8, 7), (30, 7)], 1), TEAL_L)
+    for x in (13, 26):
+        c.flat(R((x, 6, x + 1, 17)), WHITE)  # frosted bands
+    c.flat(L([(19, 9), (19, 15)], 1), TEAL_L)  # snowflake
+    c.flat(L([(16, 12), (22, 12)], 1), TEAL_L)
+    c.flat(L([(17, 10), (21, 14)], 1), WHITE)
+    c.flat(L([(21, 10), (17, 14)], 1), WHITE)
+    c.part(RR((34, 4, 40, 19), 2), STEEL)  # muzzle ring
+    c.flat(R((36, 7, 39, 16)), NAVY)
+    for x, y, w in ((9, 6, 4), (17, 5, 3), (24, 6, 4), (31, 6, 3)):  # snow piles
+        c.part(E((x - w, y - 3, x + w, y + 2)), WHITE)
+    for x, y in ((20, 17), (28, 18)):  # icicles
+        c.part(P([(x - 1, 16), (x + 1, 16), (x, y + 3)]), TEAL_L)
+    c.part(E((36, 5, 45, 17)), WHITE)  # the snowball, packed in
+    c.flat(R((40, 8, 41, 9)), STEEL)
+    c.dot(43, 12, STEEL)
+    c.dot(40, 13, STEEL)
+
+
+def firework_launcher(c: Canvas, t: int = 0) -> None:
+    """A fat festival mortar: red tube with gold bands and a star, a rocket tip in rainbow stripes, a lit fuse."""
+    c.part(P([(5, 15), (11, 15), (10, 21), (4, 21)]), BROWN)  # grip
+    c.part(RR((3, 6, 33, 17), 3), RED)  # tube
+    for x in (8, 26):
+        c.flat(R((x, 6, x + 1, 17)), YELLOW)
+    star = [(17, 7), (18.6, 10.4), (22, 10.8), (19.6, 13), (20.4, 16.5), (17, 14.7), (13.6, 16.5), (14.4, 13), (12, 10.8), (15.4, 10.4)]
+    c.flat(P([(round(x), round(y)) for x, y in star]), YELLOW)
+    c.dot(17, 11, WHITE)
+    c.part(R((33, 7, 36, 16)), STEEL_D)  # muzzle flare
+    c.part(P([(36, 8), (45, 11), (45, 12), (36, 15)]), TEAL_L)  # the rocket tip
+    c.flat(P([(38, 9), (41, 10), (41, 13), (38, 14)]), PINK)
+    c.flat(P([(41, 10), (43, 11), (43, 12), (41, 13)]), YELLOW)
+    c.flat(L([(5, 6), (4, 4)], 1), BROWN)  # fuse
+    after(c, lambda img: (put(img, 4, 3, YELLOW), put(img, 3, 2, WHITE), put(img, 5, 2, ORANGE), put(img, 2, 3, PINK_L)))
+
+
+def hive_gun(c: Canvas, t: int = 0) -> None:
+    """A beehive that shoots: stacked golden straw bands, a dark door, dripping honey and a stinger muzzle."""
+    for box, col in (((3, 15, 25, 21), OCHRE), ((4, 10, 24, 16), YELLOW), ((6, 6, 22, 11), OCHRE), ((9, 2, 19, 7), YELLOW)):
+        c.part(RR(box, 2), col)
+    c.flat(E((10, 15, 16, 20)), WALNUT_D)  # door
+    c.flat(L([(11, 15), (14, 15)], 1), BROWN)
+    for x in (7, 17, 21):
+        c.flat(L([(x, 11), (x - 1, 13)], 1), OCHRE_D)  # straw seams
+    c.part(P([(19, 20), (23, 20), (22, 21), (20, 21)]), YELLOW)  # honey drip
+    c.dot(21, 20, WHITE)
+    c.part(R((25, 9, 36, 14)), STEEL_D)  # barrel
+    for x in (28, 32):
+        c.flat(R((x, 9, x, 14)), STEEL)
+    c.part(P([(36, 7), (40, 7), (42, 11), (40, 16), (36, 16)]), OCHRE)  # hex muzzle ring
+    c.part(P([(42, 9), (45, 11), (42, 13)]), WALNUT)  # stinger
+    c.dot(44, 11, STEEL)
+    for x, col in ((12, WALNUT_D), (13, YELLOW), (14, WALNUT_D), (15, YELLOW)):  # a bee on guard on the roof
+        c.dot(x, 3, col)
+    c.dot(13, 2, WHITE)
+    c.dot(15, 2, WHITE)
+
+
+WEAPONS.update({"splash_soaker": splash_soaker, "bubble_wand": bubble_wand, "snowball_cannon": snowball_cannon,
+                "firework_launcher": firework_launcher, "hive_gun": hive_gun})
+WEAPON_ANIMS["bubble_wand"] = bubble_wand
+
+
+# --- bullets -----------------------------------------------------------------------------------------------------
+
+def water_drop(c: Canvas, f: int) -> None:  # a teardrop, tail trailing
+    m = PROJ // 2
+    c.part(P([(m - 6 - f, m), (m - 2, m - 2), (m + 1, m - 3), (m + 4, m - 2), (m + 5, m), (m + 4, m + 2), (m + 1, m + 3), (m - 2, m + 2)]), BLUE)
+    c.flat(L([(m - 1, m - 2), (m + 2, m - 2)], 1), TEAL_L)
+    c.dot(m + 3, m - 1, WHITE)
+
+
+def bubble_shot(c: Canvas, f: int) -> None:  # a soap bubble wobbling between squash and stretch
+    m = 9.5
+    rx, ry = ((6.2, 6.2), (6.8, 5.6), (6.2, 6.2), (5.6, 6.8))[f % 4]
+    thick = 1.2 / min(rx, ry)
+
+    def film(img: Image.Image) -> None:
+        for y in range(PROJ):
+            for x in range(PROJ):
+                d = math.hypot((x - m) / rx, (y - m) / ry)
+                if 1.0 < d <= 1.0 + thick:
+                    put(img, x, y, OUTLINE)
+                elif d < 1 - thick and (x * 3 + y * 5 + f) % 6 == 0:
+                    put(img, x, y, PINK_L if (x + y) % 2 else WHITE)
+                elif 1 - thick <= d <= 1.0:
+                    ang = math.atan2(y - m, x - m)
+                    if -2.7 < ang < -1.7:
+                        put(img, x, y, WHITE)
+                    elif 0.4 < ang < 1.7:
+                        put(img, x, y, PINK_L)
+        put(img, 6, 6, WHITE)
+        put(img, 7, 6 + f % 2, WHITE)
+    after(c, film)
+
+
+def snowball_shot(c: Canvas, f: int) -> None:  # a lumpy packed snowball, tumbling
+    m = PROJ // 2
+    c.part(E((m - 5, m - 5, m + 5, m + 5)), WHITE)
+    c.part(E((m - 6, m - 3, m - 2, m + 1)), WHITE)
+    spots = ((m - 2, m + 2), (m + 2, m - 1), (m, m - 3), (m + 3, m + 3))
+    for i, (x, y) in enumerate(spots):
+        c.dot(x + (f if i % 2 else -f), y, STEEL)
+    c.dot(m - 3, m - 3 + f, WHITE)
+
+
+def firework_rocket(c: Canvas, f: int) -> None:  # a party rocket: red body, gold band, pink nose, fins
+    m = PROJ // 2
+    c.part(P([(m - 6, m - 4), (m - 3, m - 2), (m - 3, m + 2), (m - 6, m + 4)]), BLUE)  # fins
+    c.part(RR((m - 5, m - 2, m + 3, m + 2), 1), RED)
+    c.flat(R((m - 1, m - 2, m, m + 2)), YELLOW)
+    c.part(P([(m + 3, m - 2), (m + 7, m), (m + 3, m + 2)]), PINK_L)
+    c.dot(m - 2, m - 1, WHITE)
+
+    def spark(img: Image.Image) -> None:
+        for i, col in enumerate((YELLOW, ORANGE, PINK, TEAL_L)):
+            put(img, m - 5 - i - f, m + ((i + f) % 3) - 1, col)
+        put(img, m - 6, m - 3 + f * 2, WHITE)
+    after(c, spark)
+
+
+SPARK_COLS = (RED, ORANGE, YELLOW, GREEN_L, TEAL_L, VIOLET_L, PINK, WHITE)
+
+
+def firework_spark(i: int) -> Image.Image:  # frame i: one colour of the star (a shard shows frame i)
+    c = Canvas(PROJ)
+    col = SPARK_COLS[i % len(SPARK_COLS)]
+    m = PROJ // 2
+    for d in range(-3, 4):
+        if d != 0:
+            k = col if abs(d) < 3 else DARKER.get(col, col)
+            c.dot(m + d, m, k)
+            c.dot(m, m + d, k)
+    for dx, dy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
+        c.dot(m + dx, m + dy, col)
+    c.dot(m, m, WHITE)
+    return outline(c.img)
+
+
+def bee_shot(c: Canvas, f: int) -> None:  # a plump bee, wings beating (4 frames)
+    m = PROJ // 2
+    reach = (7, 5, 3, 5)[f % 4]
+    for sgn in (-1, 1):  # wings on both sides of the body
+        c.part(P([(m - 1, m + sgn * 2), (m - 5, m + sgn * reach), (m + 1, m + sgn * (reach - 1))]), WHITE)
+    c.part(E((m - 5, m - 2, m + 1, m + 2)), YELLOW)  # abdomen
+    for x in (m - 4, m - 2):
+        c.flat(L([(x, m - 2), (x, m + 2)], 1), WALNUT_D)
+    c.part(E((m + 1, m - 2, m + 5, m + 2)), WALNUT)  # head
+    c.dot(m + 4, m - 1, WHITE)
+    c.dot(m - 6, m, WALNUT_D)  # stinger
+
+
+PROJECTILES.update({"splash_soaker": water_drop, "bubble_wand": bubble_shot, "snowball_cannon": snowball_shot,
+                    "firework_launcher": firework_rocket, "hive_gun": bee_shot})
+PROJECTILE_FRAMES.update({"bubble_wand": 4, "hive_gun": 4})
+
+
+# --- impact strips and floor decals -----------------------------------------------------------------------------------
+
+def ease_out(t: float) -> float:
+    return 1 - (1 - t) ** 2
+
+
+def water_splash_frame(k: int, n: int = 6) -> Image.Image:  # a crown of droplets thrown out of a squashed ripple
+    t = k / (n - 1)
+    img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    m = 16
+    e = ease_out(t)
+    if t < 0.85:  # ripple ring, squashed, two px thick while fresh
+        rr = 3 + 10 * ease_out(t / 0.85)
+        for a in range(0, 360, 6):
+            x, y = m + math.cos(math.radians(a)) * rr, m + 4 + math.sin(math.radians(a)) * rr * 0.45
+            if t < 0.6 or (a // 6 + k) % 2:
+                put(img, round(x), round(y), TEAL_L if a < 180 else BLUE)
+                if t < 0.4:
+                    put(img, round(x), round(y) + 1, BLUE)
+    for i in range(9):
+        a = math.tau * i / 9 + 0.3
+        lift = 11 * math.sin(math.pi * min(1.0, t * 1.15)) * (0.55 + 0.45 * (i % 3) / 2)
+        x = m + math.cos(a) * (2 + 11 * e)
+        y = m + 2 + math.sin(a) * (2 + 8 * e) * 0.6 - lift + 4 * t * t
+        r = 3 if t < 0.4 else 2 if t < 0.75 else 1
+        for dx in range(r):
+            for dy in range(r):
+                put(img, round(x) + dx, round(y) + dy, BLUE if dy else TEAL_L)
+        if r >= 2:
+            put(img, round(x), round(y), WHITE)
+    return img
+
+
+def puddle(v: int, base, rim, seed: int, wide: float) -> Image.Image:
+    rng = random.Random(seed + v)
+    c = Canvas(24)
+    m = 12
+    lumps = [(m + rng.randint(-3, 3), m + rng.randint(-1, 2), rng.randint(2, 4)) for _ in range(3 + v)]
+    c.part(lambda d, f: [d.ellipse((x - r * wide, y - r * 0.8, x + r * wide, y + r * 0.8), f) for x, y, r in lumps], base,
+           line=False)
+    for i in range(2 + v):  # flicked droplets
+        a = rng.uniform(0, math.tau)
+        d = rng.randint(8, 10)
+        x, y = round(m + math.cos(a) * d), round(m + math.sin(a) * d * 0.55)
+        c.part(E((x - 1, y - 1, x, y)), base, line=False)
+    x, y, r = lumps[0]
+    c.flat(L([(x - r, y - 1), (x - 1, y - 1)], 1), rim)
+    c.dot(x, y - 1, WHITE)
+    return trim(c.img)
+
+
+def water_splat(v: int) -> Image.Image:  # a tiny puddle seen from above, squashed
+    return puddle(v, BLUE, TEAL_L, 40, 1.5)
+
+
+def snow_splat(v: int) -> Image.Image:
+    return puddle(v, WHITE, WHITE, 60, 1.4)
+
+
+def snow_puff_frame(k: int, n: int = 8) -> Image.Image:
+    t = k / (n - 1)
+    rng = random.Random(7)
+    c = Canvas(48)
+    m = 24
+    e = ease_out(min(1.0, t * 1.3))
+    g = 1 - max(0.0, t - 0.5) / 0.5  # puffs shrink away at the end
+    puffs = []
+    for i in range(8):
+        a = math.tau * i / 8 + rng.uniform(-0.2, 0.2)
+        d = rng.uniform(0.6, 1.0)
+        puffs.append((m + math.cos(a) * 10 * e * d, m + math.sin(a) * 8 * e * d - 5 * t,
+                      max(1, round((6.5 - 2 * t) * g * rng.uniform(0.85, 1.15)))))
+    puffs.append((m, m - 2 * t, max(1, round((9 - 8 * t) * 1.0))))
+    c.part(blobs(puffs), WHITE)
+    img = outline(c.img)
+    for i in range(14):  # flakes fly out and drift down
+        a = rng.uniform(0, math.tau)
+        d = 8 + 14 * ease_out(t) * rng.uniform(0.6, 1.1)
+        if (i + k) % 4 != 3 or t < 0.7:
+            x, y = round(m + math.cos(a) * d), min(44, round(m + math.sin(a) * d * 0.8 + 8 * t * t))
+            x = min(max(x, 3), 44)
+            put(img, x, y, WHITE if i % 3 else TEAL_L)
+            if i % 4 == 0:
+                put(img, x + 1, y, WHITE)
+                put(img, x, y + 1, WHITE)
+    return img
+
+
+def bubble_pop_frame(k: int, n: int = 10) -> Image.Image:
+    img = Image.new("RGBA", (56, 56), (0, 0, 0, 0))
+    m = 28
+    R_ = 12
+    if k < 2:  # the bubble, then cracking
+        for a in range(0, 360, 3):
+            if k == 1 and (a // 3) % 6 == 0:
+                continue
+            ar = math.radians(a)
+            ang = math.atan2(math.sin(ar), math.cos(ar))
+            col = WHITE if -2.7 < ang < -1.7 else PINK_L if 0.4 < ang < 1.7 else TEAL_L
+            put(img, round(m + math.cos(ar) * R_), round(m + math.sin(ar) * R_), col)
+            put(img, round(m + math.cos(ar) * (R_ - 1)), round(m + math.sin(ar) * (R_ - 1)), col)
+    else:
+        u = (k - 2) / (n - 3)
+        e = ease_out(u)
+        if k == 2:  # a dithered flash ring at the moment it goes
+            for y in range(56):
+                for x in range(56):
+                    if abs(math.hypot(x - m, y - m) - (R_ + 2)) < 2.2 and (x + y) % 2 == 0:
+                        put(img, x, y, WHITE)
+        for i in range(10):  # arc fragments flying out, two px thick while fresh
+            a0 = math.tau * i / 10
+            rr = R_ + 2 + 11 * e
+            col = (TEAL_L, PINK_L, WHITE)[i % 3] if u < 0.7 else TEAL_L
+            for s in range(-3, 4):
+                if u > 0.55 and abs(s) > 1:
+                    continue
+                ar = a0 + s * 0.05
+                put(img, round(m + math.cos(ar) * rr), round(m + math.sin(ar) * rr), col)
+                if u < 0.5:
+                    put(img, round(m + math.cos(ar) * (rr - 1)), round(m + math.sin(ar) * (rr - 1)), col)
+        for i in range(8):  # droplets
+            a = math.tau * i / 8 + 0.2
+            rr = 5 + 15 * e
+            x, y = round(m + math.cos(a) * rr), round(m + math.sin(a) * rr + 4 * u * u)
+            put(img, x, y, BLUE if i % 2 else TEAL_L)
+            if u < 0.6:
+                put(img, x + 1, y, WHITE if i % 2 else TEAL_L)
+                put(img, x, y + 1, BLUE)
+        if u < 0.5:
+            for i in range(4):
+                a = math.tau * i / 4 + 0.7
+                star4(img, round(m + math.cos(a) * (R_ + 2 + 6 * e)), round(m + math.sin(a) * (R_ + 2 + 6 * e)),
+                      2 if u < 0.3 else 1, (PINK_L, TEAL_L)[i % 2])
+    return img
+
+
+def bubble_trap_frame(k: int, n: int = 6) -> Image.Image:
+    c = Canvas(64)
+    m = 31.5
+    R_ = 26.5 + (0.0, 0.5, 1.0, 0.5, 0.0, -0.5)[k % 6]
+    for y in range(64):
+        for x in range(64):
+            if R_ - 1.4 <= math.hypot(x - m, y - m) <= R_:
+                c.dot(x, y, TEAL_L)
+    img = outline(c.img)
+    for y in range(64):
+        for x in range(64):
+            d = math.hypot(x - m, y - m)
+            ang = math.atan2(y - m, x - m)
+            if R_ - 1.4 <= d <= R_:  # the rim shimmers round it as the loop runs
+                v = (ang / math.tau + 1 + k / n) % 1.0
+                put(img, x, y, WHITE if v < 0.12 else PINK_L if v < 0.4 else TEAL_L if v < 0.75 else BLUE)
+            elif d < R_ - 1.4 and (x * 13 + y * 29 + x * y + k * 5) % 23 == 0:
+                put(img, x, y, PINK_L if (x + y) % 2 else TEAL_L)  # a faint film
+    sweep = -2.4 + 0.08 * math.sin(math.tau * k / n)  # the big highlight, breathing
+    for dd in (4.0, 5.0):
+        for s in range(-9, 10):
+            a = sweep + s * 0.05
+            put(img, round(m + math.cos(a) * (R_ - dd)), round(m + math.sin(a) * (R_ - dd)), WHITE)
+    for s in range(-3, 4):
+        a = 0.9 + s * 0.06
+        put(img, round(m + math.cos(a) * (R_ - 4)), round(m + math.sin(a) * (R_ - 4)), PINK_L)
+    put(img, 20 + k % 2, 18, WHITE)
+    return img
+
+
+def firework_burst_frame(k: int, n: int = 14) -> Image.Image:
+    t = k / (n - 1)
+    m = 80
+    c = Canvas(160)
+    e = ease_out(t)
+    if t < 0.32:  # the flash: a white-hot core in a dithered golden halo
+        u = t / 0.32
+        c.part(blobs([(m, m, round((1 - u) * 13 + 4))]), WHITE if u < 0.5 else YELLOW, line=False)
+        halo = (1 - u) * 26 + 8
+        for y in range(160):
+            for x in range(160):
+                d = math.hypot(x - m, y - m)
+                if d < halo and dither_at(x, y, 0.55 * (1 - d / halo)) and not c.px[x, y][3]:
+                    c.dot(x, y, ORANGE if d > halo * 0.6 else YELLOW)
+    img = c.img
+    rain = (RED, ORANGE, YELLOW, GREEN_L, TEAL_L, VIOLET_L, PINK, WHITE)
+    R_ = 10 + 56 * e
+    for a in range(0, 360, 4):  # a shock ring of coloured dots that thins out
+        if (a // 4 * 7 + k * 3) % 11 / 11 < t * 1.1:
+            continue
+        ar = math.radians(a)
+        x, y = round(m + math.cos(ar) * R_), round(m + math.sin(ar) * R_)
+        put(img, x, y, rain[(a // 4) % 8])
+        if t < 0.5:
+            put(img, x + 1, y, rain[(a // 4) % 8])
+    for i in range(16):  # comets carried outward, each trailing a fading streak, ending in a twinkling star
+        a = math.tau * i / 16 + 0.2
+        dist = (34 + 28 * (i % 2) + 7 * (i % 3)) * e
+        col = rain[i % 8]
+        ca, sa = math.cos(a), math.sin(a)
+        for j in range(1, 7):
+            dd = dist - j * 2.6
+            if dd > 5 and t < 0.85:
+                tc = col if j < 3 else DARKER.get(col, col)
+                x, y = round(m + ca * dd), round(m + sa * dd + 3 * t * t * j)
+                put(img, x, y, tc)
+                if j < 3:
+                    put(img, x + 1, y, tc)
+        if t < 0.92 and (k + i) % 5 != 0:
+            r = 3 if (i % 2 == 0 and t < 0.55) else 2 if t < 0.8 else 1
+            star4(img, round(m + ca * dist), round(m + sa * dist + 6 * t * t), r, col)
+    if t > 0.5:  # slow falling glitter at the end
+        for i in range(14):
+            a = math.tau * i / 14 + 1.0
+            x, y = round(m + math.cos(a) * 56 * e * (0.8 + 0.2 * (i % 3))), round(m + math.sin(a) * 56 * e + 22 * (t - 0.5))
+            put(img, x, y, rain[(i + 3) % 8])
+    return img
+
+
+FX.update({
+    "water_splash": lambda: strip([water_splash_frame(k) for k in range(6)]),
+    "water_splat": lambda: strip([water_splat(v) for v in range(3)]),
+    "snow_puff": lambda: strip([snow_puff_frame(k) for k in range(8)]),
+    "snow_splat": lambda: strip([snow_splat(v) for v in range(3)]),
+    "bubble_pop": lambda: strip([bubble_pop_frame(k) for k in range(10)]),
+    "bubble_trap": lambda: strip([bubble_trap_frame(k) for k in range(6)]),
+    "firework_burst": lambda: strip([firework_burst_frame(k) for k in range(14)]),
+})
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
@@ -9885,6 +10377,9 @@ def main() -> None:
         img = projectile_strip(draw, PROJECTILE_FRAMES.get(name, 2))
         check(img, PROJ)
         img.save(PROJ_OUT / f"{name}.png")
+    spark = strip([firework_spark(i) for i in range(len(SPARK_COLS))])
+    check(spark, PROJ)
+    spark.save(PROJ_OUT / "firework_spark.png")
     print(f"wrote {len(PROJECTILES)} projectiles to {PROJ_OUT}")
     ARENA_OUT.mkdir(exist_ok=True)
     for name, parts in THEMES.items():
