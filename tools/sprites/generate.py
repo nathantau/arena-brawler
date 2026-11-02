@@ -1850,7 +1850,7 @@ def weapon_image(draw) -> Image.Image:
 
 TILE = 32
 TILE_ORDER = ["floor_a", "floor_b", "floor_shadow", "wall_top", "wall_face", "crate", "crate_damaged"]
-FACE_H = 12  # front face height on wall tiles above floor (3/4 view)
+FACE_H = 16  # front face height on wall tiles above floor (3/4 view)
 SHADOW_ROWS = 8  # floor rows shaded under a wall face (solid at the wall, dithering out)
 ARENA_W, ARENA_H = 40, 24  # layout size in tiles (ArenaLayouts); decals cover it exactly
 ARENA_OUT = ROOT / "assets" / "arenas"
@@ -1890,8 +1890,8 @@ def darken_rows(img: Image.Image, rows: int) -> Image.Image:
 
 
 def shade_face(img: Image.Image) -> Image.Image:
-    """3/4 lighting on a wall tile's front face: a 1 px highlight on the top front edge, a vertical gradient that
-    dithers into the next shade down, and a dark base line where it meets the floor (palette steps only)."""
+    """3/4 lighting on a wall tile's front face: clearly darker than the top (a step down that deepens to the base through
+    a dithered gradient), a 1 px highlight on the top front edge and a dark base line where it meets the floor."""
     out = img.copy()
     px = out.load()
     top = TILE - FACE_H
@@ -1900,16 +1900,21 @@ def shade_face(img: Image.Image) -> Image.Image:
         for x in range(TILE):
             r, g, b, a = px[x, y]
             c = (r, g, b)
-            if y == top + 1:
-                c = LIGHTER[c]  # the lit edge just under the lip
-            elif y == TILE - 2 or dither_at(x, y, max(0.0, t - 0.25) * 1.15):
-                c = DARKER[c]
+            if y == top:
+                c = LIGHTER[c]  # the lit top front edge
+            elif y == top + 1:
+                pass  # (the lip's own colour, one row under the highlight)
+            else:
+                if dither_at(x, y, 0.55 + 0.45 * t):
+                    c = DARKER[c]
+                if dither_at(x + 2, y + 1, max(0.0, t - 0.3) * 1.2):
+                    c = DARKER[c]
             px[x, y] = c + (a,)
     return out
 
 
 def shade_roof(img: Image.Image) -> Image.Image:
-    """A wall's top face catches the light: its rows nearest the front edge are a step lighter, dithered."""
+    """A wall's top face catches the light: the rows nearest the front edge are a step lighter, dithered."""
     out = img.copy()
     px = out.load()
     top = TILE - FACE_H
@@ -1922,7 +1927,7 @@ def shade_roof(img: Image.Image) -> Image.Image:
     return out
 
 
-def shade_box(img: Image.Image, top_rows: int = 7) -> Image.Image:
+def shade_box(img: Image.Image, top_rows: int = 7, lid: bool = True) -> Image.Image:
     """3/4 lighting on an outlined box tile (crate): a lit lid over a front face with a highlight on its top edge,
     a darker right edge and a bottom that dithers into the next shade down, above the outline's base line."""
     out = img.copy()
@@ -1941,15 +1946,19 @@ def shade_box(img: Image.Image, top_rows: int = 7) -> Image.Image:
                 continue
             bright = LIGHTER[c] == WHITE  # (a light material keeps its lid and shades its front face instead)
             if y <= seam:
-                if not bright:
+                if not bright and lid:
                     c = LIGHTER[c]
+                if lid and (y == y0 + 1 or x == x0 + 1) and LIGHTER[c] != c:
+                    c = LIGHTER[c]  # the lid's lit top-left rim
             elif y == seam + 1:
-                if not bright:
+                if lid:
                     c = LIGHTER[c]
             else:
                 low = (y - (y1 - 8)) / 7
-                base = 0.3 if bright else 0.0
-                if x == x1 - 1 or dither_at(x, y, max(base, low * 0.95)) or y == y1 - 1:
+                base = 0.6 if bright else 0.5
+                if x >= x1 - 2 or dither_at(x, y, max(base, low * 0.95)) or y >= y1 - 2:
+                    c = DARKER[c]
+                if low > 0.4 and dither_at(x + 1, y, low * 0.7):
                     c = DARKER[c]
             px[x, y] = c + (a,)
     for x in range(x0 + 1, x1):  # the lid's front edge: a dark seam between lid and front
@@ -2126,8 +2135,8 @@ def theme_sheet(floor, wall_top, wall_face, crate, crate_damaged) -> Image.Image
     a = floor(0)
     top = wall_top()
     crates = [object_tile(crate), object_tile(crate_damaged)]
-    if not getattr(crate, "cart", False):  # (the ball cart is a cart, not a box: it keeps its own shading)
-        crates = [shade_box(c) for c in crates]
+    cart = getattr(crate, "cart", False)  # a cart gets the dark sides and base but no lid
+    crates = [shade_box(c, 3 if cart else 7, lid=not cart) for c in crates]
     tiles = [a, floor(1), darken_rows(a, SHADOW_ROWS), top, with_face(top, wall_face())] + crates
     sheet = Image.new("RGBA", (TILE * len(tiles), TILE), (0, 0, 0, 0))
     for i, t in enumerate(tiles):

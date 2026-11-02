@@ -8,18 +8,21 @@ extends Node2D
 enum Tile { FLOOR_A, FLOOR_B, FLOOR_SHADOW, WALL_TOP, WALL_FACE, CRATE, CRATE_DAMAGED }
 
 const ART_TILE: int = 32
+## Rows of a wall tile that are its front face (generate.py FACE_H).
+const ARENA_FACE_ROWS: int = 16
 const ART_DIR: String = "res://assets/arenas/"
 ## Every Nth floor cell (by a fixed hash, so all peers match) uses the second floor variant.
 const FLOOR_B_EVERY: int = 5
-## Crate contact shadow in art pixels of the crate's cell: an ellipse (centre, radii) under its base, the first row
-## it may touch, the squared radius inside which it is solid, and its colour (like the fighters' ground shadow).
-const CRATE_SHADOW_CX: float = 17.0
-const CRATE_SHADOW_CY: float = 28.0
-const CRATE_SHADOW_RX: float = 15.0
-const CRATE_SHADOW_RY: float = 4.4
-const CRATE_SHADOW_TOP: int = 24
-const CRATE_SHADOW_CORE: float = 0.55
-const CRATE_SHADOW_COLOR: Color = Color(0, 0, 0, 0.3)
+## Drop shadows (art pixels, 1 art px = 1.5 world px): every wall run and crate casts a shadow SHADOW_OFFSET down-right (the
+## way the fighters' shadows lean), solid at SHADOW_COLOR with one ring of dithered pixels at its edge, plus a fainter dithered
+## ring of ambient occlusion hugging the footprint. A crate's footprint is this rect of its 32 px cell.
+const SHADOW_OFFSET: Vector2i = Vector2i(7, 6)
+const SHADOW_COLOR: Color = Color(0, 0, 0, 0.5)
+const AO_COLOR: Color = Color(0, 0, 0, 0.4)
+const CRATE_FOOT: Rect2i = Rect2i(4, 15, 24, 14)
+## Lit top face: a highlight along its top and left edge, a dark line along its right edge (translucent over the art).
+const EDGE_LIGHT: Color = Color(1, 1, 1, 0.38)
+const EDGE_DARK: Color = Color(0, 0, 0, 0.3)
 
 ## The theme's tile sheet; crates draw from it too.
 var tiles: Texture2D
@@ -30,6 +33,7 @@ var _overlay: Texture2D
 var _rows: Array[String] = []
 var _size: Vector2 = Vector2.ZERO
 var _crate_spots := PackedVector2Array()
+var _walls: Array[Rect2] = []
 
 
 func _init() -> void:
@@ -40,6 +44,7 @@ func setup(map: ArenaMap, theme: StringName) -> void:
 	_rows = map.rows
 	_size = map.size
 	_crate_spots = map.crate_spots
+	_walls = map.walls
 	tiles = load(ART_DIR + "%s_tiles.png" % theme)
 	var decal_path: String = ART_DIR + "%s_decal.png" % theme
 	_decal = load(decal_path) if ResourceLoader.exists(decal_path) else null
@@ -69,22 +74,39 @@ func _draw() -> void:
 	_draw_cells(false)
 	if _decal != null:
 		draw_texture_rect(_decal, Rect2(Vector2.ZERO, _size), false)
+	var t: float = Constants.TILE_SIZE
+	for w: Rect2 in _walls:
+		_draw_drop_shadow(w)
 	for c: Vector2 in _crate_spots:
-		_draw_crate_shadow(c)
+		var origin: Vector2 = c - Vector2.ONE * t * 0.5
+		var px: float = t / float(ART_TILE)
+		_draw_drop_shadow(Rect2(origin + Vector2(CRATE_FOOT.position) * px, Vector2(CRATE_FOOT.size) * px))
 
 
-## A soft contact shadow under a crate, a little down-right like the fighters' ground shadows: translucent black on the
-## art pixel grid, solid in the middle and dithered at the rim.
-func _draw_crate_shadow(centre: Vector2) -> void:
+## `foot` (world rect) casts SHADOW_OFFSET down-right: a solid block, a dithered edge, and AO round the footprint itself.
+func _draw_drop_shadow(foot: Rect2) -> void:
 	var px: float = Constants.TILE_SIZE / float(ART_TILE)
-	var origin: Vector2 = centre - Vector2.ONE * Constants.TILE_SIZE * 0.5
-	for ay: int in range(CRATE_SHADOW_TOP, ART_TILE):
-		for ax: int in range(ART_TILE):
-			var dx: float = (ax - CRATE_SHADOW_CX) / CRATE_SHADOW_RX
-			var dy: float = (ay - CRATE_SHADOW_CY) / CRATE_SHADOW_RY
-			var d: float = dx * dx + dy * dy
-			if d < CRATE_SHADOW_CORE or (d < 1.0 and (ax + ay) % 2 == 0):
-				draw_rect(Rect2(origin + Vector2(ax, ay) * px, Vector2(px, px)), CRATE_SHADOW_COLOR)
+	var shadow := Rect2(foot.position + Vector2(SHADOW_OFFSET) * px, foot.size)
+	draw_rect(shadow, SHADOW_COLOR)
+	_dither_ring(shadow, 1, SHADOW_COLOR, px)
+	_dither_ring(foot, 1, AO_COLOR, px)
+	_dither_ring(foot, 2, AO_COLOR, px)
+
+
+## A one art pixel ring `dist` pixels outside `r`, every other pixel (a checker), for soft edges.
+func _dither_ring(r: Rect2, dist: int, color: Color, px: float) -> void:
+	var x0: int = roundi(r.position.x / px) - dist
+	var y0: int = roundi(r.position.y / px) - dist
+	var x1: int = roundi(r.end.x / px) + dist - 1
+	var y1: int = roundi(r.end.y / px) + dist - 1
+	for x: int in range(x0, x1 + 1):
+		for y: int in [y0, y1]:
+			if (x + y) % 2 == 0:
+				draw_rect(Rect2(x * px, y * px, px, px), color)
+	for y: int in range(y0 + 1, y1):
+		for x: int in [x0, x1]:
+			if (x + y) % 2 == 0:
+				draw_rect(Rect2(x * px, y * px, px, px), color)
 
 
 ## One ArtBlock per horizontal run of wall cells (the map's wall rects) in `parent` (a y-sorted node), based on the
@@ -107,6 +129,7 @@ func _paint_wall(ci: CanvasItem, run: Rect2) -> void:
 	var x0: int = roundi(run.position.x / t)
 	for x: int in range(x0, x0 + roundi(run.size.x / t)):
 		ci.draw_texture_rect_region(tiles, Rect2(x * t, y * t, t, t), region(tile_at(_rows, x, y)))
+	_paint_edges(ci, run, x0, y)
 	if _overlay != null:
 		var src := Rect2(run.position / t * ART_TILE, run.size / t * ART_TILE)
 		ci.draw_texture_rect_region(_overlay, run, src)
@@ -118,3 +141,18 @@ func _draw_cells(walls: bool) -> void:
 		for x: int in _rows[y].length():
 			if (_rows[y][x] == ArenaMap.WALL_CHAR) == walls:
 				draw_texture_rect_region(tiles, Rect2(x * t, y * t, t, t), region(tile_at(_rows, x, y)))
+
+
+## Lighting from the top left on a run's roof: a highlight on its top edge (where no wall sits above) and left end, a dark
+## line on its right end, over the roof only (not its front face).
+func _paint_edges(ci: CanvasItem, run: Rect2, x0: int, y: int) -> void:
+	var t: float = Constants.TILE_SIZE
+	var px: float = t / float(ART_TILE)
+	var cells: int = roundi(run.size.x / t)
+	var below_wall: bool = tile_at(_rows, x0, y) == Tile.WALL_TOP
+	var roof_h: float = (ART_TILE if below_wall else ART_TILE - ARENA_FACE_ROWS) * px
+	var above_wall: bool = y > 0 and _rows[y - 1][x0] == ArenaMap.WALL_CHAR
+	if not above_wall:
+		ci.draw_rect(Rect2(run.position, Vector2(run.size.x, px)), EDGE_LIGHT)
+	ci.draw_rect(Rect2(run.position + Vector2(0.0, px if not above_wall else 0.0), Vector2(px, roof_h)), EDGE_LIGHT)
+	ci.draw_rect(Rect2(run.position + Vector2(run.size.x - px, 0.0), Vector2(px, roof_h)), EDGE_DARK)
