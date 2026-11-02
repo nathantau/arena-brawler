@@ -87,7 +87,9 @@ const ERUPTION_TIME: float = ERUPTION_FRAMES / ERUPTION_FPS
 const ERUPTION_LEAD: float = ERUPTION_BLAST_FRAME / ERUPTION_FPS
 const POOF_TIME: float = 0.5
 ## Smoke Bomb: the clone poof, a bit bigger, bursts where she vanishes and where she reappears.
-const VANISH_POOF_SCALE: float = 1.3
+const VANISH_POOF_SCALE: float = 1.1
+## Multiplied over the clone poof's white so it reads as Shade's navy-grey smoke.
+const VANISH_POOF_TINT: Color = Color(0.5, 0.55, 0.72)
 const FADE_TIME: float = 0.4
 ## Clones fade in inside their cloud while it's at its fullest (it plays slower than other poofs).
 const APPEAR_DELAY: float = 0.08
@@ -393,6 +395,7 @@ class Poof:
 	var duration: float = POOF_TIME
 	var scale: float = 1.0
 	var on_floor: bool = false  # drawn on the floor layer, under the players
+	var tint: Color = Color.WHITE
 
 
 var _clones: Array[AnimatedSprite2D] = []
@@ -547,6 +550,7 @@ func sync(p: Player) -> void:
 	var vanished: bool = smoke != null and smoke.is_active() and not p.dead
 	if vanished != _was_vanished and (vanished or not p.dead):  # the poof that hides her, and the one she comes back in
 		_poof(p.global_position + p.visual_offset, POOF_BIG, CLONE_POOF_TIME, VANISH_POOF_SCALE)
+		_poofs[-1].tint = VANISH_POOF_TINT
 	_was_vanished = vanished
 	var cloning: bool = clones != null and clones.is_cloning()
 	if cloning and not _was_cloning:
@@ -1228,11 +1232,11 @@ func _ward_scale() -> float:
 
 ## Frame `frame` of a horizontal strip of square frames, centred on `at`, at the sprite scale.
 func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_px: float, alpha: float = 1.0,
-		on: CanvasItem = self) -> void:
+		on: CanvasItem = self, tint: Color = Color.WHITE) -> void:
 	var h: float = art.get_height()
 	var size := Vector2(frame_w, h) * scale_px
 	on.draw_texture_rect_region(art, Rect2(at - size * 0.5, size), Rect2(frame * frame_w, 0, frame_w, h),
-		Color(1, 1, 1, alpha))
+		Color(tint, alpha))
 
 
 func _draw() -> void:
@@ -1452,10 +1456,10 @@ func _draw_flourishes() -> void:
 		var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
 		if pf.scale < 0.0:  # a negative scale mirrors the strip (faces left)
 			draw_set_transform(pf.pos, 0.0, Vector2(-1.0, 1.0))
-			_draw_frame(pf.art, frame, pf.art.get_height(), Vector2.ZERO, px * -pf.scale)
+			_draw_frame(pf.art, frame, pf.art.get_height(), Vector2.ZERO, px * -pf.scale, 1.0, self, pf.tint)
 			draw_set_transform(Vector2.ZERO)
 		else:
-			_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale)
+			_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale, 1.0, self, pf.tint)
 
 
 ## Where the kunai bit: the stop point is a player radius short of the feet-level wall; the wall itself is drawn
