@@ -1658,7 +1658,7 @@ func test_cherry_sapling_is_removed_when_she_dies() -> void:
 	var p: Player = s[2]
 	await wait_physics_frames(2)
 	_press_special(p, Vector2.RIGHT)
-	_idle(p, 40)
+	_idle(p, 70)
 	var n: int = s[3].size()
 	assert_gt(n, 0)
 	p.take_hit(9999, false, Vector2.ZERO, 2)

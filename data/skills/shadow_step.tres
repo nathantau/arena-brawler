@@ -16,5 +16,5 @@ cooldown = 8.0
 duration = 1.2
 step_speed_scale = 1.5
 step_radius = 80.0
-step_damage = 24
+step_damage = 35
 step_knockback = 200.0

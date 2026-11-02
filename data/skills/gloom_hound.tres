@@ -20,6 +20,6 @@ hound_speed = 250.0
 hound_sight = 520.0
 hound_bite_radius = 34.0
 hound_bite_interval = 0.6
-hound_damage = 11
+hound_damage = 6
 hound_knockback = 120.0
 hound_rise_time = 0.45
