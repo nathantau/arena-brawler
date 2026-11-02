@@ -322,7 +322,7 @@ const ARC_FADE_TIME: float = 0.3
 const ARC_BURST_TIME: float = 0.4
 ## Eden's Thorn Burst (a VOLLEY): a flourish centred on her when the ring of thorns leaves.
 const THORN_BURST_ART: Texture2D = preload(FX_DIR + "thorn_burst.png")
-const THORN_BURST_TIME: float = 0.6
+const THORN_BURST_TIME: float = 0.45  # a floor layer centred on her feet (behind her), withering fast
 ## Eden's Thorn Quake (generate.py QUAKE_*), the same shape as Thunder Strike: a ring of roots with thorn tips marks the spot (floor layer),
 ## then a thicket of bark thorns bursts up (impact on frame 2) over a scar in the ground that heals away.
 const QUAKE_MARK_ART: Texture2D = preload(FX_DIR + "quake_mark.png")
@@ -584,7 +584,7 @@ func sync(p: Player) -> void:
 	var thorn: CharacterSkill = _slot_id(p, &"thorn_burst")
 	var thorning: bool = thorn != null and thorn.is_active() and not p.dead
 	if thorning and not _thorn_was:
-		_poof(p.global_position + p.visual_offset, THORN_BURST_ART, THORN_BURST_TIME)
+		_poof(p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y), THORN_BURST_ART, THORN_BURST_TIME, 1.0, true)
 	_thorn_was = thorning
 	_sync_arc(p)
 	_flare_at = p.global_position + p.visual_offset

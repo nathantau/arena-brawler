@@ -9029,70 +9029,73 @@ def arc_burst_frame(kind: str, k: int) -> Image.Image:
 
 
 # ---- Thorn Burst (Eden): a ring of thorns fired out all round her ----------------------------------------------------
-THORN_FRAMES = 14
-THORN_COUNT = 14
+THORN_FRAMES = 12
+THORN_SPOKES = 10
 
 
-def thorn_shot(c: Canvas, f: int) -> None:  # a barbed thorn, point first: dark bark body, pale tip, a leaf at its base
+def thorn_shot(c: Canvas, f: int) -> None:  # a slim curved bark thorn, point first: dark body, pale sharp tip, a tiny green base
     m = PROJ // 2
     t = f % 2
-    c.part(P([(5, m - 3 + t), (PROJ - 3, m), (5, m + 3 - t)]), WALNUT)
-    c.flat(P([(7, m - 1), (PROJ - 4, m), (7, m + 1)]), WALNUT_L)
-    c.flat(L([(PROJ - 6, m), (PROJ - 3, m)], 1), CREAM)
-    c.dot(PROJ - 3, m, WHITE)
-    c.flat(P([(3, m - 2), (7, m), (3, m + 1 + t)]), GREEN)
-    c.dot(4, m - 1, GREEN_L)
-    c.dot(11 + t, m - 2 + t, CREAM_D)
+    c.part(P([(5, m - 2), (11, m - 2), (17, m - 3 + t), (12, m), (5, m + 2)]), WALNUT, shade=False)
+    c.flat(L([(6, m - 1), (12, m - 1)], 1), WALNUT_D)
+    c.flat(L([(14, m - 3 + t), (17, m - 3 + t)], 1), CREAM)
+    c.dot(17, m - 3 + t, WHITE)
+    c.flat(R((5, m - 1, 6, m + 1)), GREEN_D)
+
+
+def _bramble(c: Canvas, m: int, a: float, reach: float, bend: float, thorns: bool) -> None:
+    """One bramble vine from the middle out to `reach` along angle a (the floor is squashed to 0.55), bowing sideways by `bend`, with thorns."""
+    pts, widths = [], []
+    n = 14
+    for i in range(n + 1):
+        t = i / n
+        aa = a + bend * math.sin(t * math.pi)
+        r = reach * t
+        pts.append((m + math.cos(aa) * r, m + math.sin(aa) * r * 0.55))
+        widths.append(2.1 - 0.9 * t)
+    _tube(c, pts, widths, GREEN_D, GREEN, GREEN_L)
+    if not thorns:
+        return
+    for t, side in ((0.32, 1), (0.52, -1), (0.72, 1), (0.9, -1)):
+        if t > reach / 54.0 + 0.4:
+            continue
+        i = min(n, round(t * n))
+        x, y = pts[i]
+        aa = a + bend * math.sin(t * math.pi)
+        nx, ny = -math.sin(aa) * side, math.cos(aa) * side * 0.8
+        tx, ty = x + nx * 5 + math.cos(aa) * 2, y + ny * 5 + math.sin(aa) * 1
+        c.flat(P([(round(x - math.cos(aa)), round(y)), (round(tx), round(ty)), (round(x + math.cos(aa) * 1.5), round(y + 1))]), WALNUT)
+        sdot(c, round(tx), round(ty), CREAM)
 
 
 def thorn_burst_frame(k: int) -> Image.Image:
-    """The burst (128 px, centred on Eden): a green-white flash at her middle (0-3), THORN_COUNT bark thorns with pale tips shoot out all
-    round and shorten as they go, leaves tumble off them (to 9), then a last ring of motes drifts out and fades (10-13)."""
+    """The burst (128 px, a floor layer centred on her feet, so it sits behind and around her): a pop of soil and a flash (0-1), THORN_SPOKES
+    thorny bramble vines whip out from under her in a flat ring (1-5), hold a beat (6), then wither, shrink back and dither away fast (7-11)."""
     n = 128
     m = n // 2
     c = Canvas(n)
     ov = Canvas(n)
     rng = random.Random(2200 + k * 5)
-    u = k / (THORN_FRAMES - 1)
-    if k < 4:
-        r = (6, 12, 14, 9)[k]
-        c.flat(E((m - r, m - r, m + r, m + r)), GREEN_L if k else WHITE)
-        c.flat(E((m - r + 3, m - r + 3, m + r - 3, m + r - 3)), WHITE if k < 3 else GREEN_L)
-        ov.flat(lambda d, f: d.ellipse((m - r * 2.4, m - r * 2.4, m + r * 2.4, m + r * 2.4), outline=f, width=1), GREEN_L)
-    for i in range(THORN_COUNT):
-        a = math.tau * i / THORN_COUNT + 0.11
-        t = max(0.0, min(1.0, (u - 0.04 * (i % 3)) / 0.55))
-        if t <= 0.0 or k > 9:
+    grow = _ease(min(1.0, (k + 1) / 5.0))
+    wither = max(0.0, (k - 6) / 5.0)
+    if k < 3:  # the ground splits: a dark patch and a flash of green light
+        r = (7, 12, 9)[k]
+        c.flat(E((m - r, m - r * 0.55, m + r, m + r * 0.55)), OUTLINE)
+        c.flat(E((m - r * 0.6, m - r * 0.33, m + r * 0.6, m + r * 0.33)), GREEN_L if k < 2 else GREEN_D)
+    for i in range(THORN_SPOKES):
+        a = math.tau * i / THORN_SPOKES + 0.15 + (0.05 if i % 2 else -0.05)
+        reach = (48 + 10 * ((i * 7) % 3) / 2) * grow * (1.0 - 0.35 * wither)
+        if reach < 3:
             continue
-        reach = 52 * (1 - (1 - t) ** 2)
-        ln = 12 - 4 * max(0.0, t - 0.6) / 0.4
-        x0, y0 = m + math.cos(a) * max(0.0, reach - ln), m + math.sin(a) * max(0.0, reach - ln)
-        x1, y1 = m + math.cos(a) * reach, m + math.sin(a) * reach
-        px_, py_ = -math.sin(a) * 2.1, math.cos(a) * 2.1
-        c.part(P([(x0 + px_, y0 + py_), (x1, y1), (x0 - px_, y0 - py_)]), WALNUT, shade=False)
-        c.flat(L([(round(x0), round(y0)), (round(x0 + (x1 - x0) * 0.8), round(y0 + (y1 - y0) * 0.8))], 1), WALNUT_L)
-        sdot(c, round(x1), round(y1), CREAM)
-        if t < 0.8:  # trailing motes
-            for q in range(2):
-                sdot(ov, round(x0 - math.cos(a) * (3 + q * 3) + rng.uniform(-1, 1)), round(y0 - math.sin(a) * (3 + q * 3) + rng.uniform(-1, 1)),
-                     (GREEN_L, GREEN)[q])
-    for i in range(7):  # leaves flung off, tumbling
-        a = math.tau * (i + 0.4) / 7
-        t = (u - (0.08 + 0.04 * i)) / 0.7
-        if 0 < t < 1:
-            d = 14 + 40 * t
-            draw_leaf(c, m + math.cos(a) * d, m + math.sin(a) * d, a + t * 6 * (1 if i % 2 else -1), 7, 2.4,
-                      (GREEN, GREEN_L, GREEN_D)[i % 3], shade=True, rib=GREEN_D)
+        _bramble(c, m, a, reach, 0.22 * (1 if i % 2 else -1) * (1.0 - 0.5 * wither), thorns=grow > 0.45)
     img = outline(c.img)
+    for j in range(10 if k < 8 else 0):  # soil and leaf motes flung out
+        a = rng.uniform(0, math.tau)
+        d = (k + 1) * rng.uniform(2.5, 6.5)
+        sdot(ov, round(m + math.cos(a) * d * 1.3), round(m + math.sin(a) * d * 0.6 - 2 * k), (GREEN_L, GREEN, BROWN, CREAM_D)[j % 4])
     img.alpha_composite(ov.img)
-    if k >= 10:
-        rr = 40 + (k - 9) * 4
-        for i in range(18):
-            if (i + k) % 2 == 0:
-                a = math.tau * i / 18 + 0.2
-                x, y = round(m + math.cos(a) * rr), round(m + math.sin(a) * rr)
-                img.putpixel((x, y), (GREEN_L if k < 12 else GREEN) + (255,))
-        img = dither_out(img, (k - 9) / 5.0 * 0.7)
+    if wither > 0:
+        img = dither_out(img, min(0.95, wither * 1.05))
     return _clear_edge(img, 2)
 
 
@@ -9110,10 +9113,11 @@ ICONS["tesla_coil"] = lambda c: (c.flat(E((1, 9, 11, 12)), STEEL_D), c.flat(R((5
                                  c.flat(E((3, 0, 9, 5)), STEEL), c.dot(4, 1, WHITE),
                                  c.flat(L([(9, 2), (11, 1), (12, 3)], 1), YELLOW), c.flat(L([(3, 2), (1, 1), (0, 4)], 1), TEAL_L),
                                  c.dot(12, 3, WHITE), c.dot(0, 4, WHITE))
-ICONS["arc_dash"] = lambda c: (c.flat(L([(0, 3), (3, 3)], 1), TEAL_L), c.flat(L([(0, 9), (4, 9)], 1), TEAL_L),
-                               c.flat(L([(1, 6), (4, 6)], 1), TEAL_L),
-                               c.flat(L([(3, 7), (6, 3), (7, 8), (11, 5)], 2), YELLOW), c.flat(L([(3, 7), (6, 3), (7, 8), (11, 5)], 1), WHITE),
-                               c.flat(P([(12, 5), (9, 2), (9, 8)]), ORANGE), c.dot(12, 5, WHITE))
+ICONS["arc_dash"] = lambda c: (c.flat(L([(0, 2), (4, 2)], 1), TEAL_L), c.flat(L([(0, 6), (3, 6)], 1), TEAL_L),
+                               c.flat(L([(1, 10), (5, 10)], 1), TEAL_L), c.flat(L([(0, 4), (2, 4)], 1), TEAL_L),
+                               c.flat(P([(12, 0), (4, 5), (7, 6), (2, 12), (11, 5), (8, 4)]), YELLOW),
+                               c.flat(L([(11, 1), (6, 4)], 1), WHITE), c.flat(L([(8, 6), (4, 10)], 1), ORANGE),
+                               c.dot(12, 0, WHITE), c.dot(2, 12, WHITE))
 ICONS["thorn_burst"] = lambda c: (c.flat(E((4, 4, 8, 8)), GREEN_L), c.dot(5, 5, WHITE),
                                   c.flat(P([(5, 4), (6, 0), (7, 4)]), WALNUT), c.flat(P([(5, 8), (6, 12), (7, 8)]), WALNUT),
                                   c.flat(P([(4, 5), (0, 6), (4, 7)]), WALNUT), c.flat(P([(8, 5), (12, 6), (8, 7)]), WALNUT),
