@@ -13,6 +13,7 @@ var shared: int = 0  ## screenshot with lobby=1: 1 = P2 + P3 hover one card, 2 =
 var step: int = 0  ## screenshot with lobby=1: which character select step is showing (0 the fighter grid, 1 the detail overlay open)
 var toggle: bool = false  ## screenshot with lobby=1 strip=1 fly=1: first remove an equipped ability, then add one
 var sheet: bool = false  ## screenshot with lobby=1: a contact sheet of the showcase backdrop of all nine fighters
+var pick: StringName = &"eden"  ## screenshot with lobby=1 step=1: the fighter the overlay opens on
 var fly: bool = false  ## screenshot with lobby=1 strip=1: capture an ability flying into a slot instead of the slide-in
 var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the overlay sliding in
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
@@ -44,6 +45,7 @@ func _initialize() -> void:
 				"step": step = int(kv[1])
 				"strip": strip = kv[1] == "1"
 				"fly": fly = kv[1] == "1"
+				"char": pick = StringName(kv[1])
 				"backdrops": sheet = kv[1] == "1"
 				"toggle": toggle = kv[1] == "1"
 	InputSetup.ensure_actions()
@@ -226,7 +228,7 @@ func _shoot_lobby() -> void:
 		quit(0)
 		return
 	if step > 0:
-		lp._on_fighter_pressed(&"eden")
+		lp._on_fighter_pressed(pick)
 		lp._slide_overlay(false)
 		if step == 2:  # one ability slot emptied
 			lp._on_special_pressed(lp._pick()[3])

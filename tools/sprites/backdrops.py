@@ -279,93 +279,74 @@ def leaf_clusters(layer: Layer, rng: random.Random, centers: list, base: tuple, 
 
 
 def eden() -> Scene:
+    """Minimal: banded dark glade, four tone-on-tone trunks, one wide soft shaft, a mossy floor line."""
     s = Scene(11)
-    sky = Layer()  # a calm glade: dark canopy overhead, a warm green glow at the horizon
-    sky.gradient(0, FLOOR, [SHADOW, SHADOW, GREEN_D, GREEN_D])
+    sky = Layer()
+    sky.rect((0, 0, W, 50), flat(OUTLINE))
+    sky.rect((0, 50, W, 100), flat(SHADOW))
+    sky.rect((0, 100, W, FLOOR), flat(GREEN_D))
+    shaft = Layer()  # one wide, soft band of light, banded to match the sky behind it
+    shaft.poly([(30, 0), (74, 0), (122, FLOOR), (62, FLOOR)], lambda x, y: SHADOW if y < 50 else GREEN_D if y < 100 else OLIVE_D)
     s.add(sky)
-    shafts = Layer()  # three soft shafts of light behind the trunks
-    for x0, wd, run in ((22, 8, 24), (60, 6, 20), (92, 9, 24)):
-        shafts.poly([(x0, 10), (x0 + wd, 10), (x0 + wd + run, FLOOR), (x0 + run - 6, FLOOR)], flat(OLIVE_D))
-    s.add(shafts, 3.0, 0.0)
-    far = Layer()  # distant trunks: thin and blue
-    for i, x in enumerate(range(6, W, 19)):
-        far.rect((x, 30 + (i * 7) % 18, x + 3, FLOOR - 2), flat(NAVY))
+    s.add(shaft, 3.0, 0.0)
+    far = Layer()  # four trunks in all: two thin ones far back, fading into the dark canopy...
+    for x in (46, 86):
+        far.rect((x, 40, x + 5, FLOOR), flat(step(GREEN_D, -1)))
     s.add(far, 1.0, 0.0)
-    mid = Layer()  # mid trunks, dark with a lit left edge
-    for x, top, w in ((14, 20, 7), (50, 26, 6), (78, 22, 7), (104, 28, 6)):
-        mid.rect((x, top, x + w, FLOOR), flat(OUTLINE))
-        mid.rect((x, top, x, FLOOR), flat(GREEN_D))
-    s.add(mid, 1.5, 0.1)
-    canopy = Layer()  # the canopy edge: scalloped leaf clusters
-    canopy.rect((0, 0, W, 14), flat(OUTLINE))
-    centers = [(x + (i % 2) * 6, 14 + (i * 5) % 9, 9 + (i * 3) % 5) for i, x in enumerate(range(-4, W + 12, 14))]
-    leaf_clusters(canopy, s.rng, centers, OUTLINE, step(GREEN_D, -1))
-    leaf_clusters(canopy, s.rng, [(6, 34, 8), (18, 44, 6), (118, 36, 9), (108, 48, 6)], OUTLINE, step(GREEN_D, -1))
-    tree(canopy, -6, 0, FLOOR + 4, 20, OUTLINE, GREEN_D)  # the two foreground trunks
-    tree(canopy, 114, 0, FLOOR + 4, 22, OUTLINE, GREEN_D)
-    s.add(canopy, 2.0, 0.25)
+    near = Layer()  # ...and two thick dark ones nearer
+    for x in (14, 104):
+        near.rect((x, 0, x + 11, FLOOR), flat(OUTLINE))
+    s.add(near, 1.5, 0.1)
     floor = Layer()
-    ground(floor, [GREEN_D, GREEN_D, step(GREEN_D, -1)], rim=GREEN)
-    for x in range(8, W, 17):  # grass tufts, then a few flowers
-        y = FLOOR + 8 + (x * 7) % 36
+    ground(floor, [GREEN_D, OUTLINE, OUTLINE], rim=GREEN)
+    for x, y in ((18, FLOOR + 10), (52, FLOOR + 24), (86, FLOOR + 14), (112, FLOOR + 32)):  # a few grass tufts
         for dx, dy in ((-2, 0), (0, -2), (2, 0), (-1, -1), (1, -1)):
             floor.put(x + dx, y + dy, GREEN_L if dy else GREEN)
-    for x, y, c in ((22, FLOOR + 22, PINK_L), (50, FLOOR + 34, YELLOW), (90, FLOOR + 18, PINK_L), (108, FLOOR + 40, WHITE), (38, FLOOR + 46, YELLOW)):
-        floor.put(x, y, c)
-        floor.put(x, y + 1, GREEN)
-        floor.put(x, y + 2, GREEN)
     s.add(floor)
-    s.particles(14, (6, 0, W - 6, 100), (-16, 52), [OLIVE_L, GREEN_L, GREEN], kind="leaf", sway=5)
-    s.particles(8, (10, 70, W - 10, 150), (6, -18), [YELLOW, GREEN_L], size=1, sway=4)
+    s.particles(12, (6, 0, W - 6, 100), (-16, 52), [OLIVE_L, GREEN_L, GREEN], kind="leaf", sway=5)
+    s.particles(9, (10, 70, W - 10, 150), (6, -18), [YELLOW, GREEN_L], size=1, sway=4)
     return s
 
 
 def flint() -> Scene:
+    """Minimal: charcoal-to-deep-red bands, a low warm glow ellipse behind him, rock edges, a cracked floor."""
     s = Scene(12)
-    back = Layer()  # inside the arch: warm bands rising from the lava
-    back.gradient(0, FLOOR, [OUTLINE, OUTLINE, MAROON, MAROON, RED])
+    back = Layer()  # the red only arrives in the lowest bands: never the top half
+    back.gradient(0, FLOOR, [OUTLINE, SHADOW, SHADOW])
     s.add(back)
-    arch = Layer()  # a dark rock arch framing the scene
-    ring = Image.new("L", (W, H), 0)
-    d = ImageDraw.Draw(ring)
-    d.rectangle((0, 0, W, FLOOR), fill=255)
-    d.ellipse((14, 18, W - 14, 220), fill=0)  # the opening
-    mp = ring.load()
-    for y in range(H):
-        for x in range(W):
-            if mp[x, y]:
-                arch.put(x, y, OUTLINE)
-    for x in range(W):  # a lit rim along the inside of the arch, picked out by the lava
-        for y in range(H):
-            if arch.get(x, y) is not None and any(arch.get(x + dx, y + dy) is None for dx, dy in ((1, 0), (-1, 0), (0, 1)) if 0 < y + dy < FLOOR):
-                arch.put(x, y, MAROON if y > 40 else step(MAROON, -1))
-    for x, ln in ((36, 14), (50, 22), (64, 12), (78, 20), (92, 12)):  # stalactites hanging in the opening
-        arch.poly([(x - 4, 14), (x + 4, 14), (x, 18 + ln)], flat(OUTLINE))
-    s.add(arch, 1.0, 0.0)
-    pool = Layer()  # a lava pool behind him: nested bands, hottest in the middle
-    for (rx, ry, c) in ((58, 12, MAROON), (52, 10, RED), (42, 8, ORANGE), (28, 5, YELLOW)):
-        pool.ellipse((64 - rx, FLOOR - 4 - ry, 64 + rx, FLOOR - 4 + ry), flat(c))
-    s.add(pool, 2.0, 0.0)
+    rocks = Layer()  # jagged dark rock edges
+    for side, x0 in ((1, 0), (-1, W)):
+        pts = [(x0, 30)]
+        y = 30
+        for i in range(8):
+            y += 12
+            pts.append((x0 + side * (14 + (i * 7) % 11 + (4 if i % 2 else 0)), y))
+        pts += [(x0 + side * 12, FLOOR), (x0, FLOOR)]
+        rocks.poly(pts, flat(OUTLINE))
+    s.add(rocks, 1.0, 0.0)
     floor = Layer()
-    ground(floor, [step(MAROON, 0), step(MAROON, 0), OUTLINE], rim=RED)
-    for x0 in (14, 38, 90, 112):  # glowing cracks
-        x, y = x0, FLOOR + 8
-        for _ in range(9):
-            floor.put(x, y, ORANGE)
-            x += s.rng.choice((-1, 0, 1))
+    ground(floor, [OUTLINE, OUTLINE, OUTLINE], rim=step(MAROON, 0))
+    for x0, length in ((22, 9), (60, 11), (100, 8)):  # thin glowing cracks with a branch
+        x, y = x0, FLOOR + 6
+        for k in range(length):
+            floor.put(x, y, RED if k % 3 else step(ORANGE, -1))
+            x += s.rng.choice((-1, 0, 0, 1))
             y += 2
+            if k == length // 2:
+                floor.put(x + 1, y, RED)
+                floor.put(x + 2, y + 1, RED)
     s.add(floor)
-    s.particles(18, (10, FLOOR - 10, W - 10, FLOOR + 10), (6, -96), [ORANGE, YELLOW, RED], sway=4)
+    glow = Layer()  # a warm pool of light on the floor round his feet: a flat ellipse, two bands deep
+    for rx, ry, c in ((64, 15, MAROON), (40, 8, BROWN)):
+        glow.ellipse((64 - rx, FLOOR + 3 - ry, 64 + rx, FLOOR + 3 + ry), flat(c))
+    s.add(glow)
 
-    def pulse(f: int, img: Image.Image) -> None:  # a slow breath of heat over the pool
-        px = img.load()
-        a = 0.9 + 0.5 * math.sin(math.tau * f / FRAMES)
-        for y in range(FLOOR - 40, FLOOR + 6):
-            for x in range(14, W - 14):
-                d = math.hypot((x - 64) / 70, (y - (FLOOR - 4)) / 38)
-                if d < 1 and px[x, y][:3] in (MAROON, RED, ORANGE, OUTLINE):
-                    px[x, y] = dith(px[x, y][:3], a * (1 - d) ** 1.2, x, y) + (255,)
-    s.glow = pulse
+    def core(f: int, cv: Layer) -> None:  # the hot centre breathes
+        k = 0.5 + 0.5 * math.sin(math.tau * f / FRAMES)
+        rx, ry = 22 + round(8 * k), 5 + round(2 * k)
+        cv.d.ellipse((64 - rx, FLOOR + 3 - ry, 64 + rx, FLOOR + 3 + ry), fill=(BROWN if k < 0.5 else OCHRE_D) + (255,))
+    s.motion.append(core)
+    s.particles(16, (14, FLOOR - 8, W - 14, FLOOR + 8), (6, -96), [ORANGE, YELLOW, RED], sway=4)
     return s
 
 
