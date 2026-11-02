@@ -21,6 +21,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 import arena_decor
+import backdrops
 from palette import (BLUE, BROWN, CHESTNUT, CHESTNUT_D, CHESTNUT_L, CREAM, CREAM_D, DARKER, GREEN, GREEN_D, GREEN_L, LIGHTER,
                      MAROON, NAVY, OCHRE, OCHRE_D, OLIVE, OLIVE_D, OLIVE_L, ORANGE, OUTLINE, PALETTE, PINK, PINK_L, RED,
                      SHADOW, SKIN, SKIN_D, STEEL, STEEL_D, TEAL, TEAL_L, VIOLET, VIOLET_D, VIOLET_L, WALNUT, WALNUT_D,
@@ -9926,6 +9927,7 @@ def main() -> None:
         check(img, img.width)
         img.save(FX_OUT / f"{name}.png")
     print(f"wrote {len(FX)} effect strips to {FX_OUT}")
+    backdrops.main()  # character-select backdrops -> assets/backdrops
     # App Store icons must be opaque.
     app_icon().save(ROOT / "assets" / "icon.png")  # ICON_STYLE picks the concept
     print("wrote assets/icon.png")

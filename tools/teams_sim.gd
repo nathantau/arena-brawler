@@ -12,6 +12,7 @@ var lobby: bool = false
 var shared: int = 0  ## screenshot with lobby=1: 1 = P2 + P3 hover one card, 2 = P3 locked and P2 hovers that card  ## screenshot: the loading room (nobody readies up)
 var step: int = 0  ## screenshot with lobby=1: which character select step is showing (0 the fighter grid, 1 the detail overlay open)
 var toggle: bool = false  ## screenshot with lobby=1 strip=1 fly=1: first remove an equipped ability, then add one
+var sheet: bool = false  ## screenshot with lobby=1: a contact sheet of the showcase backdrop of all nine fighters
 var fly: bool = false  ## screenshot with lobby=1 strip=1: capture an ability flying into a slot instead of the slide-in
 var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the overlay sliding in
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
@@ -43,6 +44,7 @@ func _initialize() -> void:
 				"step": step = int(kv[1])
 				"strip": strip = kv[1] == "1"
 				"fly": fly = kv[1] == "1"
+				"backdrops": sheet = kv[1] == "1"
 				"toggle": toggle = kv[1] == "1"
 	InputSetup.ensure_actions()
 	if lobby and shot_path != "":
@@ -171,6 +173,27 @@ func _shoot_lobby() -> void:
 	physics_frame.disconnect(_tick)
 	for i: int in 8:
 		await process_frame
+	var ratio: float = float(root.size.x) / root.get_visible_rect().size.x
+	if sheet:
+		lp._on_fighter_pressed(&"eden")
+		lp._slide_overlay(false)
+		var cells: Array[Image] = []
+		for id: StringName in [&"eden", &"flint", &"bolt", &"flicker", &"shadow", &"sakura", &"wukong", &"twinshot", &"warden"]:
+			arena.select_character(arena.get_player(1), id)
+			for i: int in 40:  # the zoom-in and the crossfade finish; the backdrop has moved on a little
+				await process_frame
+			var rect := Rect2i(lp._stage.get_global_rect().position * ratio, lp._stage.size * ratio)
+			var cell: Image = root.get_texture().get_image().get_region(rect)
+			cell.convert(Image.FORMAT_RGBA8)
+			cell.resize(cell.get_width() / 2, cell.get_height() / 2, Image.INTERPOLATE_BILINEAR)
+			cells.append(cell)
+		var cs: Vector2i = cells[0].get_size()
+		var sheet_img := Image.create(cs.x * 5, cs.y * 2, false, Image.FORMAT_RGBA8)
+		for k: int in cells.size():
+			sheet_img.blit_rect(cells[k], Rect2i(Vector2i.ZERO, cs), Vector2i((k % 5) * cs.x, (k / 5) * cs.y))
+		print("[teams_sim] backdrops ", shot_path, " ", sheet_img.save_png(shot_path))
+		quit(0)
+		return
 	if strip:
 		lp._on_fighter_pressed(&"bolt")
 		if fly:  # let the slide finish

@@ -111,6 +111,8 @@ var _flash_tween: Tween
 ## The big preview.
 var _stage: Panel
 var _pivot: Node2D
+var _backdrop: StageBackdrop
+var _floor_fx: Control
 var _sprite: AnimatedSprite2D
 var _preview_id: StringName = &""
 var _preview_tween: Tween
@@ -316,8 +318,14 @@ func _build_stage(body: BoxContainer) -> void:
 	style.set_corner_radius_all(6)
 	_stage.add_theme_stylebox_override("panel", style)
 	_stage.resized.connect(_layout_stage)
-	_stage.draw.connect(_draw_stage)
 	body.add_child(_stage)
+	_backdrop = StageBackdrop.new()  # the themed pixel-art scene, under everything else
+	_stage.add_child(_backdrop)
+	_floor_fx = Control.new()  # the fighter's contact shadow, over the scene
+	_floor_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_floor_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_floor_fx.draw.connect(_draw_floor_fx)
+	_stage.add_child(_floor_fx)
 	_pivot = Node2D.new()
 	_stage.add_child(_pivot)
 	_sprite = AnimatedSprite2D.new()
@@ -659,22 +667,19 @@ func _layout_stage() -> void:
 	_sprite.scale = Vector2.ONE * s
 	var room: float = _stage.size.y - PREVIEW_TOP - 30.0
 	_pivot.position = Vector2(_stage.size.x * 0.5, PREVIEW_TOP + room * 0.5 + 4.0 * s)
-	_stage.queue_redraw()
+	_backdrop.floor_y = _pivot.position.y + 22.0 * s
+	_floor_fx.queue_redraw()
 
 
-## A soft spotlight behind the fighter and a floor shadow under it.
-func _draw_stage() -> void:
+## A soft contact shadow under the fighter's feet.
+func _draw_floor_fx() -> void:
 	var s: float = _sprite.scale.x
-	var glow_at: Vector2 = _pivot.position - Vector2(0.0, 4.0 * s)
-	var reach: float = minf(_stage.size.x, _stage.size.y - PREVIEW_TOP) * 0.7
-	for i: int in 28:
-		_stage.draw_circle(glow_at, reach * (1.0 - i * 0.035), Color(0.32, 0.42, 0.78, 0.014))
 	var feet: Vector2 = _pivot.position + Vector2(0.0, 22.0 * s)
-	_stage.draw_set_transform(feet, 0.0, Vector2(1.0, 0.28))
-	var r: float = 16.0 * s
-	for i: int in 4:
-		_stage.draw_circle(Vector2.ZERO, r * (1.0 - i * 0.18), Color(0.0, 0.0, 0.0, 0.14))
-	_stage.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_floor_fx.draw_set_transform(feet, 0.0, Vector2(1.0, 0.28))
+	var r: float = 18.0 * s
+	for i: int in 5:
+		_floor_fx.draw_circle(Vector2.ZERO, r * (1.0 - i * 0.16), Color(0.0, 0.0, 0.0, 0.17))
+	_floor_fx.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## Shows `c` in the showcase: a smooth zoom + fade in. A fast change replaces the tween in flight.
@@ -685,6 +690,7 @@ func _show_preview(c: CharacterData) -> void:
 		_preview_tween = null
 	_sprite.sprite_frames = c.sprite_frames()
 	_sprite.play(&"idle")
+	_backdrop.show_theme(StageBackdrop.texture_for(c.id))
 	_in_flair = false
 	_flair_left = FLAIR_GAP.x
 	_layout_stage()
