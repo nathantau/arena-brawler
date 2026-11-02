@@ -21,6 +21,8 @@ signal shot_spawned(owner_id: int, origin: Vector2, facing: Vector2, weapon: Wea
 signal beam_drawn(owner_id: int, from: Vector2, to: Vector2, weapon: WeaponData)
 ## A chain hit jumped from one enemy to the next (cosmetic, every peer).
 signal chained(from: Vector2, to: Vector2, color: Color)
+## A parry sent a shot back (cosmetic, every peer).
+signal deflected(at: Vector2, color: Color)
 signal swung(origin: Vector2, facing: Vector2, weapon: WeaponData)
 ## `art` false: a skill draws its own (Eruption's pillar of fire); keep just the sound, sparks and shake.
 signal exploded(at: Vector2, radius: float, color: Color, slam: bool, art: bool)
@@ -41,6 +43,8 @@ const CRIT_RADIUS_SCALE: float = 1.4
 const SPRITE_FPS: float = 12.0
 const CRIT_SPRITE_SCALE: float = 1.35
 const CRIT_FLASH: Color = Color(1.8, 1.8, 1.8)
+## A parried shot is drawn cool and bright.
+const REFLECT_TINT: Color = Color(0.55, 0.95, 1.6)
 const CRIT_SPARKLE_COLOR: Color = Color(1.0, 0.85, 0.35)
 ## Trail: this many art-pixel squares behind the bullet, shrinking.
 const TRAIL_DOTS: int = 3
@@ -97,6 +101,8 @@ class Slot:
 	var split_scale: float = 0.0
 	## A player this shot sails past (a split shard never re-hits the player its parent burst on).
 	var skip_id: int = -1
+	## Parried: drawn in the parrier's colour so it reads as theirs now.
+	var reflected: bool = false
 
 
 class Impact:
@@ -260,6 +266,7 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.split_count = weapon.split_count
 	slot.split_scale = weapon.split_scale
 	slot.skip_id = -1
+	slot.reflected = false
 	if not AutoAim.has_line_of_sight(space, _los_query, origin, muzzle):
 		_stop(slot, muzzle)
 
@@ -317,6 +324,9 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 			if s.active and s.attacker_id != owner_id and s.pos.distance_to(origin) <= reach + s.radius \
 					and CombatRules.in_arc(origin, facing, s.pos, weapon.melee_arc_deg):
 				s.vel = _toward_shooter(s, origin, facing) * s.vel.length()
+				s.color = weapon.color  # theirs became yours
+				s.reflected = true
+				deflected.emit(s.pos, weapon.color)
 				s.attacker_id = owner_id
 				s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
 	if weapon.splash_radius > 0.0:
@@ -779,6 +789,7 @@ func _spawn_shards(s: Slot, at: Vector2) -> void:
 		shard.backstab = 0.0
 		shard.split_count = 0
 		shard.skip_id = s.skip_id
+		shard.reflected = false
 
 
 ## Storm Cloud: lightning strikes every other player within `radius` of `origin` that is in sight of it, pushed away from it.
@@ -881,9 +892,17 @@ func _draw() -> void:
 		var h: float = s.sprite.get_height()
 		var frames: int = int(s.sprite.get_width() / h)
 		var scale_px: float = px * (CRIT_SPRITE_SCALE if s.crit else 1.0)
-		draw_set_transform(s.pos, _time * Constants.BOOMERANG_SPIN if s.boomerang else s.vel.angle(), Vector2(scale_px, scale_px))
+		var angle: float = _time * Constants.BOOMERANG_SPIN if s.boomerang else s.vel.angle()
+		if s.boomerang:  # bigger, with a faint trail of fading afterimages
+			scale_px *= Constants.BOOMERANG_SCALE
+			for g: int in Constants.BOOMERANG_GHOSTS:
+				draw_set_transform(s.pos - s.vel * Constants.BOOMERANG_GHOST_GAP * (g + 1),
+					angle - Constants.BOOMERANG_SPIN * Constants.BOOMERANG_GHOST_GAP * (g + 1), Vector2(scale_px, scale_px))
+				draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
+					Color(1, 1, 1, Constants.BOOMERANG_GHOST_ALPHA / (g + 1)))
+		draw_set_transform(s.pos, angle, Vector2(scale_px, scale_px))
 		draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
-			CRIT_FLASH if s.crit and tick % 2 == 0 else Color.WHITE)
+			CRIT_FLASH if s.crit and tick % 2 == 0 else REFLECT_TINT if s.reflected else Color.WHITE)
 		draw_set_transform(Vector2.ZERO)
 	for imp: Impact in _impacts:
 		if imp.time_left <= 0.0:

@@ -455,6 +455,7 @@ func _attach_effects() -> void:
 	projectiles.chained.connect(func(from: Vector2, to: Vector2, color: Color) -> void:
 		effects.chain_arc(from, to, color)
 		sfx.play(&"laser", to))
+	projectiles.deflected.connect(effects.deflect)
 	projectiles.exploded.connect(_fx_explosion)
 	projectiles.burst_shown.connect(effects.burst_strip)
 	hit_landed.connect(_fx_hit)

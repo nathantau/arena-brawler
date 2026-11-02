@@ -47,7 +47,18 @@ const INVULN_ALPHA: float = 0.45
 const GUN_FADE_TIME: float = 0.12
 const GHOST_FADE_TIME: float = 0.15
 ## A burning player sheds an ember this often.
-const EMBER_INTERVAL: float = 0.1
+const EMBER_INTERVAL: float = 0.25
+## Burning look: a warm tint pulsing at BURN_PULSE_HZ and BURN_LICKS small flame licks at a time rising off the body at
+## the BURN_ROOTS (px from the node origin: head, shoulders, torso, hips), each living BURN_LICK_LIFE s.
+const BURN_PULSE_HZ: float = 3.0
+const BURN_TINT: Vector3 = Vector3(0.35, 0.0, -0.4)
+const BURN_LICKS: int = 4
+const BURN_LICK_LIFE: float = 0.6
+const BURN_LICK_HEIGHT: float = 28.0
+const BURN_ROOTS: Array[Vector2] = [Vector2(-24, -30), Vector2(24, -32), Vector2(-8, -46), Vector2(9, -46),
+	Vector2(-28, -6), Vector2(28, -4), Vector2(-24, 16), Vector2(24, 18)]
+## Lick colours from its root to its tip.
+const BURN_COLORS: Array[Color] = [UiStyle.C_WHITE, UiStyle.C_YELLOW, UiStyle.C_ORANGE, UiStyle.C_RED]
 ## Spawn protection look: flicker rate (Hz, doubled for the last SPAWN_WARN_TIME s), low alpha, shimmer rate, ground ring.
 const SPAWN_BLINK_HZ: float = 8.0
 const SPAWN_WARN_TIME: float = 0.4
@@ -367,6 +378,10 @@ func _process(delta: float) -> void:
 	_gun_alpha = _ghost_a  # (the weapon fades on its own, not with the body)
 	_sprite.modulate.a = 0.0 if _special_fx.is_swinging() else _special_fx.owner_alpha() * _gun_alpha
 	_sprite.modulate = Color(1, 1, 1, _sprite.modulate.a)
+	if stats.burn_remaining > 0.0 and _sprite.modulate.a > 0.0:
+		var heat: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * BURN_PULSE_HZ)
+		_sprite.modulate = Color(1.0 + BURN_TINT.x * heat, 1.0 + BURN_TINT.y * heat, 1.0 + BURN_TINT.z * heat,
+			_sprite.modulate.a)
 	if stats.spawn_protect > 0.0 and _sprite.modulate.a > 0.0:
 		# Spawn protection: flickers (faster as it runs out) with a cool shimmer sweeping through the tint.
 		var phase: float = Time.get_ticks_msec() * 0.001
@@ -1327,8 +1342,35 @@ func _draw_overlay() -> void:
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)
+	if stats.burn_remaining > 0.0 and not dead and not is_concealed():
+		_draw_burn(_overlay)
 	if not is_local and not is_concealed():
 		_draw_bars(Constants.PLAYER_RADIUS)
+
+
+## Small flame licks rising off the body: each grows from its root, sways, thins to a tip and dithers out, snapped to art pixels
+## and coloured by height (white-hot root, yellow, orange, red tip). Which roots are lit changes every lick.
+func _draw_burn(ci: CanvasItem) -> void:
+	var px: float = Constants.SPRITE_SCALE
+	var clock: float = Time.get_ticks_msec() * 0.001 / BURN_LICK_LIFE
+	for k: int in BURN_LICKS:
+		var t: float = clock + float(k) / BURN_LICKS
+		var cycle: int = floori(t)
+		var age: float = t - cycle
+		var root: Vector2 = BURN_ROOTS[posmod(hash([player_id, cycle, k]), BURN_ROOTS.size())]
+		var rows: int = maxi(1, roundi(BURN_LICK_HEIGHT * pow(sin(PI * age), 0.7) / px))
+		for j: int in rows:
+			var f: float = float(j) / rows
+			var sway: float = sin(age * 7.0 + k * 2.1 + f * 2.5) * 3.0 * f
+			var width: int = 5 if f < 0.15 else 4 if f < 0.35 else 3 if f < 0.6 else 2 if f < 0.85 else 1
+			var base: int = mini(BURN_COLORS.size() - 1, int(f * BURN_COLORS.size()))
+			for c: int in width:
+				if age > 0.65 and (j + c + cycle) % 2 == 0:
+					continue  # dithers away as it dies
+				var edge: bool = width >= 3 and (c == 0 or c == width - 1)  # the rim burns a step redder than the core
+				var color: Color = BURN_COLORS[mini(BURN_COLORS.size() - 1, base + (1 if edge else 0))]
+				var cell: Vector2 = Vector2(floorf((root.x + sway) / px) + c - width / 2, floorf((root.y - j * px) / px)) * px
+				ci.draw_rect(Rect2(cell, Vector2(px, px)), color)
 
 
 ## The held weapon is left out while a pose replaces him: morph, grapple zip, swing, staff whirl / plant, petals, flare, step

@@ -52,6 +52,12 @@ const ARC_POOL: int = 12
 const ARC_TIME: float = 0.2
 const ARC_JITTER: float = 7.0
 const ARC_SPARKS: int = 5
+## Parry flash (Arc Blade): a ring flaring out from the contact point behind a four-point glint.
+const FLASH_POOL: int = 8
+const FLASH_TIME: float = 0.22
+const FLASH_RADIUS: float = 30.0
+const FLASH_RAYS: float = 26.0
+const FLASH_SPARKS: int = 8
 ## Embers shed by a burning fighter (Ember Palm).
 const EMBER_COLORS: Array[Color] = [UiStyle.C_YELLOW, UiStyle.C_ORANGE, UiStyle.C_RED]
 const EMBER_COUNT: int = 2
@@ -157,6 +163,12 @@ class Arc:
 	var seed: int = 0
 
 
+class Flash:
+	var life: float = 0.0
+	var pos: Vector2 = Vector2.ZERO
+	var color: Color = Color.WHITE
+
+
 class Beam:
 	var life: float = 0.0
 	var from: Vector2 = Vector2.ZERO
@@ -195,6 +207,8 @@ var _particles: Array[Particle] = []
 var _numbers: Array[DamageNumber] = []
 var _beams: Array[Beam] = []
 var _arcs: Array[Arc] = []
+var _flashes: Array[Flash] = []
+var _fc: int = 0
 var _ac: int = 0
 var _thrusts: Array[Thrust] = []
 var _held: Dictionary = {}  # player_id -> HeldBeam
@@ -235,6 +249,8 @@ func _ready() -> void:
 		_beams.append(Beam.new())
 	for i: int in ARC_POOL:
 		_arcs.append(Arc.new())
+	for i: int in FLASH_POOL:
+		_flashes.append(Flash.new())
 	for i: int in 8:
 		_thrusts.append(Thrust.new())
 	for i: int in MARKER_POOL:
@@ -345,6 +361,16 @@ func chain_arc(from: Vector2, to: Vector2, color: Color) -> void:
 	burst(to, color.lerp(UiStyle.C_WHITE, 0.5), ARC_SPARKS, LIGHTNING_SPARK_SPEED, LIGHTNING_SPARK_SIZE, LIGHTNING_SPARK_LIFE)
 
 
+## A bright deflect flash where a parry met a shot.
+func deflect(at: Vector2, color: Color) -> void:
+	var f: Flash = _flashes[_fc]
+	_fc = (_fc + 1) % _flashes.size()
+	f.life = FLASH_TIME
+	f.pos = at
+	f.color = color
+	burst(at, color.lerp(UiStyle.C_WHITE, 0.6), FLASH_SPARKS, LIGHTNING_SPARK_SPEED, LIGHTNING_SPARK_SIZE, LIGHTNING_SPARK_LIFE)
+
+
 ## A single ember rising off a burning fighter at `at`.
 func ember(at: Vector2) -> void:
 	for i: int in EMBER_COUNT:
@@ -448,6 +474,8 @@ func _process(delta: float) -> void:
 		b.life -= delta
 	for a: Arc in _arcs:
 		a.life -= delta
+	for f: Flash in _flashes:
+		f.life -= delta
 	for id: int in _held.keys():
 		var h: HeldBeam = _held[id]
 		h.life -= delta
@@ -521,6 +549,9 @@ func _draw() -> void:
 	for a: Arc in _arcs:
 		if a.life > 0.0:
 			_draw_arc(a, px)
+	for f: Flash in _flashes:
+		if f.life > 0.0:
+			_draw_flash(f, px)
 	_draw_held_beams(px)
 	_draw_aim_marker(px)
 	for p: Particle in _particles:
@@ -801,6 +832,19 @@ func _draw_lightning_beam(h: HeldBeam, ends: PackedVector2Array, px: float) -> v
 		_pdisc(tip, 3.5, LIGHTNING_CYAN, px, true)
 	# 6. the hand: start-up flash, then a crackling orb
 	_lightning_orb(h, hand, rng, px, life_k)
+
+
+func _draw_flash(f: Flash, px: float) -> void:
+	var k: float = 1.0 - f.life / FLASH_TIME
+	var ring := PackedVector2Array()
+	for i: int in 17:
+		ring.append(f.pos + Vector2.RIGHT.rotated(TAU * i / 16.0) * lerpf(6.0, FLASH_RADIUS, 1.0 - pow(1.0 - k, 2.0)))
+	_ppoly(ring, f.color, 2 if k < 0.6 else 1, px)
+	_ppoly(ring, UiStyle.C_WHITE if k < 0.4 else f.color, 1, px)
+	var ray: float = FLASH_RAYS * (1.0 - k)
+	for d: Vector2 in [Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT, Vector2.UP]:  # a four-point glint
+		_pline(f.pos, f.pos + d * ray, UiStyle.C_WHITE, 2 if k < 0.5 else 1, px)
+	_pdisc(f.pos, 4.0 * (1.0 - k) + 1.0, UiStyle.C_WHITE, px)
 
 
 ## The same layers as the lightning beam (dithered glow, yellow edge, white-hot core), re-rolled LIGHTNING_HZ times a second,

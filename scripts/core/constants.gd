@@ -202,6 +202,11 @@ const BEAM_RAMP_GRACE: float = 0.3
 const FIRE_STREAK_GRACE: float = 0.2
 ## Boomerang spin (rad/s).
 const BOOMERANG_SPIN: float = 22.0
+## A boomerang is drawn this much bigger than a bullet, trailed by BOOMERANG_GHOSTS afterimages BOOMERANG_GHOST_GAP s apart.
+const BOOMERANG_SCALE: float = 1.6
+const BOOMERANG_GHOSTS: int = 3
+const BOOMERANG_GHOST_GAP: float = 0.012
+const BOOMERANG_GHOST_ALPHA: float = 0.45
 ## A returning boomerang flies this long at most; a consecutive-shot streak (Pocket Blaster) resets after this long idle.
 const BOOMERANG_RETURN_LIFE: float = 4.0
 const STREAK_RESET: float = 1.0

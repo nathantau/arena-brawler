@@ -1,22 +1,29 @@
 extends SceneTree
-## Contact sheet of the weapon hooks (chain arc, boomerang, burn embers, split shards, parry), one row each, written to
-## weapon_hooks_preview.png in the project root. Needs a window (small, off-screen: override.cfg as in CLAUDE.md Commands):
+## Contact sheet of the weapon hooks (chain arc, boomerang, burn, split shards, parry), one labelled row each, written to
+## weapon_hooks_preview.png in the project root. Needs a window (small, off-screen: override.cfg as in CLAUDE.md Commands,
+## with window/size/viewport_width=1334 and viewport_height=750):
 ##   godot --path . -s tools/weapon_hooks_preview.gd
 
 const START_FRAME: int = 420
 const ROW_LEN: int = 110
-const COLS: int = 8
-const ZOOM: int = 2
-const CROP: Vector2i = Vector2i(300, 170)  # screen px around the row's focus point
-## Physics frames (from a row's start) that are photographed, per row.
-const SHOT_AT: Array = [
-	[3, 6, 9, 12, 15, 18, 22, 28],
-	[6, 14, 22, 30, 38, 46, 54, 62],
-	[4, 8, 12, 16, 20, 24, 28, 32],
-	[19, 21, 23, 25, 27, 30, 34, 40],
-	[3, 6, 9, 12, 15, 18, 22, 28],
-]
+const COLS: int = 6
+const CELL: Vector2i = Vector2i(760, 380)
+const LABEL_H: int = 40
 const PAD: int = 4
+const BG: Color = Color(0.08, 0.08, 0.1)
+## Per row: label, screen px cropped around the focus (CELL / zoom: 1 = wide shot, 2 = close-up), the world focus offset from
+## `home`, and the physics frames (from the row's start) that are photographed.
+const ROWS: Array = [
+	{"label": "Arc Zapper: chain lightning jumps to the nearest other enemy (70%)", "zoom": 1, "focus": Vector2(-30, 40),
+		"at": [4, 5, 6, 7, 9, 12]},
+	{"label": "Umbral Shuriken: boomerang, out, turn, back to Shadow", "zoom": 1, "focus": Vector2(-10, 0),
+		"at": [4, 16, 28, 34, 46, 58]},
+	{"label": "Ember Palm: burning target (tint pulse + flame licks)", "zoom": 2, "focus": Vector2(0, 0),
+		"at": [4, 8, 12, 16, 20, 24]},
+	{"label": "Seed Sling: bursts into 3 thorn shards", "zoom": 2, "focus": Vector2(60, 0), "at": [19, 22, 25, 28, 32, 38]},
+	{"label": "Arc Blade: parry sends the shot back at the shooter", "zoom": 1, "focus": Vector2(-70, 0),
+		"at": [9, 11, 12, 14, 18, 23]},
+]
 
 var arena: Arena
 var me: Player
@@ -24,8 +31,9 @@ var a: Player
 var b: Player
 var frames: int = 0
 var home: Vector2
-var shots: Array = []  # Array of Array[Image], per row
+var shots: Array = []  # per row: Array[Image], each CELL big
 var seq: int = 1
+var sheet_done: bool = false
 
 
 func _initialize() -> void:
@@ -33,7 +41,7 @@ func _initialize() -> void:
 	arena = Arena.new(Arena.Mode.OFFLINE)
 	root.add_child(arena)
 	physics_frame.connect(_tick)
-	for r: int in SHOT_AT.size():
+	for r: int in ROWS.size():
 		shots.append([])
 
 
@@ -59,8 +67,9 @@ func _tick() -> void:
 		var st: MatchState = arena.match_state
 		var phase: MatchState.Phase = st.phase
 		st.phase = MatchState.Phase.LOBBY
-		arena.select_character(a, &"shadow")  # plain looks: Flint's own flames would read as burning
-		arena.select_character(b, &"bolt")
+		arena.select_character(me, &"shadow")  # plain looks: Flint's own flames would read as burning
+		arena.select_character(a, &"flicker")
+		arena.select_character(b, &"eden")
 		st.phase = phase
 		arena.referee.set_ready(1, true)  # leaves the loading room: the match counts down, then plays
 	if me == null or frames < START_FRAME:
@@ -76,89 +85,107 @@ func _tick() -> void:
 		p.stats.hp = p.stats.max_hp
 	var row: int = (frames - START_FRAME) / ROW_LEN
 	var n: int = (frames - START_FRAME) % ROW_LEN
-	if row >= SHOT_AT.size():
-		_finish()
+	if row >= ROWS.size():
+		if not sheet_done:
+			sheet_done = true
+			_finish()
 		return
 	_scenario(row, n)
-	if SHOT_AT[row].has(n):
+	if ROWS[row].at.has(n):
 		_grab(row)
 
 
-func _stage(me_at: Vector2, a_at: Vector2, b_at: Vector2) -> void:
-	me.global_position = me_at
-	a.global_position = a_at
-	b.global_position = b_at
-	for p: Player in [me, a, b]:
-		p.velocity = Vector2.ZERO
+func _put(who: Player, offset: Vector2) -> void:
+	who.global_position = home + offset
+	who.velocity = Vector2.ZERO
 
 
 func _scenario(row: int, n: int) -> void:
-	var far: Vector2 = home + Vector2(-450, 300)  # parked off the photographed area, near enough for the camera
+	var park: Vector2 = Vector2(-700, -600)  # off every photograph, near enough for the camera
+	_put(b, park)
+	if row != 2:
+		a.stats.burn_remaining = 0.0  # (nobody simulates here, so a burn would never run out)
 	match row:
-		0:  # chain: Bolt's zap hits A, jumps to B
+		0:  # Bolt's zap hits A, jumps to the separate B
+			_put(me, Vector2(-170, 40))
+			_put(a, Vector2(0, 40))
+			_put(b, Vector2(100, -25))
 			if n == 0:
-				_stage(home - Vector2(240, 0), home, home + Vector2(36, 78))
-				me.facing = Vector2.RIGHT
 				_fire(me, Vector2.RIGHT, &"bolt_zapper")
-			elif n < 30:
-				a.global_position = home
-				b.global_position = home + Vector2(36, 78)
-		1:  # boomerang out and back
+		1:  # boomerang out and back, nobody in the way
+			_put(me, Vector2(-230, 0))
+			_put(a, park)
 			if n == 0:
-				_stage(home - Vector2(150, 0), far, far)
 				_fire(me, Vector2.RIGHT, &"shadow_shuriken")
-			me.global_position = home - Vector2(150, 0)
-			a.global_position = far
-			b.global_position = far
 		2:  # burning target
+			_put(me, Vector2(-450, 0))
+			_put(a, Vector2.ZERO)
 			if n == 0:
-				_stage(home - Vector2(450, 0), home, far)
 				a.stats.ignite(1.5, 2, 0.25, 1)
-			a.global_position = home
-			b.global_position = far
-			me.global_position = home - Vector2(450, 0)
 		3:  # seed sling bursting on a fighter, shards fanning onward
+			_put(me, Vector2(-200, 0))
+			_put(a, Vector2(60, 0))
 			if n == 0:
-				_stage(home - Vector2(200, 0), home + Vector2(60, 0), far)
 				_fire(me, Vector2.RIGHT, &"eden_sling")
-			a.global_position = home + Vector2(60, 0)
-			me.global_position = home - Vector2(200, 0)
-			b.global_position = far
-		4:  # parry: A shoots, the Arc Blade sends it back
+		4:  # parry: A shoots from the left, the Arc Blade sends it back
+			_put(me, Vector2(60, 0))
+			_put(a, Vector2(-200, 0))
+			me.facing = Vector2.LEFT
 			if n == 0:
-				_stage(home + Vector2(60, 0), home - Vector2(140, 0), far)
-				a.facing = Vector2.RIGHT
-				me.facing = Vector2.LEFT
 				_fire(a, Vector2.RIGHT, &"pistol")
-			if n == 4:
+			if n == 11:
 				_fire(me, Vector2.LEFT, &"sword")
-			a.global_position = home - Vector2(140, 0)
-			me.global_position = home + Vector2(60, 0)
-			b.global_position = far
 
 
 func _grab(row: int) -> void:
 	await RenderingServer.frame_post_draw
 	var img: Image = root.get_texture().get_image()
-	var focus: Vector2 = home + Vector2(-40, 0)
-	if row == 0 or row == 2:
-		focus = home + Vector2(0, 30 if row == 0 else 0)
-	var at: Vector2 = root.get_canvas_transform() * focus
-	var corner: Vector2i = (Vector2i(at) - CROP / 2).clamp(Vector2i.ZERO, img.get_size() - CROP)
-	var rect := Rect2i(corner, CROP)
-	var crop: Image = img.get_region(rect)
-	crop.convert(Image.FORMAT_RGBA8)
-	crop.resize(crop.get_width() * ZOOM, crop.get_height() * ZOOM, Image.INTERPOLATE_NEAREST)
+	img.convert(Image.FORMAT_RGBA8)
+	var zoom: int = ROWS[row].zoom
+	var crop_size: Vector2i = CELL / zoom
+	var at: Vector2 = root.get_canvas_transform() * (home + ROWS[row].focus as Vector2)
+	var corner: Vector2i = (Vector2i(at) - crop_size / 2).clamp(Vector2i.ZERO, img.get_size() - crop_size)
+	var crop: Image = img.get_region(Rect2i(corner, crop_size))
+	if zoom > 1:
+		crop.resize(CELL.x, CELL.y, Image.INTERPOLATE_NEAREST)
 	shots[row].append(crop)
 
 
+## Blits the cells onto the sheet, then the row labels (rendered in a transparent SubViewport) over it.
 func _finish() -> void:
-	var cell := Vector2i(CROP * ZOOM)
-	var sheet := Image.create(COLS * (cell.x + PAD) + PAD, shots.size() * (cell.y + PAD) + PAD, false, Image.FORMAT_RGBA8)
-	sheet.fill(Color(0.08, 0.08, 0.1))
-	for r: int in shots.size():
+	var size := Vector2i(COLS * (CELL.x + PAD) + PAD, ROWS.size() * (CELL.y + LABEL_H + PAD) + PAD)
+	var sheet := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
+	sheet.fill(BG)
+	for r: int in ROWS.size():
 		for c: int in shots[r].size():
 			var im: Image = shots[r][c]
-			sheet.blit_rect(im, Rect2i(Vector2i.ZERO, im.get_size()), Vector2i(PAD + c * (cell.x + PAD), PAD + r * (cell.y + PAD)))
+			sheet.blit_rect(im, Rect2i(Vector2i.ZERO, CELL), Vector2i(PAD + c * (CELL.x + PAD), _row_y(r) + LABEL_H))
+	var vp := SubViewport.new()
+	vp.size = size
+	vp.transparent_bg = true
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(vp)
+	var board := Node2D.new()
+	vp.add_child(board)
+	board.draw.connect(func() -> void:
+		var font: Font = ThemeDB.fallback_font
+		for r: int in ROWS.size():
+			board.draw_string(font, Vector2(PAD + 6, _row_y(r) + LABEL_H - 12), ROWS[r].label, HORIZONTAL_ALIGNMENT_LEFT, -1.0,
+				24, Color(0.95, 0.93, 0.85)))
+	board.queue_redraw()
+	await process_frame
+	await process_frame
+	await RenderingServer.frame_post_draw
+	var labels: Image = vp.get_texture().get_image()
+	labels.convert(Image.FORMAT_RGBA8)
+	sheet.blend_rect(labels, Rect2i(Vector2i.ZERO, size), Vector2i.ZERO)
+	if OS.get_cmdline_user_args().has("cells"):  # also write every cell on its own (cell_<row>_<col>.png) to inspect details
+		for r: int in ROWS.size():
+			for c: int in shots[r].size():
+				(shots[r][c] as Image).save_png("/tmp/cell_%d_%d.png" % [r, c])
 	sheet.save_png("res://weapon_hooks_preview.png")
 	quit()
+
+
+func _row_y(r: int) -> int:
+	return PAD + r * (CELL.y + LABEL_H + PAD)
