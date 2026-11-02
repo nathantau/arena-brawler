@@ -563,10 +563,8 @@ func _draw_messages() -> void:
 		_last_count = -1
 	if player.dead and st.phase != MatchState.Phase.RESULTS:
 		var msg: String
-		if st.may_respawn(player.player_id):
-			msg = "Respawning in %.1f" % maxf(0.0, player.respawn_timer)
-		elif st.mode == MatchRules.Mode.TEAMS and st.is_participant(player.player_id):
-			msg = "Out this round"
+		if st.may_respawn(player.player_id) or (st.mode == MatchRules.Mode.TEAMS and st.is_participant(player.player_id)):
+			msg = "RESPAWN IN %d" % maxi(1, ceili(player.respawn_timer))
 		else:
 			msg = "Spectating · you'll play next match"
 		var w: float = UiStyle.text_width(msg, UiStyle.SIZE_HEADING, true) + PILL_PAD * 2.0

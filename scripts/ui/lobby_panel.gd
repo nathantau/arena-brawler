@@ -838,8 +838,8 @@ func _refresh() -> void:
 	var me: Player = arena.local_player
 	_title.text = "LOADING ROOM · %s" % MatchRules.MODE_NAMES[st.mode]
 	if st.mode == MatchRules.Mode.TEAMS:
-		_rules.text = "First team to %d rounds · %ds rounds · %d lives each" % [MatchRules.kill_target(st.mode),
-			int(minf(st.time_limit, Constants.TEAMS_ROUND_TIME)), Constants.TEAMS_LIVES]
+		_rules.text = "First team to %d rounds · %ds rounds · %ds respawns" % [MatchRules.kill_target(st.mode),
+			int(minf(st.time_limit, Constants.TEAMS_ROUND_TIME)), int(Constants.TEAMS_RESPAWN_DELAY)]
 	else:
 		_rules.text = "First to %d kills · %d:%02d" % [MatchRules.kill_target(st.mode),
 			int(st.time_limit) / 60, int(st.time_limit) % 60]

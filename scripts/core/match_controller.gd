@@ -14,7 +14,8 @@ signal round_started
 
 var state := MatchState.new()
 ## Teams: returns id -> hp of every player alive right now (asked only when a round runs out of time).
-var living_hp: Callable
+## Kills this round per team (index = team id), authoritative only: the clock-out tiebreak.
+var round_kills: Array[int] = [0, 0, 0]
 
 
 func set_mode(mode: MatchRules.Mode) -> void:
@@ -48,11 +49,13 @@ func set_team(id: int, team: int) -> void:
 	changed.emit()
 
 
-## Teams: a participant died at `at`. Spends a life while a round is running, and a carried flag drops there.
-func on_death(id: int, at: Vector2 = Vector2.ZERO) -> void:
+## Teams: a participant died at `at`. Counts the other team's kill while a round is running, and a carried flag drops there.
+func on_death(id: int, at: Vector2 = Vector2.ZERO, killer_id: int = 0) -> void:
 	if not _round_running() or not state.teams.has(id):
 		return
-	state.lives[id] = maxi(0, state.lives_of(id) - 1)
+	var killer_team: int = state.team_of(killer_id)
+	if killer_team != 0 and killer_team != state.team_of(id):
+		round_kills[killer_team] += 1
 	var flag: int = state.carried_flag_of(id)
 	if flag != 0:
 		state.flag_state[flag] = MatchState.Flag.DROPPED
@@ -170,7 +173,6 @@ func remove_player(id: int, scores: ScoreBoard, humans: Array[int]) -> void:
 		state.flag_state[held] = MatchState.Flag.HOME
 		state.flag_carrier[held] = 0
 	state.teams.erase(id)
-	state.lives.erase(id)
 	var running: bool = state.phase == MatchState.Phase.COUNTDOWN or state.phase == MatchState.Phase.PLAYING
 	var team_empty: bool = state.mode == MatchRules.Mode.TEAMS and was_in and (
 			MatchRules.members(state.teams, MatchRules.TEAM_A).is_empty() \
@@ -220,7 +222,7 @@ func _round_running() -> bool:
 
 
 ## Teams: between rounds count the intermission down, then reset for the next round; in a round look for a
-## team that is out (every player's lives spent), or the clock running out.
+## flag capture (ends the round in `flag_capture`) or the clock running out.
 func _tick_round(delta: float, scores: ScoreBoard) -> void:
 	if state.intermission > 0.0:
 		state.intermission -= delta
@@ -228,7 +230,7 @@ func _tick_round(delta: float, scores: ScoreBoard) -> void:
 			state.intermission = 0.0
 			state.round_number += 1
 			state.time_left = _round_time()
-			_refill_lives()
+			round_kills = [0, 0, 0]
 			state.reset_flags()
 			round_started.emit()
 			changed.emit()
@@ -239,14 +241,8 @@ func _tick_round(delta: float, scores: ScoreBoard) -> void:
 			state.flag_timer[flag] -= delta
 			if state.flag_timer[flag] <= 0.0:
 				flag_return(flag)
-	var result: int = MatchRules.round_result(state.teams, state.lives)
-	var reason: int = MatchRules.Reason.WIPE
-	if result == MatchRules.ROUND_ON and state.time_left <= 0.0:
-		var hp: Dictionary = living_hp.call() if living_hp.is_valid() else {}
-		result = MatchRules.timeout_winner(state.teams, hp, state.teams_carrying())
-		reason = MatchRules.Reason.TIMEOUT
-	if result != MatchRules.ROUND_ON:
-		_end_round(result, reason, scores)
+	if state.time_left <= 0.0:
+		_end_round(MatchRules.timeout_winner(round_kills), MatchRules.Reason.TIMEOUT, scores)
 
 
 func _end_round(winner: int, reason: int, scores: ScoreBoard) -> void:
@@ -260,11 +256,6 @@ func _end_round(winner: int, reason: int, scores: ScoreBoard) -> void:
 		return
 	state.intermission = Constants.TEAMS_INTERMISSION
 	changed.emit()
-
-
-func _refill_lives() -> void:
-	for id: int in state.teams:
-		state.lives[id] = Constants.TEAMS_LIVES
 
 
 func _tick_lobby(humans: Array[int], bots: Array[int]) -> void:
@@ -304,7 +295,7 @@ func _end(scores: ScoreBoard) -> void:
 
 func _reset_teams() -> void:
 	state.teams.clear()
-	state.lives.clear()
+	round_kills = [0, 0, 0]
 	state.round_scores = [0, 0, 0]
 	state.round_number = 0
 	state.round_winner = 0
@@ -313,14 +304,13 @@ func _reset_teams() -> void:
 	state.reset_flags()
 
 
-## Teams: lock in everyone's team (picks kept, the rest balanced), round 1, full lives, 0-0.
+## Teams: lock in everyone's team (picks kept, the rest balanced), round 1, 0-0.
 func _start_teams() -> void:
 	var picks: Dictionary[int, int] = state.teams.duplicate()
 	_reset_teams()
 	if state.mode == MatchRules.Mode.TEAMS:
 		state.teams = MatchRules.assign_teams(state.participants, picks)
 		state.round_number = 1
-		_refill_lives()
 
 
 func _enter(phase: MatchState.Phase, duration: float) -> void:

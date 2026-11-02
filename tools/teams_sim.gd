@@ -1,7 +1,7 @@
 extends SceneTree
 ## Teams 3v3 check: one offline match where every fighter (the "human" seat included) is driven by a BotBrain.
 ## Prints each round's result and the final winner; exits 1 if no winner is declared in time.
-##   godot --path . --headless --fixed-fps 60 -s tools/teams_sim.gd -- [round=90] [seed=1] [max=1800]
+##   godot --path . --headless --fixed-fps 60 -s tools/teams_sim.gd -- [round=120] [seed=1] [max=1800]
 ## Screenshot (needs a window; focus-safe like the smoke test, see CLAUDE.md Commands): add `shot=<png path>`
 ## and the match is rendered with a camera over the whole arena; the png is written mid round 1 and it quits.
 
@@ -17,11 +17,12 @@ var sheet: bool = false  ## screenshot with lobby=1: a contact sheet of the show
 var pick: StringName = &"eden"  ## screenshot with lobby=1 step=1: the fighter the overlay opens on
 var fly: bool = false  ## screenshot with lobby=1 strip=1: capture an ability flying into a slot instead of the slide-in
 var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the overlay sliding in
+var dead: bool = false  ## screenshot: the local player dies at once, so the respawn countdown shows (use at=200)
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
 
 var arena: Arena
 var frames: int = 0
-var round_secs: float = 90.0
+var round_secs: float = 120.0
 var base_seed: int = 1
 var max_secs: float = 1800.0
 var shot_path: String = ""
@@ -40,6 +41,7 @@ func _initialize() -> void:
 				"shot": shot_path = kv[1]
 				"at": shot_frames = int(kv[1])
 				"carry": carry = kv[1] == "1"
+				"dead": dead = kv[1] == "1"
 				"win": win = kv[1] == "1"
 				"lobby": lobby = kv[1] == "1"
 				"shared": shared = int(kv[1])
@@ -98,6 +100,9 @@ func _tick() -> void:
 			var me: Player = arena.get_player(1)
 			arena.referee.flag_pickup(1, MatchRules.other_team(me.team))
 			arena.referee.flag_capture(1, arena.scores)
+		if dead and _play_frames == 20:
+			arena.get_player(1).stats.spawn_protect = 0.0
+			arena.get_player(1).take_hit(9999, false, Vector2.ZERO, Constants.BOT_ID_BASE)
 		if shot_path != "" and carry and _play_frames == 20:
 			for p: Player in arena.players:
 				if p.team == MatchRules.TEAM_B and not p.is_local and not p.dead:
@@ -145,13 +150,16 @@ func _report() -> void:
 func _shoot() -> void:
 	var view: Vector2 = root.get_visible_rect().size
 	arena.camera.position_smoothing_enabled = false
-	if _carrier != null:  # close up on the carrier
+	if dead:
+		pass
+	elif _carrier != null:  # close up on the carrier
 		arena.camera.zoom = Vector2.ONE * arena._zoom() * 1.3
 		arena.camera.global_position = _carrier.global_position
 	else:
 		arena.camera.zoom = Vector2.ONE * minf(view.x / arena.map.size.x, view.y / arena.map.size.y)
 		arena.camera.global_position = arena.map.size * 0.5
-	arena.camera.set_process(false)
+	if not dead:
+		arena.camera.set_process(false)
 	arena.set_physics_process(false)
 	await process_frame
 	await process_frame

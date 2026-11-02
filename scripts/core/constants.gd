@@ -132,13 +132,13 @@ const DUEL_PLAYERS: int = 2
 const FFA_MAX_PLAYERS: int = 4
 const DUEL_KILL_TARGET: int = 5
 const FFA_KILL_TARGET: int = 10
-## Teams 3v3: round wins needed to take the match, players per team, lives per round (1 respawn), round clock,
-## and the pause between rounds (everyone is reset at their team's spawns).
+## Teams 3v3: round wins needed to take the match, players per team, the respawn wait (unlimited respawns), round
+## clock, and the pause between rounds (everyone is reset at their team's spawns).
 const TEAMS_ROUND_TARGET: int = 5
 const TEAM_SIZE: int = 3
 const TEAMS_MAX_PLAYERS: int = TEAM_SIZE * 2
-const TEAMS_LIVES: int = 2
-const TEAMS_ROUND_TIME: float = 90.0
+const TEAMS_RESPAWN_DELAY: float = 10.0
+const TEAMS_ROUND_TIME: float = 120.0
 const TEAMS_INTERMISSION: float = 3.0
 ## Teams: everyone's max HP is multiplied by this (Duel / FFA stay as they are).
 const TEAMS_HP_SCALE: float = 1.5

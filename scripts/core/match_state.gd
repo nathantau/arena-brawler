@@ -32,8 +32,6 @@ var winner_id: int = 0
 var blocker: String = ""
 ## Teams mode. In the lobby: player id -> team picked (absent = auto). From the countdown: everyone's team.
 var teams: Dictionary[int, int] = {}
-## Lives left this round, per participant (Teams only).
-var lives: Dictionary[int, int] = {}
 ## Rounds won: [unused, team A, team B] (indexed by team id).
 var round_scores: Array[int] = [0, 0, 0]
 ## 1-based round number (0 outside a Teams match).
@@ -70,7 +68,7 @@ func may_respawn(id: int) -> bool:
 			return true
 		Phase.COUNTDOWN, Phase.PLAYING:
 			if mode == MatchRules.Mode.TEAMS and phase == Phase.PLAYING:
-				return is_participant(id) and intermission <= 0.0 and lives_of(id) > 0
+				return is_participant(id) and intermission <= 0.0
 			return is_participant(id)
 	return false
 
@@ -89,15 +87,6 @@ func carried_flag_of(id: int) -> int:
 	return 0
 
 
-## Teams holding the enemy flag right now (carried, not dropped).
-func teams_carrying() -> Array[int]:
-	var out: Array[int] = []
-	for t: int in [MatchRules.TEAM_A, MatchRules.TEAM_B]:
-		if flag_state[MatchRules.other_team(t)] == Flag.CARRIED:
-			out.append(t)
-	return out
-
-
 func team_of(id: int) -> int:
 	return teams.get(id, 0)
 
@@ -109,10 +98,6 @@ func slot_empty(id: int, slot: int) -> bool:
 
 func has_gap(id: int) -> bool:
 	return gaps.get(id, 0) != 0
-
-
-func lives_of(id: int) -> int:
-	return lives.get(id, 0)
 
 
 func to_array() -> Array:
@@ -130,7 +115,7 @@ func to_array() -> Array:
 	a[Field.BLOCKER] = blocker
 	var tl := PackedInt32Array()
 	for id: int in teams:
-		tl.append_array([id, teams[id], lives.get(id, 0)])
+		tl.append_array([id, teams[id]])
 	a[Field.TEAMS] = tl
 	a[Field.ROUND_SCORES] = PackedInt32Array(round_scores)
 	a[Field.ROUND] = round_number
@@ -171,7 +156,7 @@ func apply_array(a: Array) -> bool:
 		return false
 	var tl: PackedInt32Array = a[Field.TEAMS]
 	var rs: PackedInt32Array = a[Field.ROUND_SCORES]
-	if tl.size() % 3 != 0 or rs.size() != 3:
+	if tl.size() % 2 != 0 or rs.size() != 3:
 		return false
 	var p: int = a[Field.PHASE]
 	var m: int = a[Field.MODE]
@@ -189,10 +174,8 @@ func apply_array(a: Array) -> bool:
 	winner_id = a[Field.WINNER]
 	blocker = a[Field.BLOCKER]
 	teams = {}
-	lives = {}
-	for i: int in range(0, tl.size(), 3):
+	for i: int in range(0, tl.size(), 2):
 		teams[tl[i]] = tl[i + 1]
-		lives[tl[i]] = tl[i + 2]
 	round_scores = [rs[0], rs[1], rs[2]]
 	round_number = a[Field.ROUND]
 	round_winner = a[Field.ROUND_WINNER]

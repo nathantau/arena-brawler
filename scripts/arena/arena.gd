@@ -179,7 +179,6 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 		team_requested.connect(func(team: int) -> void:
 			if local_player != null:
 				referee.set_team(local_player.player_id, team))
-		referee.living_hp = _living_hp
 		referee.round_started.connect(_on_round_started)
 		referee.round_ended.connect(func(_winner: int, _reason: int) -> void: projectiles.clear())
 		arena_requested.connect(referee.set_arena)
@@ -908,16 +907,6 @@ func _tick_flags() -> void:
 			return
 
 
-## id -> hp of every participant standing right now (for the round-timeout tiebreak).
-func _living_hp() -> Dictionary:
-	var out: Dictionary = {}
-	for id: int in match_state.participants:
-		var p: Player = get_player(id)
-		if p != null and not p.dead:
-			out[id] = p.stats.hp
-	return out
-
-
 func _team_for(id: int) -> int:
 	return match_state.team_of(id) if match_state.mode == MatchRules.Mode.TEAMS else 0
 
@@ -1021,7 +1010,9 @@ func _on_projectile_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: in
 
 func _on_player_died(victim: Player, killer_id: int) -> void:
 	if referee != null:
-		referee.on_death(victim.player_id, victim.global_position)
+		referee.on_death(victim.player_id, victim.global_position, killer_id)
+		if mode != Mode.CLIENT and match_state.mode == MatchRules.Mode.TEAMS and match_state.phase == MatchState.Phase.PLAYING:
+			victim.respawn_timer = Constants.TEAMS_RESPAWN_DELAY  # clients read it from the snapshot
 	scores.register_kill(killer_id, victim.player_id)
 	kill_registered.emit(killer_id, victim.player_id)
 
