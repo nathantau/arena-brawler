@@ -457,8 +457,9 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     # ---- head: hair mass, face
     if hair in ("H5", "H7", "H8"):
         up.part(E((17, 7, 49, 36) if hair == "H7" else ((15, 4, 49, 37) if hair == "H9" else (16, 4, 50, 36))), HAIR_A)
-    up.part(RR(FACE, FACE_R), SKIN)
-    up.flat(L([(26, 35), (42, 36)], 1), SKIN_D)
+    # the shared female face (Sakura / Eden, generate.py): a full-width brow tapering into a smaller rounded chin
+    up.part(lambda d, f: (d.rounded_rectangle((FACE[0], FACE[1], FACE[2], 29), FACE_R, f),
+                          d.ellipse((FACE[0] + 1, 19, FACE[2] - 1, FACE[3] - 1), f)), SKIN)
     # side locks + fringe, per style
     wv = sw_(t, 1.0, 1) + (1 if mv else 0)
     if hair == "H4":  # short loose strands framing the face
@@ -477,7 +478,7 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         up.dot(48, 38, GOLD)
         fringe = [(19, 10), (49, 10), (50, 18), (46, 18), (46, 17), (40, 17), (40, 18), (33, 18), (33, 17), (27, 17), (27, 18), (19, 18)]
     elif hair == "H9":  # long side locks in front of her ears, joined to the back hair; then bangs grow out of the crown seamlessly
-        for p0, p1, p2, p3, lag in (((22, 13), (21, 24), (23, 34), (22, 43), 0.5), ((47, 13), (48.5, 24), (46, 34), (47, 43), 0.2)):
+        for p0, p1, p2, p3, lag in (((22, 13), (21, 24), (24, 34), (23, 43), 0.5), ((47, 13), (48.5, 24), (45, 34), (46, 43), 0.2)):
             sh = -1.0 * mv
             hair_band(up, strand(p0, (p1[0] + sh, p1[1]), (p2[0] + sh, p2[1]), (p3[0] + sh * 1.5, p3[1]), t, 0.8, k=2.0, lag=lag, n=12),
                       [4.2, 4.2, 4, 3.8, 3.5, 3.1, 2.7, 2.2, 1.7, 1.3, 1, 0.8, 0.6], clusters=((0.4, BLUE),),
@@ -636,7 +637,7 @@ def scale_sheet(out_dir):
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v11_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v12_scale.png")
 
 
 def head_check(out_dir):
@@ -644,7 +645,13 @@ def head_check(out_dir):
     h = HAIRS[0][1]
     f = frame(build_a, 0, hair=h, mouth_kind=DEFAULT_MOUTH)
     oy = PAD + UPPER_DY
-    f.crop((PAD + 10, oy - 4, PAD + 62, oy + 42)).resize((520, 460), Image.NEAREST).convert("RGB").save(out_dir / "shade_A_v11_head.png")
+    box = (PAD + 10, oy - 4, PAD + 62, oy + 42)
+    ref = lambda n: Image.open(ROOT / "assets" / "sprites" / f"{n}.png").convert("RGBA").crop((0, 0, CELL, CELL))
+    heads = [f, ref("sakura"), ref("eden")]
+    strip = Image.new("RGBA", (3 * 520 + 16, 460), (24, 24, 32, 255))
+    for i, im in enumerate(heads):
+        strip.alpha_composite(im.crop(box).resize((520, 460), Image.NEAREST), (i * 528, 0))
+    strip.convert("RGB").save(out_dir / "shade_A_v12_head.png")
     worst = {}
     for y in range(oy + 3, oy + 23):
         run, last = 0, None
@@ -673,7 +680,7 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v11.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v12.png")
     head_check(out_dir)
     scale_sheet(out_dir)
 
