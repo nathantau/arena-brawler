@@ -12,6 +12,8 @@ signal skill_used(user: Player, skill: SkillData)
 signal healed(user: Player, amount: int)
 ## Came back from dead / sitting out (every peer, from the synced dead flag): spawn pop FX.
 signal spawned(user: Player)
+## A burning player sheds an ember now and then (cosmetic, every peer, from the synced burn time).
+signal burning(user: Player)
 
 ## Layout of capture_state() / apply_state() arrays sent in snapshots.
 enum StateField {
@@ -20,7 +22,7 @@ enum StateField {
 	CHARACTER, SKILL_IDS, SKILL_COOLDOWNS, SKILL_ACTIVE, SKILL_DIRECTIONS, SKILL_ANCHORS, SKILL_WEAPON_COOLDOWNS,
 	SKILL_HITS,
 	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ, SLOW_REMAINING, SLOW_FACTOR,
-	STUN_REMAINING, SPAWN_PROTECT,
+	STUN_REMAINING, SPAWN_PROTECT, WEAPON_RAMP, BURN_REMAINING,
 	COUNT,
 }
 
@@ -44,6 +46,8 @@ const INVULN_ALPHA: float = 0.45
 ## The held weapon fades out / back in over this long as a pose takes over from him and hands back.
 const GUN_FADE_TIME: float = 0.12
 const GHOST_FADE_TIME: float = 0.15
+## A burning player sheds an ember this often.
+const EMBER_INTERVAL: float = 0.1
 ## Spawn protection look: flicker rate (Hz, doubled for the last SPAWN_WARN_TIME s), low alpha, shimmer rate, ground ring.
 const SPAWN_BLINK_HZ: float = 8.0
 const SPAWN_WARN_TIME: float = 0.4
@@ -118,6 +122,7 @@ var fallback_weapon: WeaponData
 ## special button (InputFrame.skill) fires slot 0, the second (InputFrame.special) slot 1, the third (special2) slot 2.
 var skills: Array[CharacterSkill] = []
 var facing: Vector2 = Vector2.RIGHT
+var _ember_left: float = 0.0
 ## Null for client-side remote players (they are positioned by interpolation).
 var controller: PlayerController
 var projectiles: ProjectilePool
@@ -319,6 +324,11 @@ func _process(delta: float) -> void:
 		if remote_gust != null and projectiles != null:
 			_gust(remote_gust, 0, false)
 	_hit_flash = maxf(0.0, _hit_flash - delta)
+	_ember_left -= delta
+	if _ember_left <= 0.0:
+		_ember_left = EMBER_INTERVAL
+		if stats.burn_remaining > 0.0 and not dead:
+			burning.emit(self)
 	_god_linger = godspeed_linger(_god_linger, _any_skill_active() and not dead, delta)
 	godspeed = character.has_godspeed() and _god_linger > 0.0 and not dead
 	god_level = 0.0 if dead or not character.has_godspeed() else god_level_step(god_level, godspeed, delta)
@@ -377,6 +387,10 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		_prev_skills = input.pressed_slots()  # a button held (or tapped) while dead must not fire on the respawn frame
 		return
 	stats.tick(delta)
+	if stats.burn_due > 0 and not replay and projectiles != null and projectiles.authoritative:
+		take_hit(stats.burn_due * stats.burn_damage, false, Vector2.ZERO, stats.burn_attacker)
+		if dead:
+			return
 	if stats.is_stunned():
 		_interrupt_channels()
 	# Caught before the tick so the frame it runs out still puts him exactly on the landing spot.
@@ -1219,6 +1233,8 @@ func capture_state() -> Array:
 	s[StateField.SLOW_FACTOR] = stats.slow_factor
 	s[StateField.STUN_REMAINING] = stats.stun_remaining
 	s[StateField.SPAWN_PROTECT] = stats.spawn_protect
+	s[StateField.WEAPON_RAMP] = Vector2(weapon.spin, weapon.idle)
+	s[StateField.BURN_REMAINING] = stats.burn_remaining
 	return s
 
 
@@ -1270,6 +1286,10 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	stats.slow_factor = s[StateField.SLOW_FACTOR]
 	stats.stun_remaining = s[StateField.STUN_REMAINING]
 	stats.spawn_protect = s[StateField.SPAWN_PROTECT]
+	var ramp: Vector2 = s[StateField.WEAPON_RAMP]
+	weapon.spin = ramp.x
+	weapon.idle = ramp.y
+	stats.burn_remaining = s[StateField.BURN_REMAINING]
 	_set_dead(s[StateField.DEAD])
 	_sync_shields()
 	return true

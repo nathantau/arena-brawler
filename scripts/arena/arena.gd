@@ -86,6 +86,8 @@ const BURST_MUZZLE_COUNT: int = 4
 const BURST_MUZZLE_SPEED: float = 260.0
 const BURST_MUZZLE_SPREAD: float = 0.8
 const PARTICLE_SIZE: float = 4.0
+## Embers rise off a burning fighter from about the waist (px below the node origin).
+const EMBER_BODY_Y: float = 6.0
 const PARTICLE_LIFE: float = 0.35
 const CRATE_DEBRIS_COLOR: Color = Color(0.55, 0.4, 0.25)
 const BEAM_WIDTH_SCALE: float = 2.0
@@ -228,6 +230,9 @@ func add_player(id: int, color_index: int, ctrl: PlayerController,
 	p.shot_fired.connect(_on_player_shot)
 	p.skill_used.connect(_on_skill_used)
 	p.spawned.connect(_fx_spawn)
+	p.burning.connect(func(who: Player) -> void:
+		if effects != null:
+			effects.ember(who.global_position + who.visual_offset + Vector2(0.0, EMBER_BODY_Y)))
 	p.healed.connect(func(user: Player, amount: int) -> void:
 		if effects != null:
 			effects.heal_number(user.global_position + user.visual_offset - Vector2(0.0, Constants.HEAL_NUMBER_RISE), amount))
@@ -447,6 +452,9 @@ func _attach_effects() -> void:
 					break
 		else:
 			effects.swing(origin, facing, w.melee_range, w.melee_arc_deg, w.color))
+	projectiles.chained.connect(func(from: Vector2, to: Vector2, color: Color) -> void:
+		effects.chain_arc(from, to, color)
+		sfx.play(&"laser", to))
 	projectiles.exploded.connect(_fx_explosion)
 	projectiles.burst_shown.connect(effects.burst_strip)
 	hit_landed.connect(_fx_hit)

@@ -27,3 +27,5 @@ sfx = &"shot_light"
 pierce = 1
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"flicker"])
+backstab_bonus = 0.75
+hook = "+75% from behind"
