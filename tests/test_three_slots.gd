@@ -97,3 +97,13 @@ func test_third_button_is_edge_triggered_and_unaffected_by_dead_hold() -> void:
 	f.seq = 2
 	p.simulate(f, 1.0 / 60.0)
 	assert_false(p.skills[2].is_active(), "a hold through death doesn't fire on respawn")
+
+
+func test_swapping_slots_keeps_each_specials_cooldown() -> void:
+	var p: Player = _player(1, &"flicker")
+	var third: SkillData = p.skills[2].data
+	p.skills[2].cooldown_remaining = 4.0
+	p.set_skill(1, third)
+	assert_eq(p.skills[1].data, third)
+	assert_eq(p.skills[1].cooldown_remaining, 4.0, "the special that was cooling down is still cooling down")
+	assert_eq(p.skills[2].cooldown_remaining, 0.0)
