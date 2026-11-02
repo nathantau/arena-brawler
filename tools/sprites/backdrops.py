@@ -271,79 +271,101 @@ def puffs(layer: Layer, rng: random.Random, boxes: list, base: tuple, top: tuple
             top if y < cy - ry * 0.45 else step(base, bottom_dark) if y > cy + ry * 0.55 else base))
 
 
+def leaf_clusters(layer: Layer, rng: random.Random, centers: list, base: tuple, light: tuple) -> None:
+    """Round leaf clumps: a flat base disc with a lit upper-left rim (clean 1-2 px edge, no dither)."""
+    for cx, cy, r in centers:
+        layer.ellipse((cx - r, cy - r, cx + r, cy + r), lambda x, y, cx=cx, cy=cy, r=r: (
+            light if (x - cx) + (y - cy) < -r * 0.9 else base))
+
+
 def eden() -> Scene:
     s = Scene(11)
-    sky = Layer()
-    sky.rect((0, 0, W, FLOOR), flat(OUTLINE))
-    sky.fade_fill(6, 100, GREEN_D, 0.9)
-    sky.rect((0, 100, W, FLOOR), flat(GREEN_D))
+    sky = Layer()  # a calm glade: dark canopy overhead, a warm green glow at the horizon
+    sky.gradient(0, FLOOR, [SHADOW, SHADOW, GREEN_D, GREEN_D])
     s.add(sky)
-    shafts = Layer()  # soft light through the canopy
-    for x0, wd in ((30, 9), (56, 6), (80, 11)):
-        shafts.poly([(x0, 0), (x0 + wd, 0), (x0 + wd + 30, FLOOR + 2), (x0 + 16, FLOOR + 2)], flat(OLIVE_D),
-                    lambda x, y: 0.5 * max(0.0, 1 - y / FLOOR) ** 0.8)
+    shafts = Layer()  # three soft shafts of light behind the trunks
+    for x0, wd, run in ((22, 8, 24), (60, 6, 20), (92, 9, 24)):
+        shafts.poly([(x0, 10), (x0 + wd, 10), (x0 + wd + run, FLOOR), (x0 + run - 6, FLOOR)], flat(OLIVE_D))
     s.add(shafts, 3.0, 0.0)
-    far = Layer()  # hazy trunks and a low treeline
-    for i, x in enumerate(range(2, W, 15)):
-        tree(far, x + (i * 5) % 7, 18 + (i % 3) * 12, FLOOR - 2, 5, SHADOW)
-    puffs(far, s.rng, [(x, 54 + (x // 9) % 3 * 6, 16, 8) for x in range(0, W + 16, 24)], SHADOW, SHADOW)
+    far = Layer()  # distant trunks: thin and blue
+    for i, x in enumerate(range(6, W, 19)):
+        far.rect((x, 30 + (i * 7) % 18, x + 3, FLOOR - 2), flat(NAVY))
     s.add(far, 1.0, 0.0)
-    near = Layer()  # the two big trunks and the canopy overhead
-    tree(near, -8, 0, FLOOR + 4, 24, OUTLINE, GREEN_D)
-    tree(near, 112, 0, FLOOR + 4, 26, OUTLINE, GREEN_D)
-    puffs(near, s.rng, [(x, 6 + (x // 20) % 2 * 6, 22, 14) for x in range(0, W + 20, 20)]
-          + [(8, 26, 20, 12), (120, 24, 20, 12)], OUTLINE, GREEN_D, 0)
-    s.add(near, 2.0, 0.25)
+    mid = Layer()  # mid trunks, dark with a lit left edge
+    for x, top, w in ((14, 20, 7), (50, 26, 6), (78, 22, 7), (104, 28, 6)):
+        mid.rect((x, top, x + w, FLOOR), flat(OUTLINE))
+        mid.rect((x, top, x, FLOOR), flat(GREEN_D))
+    s.add(mid, 1.5, 0.1)
+    canopy = Layer()  # the canopy edge: scalloped leaf clusters
+    canopy.rect((0, 0, W, 14), flat(OUTLINE))
+    centers = [(x + (i % 2) * 6, 14 + (i * 5) % 9, 9 + (i * 3) % 5) for i, x in enumerate(range(-4, W + 12, 14))]
+    leaf_clusters(canopy, s.rng, centers, OUTLINE, step(GREEN_D, -1))
+    leaf_clusters(canopy, s.rng, [(6, 34, 8), (18, 44, 6), (118, 36, 9), (108, 48, 6)], OUTLINE, step(GREEN_D, -1))
+    tree(canopy, -6, 0, FLOOR + 4, 20, OUTLINE, GREEN_D)  # the two foreground trunks
+    tree(canopy, 114, 0, FLOOR + 4, 22, OUTLINE, GREEN_D)
+    s.add(canopy, 2.0, 0.25)
     floor = Layer()
-    ground(floor, [GREEN_D, GREEN_D, OUTLINE], rim=OLIVE_D)
-    for _ in range(26):  # grass tufts
-        x, y = s.rng.randrange(2, W - 2), s.rng.randrange(FLOOR + 4, H - 4)
-        floor.put(x, y, step(GREEN, -1))
-        floor.put(x - 1, y - 1, step(GREEN, -1))
-        floor.put(x + 1, y - 2, step(GREEN, -1))
+    ground(floor, [GREEN_D, GREEN_D, step(GREEN_D, -1)], rim=GREEN)
+    for x in range(8, W, 17):  # grass tufts, then a few flowers
+        y = FLOOR + 8 + (x * 7) % 36
+        for dx, dy in ((-2, 0), (0, -2), (2, 0), (-1, -1), (1, -1)):
+            floor.put(x + dx, y + dy, GREEN_L if dy else GREEN)
+    for x, y, c in ((22, FLOOR + 22, PINK_L), (50, FLOOR + 34, YELLOW), (90, FLOOR + 18, PINK_L), (108, FLOOR + 40, WHITE), (38, FLOOR + 46, YELLOW)):
+        floor.put(x, y, c)
+        floor.put(x, y + 1, GREEN)
+        floor.put(x, y + 2, GREEN)
     s.add(floor)
     s.particles(14, (6, 0, W - 6, 100), (-16, 52), [OLIVE_L, GREEN_L, GREEN], kind="leaf", sway=5)
-    s.particles(12, (10, 70, W - 10, 150), (6, -18), [YELLOW, GREEN_L], size=1, sway=4)  # fireflies
+    s.particles(8, (10, 70, W - 10, 150), (6, -18), [YELLOW, GREEN_L], size=1, sway=4)
     return s
 
 
 def flint() -> Scene:
     s = Scene(12)
-    wall = Layer()
-    wall.rect((0, 0, W, FLOOR), flat(OUTLINE))
-    wall.fade_fill(20, FLOOR - 8, MAROON, 1.3)
-    wall.rect((0, FLOOR - 8, W, FLOOR), flat(MAROON))
-    s.add(wall)
-    rocks = Layer()  # cave walls and a jagged ceiling, lit from the lava below
-    rocks.poly([(0, 0), (24, 0), (14, 40), (22, 78), (10, 108), (14, FLOOR), (0, FLOOR)], flat(OUTLINE))
-    rocks.poly([(W, 0), (104, 0), (114, 40), (106, 78), (118, 108), (114, FLOOR), (W, FLOOR)], flat(OUTLINE))
-    ceiling = [(0, 0), (W, 0), (W, 12)]
-    for x in range(W, -1, -1):
-        ceiling.append((x, 12 + int(10 * abs(math.sin(x * 0.19)) * (1.0 if (x // 13) % 2 else 0.45)) + (x % 5 == 0)))
-    rocks.poly(ceiling, flat(OUTLINE))
-    rocks.poly([(22, 78), (25, 82), (14, 108), (14, FLOOR), (12, 108)], flat(MAROON))  # rim lit by the lava
-    rocks.poly([(106, 78), (103, 82), (114, 108), (114, FLOOR), (116, 108)], flat(MAROON))
-    s.add(rocks, 1.0, 0.0)
-    lava = Layer()  # river of lava behind the fighter: flowing stripes
-    for y in range(FLOOR - 20, FLOOR):
+    back = Layer()  # inside the arch: warm bands rising from the lava
+    back.gradient(0, FLOOR, [OUTLINE, OUTLINE, MAROON, MAROON, RED])
+    s.add(back)
+    arch = Layer()  # a dark rock arch framing the scene
+    ring = Image.new("L", (W, H), 0)
+    d = ImageDraw.Draw(ring)
+    d.rectangle((0, 0, W, FLOOR), fill=255)
+    d.ellipse((14, 18, W - 14, 220), fill=0)  # the opening
+    mp = ring.load()
+    for y in range(H):
         for x in range(W):
-            wave = math.sin(x * 0.22 + y * 0.9)
-            c = ORANGE if wave > 0.78 else RED if wave > -0.2 else MAROON
-            lava.put(x, y, c)
-    for x in range(W):
-        lava.put(x, FLOOR - 21, step(MAROON, -1))
-    s.add(lava, 3.0, 0.0)
+            if mp[x, y]:
+                arch.put(x, y, OUTLINE)
+    for x in range(W):  # a lit rim along the inside of the arch, picked out by the lava
+        for y in range(H):
+            if arch.get(x, y) is not None and any(arch.get(x + dx, y + dy) is None for dx, dy in ((1, 0), (-1, 0), (0, 1)) if 0 < y + dy < FLOOR):
+                arch.put(x, y, MAROON if y > 40 else step(MAROON, -1))
+    for x, ln in ((36, 14), (50, 22), (64, 12), (78, 20), (92, 12)):  # stalactites hanging in the opening
+        arch.poly([(x - 4, 14), (x + 4, 14), (x, 18 + ln)], flat(OUTLINE))
+    s.add(arch, 1.0, 0.0)
+    pool = Layer()  # a lava pool behind him: nested bands, hottest in the middle
+    for (rx, ry, c) in ((58, 12, MAROON), (52, 10, RED), (42, 8, ORANGE), (28, 5, YELLOW)):
+        pool.ellipse((64 - rx, FLOOR - 4 - ry, 64 + rx, FLOOR - 4 + ry), flat(c))
+    s.add(pool, 2.0, 0.0)
     floor = Layer()
-    ground(floor, [MAROON, MAROON, OUTLINE], rim=RED)
-    for x0 in (14, 40, 72, 102):  # glowing cracks
-        x, y = x0, FLOOR + 6
-        for _ in range(10):
-            floor.put(x, y, step(ORANGE, -1))
+    ground(floor, [step(MAROON, 0), step(MAROON, 0), OUTLINE], rim=RED)
+    for x0 in (14, 38, 90, 112):  # glowing cracks
+        x, y = x0, FLOOR + 8
+        for _ in range(9):
+            floor.put(x, y, ORANGE)
             x += s.rng.choice((-1, 0, 1))
             y += 2
     s.add(floor)
-    s.particles(22, (4, FLOOR - 6, W - 4, FLOOR + 20), (8, -96), [ORANGE, YELLOW, RED], sway=4)
-    s.glow = glow_points([(64, FLOOR - 12, 80, 36, 1.4, 0.4)])
+    s.particles(18, (10, FLOOR - 10, W - 10, FLOOR + 10), (6, -96), [ORANGE, YELLOW, RED], sway=4)
+
+    def pulse(f: int, img: Image.Image) -> None:  # a slow breath of heat over the pool
+        px = img.load()
+        a = 0.9 + 0.5 * math.sin(math.tau * f / FRAMES)
+        for y in range(FLOOR - 40, FLOOR + 6):
+            for x in range(14, W - 14):
+                d = math.hypot((x - 64) / 70, (y - (FLOOR - 4)) / 38)
+                if d < 1 and px[x, y][:3] in (MAROON, RED, ORANGE, OUTLINE):
+                    px[x, y] = dith(px[x, y][:3], a * (1 - d) ** 1.2, x, y) + (255,)
+    s.glow = pulse
     return s
 
 
@@ -400,9 +422,13 @@ def flicker() -> Scene:
         x, y = s.rng.randrange(0, W), s.rng.randrange(0, 84)
         stars.put(x, y, s.rng.choice((STEEL_D, STEEL_D, STEEL)))
     s.add(stars)
-    moon = Layer()  # a big moon with banded halo
-    moon.ellipse((74, 12, 110, 48), lambda x, y: STEEL if (x - 74) + (y - 12) * 0.6 < 34 else STEEL_D)
-    for cx, cy, r in ((86, 24, 3), (99, 33, 4), (83, 39, 2)):
+    moon = Layer()  # a crisp moon: halo ring, rim band, lit face with a shaded limb
+    moon.ellipse((52, -10, 132, 70), flat(SHADOW))
+    moon.ellipse((58, -4, 126, 64), flat(NAVY))
+    moon.ellipse((72, 10, 112, 50), flat(STEEL_D))
+    moon.ellipse((74, 12, 110, 48), lambda x, y: STEEL if (x - 74) + (y - 12) * 0.7 < 33 else STEEL_D)
+    moon.ellipse((76, 14, 100, 38), lambda x, y: WHITE if (x - 76) + (y - 14) < 22 else STEEL)
+    for cx, cy, r in ((86, 26, 3), (99, 35, 3), (83, 40, 2)):
         moon.ellipse((cx - r, cy - r, cx + r, cy + r), flat(STEEL_D))
     s.add(moon)
     city = Layer()
@@ -419,7 +445,6 @@ def flicker() -> Scene:
     ground(roof, [SHADOW, SHADOW, NAVY], lines=(6, 1), line_c=OUTLINE, rim=STEEL_D)
     s.add(roof)
     s.particles(8, (0, 20, W, 100), (24, 8), [STEEL, WHITE], size=1, sway=2)
-    s.glow = glow_points([(92, 30, 44, 40, 0.8, 0.0)])
     return s
 
 
@@ -452,25 +477,36 @@ def shadow() -> Scene:
 def sakura() -> Scene:
     s = Scene(16)
     sky = Layer()
-    sky.gradient(0, FLOOR, [OUTLINE, NAVY, VIOLET_D, MAROON])
+    sky.gradient(0, FLOOR, [NAVY, VIOLET_D, VIOLET, MAROON])
     s.add(sky)
-    far = Layer()
-    far.poly([(8, FLOOR - 4), (8, 76), (2, 76), (20, 64), (38, 76), (32, 76), (32, FLOOR - 4)], flat(OUTLINE))
-    far.poly([(10, 98), (3, 98), (20, 86), (37, 98), (30, 98)], flat(OUTLINE))
-    far.poly([(0, FLOOR), (0, 116), (28, 110), (60, 116), (96, 110), (W, 114), (W, FLOOR)], flat(OUTLINE))
+    far = Layer()  # a pagoda on the horizon and a torii gate framing the fighter
+    far.poly([(100, FLOOR - 4), (100, 92), (96, 92), (108, 84), (120, 92), (116, 92), (116, FLOOR - 4)], flat(OUTLINE))
+    far.poly([(0, FLOOR), (0, 118), (28, 112), (60, 118), (96, 112), (W, 116), (W, FLOOR)], flat(OUTLINE))
+    for x in (30, 90):  # torii posts
+        far.rect((x, 56, x + 5, FLOOR), flat(OUTLINE))
+        far.rect((x, 56, x, FLOOR), flat(MAROON))
+    far.poly([(22, 58), (98, 58), (104, 50), (16, 50)], flat(OUTLINE))  # top beam, upswept ends
+    far.rect((28, 66, 97, 70), flat(OUTLINE))
+    far.rect((16, 50, 104, 50), flat(MAROON))
     s.add(far, 1.0, 0.0)
-    blossom = Layer()  # blossom tree on the right
-    tree(blossom, 100, 34, FLOOR + 4, 10, OUTLINE, WALNUT_D)
-    puffs(blossom, s.rng, [(106, 30, 26, 14), (90, 44, 18, 10), (122, 46, 16, 10), (108, 14, 20, 9)], MAROON, PINK, -1)
-    for _ in range(70):
-        x, y = s.rng.randrange(78, W), s.rng.randrange(2, 62)
-        if blossom.get(x, y) is not None:
-            blossom.put(x, y, PINK_L if s.rng.random() < 0.15 else PINK)
+    blossom = Layer()  # blossom canopy in three pinks, hanging in from the left
+    tree(blossom, 24, 56, FLOOR + 4, 9, OUTLINE, WALNUT_D)
+    for cx, cy, r in ((32, 54, 18), (54, 50, 14), (12, 70, 14), (40, 70, 12)):  # the dark mass of the crown
+        blossom.ellipse((cx - r, cy - r, cx + r, cy + r), flat(MAROON))
+    for tone, count, rmax in ((PINK, 46, 3), (PINK_L, 16, 2)):  # blossom clumps in two lighter pinks
+        for _ in range(count):
+            x, y = s.rng.randrange(0, 68), s.rng.randrange(30, 90)
+            if blossom.get(x, y) is not None:
+                r = s.rng.randrange(1, rmax + 1)
+                blossom.ellipse((x - r, y - r, x + r, y + r), flat(tone))
     s.add(blossom, 1.5, 0.3)
     floor = Layer()
-    ground(floor, [VIOLET_D, NAVY, NAVY], lines=(7, 1), line_c=OUTLINE, rim=PINK)
+    ground(floor, [VIOLET_D, VIOLET_D, NAVY], lines=(7, 1), line_c=step(VIOLET_D, -1), rim=PINK)
+    for x, y in ((20, FLOOR + 14), (44, FLOOR + 30), (88, FLOOR + 22), (108, FLOOR + 40), (70, FLOOR + 10)):  # petals on the path
+        floor.put(x, y, PINK)
+        floor.put(x + 1, y, PINK_L)
     s.add(floor)
-    s.particles(28, (0, 0, W, 120), (-22, 80), [PINK_L, PINK, PINK], kind="leaf", sway=6)
+    s.particles(30, (0, 0, W, 120), (-22, 80), [PINK_L, PINK, PINK], kind="leaf", sway=6)
     return s
 
 

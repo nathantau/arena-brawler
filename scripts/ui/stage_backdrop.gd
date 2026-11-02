@@ -24,6 +24,11 @@ var _prev: Texture2D
 var _fade: float = 1.0
 var _fade_tween: Tween
 var _clock: float = 0.0
+## The fighter's displayed pixel scale; the picture is drawn at the same one when it fits.
+var art_scale: int = 1:
+	set(v):
+		art_scale = v
+		queue_redraw()
 
 
 func _init() -> void:
@@ -38,10 +43,12 @@ static func texture_for(id: StringName) -> Texture2D:
 	return load(path) as Texture2D if ResourceLoader.exists(path) else null
 
 
-## Whole-number scale at which the picture covers a `size` panel with its floor row on `floor_y`.
-static func fit_scale(size: Vector2, floor_y: float) -> int:
-	var need: float = maxf(size.x / ART_W, maxf(floor_y / FLOOR_ROW, (size.y - floor_y) / (ART_H - FLOOR_ROW)))
-	return maxi(1, ceili(need))
+## Whole-number scale of the picture in a `size` panel with its floor row on `floor_y`: the fighter's own pixel
+## scale (`fighter_scale`, so both show the same pixel size) unless the picture would not reach the top or bottom.
+## Any width the picture does not cover is filled by stretching its (dark) edge columns.
+static func fit_scale(size: Vector2, floor_y: float, fighter_scale: int = 1) -> int:
+	var need: float = maxf(floor_y / FLOOR_ROW, (size.y - floor_y) / (ART_H - FLOOR_ROW))
+	return maxi(maxi(1, fighter_scale), ceili(need))
 
 
 ## Switch to `tex`; the old picture fades out underneath. Quick successive switches replace the fade in flight.
@@ -75,7 +82,13 @@ func _draw() -> void:
 
 
 func _draw_strip(tex: Texture2D, alpha: float) -> void:
-	var s: int = fit_scale(size, floor_y)
+	var s: int = fit_scale(size, floor_y, art_scale)
 	var frame: int = int(_clock * FPS) % FRAMES
+	var tint := Color(1.0, 1.0, 1.0, alpha)
 	var dest := Rect2((size.x - ART_W * s) * 0.5, floor_y - FLOOR_ROW * s, ART_W * s, ART_H * s)
-	draw_texture_rect_region(tex, dest, Rect2(frame * ART_W, 0, ART_W, ART_H), Color(1.0, 1.0, 1.0, alpha))
+	draw_texture_rect_region(tex, dest, Rect2(frame * ART_W, 0, ART_W, ART_H), tint)
+	if dest.position.x > 0.0:  # wider panel than picture: stretch the edge columns outwards
+		draw_texture_rect_region(tex, Rect2(0.0, dest.position.y, dest.position.x, dest.size.y),
+			Rect2(frame * ART_W, 0, 1, ART_H), tint)
+		draw_texture_rect_region(tex, Rect2(dest.end.x, dest.position.y, size.x - dest.end.x, dest.size.y),
+			Rect2(frame * ART_W + ART_W - 1, 0, 1, ART_H), tint)

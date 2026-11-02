@@ -667,6 +667,7 @@ func _layout_stage() -> void:
 	_sprite.scale = Vector2.ONE * s
 	var room: float = _stage.size.y - PREVIEW_TOP - 30.0
 	_pivot.position = Vector2(_stage.size.x * 0.5, PREVIEW_TOP + room * 0.5 + 4.0 * s)
+	_backdrop.art_scale = s
 	_backdrop.floor_y = _pivot.position.y + 22.0 * s
 	_floor_fx.queue_redraw()
 
