@@ -281,7 +281,7 @@ def sh_lock(c, pts, widths, clusters=((0.28, BLUE),), color=SH_HAIR, rim=True, l
         c.flat(L(sh_ipts(sh_lerp(outer, inner, f)[3 + i:n - 3 - 2 * i]), 1), col)
 
 
-def sh_fox_mask(c, cx, cy, deg=30, k=1.25):
+def sh_fox_mask(c, cx, cy, deg=30, k=1.0):
     """A festival fox mask pushed up and askew on the back (left) side of her face, drawn tilted `deg` degrees clockwise
     directly from rotated vertices (no pixel rotation), so the outline stays crisp and the markings stay symmetric about
     the tilted axis: ears with red tips, slanted eye slits, whiskers, forehead mark, nose, and a tie cord tucked into her hair."""
@@ -324,16 +324,12 @@ def flicker(step=None, t=0, zip_=False):
     up = ShCanvas()
     # ---- legs: dark leggings with a dithered fishnet strip, bandage wraps with diagonal lines, split-toe tabi, thigh holster
     for x, dy in legs(low, SHADOW, SHADOW, step):
-        for yy in (50 + dy, 51 + dy):
-            for xx in range(x, x + 6):
-                if (xx + yy) % 2 == 0:
-                    low.dot(xx, yy, STEEL_D)
-        low.flat(R((x, 52 + dy, x + 5, 53 + dy)), STEEL)
-        low.flat(R((x, 53 + dy, x + 5, 53 + dy)), STEEL_D)
-        low.flat(L([(x, 53 + dy), (x + 5, 52 + dy)], 1), WHITE)  # wrap line
-        low.dot(x, 52 + dy, WHITE)
-        low.flat(L([(x + 6, 55 + dy), (x + 6, 56 + dy)], 1), OUTLINE)  # tabi split toe
-        low.dot(x, 54 + dy, STEEL_D)
+        low.flat(L([(x, 47 + dy), (x, 52 + dy)], 1), STEEL_D)  # lit left edge of the legging
+        low.flat(R((x - 1, 54 + dy, x + 6, 55 + dy)), STEEL)  # bandage wraps round the ankles, over the tabi
+        low.flat(R((x - 1, 55 + dy, x + 6, 55 + dy)), STEEL_D)
+        low.flat(L([(x - 1, 55 + dy), (x + 6, 54 + dy)], 1), WHITE)  # wrap line
+        low.dot(x, 54 + dy, WHITE)
+        low.flat(L([(x + 6, 56 + dy), (x + 7, 56 + dy)], 1), OUTLINE)  # tabi split toe
     low.part(P([(39, 50), (43, 51), (43, 55), (40, 56), (39, 54)]), BROWN)  # dark-brown pouch and one kunai ring
     low.flat(L([(39, 51), (43, 52)], 1), SHADOW)
     low.flat(L([(43, 52), (46, 51)], 2), STEEL_D)
@@ -364,20 +360,19 @@ def flicker(step=None, t=0, zip_=False):
     arm(up, ARM_X[0], SH_KIM, SKIN)
     tekko(ARM_X[0])
     # ---- wrap top over a short flared skirt (same colour, darker underside); split flaps
-    flare = [(20, 47), (44, 47), (46, 49.5), (42, 51.5 + sh_sw(t, 1.0, 1)), (37, 50.5), (33, 48.5), (29, 50.5), (24, 51.5 - sh_sw(t, 0.5, 1)), (19, 49.5)]
+    flare = [(20, 47), (44, 47), (46, 50), (42, 53 + sh_sw(t, 1.0, 1)), (37, 51.5), (33, 49.5), (29, 51.5), (24, 53 - sh_sw(t, 0.5, 1)), (19, 50)]
     up.part(lambda d, f: (d.rounded_rectangle((20, 33, 44, 48), 3, f), d.polygon(flare, f)), SH_KIM)
-    up.flat(R((20, 50, 46, 50)), SHADOW)
-    up.dither(R((36, 38, 45, 51)), SHADOW, only_on=SH_KIM)
+    up.dither(R((36, 38, 45, 54)), SHADOW, only_on=SH_KIM)
     up.flat(L([(21, 38), (21, 46)], 1), STEEL)
-    up.flat(L([(33, 48), (33, 51)], 1), SHADOW)  # skirt split
+    up.flat(L([(33, 49), (33, 51)], 1), SHADOW)  # skirt split
     up.part(RR((22, 37, 43, 38), 1), RED)  # slim neck scarf under her chin
     up.flat(L([(24, 37), (36, 37)], 1), ORANGE)
     # fishnet undershirt in a deep V: a dark base with a regular staggered lattice of skin dots, to the sternum above the obi
-    up.part(P([(24, 39), (44, 39), (34, 45)]), SHADOW, shade=False, line=False)
+    up.part(P([(25, 39), (43, 39), (34, 45)]), NAVY, shade=False, line=False)
     for yy in range(39, 46):
         for xx in range(23, 46):
-            if up.at(xx, yy)[:3] == SHADOW and (xx + 2 * (yy % 2)) % 4 == 0:
-                up.dot(xx, yy, SKIN)
+            if up.at(xx, yy)[:3] == NAVY and (xx + 2 * (yy % 2)) % 4 == 0:
+                up.dot(xx, yy, SKIN_D)
     up.flat(L([(24, 39), (34, 45)], 2), CREAM)  # two bold 2 px cream lapels from the shoulders
     up.flat(L([(44, 39), (34, 45)], 2), CREAM)
     up.flat(L([(23, 41), (33, 46)], 1), SHADOW)  # shadow under the lapels
@@ -385,10 +380,10 @@ def flicker(step=None, t=0, zip_=False):
     up.part(R((20, 45, 44, 47)), RED, line=False)  # red obi: a bold 3 px band with a lit top row, a knot, two hanging ends
     up.flat(R((20, 45, 44, 45)), ORANGE)
     up.flat(R((20, 47, 44, 47)), MAROON)
-    up.part(P([(38, 48), (36, 52.5 + bw), (39, 51.5 + bw), (40, 48)]), RED)
-    up.part(P([(40, 48), (42, 52.5 + bw), (44, 50.5 + bw), (42, 48)]), RED)
-    up.part(E((37, 44, 42, 49)), RED)
-    up.dot(38, 45, ORANGE)
+    up.part(P([(38, 48), (36.5, 50.5 + bw), (39, 50 + bw)]), RED)
+    up.part(P([(40, 48), (42.5, 50.5 + bw), (42, 48.5)]), RED)
+    up.part(E((38, 44, 42, 48)), RED)
+    up.dot(39, 45, ORANGE)
     if zip_:  # Grapple Kunai: the front arm reaches forward along the chain (hair streams back: flicker_zip)
         up.part(RR((40, 37, 50, 41), 2), SH_KIM)
         up.flat(L([(44, 38), (44, 40)], 1), SHADOW)  # forearm wrap
@@ -419,7 +414,7 @@ def flicker(step=None, t=0, zip_=False):
         up.flat(L(sh_ipts([(at(0.1)[0] - 1.5, at(0.1)[1]), (at(f * 0.75)[0] - 1.5, at(f * 0.75)[1])]), 1), BLUE)  # staggered lit streak
     up.flat(lambda d, f: d.arc((22, 6, 44, 30), 212, 236, f), BLUE)  # two short curved crown streaks, not rings
     up.flat(lambda d, f: d.arc((26, 9, 44, 27), 232, 252, f), STEEL_D)
-    sh_fox_mask(up, 22, 19, 30)  # the mask rides the back of her head, tilted down-left
+    sh_fox_mask(up, 19, 16, 30)  # the mask rides the back of her head, tilted down-left, clear of her eye
     # eyes: orange iris with a bright lower rim, a heavy top lid and a lash flick with a red tip; crimson lips
     big_eyes(up, EYES_Y - 1, EYES_X, ORANGE, h=6)
     if not KO:
