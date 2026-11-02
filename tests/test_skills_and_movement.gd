@@ -446,6 +446,56 @@ func test_ape_slam_lands_after_its_windup() -> void:
 
 
 
+func _start_ape_windup() -> Player:
+	var p: Player = _player(characters.get_character(&"wukong"))
+	p.projectiles = ProjectilePool.new()
+	add_child_autofree(p.projectiles)
+	assert_true(p.skills[1].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
+	var fire := InputFrame.new()
+	fire.fire = true
+	p.simulate(fire, Constants.PHYSICS_DT)
+	assert_true(p._windup_left >= 0.0, "wind-up pending")
+	return p
+
+
+func _run_idle(p: Player, seconds: float) -> void:
+	var idle := InputFrame.new()
+	for i: int in ceili(seconds / Constants.PHYSICS_DT) + 2:
+		p.simulate(idle, Constants.PHYSICS_DT)
+
+
+func test_freeze_cancels_a_pending_windup() -> void:
+	var p: Player = _start_ape_windup()
+	watch_signals(p)
+	p.frozen = true
+	p.simulate(InputFrame.new(), Constants.PHYSICS_DT)
+	p.frozen = false
+	_run_idle(p, p.held_weapon().data.windup)
+	assert_signal_not_emitted(p, "shot_fired", "the wind-up did not survive the freeze")
+
+
+func test_stun_cancels_a_pending_windup() -> void:
+	var p: Player = _start_ape_windup()
+	watch_signals(p)
+	p.stats.apply_stun(0.3)
+	p.simulate(InputFrame.new(), Constants.PHYSICS_DT)
+	assert_eq(p._windup_left, -1.0)
+	_run_idle(p, p.held_weapon().data.windup + 0.4)
+	assert_signal_not_emitted(p, "shot_fired", "stunned mid wind-up: no hit")
+
+
+func test_autopilot_presses_special2() -> void:
+	var input := LocalInput.new()
+	input.autopilot = true
+	input.special_every = 10
+	input.arena = autofree(Arena.new(Arena.Mode.CLIENT, 1))
+	var p: Player = _player(characters.get_character(&"wukong"))
+	var seen: bool = false
+	for i: int in 30:
+		seen = seen or input.get_input(p, Constants.PHYSICS_DT).special2
+	assert_true(seen, "autopilot presses slot 3")
+
+
 func test_flint_inferno_fires_beams() -> void:
 	var flint: CharacterData = characters.get_character(&"flint")
 	var inferno: SkillData = flint.signature_skill

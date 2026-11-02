@@ -108,8 +108,10 @@ func _drive_autopilot(player: Player) -> void:
 	_frame.fire = auto_target != null
 	_frame.skill = auto_target != null and _frame.seq % Constants.AUTOPILOT_SKILL_EVERY_FRAMES == 0
 	_frame.special = auto_target != null and _frame.seq % Constants.AUTOPILOT_SPECIAL_EVERY_FRAMES == 0
+	_frame.special2 = auto_target != null and _frame.seq % Constants.AUTOPILOT_SPECIAL2_EVERY_FRAMES == 0
 	if special_every > 0:
 		_frame.special = _frame.seq % special_every == 0
+		_frame.special2 = _frame.seq % special_every == special_every / 2
 	if auto_target != null:
 		_frame.move_vec = Vector2.RIGHT.rotated(_frame.seq * Constants.AUTOPILOT_TURN_PER_FRAME)
 		return

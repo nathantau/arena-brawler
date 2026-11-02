@@ -302,6 +302,11 @@ const THUNDER_BOLT_FPS: float = 20.0
 const THUNDER_IMPACT_FRAME: float = 2.0
 const THUNDER_LEAD: float = THUNDER_IMPACT_FRAME / THUNDER_BOLT_FPS
 const THUNDER_BASE_Y: float = 112.0
+## Umbral Spikes' own burst strips (generate.py SPIKE_FRAMES): 24 frames (was 10 at 20 fps) at 48 fps, the same 0.5 s; the floor cracks and
+## tips push up for 8 frames before the impact on frame 8, so the burst starts SPIKE_LEAD before the blast (still inside the telegraph).
+const SPIKE_BURST_FPS: float = 48.0
+const SPIKE_IMPACT_FRAME: float = 8.0
+const SPIKE_LEAD: float = SPIKE_IMPACT_FRAME / SPIKE_BURST_FPS
 const THUNDER_BOLT_TIME: float = 0.5
 ## Shadow's Umbral Spikes share Thunder Strike's path (same frame layout, ring 48 art px, impact on frame 2): the strips are picked by skill id.
 const SPIKE_MARK_ART: Texture2D = preload(FX_DIR + "spike_mark.png")
@@ -339,11 +344,11 @@ const QUAKE_SCAR_ART: Texture2D = preload(FX_DIR + "quake_scar.png")
 const QUAKE_ART_RADIUS: float = 69.0  # world px: QUAKE_R 46 art px x the sprite scale
 const QUAKE_MARK_FPS: float = 10.0
 const QUAKE_EASE_IN: float = 0.2
-const QUAKE_BURST_FPS: float = 18.0
-const QUAKE_IMPACT_FRAME: float = 2.0
+const QUAKE_BURST_FPS: float = 36.0  # 28 frames (was 14 at 18): same 0.78 s
+const QUAKE_IMPACT_FRAME: float = 8.0  # cracks and rising tips come first (generate.py QUAKE_IMPACT)
 const QUAKE_LEAD: float = QUAKE_IMPACT_FRAME / QUAKE_BURST_FPS
 const QUAKE_BASE_Y: float = 112.0
-const QUAKE_BURST_TIME: float = 14.0 / QUAKE_BURST_FPS
+const QUAKE_BURST_TIME: float = 28.0 / QUAKE_BURST_FPS
 ## Shade's Kunai Rain (generate.py RAIN_*), the same shape as Storm Cloud: a faint target ring on the floor (opens over RAIN_FORM_TIME, loops,
 ## closes over RAIN_END_TIME) and, on every strike tick, kunai that streak down at each victim's feet plus a few more at spots inside the
 ## ring (rooted on row RAIN_KUNAI_BASE_Y of a 64 px frame); each sticks in the floor for a moment and fades.
@@ -860,14 +865,15 @@ func _bolt(at: Vector2, ground: Vector2) -> void:
 func _sync_thunder(p: Player) -> void:
 	var slot: CharacterSkill = _slot(p, SkillData.Kind.THUNDER)
 	var on: bool = slot != null and slot.is_active() and not p.dead
-	if on and not _thunder_started and slot.active_remaining <= THUNDER_LEAD:  # the bolt drops
+	var lead: float = SPIKE_LEAD if slot != null and slot.data.id == &"umbral_spikes" else THUNDER_LEAD
+	if on and not _thunder_started and slot.active_remaining <= lead:  # the bolt drops
 		var art: Array = THUNDER_ART_SETS.get(slot.data.id, THUNDER_DEFAULT_ART)
 		var bolt_art: Texture2D = art[1]
 		var lift: float = (bolt_art.get_height() * 0.5 - THUNDER_BASE_Y) * Constants.SPRITE_SCALE
 		_poof(slot.anchor + Vector2(0.0, lift), bolt_art, THUNDER_BOLT_TIME)
 		_poof(slot.anchor, art[2], THUNDER_BOLT_TIME, slot.data.thunder_blast.splash_radius / THUNDER_ART_RADIUS, true)
-	_thunder_started = on and (_thunder_started or slot.active_remaining <= THUNDER_LEAD)
-	_thunder_mark = slot if on and slot.active_remaining > THUNDER_LEAD else null
+	_thunder_started = on and (_thunder_started or slot.active_remaining <= lead)
+	_thunder_mark = slot if on and slot.active_remaining > lead else null
 
 
 ## Thorn Quake: the ring while the telegraph runs, the thicket (and the scar under it) when it is about to land.

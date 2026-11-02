@@ -843,15 +843,17 @@ def sakura(step=None, t=0):
     return low, up
 
 
-def flint(step=None, t=0, heat=0.0):
+def flint(step=None, t=0, heat=0.0, form=False):
     """Fire: a little fire elemental with a molten face, a scorched dark suit
     burning up from its hem (heat burns it off) over a glowing molten body and legs with veins and an ember heart, flames curling up him and wisps breaking off, and fists of fire. His flaming hair is drawn above the
     art box (CROWNS: flint_crown). `heat` 0..1 stokes him into his Inferno form:
-    bigger hand flames, white-hot cracks, flames off his shoulders and blazing eyes trailing fire."""
+    bigger hand flames, white-hot cracks, flames off his shoulders and blazing eyes trailing fire. `form` = the Inferno
+    form (and its morph): its blaze comes from fire_tongues (inferno_fire behind him, a soft layer in front) instead of the
+    bonfire, foot / leg licks and wisps Flare Burst's charge pose still uses."""
     hot = heat >= 0.5
     crack = (ORANGE, YELLOW)[t % 2] if not hot else (YELLOW, WHITE)[t % 2]  # cracks pulse every tick
     low = Canvas()
-    if heat > 0:  # a bonfire roaring up behind him (on the legs' canvas, so behind everything): jagged tongues all
+    if heat > 0 and not form:  # a bonfire roaring up behind him (on the legs' canvas, so behind everything): jagged tongues all
         # licking upwards, flickering every tick, rising out of a rounded mass of fire; grows with heat
         rx, ry = 25 * heat, 9 * heat
         low.part(E((32 - rx, 49 - ry, 32 + rx, 49 + ry)), RED, shade=False, line=False)
@@ -862,13 +864,13 @@ def flint(step=None, t=0, heat=0.0):
         low.flat(R((x + 2, 46 + dy, x + 3, 52 + dy)), YELLOW if hot else ORANGE)  # glowing inside
         low.flat(R((x + 2, 47 + dy, x + 2, 51 + dy)), crack)  # a vein of fire down each
         low.flat(R((x + 1, 54 + dy, x + 5, 55 + dy)), YELLOW if hot else ORANGE)  # hot toes
-        for j, fx in enumerate((x - 2, x + 7)):  # little flames licking up beside each foot, flickering out of step
+        for j, fx in enumerate(() if form else (x - 2, x + 7)):  # little flames licking up beside each foot, flickering out of step
             h = 4 + (t + k + j) % 3 + round(heat * 3)
             low.part(P([(fx - 2, 57 + dy), (fx + SWAY[(t + j + k) % 4], 57 + dy - h), (fx + 2, 57 + dy)]), RED,
                      shade=False, line=False)
             low.part(P([(fx - 1, 57 + dy), (fx, 58 + dy - h + 1), (fx + 1, 57 + dy)]), YELLOW if h > 5 else ORANGE,
                      shade=False, line=False)
-    if heat > 0:  # licks of fire curling up round his legs, out of step
+    if heat > 0 and not form:  # licks of fire curling up round his legs, out of step
         for k, (root, ctrl, tip, side) in enumerate((((21, 57), (15, 51), (21, 43), 1), ((27, 58), (23, 53), (28, 46), 1),
                                                      ((37, 58), (41, 53), (36, 46), 1), ((43, 57), (49, 51), (43, 43), 1))):
             sh = (0.7 + 0.3 * ((t + k) % 2)) * heat
@@ -879,7 +881,11 @@ def flint(step=None, t=0, heat=0.0):
 
     def fist(cx, k):  # a ball of fire for a hand, its flame licking up and flickering every tick
         hh = 7 + round(heat * 6) + (t + k) % 2
-        flame(up, cx - 4, cx + 4, 46, hh, t + k, tongues=2)
+        if form:  # a small soft flame, not a spiky one
+            fire_tongues(up, cx, 46, [(0, hh * 1.9, 5.0, 0.12 * (1 - 2 * (k % 2)), 0.3 * k, 1)],
+                         ((t + k * 3) % FIRE_PERIOD) / FIRE_PERIOD, sway=1.0, sheds=False)
+        else:
+            flame(up, cx - 4, cx + 4, 46, hh, t + k, tongues=2)
         up.part(E((cx - 3, 41, cx + 3, 47)), ORANGE)
         up.flat(E((cx - 1, 43, cx + 1, 45)), YELLOW if not hot else WHITE)
 
@@ -932,11 +938,16 @@ def flint(step=None, t=0, heat=0.0):
     for k, (root, ctrl, tip) in enumerate((((25, 48), (20, 42), (26, 33)), ((39, 48), (44, 43), (38, 35))) if heat else ()):
         flame_tongue(up, root, [r + (q - r) * reach for r, q in zip(root, ctrl)], [r + (q - r) * reach for r, q in zip(root, tip)],
                (t + k * 2) * math.pi / 2, wide=2.5 + heat)
+    if form:  # flames licking up over his legs and hem in front of him (a thin soft layer, his body stays readable)
+        fire_tongues(up, 32, 57, [(-17, 13 * heat, 5.0, -0.25, 0.1, 1), (-9, 9 * heat, 4.0, -0.1, 0.6, 1),
+                                  (9, 10 * heat, 4.0, 0.1, 0.35, 1), (17, 13 * heat, 5.0, 0.25, 0.85, 1)],
+                     ((t + FIRE_PERIOD // 2) % FIRE_PERIOD) / FIRE_PERIOD, shift=-0.1, sway=1.2, sheds=False, ragged=3,
+                     hollow=0.3)
     fist(47, 3)  # front hand
     # wisps of flame breaking off him: each rises and shrinks away over 4 ticks, out of step (more when hot)
     # wisps of flame breaking off his edges: each drifts up and out and shrinks away over 4 ticks, out of step
     # (more when hot)
-    spots = [(21, 41, -1), (43, 39, 1), (22, 47, -1), (42, 46, 1)] + ([(20, 35, -1), (44, 34, 1)] if heat else [])
+    spots = [] if form else [(21, 41, -1), (43, 39, 1), (22, 47, -1), (42, 46, 1)] + ([(20, 35, -1), (44, 34, 1)] if heat else [])
     for k, (wx, wy, out) in enumerate(spots):
         phase = (t + k * 2 + (k > 3)) % 4
         r = (3, 2, 1, 0)[phase]
@@ -957,7 +968,8 @@ def flint(step=None, t=0, heat=0.0):
         for x in EYES_X:
             up.flat(R((x, EYES_Y, x + 3, EYES_Y + 5)), YELLOW)  # same eye shape, lit from inside
             up.flat(R((x + 1, EYES_Y + 1, x + 2, EYES_Y + 4)), WHITE)
-            up.flat(L([(x + 1, EYES_Y - 1), (x - 1, EYES_Y - 3 - (t % 2))], 1), YELLOW)  # flame flicking up off it
+            if not form:
+                up.flat(L([(x + 1, EYES_Y - 1), (x - 1, EYES_Y - 3 - (t % 2))], 1), YELLOW)  # flame flicking up off it
     else:
         big_eyes(up, EYES_Y, EYES_X, YELLOW)
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
@@ -980,25 +992,122 @@ def flint_ragged_base(c: Canvas, t: int, heat: float) -> None:
                 px[x, y] = (0, 0, 0, 0)
 
 
+FIRE_PERIOD = 4  # frames in the fire loop being drawn: 4 for idle, 8 for walk (frames() sets it), 8 for the morph
+
+
+def fire_tongues(c: Canvas, cx: int, base: int, tongues, u: float, shift: float = 0.0, sway: float = 2.5,
+                 sheds: bool = True, ragged: int = 0, hollow: float = 0.0) -> None:
+    """Real-looking pixel fire from soft teardrop tongues. Each tongue = (dx, height, width, lean, phase, beats):
+    wide at the root, tapering to a rounded tip, its centre line an S-curve (it leans out and sways on a rolling wave),
+    its height breathing `beats` whole times per loop (u 0..1), so a loop is seamless and nothing pops. Colour is the heat:
+    white-yellow core near the root, then yellow, orange, red, maroon at the thin edges and tips. The tip of a tall tongue
+    sheds a small flame that rises, shrinks and cools over the loop (never a lone pixel). A last pass removes specks and
+    1 px spikes. `shift` warms (+) or cools (-) everything. `ragged` = depth (px) of the uneven underside: notches are cut
+    up between little tongues of different lengths (flickering on the loop), so the base is broken, not a flat edge. `hollow`
+    leaves the inner part of each tongue empty (below that lateral fraction), so what is behind shows through."""
+    tau = math.tau
+    n = c.size
+    heat: dict[tuple[int, int], float] = {}
+    tips = []
+    for dx, hgt, w0, lean, ph, beats in tongues:
+        hcur = hgt * (0.9 + 0.1 * math.sin(tau * (beats * u + ph)))
+        if hcur < 3:
+            continue
+        y_top = int(base - hcur) - 1
+        for y in range(max(1, y_top), min(n - 1, base + 1)):
+            v = (base - y) / hcur
+            if v >= 1.0:
+                continue
+            xc = cx + dx + lean * hcur * v ** 1.7 + sway * v * math.sin(tau * (u + v * 0.7 + ph))
+            hw = w0 * (1.0 - v ** 1.9) ** 0.7 * (1.0 + 0.12 * math.sin(tau * (2 * u - 1.5 * v + ph)))
+            if hw < 1.7:  # the tip ends blunt and round, never a needle
+                continue
+            for x in range(int(xc - hw) - 1, int(xc + hw) + 2):
+                lat = abs(x - xc) / hw
+                if lat > 1.0 or lat < hollow or not 0 < x < n - 1:
+                    continue
+                h = (1.0 - v ** 1.5) * (1.0 - 0.75 * lat ** 1.5) + shift
+                if h > heat.get((x, y), -9.0):
+                    heat[(x, y)] = h
+        tips.append((cx + dx + lean * hcur * 0.9, base - hcur, hgt, w0, ph))
+    if ragged:
+        teeth = (5, 2, 4, 1, 5, 3, 2, 5, 1, 4, 3, 2, 5, 3, 4)
+        centres = [(cx - 33 + k * 4.6 + ((k * 5) % 3 - 1), teeth[k] / 5.0, k) for k in range(15)]
+        for (x, y) in list(heat):
+            reach = max(hh * ragged * (0.75 + 0.25 * math.sin(tau * (u + k * 0.37))) * max(0.0, 1 - abs(x - tx) / 2.6)
+                        for tx, hh, k in centres)
+            if y > base - ragged + reach:
+                del heat[(x, y)]
+    for _ in range(2):  # no specks, no 1 px spikes
+        drop = [(x, y) for (x, y) in heat
+                if ((x - 1, y) in heat) + ((x + 1, y) in heat) + ((x, y - 1) in heat) + ((x, y + 1) in heat) < 2
+                or (((x - 1, y) not in heat) and ((x + 1, y) not in heat) and (x, y - 1) not in heat)]
+        for k in drop:
+            del heat[k]
+    for (x, y), h in heat.items():
+        col = WHITE if h >= 1.0 else YELLOW if h >= 0.55 else ORANGE if h >= 0.3 else RED if h >= 0.08 else MAROON
+        c.px[x, y] = col + (255,)
+    if sheds:
+        for tx, ty, hgt, w0, ph in tips:
+            if hgt < 25:
+                continue
+            f = (u + ph) % 1.0  # 0 just pinched off the tip, 1 gone
+            size = 1.0 - f
+            bx = round(tx + 2.5 * math.sin(tau * (f + ph)))
+            by = max(5, round(ty + 2 - 10 * f))
+            col = (YELLOW, ORANGE, RED, MAROON)[min(3, int(f * 4))]
+            if f < 0.4:
+                c.part(R((bx, by - 1, bx + 1, by + 1)), col, shade=False, line=False)
+            elif f < 0.75:
+                c.part(R((bx, by, bx + 1, by + 1)), col, shade=False, line=False)
+
+
+INFERNO_BACK = (  # (dx from his centre, height, width, lean, phase, beats): the blaze rising off the ground round his body, hugging his shoulders and the sides of his head
+    (0, 31, 19, 0.0, 0.0, 1),  # the mass of fire round his body (its edges are what shows)
+    (-20, 62, 6.5, -0.08, 0.65, 1), (20, 57, 6.5, 0.08, 0.2, 1),
+    (-26, 42, 6.0, -0.12, 0.45, 1), (26, 37, 6.0, 0.12, 0.8, 1), (-31, 25, 5.2, -0.14, 0.9, 1), (31, 22, 5.2, 0.14, 0.3, 1),
+)
+INFERNO_CROWN = (  # the flame crown, rooted on his head: tongues of varied height, tallest in the middle / back, leaning together
+    (0, 11, 18, 0.0, 0.0, 1),
+    (-14, 30, 6.0, 0.16, 0.6, 1), (-7, 35, 6.2, 0.09, 0.1, 1), (0, 37, 6.4, 0.0, 0.45, 1), (7, 33, 6.2, -0.09, 0.8, 1),
+    (14, 27, 5.8, -0.16, 0.3, 1),
+)
+
+
+def inferno_fire(t: int, dy: int, heat: float = 1.0) -> Canvas:
+    """Inferno's blaze behind him (CELL canvas, outlined with him): fire rising off the ground round his body and a tall
+    crown of flame over his head, as soft tongues that sway, taper, curl and shed small flames (fire_tongues). `heat` 0..1
+    grows it for the morph."""
+    c = Canvas(CELL)
+    u = (t % FIRE_PERIOD) / FIRE_PERIOD
+    h = max(0.0, min(1.0, heat))
+    if h < 0.1:
+        return c
+    base = PAD + 59
+    fire_tongues(c, CELL // 2, base, [(dx * h ** 0.5, hg * h ** 0.6, w * h ** 0.5, ln, ph, bt) for dx, hg, w, ln, ph, bt in INFERNO_BACK],
+                 u, shift=-0.12, sheds=h > 0.7, ragged=6)
+    root = PAD + UPPER_DY + dy + HEAD[1] + 10  # the crown grows out of the head's top edge
+    fire_tongues(c, CELL // 2, root, [(dx * h ** 0.5, hg * h ** 0.6, w * h ** 0.5, ln, ph, bt) for dx, hg, w, ln, ph, bt in INFERNO_CROWN],
+                 u + 0.15, shift=-0.02, sheds=h > 0.7, sway=1.8)
+    return fill_notches(c)
+
+
 def flint_ground_glow(t: int, heat: float = 1.0) -> Canvas:
     """Under Inferno Flint (CELL canvas, laid UNDER his outlined sprite, no outline of its own): a dithered pool of firelight
-    fading into the ground (hot orange / red / maroon, flickering with `t`), with a few embers dropping off the base."""
+    fading into the ground (hot orange / red / maroon, flickering with the fire's loop)."""
     c = Canvas(CELL)
-    gx, gy = CELL // 2, PAD + 57
+    gx, gy = CELL // 2, PAD + 58
     rx, ry = 33 * heat, 10 * heat
+    u = (t % FIRE_PERIOD) / FIRE_PERIOD
     if heat > 0.05:
         for y in range(gy - 10, gy + 14):
             for x in range(gx - 36, gx + 37):
                 r = ((x - gx) / rx) ** 2 + ((y - gy) / ry) ** 2
                 if r >= 1.0:
                     continue
-                k = 1 - r + 0.12 * math.sin(x * 0.7 + t * 1.57)  # brightness, flickering
+                k = 1 - r + 0.12 * math.sin(x * 0.7 + math.tau * u)  # brightness, flickering
                 if BAYER[y % 4][x % 4] / 16 < k * 1.0 - 0.05:
                     c.px[x, y] = (ORANGE if k > 0.7 else RED if k > 0.4 else MAROON) + (255,)
-        for k in range(5):  # embers lifting off the base and dying out
-            ph = (t + k * 3) % 4
-            ex = gx - 24 + k * 12 + (k * 7) % 5 + SWAY[(t + k) % 4]
-            c.dot(ex, gy + 1 - 3 * ph - (k % 2) * 2, (YELLOW, ORANGE, RED, MAROON)[ph])
     return c
 
 
@@ -1088,7 +1197,7 @@ def flint_embers(i: int, heat: float = 0.0) -> Canvas:
 
 
 def flint_inferno(step=None, t=0):
-    return flint(step, t, heat=1.0)
+    return flint(step, t, heat=1.0, form=True)
 
 
 INFERNO_MORPH_FRAMES = 24
@@ -1097,17 +1206,21 @@ INFERNO_MORPH_FRAMES = 24
 def flint_inferno_morph() -> Image.Image:
     """Flint stoking up: his idle frame with heat rising 0 -> 1 over 24 frames (no growth: form_scale 1), flames licking up
     round him more and more and a spray of fire sparks building to a burst as he flares into Inferno."""
+    global FIRE_PERIOD
     out = []
     n = INFERNO_MORPH_FRAMES
+    FIRE_PERIOD = 8
     for k in range(n):
         h = k / (n - 1)
-        low, up = flint(None, k % 4, heat=h)
+        low, up = flint(None, k % 8, heat=h, form=True)
         f = flint_inferno_aura(k % 4, h * h).img
         f.alpha_composite(low.img)
         f.alpha_composite(up.img, (0, UPPER_DY))
-        cell_img = flint_crown(k % 4, 0, h).img
+        cell_img = inferno_fire(k % 8, 0, h).img  # (the 8-frame fire loop runs 3 times over the strip)
+        if h < 0.85:  # his own hair flame, swallowed by the blaze as it rises
+            cell_img.alpha_composite(flint_crown(k % 4, 0, h).img)
         cell_img.alpha_composite(f, (PAD, PAD))
-        under = flint_ground_glow(k % 4, h).img
+        under = flint_ground_glow(k % 8, h).img
         under.alpha_composite(outline(cell_img))
         img = under
         ov = Canvas(CELL)
@@ -1118,6 +1231,7 @@ def flint_inferno_morph() -> Image.Image:
             spark_cloud(ov, 31, 36, k - (n - 6), (cx, cy), (1.5, 4.5), (4, 8), 3, g=0.1, trail=3)
         img.alpha_composite(ov.img)
         out.append(img)
+    FIRE_PERIOD = 4
     return strip(out)
 
 
@@ -4519,20 +4633,11 @@ CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukon
               "sakura": sakura}
 ## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
 # --- Inferno (Flint's form): flames licking up round him and fire sparks flying off ----------------------------------
-INFERNO_LICKS = ((8, 52, 15, -1), (56, 52, 16, 1), (5, 34, 12, -1), (59, 36, 13, 1), (14, 22, 10, -1), (50, 20, 11, 1))
-
-
 def flint_inferno_aura(i: int, h: float = 1.0) -> Canvas:
     """Behind Inferno Flint (period 4): flames licking up on both sides of him, each on its own beat, with fire sparks
     (bright heads, cooling trails) streaming up and out. `h` 0..1 scales it for the morph."""
     c = flint_embers(i, h)
     ph = math.tau * i / 4
-    for n, (x, y, height, side) in enumerate(INFERNO_LICKS):
-        hh = height * h * (1 + 0.18 * math.sin(ph + n * 1.9))
-        if hh < 4:
-            continue
-        sw = side * (1.2 + 1.5 * math.sin(ph + n)) + side * 1.5
-        flame_tongue(c, (x, y), (x + sw * 0.5, y - hh * 0.55), (x + sw + side * 1.5, y - hh), ph + n * 2.3, 1, 3.2 * min(1.0, 0.4 + h) , 32)
     spark_cloud(c, 17, int(3 + 7 * h), i, lambda r: (r.choice((r.uniform(4, 14), r.uniform(50, 60))), r.uniform(20, 52)),
                 (0.2, 0.8), (3, 4), 4, angle=(-2.4, -0.75), loop=4, up=1.4, trail=2)
     return c
@@ -4615,7 +4720,7 @@ AURAS = {"wukong": wukong_clouds, "flint": flint_embers,
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
 GROUND_GLOWS = {"flint_inferno": flint_ground_glow}  # optional floor glow laid under each frame
-CROWNS = {"flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
+CROWNS = {"flint": flint_crown, "flint_inferno": lambda t, dy: inferno_fire(t, dy, 1.0)}  # optional per-frame effects drawn behind
 HITS = {}  # per-character hit frames: fn(idle frame 0) -> 2 frames (default: white flash, then one step lighter)
 DEATHS = {}  # per-character death frames: fn() -> 8 CELL frames (default: death_frames)
 SHEETS = {}  # whole hand-built sheets (idle, hit, walk, death): fn() -> list of CELL frames, written after the loop in main()
@@ -6155,9 +6260,15 @@ def frames(build, aura=None, crown=None, ground=None) -> list[Image.Image]:
             return under
         return outline(f)
 
+    global FIRE_PERIOD
+    FIRE_PERIOD = 4
     idle = [frame(None, dy, i) for i, dy in enumerate(IDLE_BOB)]
     hit = [recolor(idle[0], lambda _c: WHITE), recolor(idle[0], LIGHTER.__getitem__)]
-    walk = [frame(i, dy, i) for i, dy in enumerate(WALK_BOB)]
+    FIRE_PERIOD = 8  # the walk loop is 8 frames: the fire rises at half the speed per frame
+    try:
+        walk = [frame(i, dy, i) for i, dy in enumerate(WALK_BOB)]
+    finally:
+        FIRE_PERIOD = 4
     return idle + hit + walk
 
 
@@ -7588,7 +7699,7 @@ PROJECTILES["shadow_shuriken"] = shadow_star_shot
 SINK_FRAMES = 10
 PUDDLE_LOOP = 8
 BURST_FRAMES = 14
-HOUND_RISE_FRAMES = 12
+HOUND_RISE_FRAMES = 18
 HOUND_RUN_FRAMES = 6
 HOUND_BITE_FRAMES = 6
 HOUND_MELT_FRAMES = 12
@@ -7974,7 +8085,7 @@ def hound_frame(kind: str, k: int) -> Image.Image:
             sdot2(c, round(30 + rng.uniform(-20, 20)), round(g - rng.uniform(0, 8 + 20 * u)), rng.choice((VIOLET, VIOLET_L)))
     else:  # melt: sinks back into a puddle that opens out under it (the rise's puddle, backwards), dithering away
         u = k / (HOUND_MELT_FRAMES - 1)
-        hound_puddle(c, HOUND_RISE_FRAMES - 1 - k)
+        hound_puddle(c, round((HOUND_RISE_FRAMES - 1) * (1 - u)))
         body = Canvas(96)
         hound_body(body, 0.0)
         body.img = dither_out(body.img, u * 0.7, flip=k % 2 == 1)
@@ -8106,7 +8217,20 @@ FX.update({
 
 QUAKE_R = 46  # the telegraph ring's radius in art px (quake_blast.tres splash 70 / SPRITE_SCALE 1.5): SpecialFx.QUAKE_ART_RADIUS
 QUAKE_MARK_FRAMES = 8
-QUAKE_FRAMES = 14  # quake_burst / quake_scar: thorns breach (impact on frame 2), hold, then sink away
+QUAKE_FRAMES = 28  # quake_burst / quake_scar: the ground cracks and thorn tips push up (frames 0-7), impact on frame 8, hold, then sink away
+QUAKE_IMPACT = 8  # SpecialFx.QUAKE_IMPACT_FRAME; the design time (the old 14-frame strip's k) is 2.0 here
+
+
+def quake_t(i: int) -> float:
+    """Design time of output frame i: the old strip's frame k (impact 2, end 13), eased slowly into the impact and at 1.7x its old density after."""
+    return i * 0.25 if i <= QUAKE_IMPACT else 2.0 + (i - QUAKE_IMPACT) * 11.0 / (QUAKE_FRAMES - 1 - QUAKE_IMPACT)
+
+
+def _clip_below(c: Canvas, before: Image.Image, y: int) -> None:
+    """Puts back what was under rows y and below (before the last thing was drawn): that thing is rising out of the floor at row y."""
+    for yy in range(max(0, int(y)), c.img.height):
+        for xx in range(c.img.width):
+            c.px[xx, yy] = before.getpixel((xx, yy))
 QUAKE_BASE = 112  # quake_burst: the row the thorns' roots sit on (SpecialFx.QUAKE_BASE_Y), in a 128 px frame
 
 
@@ -8213,83 +8337,118 @@ def _quake_layout() -> list:
     return sorted(out, key=lambda t: t[1])
 
 
-def quake_burst_frame(k: int) -> Image.Image:
-    """The thorns (128 px, roots on row QUAKE_BASE, centred across): the ground heaves and cracks (frame 0-1), then a thicket of bark
-    thorns bursts up, middle first (impact on frame 2), clods fly, dust rolls out; they hold, sway, and sink away with leaves
-    sprouting on them as they go."""
+def quake_burst_frame(i: int) -> Image.Image:
+    """The thorns (128 px, roots on row QUAKE_BASE, centred across), QUAKE_FRAMES frames, impact on frame QUAKE_IMPACT: soil hops and a
+    green seam glows in the floor, then thorn tips push up through the ground (each drawn whole and clipped at its own root row, so it
+    rises tip first), middle first, clods fly and dust rolls out; they overshoot, hold, sway, and sink back into the floor with leaves
+    sprouting on them as they go, a last puff of dust where they went."""
+    t = quake_t(i)
     n, m = 128, 64
     c = Canvas(n)
-    rng = random.Random(940 + k)
+    rng = random.Random(940 + i)
     base = QUAKE_BASE
+    if t < 2.6:  # a glow seam in the floor and soil hopping where the thorns will come
+        pre = min(1.0, t / 1.4)
+        for j in range(7):
+            a = math.tau * j / 7 + 0.4
+            ln = (6 + 8 * (j % 3)) * pre
+            if ln >= 2:
+                c.flat(L([(m, base), (round(m + math.cos(a) * ln * 1.4), round(base + math.sin(a) * ln * 0.55))], 1), GREEN_L if j % 2 else GREEN)
+        for _ in range(int(6 * pre) if t < 1.6 else 0):
+            a, r = rng.uniform(0, math.tau), rng.uniform(4, 30) * pre
+            sdot(c, round(m + math.cos(a) * r * 1.3), round(base + math.sin(a) * r * 0.5 - rng.uniform(0, 3)), rng.choice((BROWN, CHESTNUT, GREEN_L)))
     for dx, dy, hmax, w, lean, start in _quake_layout():
-        e = _quake_env(k, start - 1.0 if start < 2 else start - 0.7)
-        sway = 0.8 * math.sin(k * 0.8 + dx) * (1 if 4 <= k <= 9 else 0)
-        _quake_thorn(c, m + dx, base + dy, hmax * e, w, lean + sway, k * 0.6)
+        e = _quake_env(t, start - 1.0 if start < 2 else start - 0.7)
+        if e <= 0:
+            continue
+        sway = 0.8 * math.sin(t * 0.8 + dx) * (1 if 4 <= t <= 9 else 0)
+        root = base + dy
+        before = c.img.copy()
+        sunk = hmax * (1.0 - min(e, 1.0)) * 0.95
+        _quake_thorn(c, m + dx, root + sunk, hmax * max(e, 1.0), w, lean + sway, t * 0.6)
+        _clip_below(c, before, root + 1)
+        if 0.03 < e < 0.9 or (t > 8 and e < 0.6):  # a little heaped soil round the root while it breaks the surface
+            for sx in (-1, 1):
+                sdot(c, round(m + dx + sx * (w + 1.5)), root, BROWN)
+                sdot(c, round(m + dx + sx * (w + 3)), root, CHESTNUT)
+                sdot(c, round(m + dx + sx * (w + 2)), root - 1, BROWN)
     # dust ring and clods
-    if 1 <= k <= 7:
-        rr = 14 + (k - 1) * 8
-        for i in range(26):
-            a = math.tau * i / 26 + 0.1 * k
-            if rng.random() < 0.8 - 0.09 * k:
+    if 1.4 <= t <= 7.5:
+        rr = 14 + (t - 1.0) * 8
+        for j in range(26):
+            a = math.tau * j / 26 + 0.1 * t
+            if rng.random() < 0.8 - 0.09 * t:
                 x, y = m + math.cos(a) * rr, base + math.sin(a) * rr * 0.6
-                sdot(c, round(x), round(y - 1), CREAM if (i + k) % 3 == 0 else CREAM_D)
-                if rr > 24 and i % 2 == 0:
+                sdot(c, round(x), round(y - 1), CREAM if (j + i) % 3 == 0 else CREAM_D)
+                if rr > 24 and j % 2 == 0:
                     sdot(c, round(x), round(y), CREAM_D)
-    for j in range(16 if 1 <= k <= 9 else 0):  # clods thrown up and falling
-        a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
-        sp = rng.uniform(6, 12)
-        t = (k - 1) * 0.55
-        x = m + math.cos(a) * sp * t * 2.6
-        y = base - 4 + math.sin(a) * sp * t * 2.2 + 5.5 * t * t
-        if y < base + 6:
-            sdot(c, round(x), round(y), (BROWN, CHESTNUT, GREEN, WALNUT)[j % 4])
-            if j % 4 == 0:
-                sdot(c, round(x) + 1, round(y), BROWN)
-    if k >= 8:  # leaves and spores drifting up as the thorns sink
+    if t >= 1.0 and t <= 9.5:
+        for j in range(16):  # clods thrown up and falling
+            a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
+            sp = rng.uniform(6, 12)
+            tt = (t - 1.0) * 0.55
+            x = m + math.cos(a) * sp * tt * 2.6
+            y = base - 4 + math.sin(a) * sp * tt * 2.2 + 5.5 * tt * tt
+            if y < base + 6:
+                sdot(c, round(x), round(y), (BROWN, CHESTNUT, GREEN, WALNUT)[j % 4])
+                if j % 4 == 0:
+                    sdot(c, round(x) + 1, round(y), BROWN)
+    if t >= 8:  # leaves and spores drifting up as the thorns sink, and dust where they go back in
         for j in range(8):
             a = rng.uniform(0, math.tau)
             r = rng.uniform(6, 38)
-            t = (k - 8) / 5
-            if rng.random() < 1 - t:
-                x, y = m + math.cos(a) * r, base - 10 - t * 26 - rng.uniform(0, 14) + math.sin(a) * r * 0.3
+            tt = (t - 8) / 5
+            if tt < 1 and rng.random() < 1 - tt:
+                x, y = m + math.cos(a) * r, base - 10 - tt * 26 - rng.uniform(0, 14) + math.sin(a) * r * 0.3
                 sdot(c, round(x), round(y), GREEN_L if j % 2 else GREEN)
+        if 9.5 <= t <= 13.5:
+            for j in range(18):
+                a = math.tau * j / 18
+                r = rng.uniform(8, 40) * (0.7 + (t - 9.5) * 0.08)
+                if rng.random() < 0.8 - (t - 9.5) * 0.17:
+                    sdot(c, round(m + math.cos(a) * r * 1.2), round(base + math.sin(a) * r * 0.45 - (t - 9.5) * 1.2), CREAM_D if j % 2 else CREAM)
     return _clear_edge(c.img)
 
 
-def quake_scar_frame(k: int) -> Image.Image:
-    """The ground left behind (112 px, centred on the spot, same timing as quake_burst): upturned soil and cracks ringing the thorns
-    appear with the impact (frame 2), then the wound closes over, greens, and dithers away."""
+def quake_scar_frame(i: int) -> Image.Image:
+    """The ground left behind (112 px, centred on the spot, same timing as quake_burst): hairline cracks open in the floor before the
+    thorns break through (frames 1-7), upturned soil rings them at the impact (frame 8), then the wound closes over, greens, and dithers away."""
+    t = quake_t(i)
     n = 112
     m = n // 2
     c = Canvas(n)
-    if k < 1:
+    if i < 1:
         return c.img
     rng = random.Random(950)  # one mark, the same every frame, so it stays put
-    appear = min(1.0, k / 3.0)
-    r0 = 40 * appear
+    appear = min(1.0, max(0.0, (t - 0.1) / 2.3))
     pts = []
-    for i in range(16):
-        a = math.tau * i / 16
-        j = rng.uniform(0.75, 1.1)
-        pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.78))
-    c.flat(P(pts), WALNUT_D)
-    c.flat(P([(m + (x - m) * 0.7, m + (y - m) * 0.7) for x, y in pts]), OUTLINE)
-    for i in range(9):  # cracks
+    r0 = 40 * appear
+    for j in range(16):
+        a = math.tau * j / 16
+        jj = rng.uniform(0.75, 1.1)
+        pts.append((m + math.cos(a) * r0 * jj, m + math.sin(a) * r0 * jj * 0.78))
+    if t >= 1.4:  # the dark upturned earth only once things start to break
+        k2 = min(1.0, (t - 1.4) / 0.9)
+        c.flat(P([(m + (x - m) * k2, m + (y - m) * k2) for x, y in pts]), WALNUT_D)
+        c.flat(P([(m + (x - m) * 0.7 * k2, m + (y - m) * 0.7 * k2) for x, y in pts]), OUTLINE)
+    for j in range(9):  # cracks, running out from the middle as time passes
         a = rng.uniform(0, math.tau)
-        ln = rng.uniform(r0 * 0.8, r0 * 1.45)
+        ln = rng.uniform(40 * 0.8, 40 * 1.45) * appear
         mid = (m + math.cos(a + rng.uniform(-0.3, 0.3)) * ln * 0.55, m + math.sin(a) * ln * 0.45)
         end = (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.78)
-        c.flat(L([(m + math.cos(a) * 8, m + math.sin(a) * 6), mid, end], 1), GREEN_D if k > 6 else WALNUT)
-    for i in range(18):  # soil clumps round the edge, turning to grass
-        a = rng.uniform(0, math.tau)
-        r = r0 * rng.uniform(0.85, 1.2)
-        x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.78)
-        col = BROWN if k < 6 else GREEN if i % 2 else GREEN_L
-        sdot(c, x, y, col)
-        sdot(c, x + 1, y, col)
-        if k >= 6 and i % 3 == 0:
-            sdot(c, x, y - 1, GREEN_L)
-    fade = max(0.0, (k - 8) / (QUAKE_FRAMES - 8))
+        c.flat(L([(m + math.cos(a) * 8 * appear, m + math.sin(a) * 6 * appear), mid, end], 1),
+               GREEN_D if t > 6 else (GREEN if t < 1.4 and j % 2 else WALNUT))
+    if t >= 1.4:
+        for j in range(18):  # soil clumps round the edge, turning to grass
+            a = rng.uniform(0, math.tau)
+            r = r0 * rng.uniform(0.85, 1.2)
+            x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.78)
+            col = BROWN if t < 6 else GREEN if j % 2 else GREEN_L
+            sdot(c, x, y, col)
+            sdot(c, x + 1, y, col)
+            if t >= 6 and j % 3 == 0:
+                sdot(c, x, y - 1, GREEN_L)
+    fade = max(0.0, (t - 8) / 5.0)
     px = c.img.load()
     for y in range(n):
         for x in range(n):
@@ -8870,13 +9029,32 @@ def rift_lash_frame(k: int) -> Image.Image:
 # ---- Umbral Spikes (Shadow): dark crystal spikes burst up out of the floor where he marked --------------------------
 SPIKE_R = 48  # the ring radius in art px (SpecialFx.THUNDER_ART_RADIUS 72 world / 1.5): the blast radius scales it
 SPIKE_MARK_FRAMES = 8
-SPIKE_FRAMES = 10  # THUNDER_BOLT_FRAMES: the burst lands on frame 2
+SPIKE_FRAMES = 24  # spike_burst / spike_scorch: floor cracks and tips push up (frames 0-7), the burst lands on frame 8 (SpecialFx.SPIKE_IMPACT_FRAME), then retreat
+SPIKE_IMPACT = 8
+SPIKE_DESIGN_END = 9.0  # the old 10-frame strip's last frame
 SPIKE_BASE = 112  # the row the field is centred on (SpecialFx.THUNDER_BASE_Y), in a 128 px frame
 # (dx, dy, height, half width, lean, delay) of the spikes, in art px about the spot: one tall, a ring, an outer scatter
 SPIKES = [(0, 0, 76, 7, 0.0, 0), (-16, -4, 58, 6, -0.12, 0), (15, -5, 62, 6, 0.1, 0), (-8, 10, 48, 5, -0.08, 0), (10, 10, 54, 6, 0.12, 0),
           (-30, 2, 38, 5, -0.2, 1), (29, 3, 42, 5, 0.18, 1), (-22, -13, 32, 4, -0.1, 1), (22, -14, 34, 4, 0.12, 1),
           (0, -17, 36, 4, 0.0, 1), (-3, 17, 30, 4, -0.05, 1), (-38, -4, 22, 3, -0.25, 2), (37, -3, 24, 3, 0.25, 2)]
 SPIKE_GROW = (0.18, 0.7, 1.0, 1.0, 0.97, 0.9, 0.68, 0.42, 0.2, 0.0)
+
+
+def spike_t(i: int) -> float:
+    """Design time of output frame i: the old strip's frame k (impact 2, end 9), eased slowly into the impact, 2x denser after."""
+    return i * 0.25 if i <= SPIKE_IMPACT else 2.0 + (i - SPIKE_IMPACT) * (SPIKE_DESIGN_END - 2.0) / (SPIKE_FRAMES - 1 - SPIKE_IMPACT)
+
+
+def _spike_grow(t: float, delay: int) -> float:
+    """How much of a spike is up at design time t: it pushes up through the floor towards the impact (staggered by `delay`), then the
+    old hold / retreat curve, linearly in between its frames."""
+    if t <= 2.0:
+        x = (t - 0.2 - 0.6 * delay) / 1.8
+        return 0.0 if x <= 0 else math.sin(min(1.0, x) * math.pi / 2)
+    kk = min(max(t - delay, 0.0), SPIKE_DESIGN_END)
+    lo = int(kk)
+    hi = min(lo + 1, len(SPIKE_GROW) - 1)
+    return SPIKE_GROW[lo] + (SPIKE_GROW[hi] - SPIKE_GROW[lo]) * (kk - lo)
 
 
 def spike_mark_frame(k: int) -> Image.Image:
@@ -8932,78 +9110,105 @@ def _spike(c: Canvas, x: float, y: float, h: float, hw: float, lean: float, brig
         sdot(c, round(tip[0]), round(tip[1]) + 1, PINK_L)
 
 
-def spike_burst_frame(k: int) -> Image.Image:
-    """The strike (128 px, field centred on row SPIKE_BASE, impact on frame 2 like the thunder bolt): the floor splits and short black
-    tips push through (frame 0-1), a thicket of crystal spikes lunges up with a pale flash and a ring racing over the floor (2-4), holds
-    a beat, then cracks, shrinks and falls apart into shards (5-9). Spikes are drawn back to front."""
+def spike_burst_frame(i: int) -> Image.Image:
+    """The strike (128 px, field centred on row SPIKE_BASE, SPIKE_FRAMES frames, impact on frame SPIKE_IMPACT): the floor glows and cracks
+    and black tips push up through it (0-7); a thicket of crystal spikes lunges up, each drawn whole and clipped at its own foot row so
+    it rises out of the floor, with a pale flash and a ring racing over the floor (8-14); it holds a beat, then cracks and sinks back
+    into the floor in a drift of shards (15-23). Spikes are drawn back to front over a soft contact shadow."""
+    t = spike_t(i)
     n, m = 128, 64
     c = Canvas(n)
     ov = Canvas(n)
-    rng = random.Random(1500 + k * 7)
-    if k >= 2:  # flash and shock ring on the floor
-        r = (0, 0, 30, 24, 16, 8, 0, 0, 0, 0)[k]
-        if r:
-            c.flat(E((m - r, SPIKE_BASE - r * 0.5, m + r, SPIKE_BASE + r * 0.5)), PINK_L if k > 2 else WHITE)
-        rr = 16 + (k - 2) * 9
-        if k <= 6:
-            c.flat(lambda d, f: d.ellipse((m - rr, SPIKE_BASE - rr * 0.38, m + rr, SPIKE_BASE + rr * 0.38), outline=f, width=3 if k < 4 else 1),
-                   VIOLET_L if k < 5 else VIOLET)
-    for dx, dy, hh, hw, lean, delay in sorted(SPIKES, key=lambda s: s[1]):
-        kk = k - delay
-        if kk < 0:
+    rng = random.Random(1500 + i * 7)
+    if t >= 1.0:  # a soft contact shadow under the field while the spikes stand
+        sh = min(1.0, (t - 1.0) / 1.5) * (1.0 - max(0.0, (t - 6.0) / 3.0))
+        if sh > 0:
+            for y in range(SPIKE_BASE - 14, SPIKE_BASE + 15):
+                for x in range(m - 40, m + 41):
+                    d = ((x - m) / 40.0) ** 2 + ((y - SPIKE_BASE) / 13.0) ** 2
+                    if d < 1.0 and BAYER[y % 4][x % 4] / 16 < 0.5 * sh * (1 - d):
+                        c.dot(x, y, OUTLINE)
+    if t >= 2.0:  # flash and shock ring on the floor
+        r = max(0.0, 30.0 - (t - 2.0) * 7.5)
+        if r >= 1:
+            c.flat(E((m - r, SPIKE_BASE - r * 0.5, m + r, SPIKE_BASE + r * 0.5)), PINK_L if t > 2.3 else WHITE)
+        rr = 16 + (t - 2) * 9
+        if t <= 6:
+            c.flat(lambda d, f: d.ellipse((m - rr, SPIKE_BASE - rr * 0.38, m + rr, SPIKE_BASE + rr * 0.38), outline=f, width=3 if t < 4 else 1),
+                   VIOLET_L if t < 5 else VIOLET)
+    for dx, dy, hh, hw, lean, delay in sorted(SPIKES, key=lambda s_: s_[1]):
+        g = _spike_grow(t, delay)
+        if g <= 0.02:
             continue
-        g = SPIKE_GROW[min(kk, SPIKE_FRAMES - 1)]
-        if k < 2:  # the first frames: only the tall ones poke through
-            g = (0.12, 0.35)[k] if delay == 0 else 0.0
-        jitter = rng.uniform(-1, 1) if k >= 6 else 0
-        _spike(c, m + dx + jitter, SPIKE_BASE + dy * 0.8, hh * g, hw * (0.6 + 0.4 * min(1.0, g * 1.5)), lean, 1.0 if k <= 4 else 0.0)
+        jitter = rng.uniform(-1, 1) if t >= 6 else 0
+        root = SPIKE_BASE + dy * 0.8
+        before = c.img.copy()
+        _spike(c, m + dx + jitter, root + hh * (1.0 - g), hh, hw * (0.6 + 0.4 * min(1.0, g * 1.5)), lean, 1.0 if t <= 4 else 0.0)
+        _clip_below(c, before, round(root) + 1)
     img = outline(c.img)
-    for j in range(16 if k >= 2 else 0):  # shards thrown up and falling
-        a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
-        r = (k - 1) * rng.uniform(3.0, 7.5)
-        life = max(0.0, 1 - k / SPIKE_FRAMES)
-        if r > 0 and rng.random() < life + 0.3:
-            sdot(ov, round(m + math.cos(a) * r * 1.5), round(SPIKE_BASE - 12 + math.sin(a) * r * 1.1 + (k - 3) * 2.0),
-                 (WHITE, PINK_L, VIOLET_L, VIOLET)[j % 4])
-    if k < 2:
-        for j in range(8):  # cracks glowing in the floor before it splits
+    if t >= 2.0:
+        for j in range(16):  # shards thrown up and falling
+            a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
+            r = (t - 1) * rng.uniform(3.0, 7.5)
+            life = max(0.0, 1 - t / SPIKE_DESIGN_END)
+            if r > 0 and rng.random() < life + 0.3:
+                sdot(ov, round(m + math.cos(a) * r * 1.5), round(SPIKE_BASE - 12 + math.sin(a) * r * 1.1 + (t - 3) * 2.0),
+                     (WHITE, PINK_L, VIOLET_L, VIOLET)[j % 4])
+    if t < 2.0:  # cracks glowing in the floor before it splits, soil hopping
+        for j in range(8):
             a = rng.uniform(0, math.tau)
-            ln = rng.uniform(8, 26) * (0.6 + 0.5 * k)
-            ov.flat(L([(m, SPIKE_BASE), (round(m + math.cos(a) * ln * 1.3), round(SPIKE_BASE + math.sin(a) * ln * 0.5))], 1), VIOLET_L if j % 2 else PINK_L)
+            ln = rng.uniform(8, 26) * min(1.0, 0.1 + 0.5 * t)
+            if ln >= 2:
+                ov.flat(L([(m, SPIKE_BASE), (round(m + math.cos(a) * ln * 1.3), round(SPIKE_BASE + math.sin(a) * ln * 0.5))], 1), VIOLET_L if j % 2 else PINK_L)
+        for _ in range(int(5 * min(1.0, t))):
+            a, r = rng.uniform(0, math.tau), rng.uniform(4, 24)
+            sdot(ov, round(m + math.cos(a) * r * 1.3), round(SPIKE_BASE + math.sin(a) * r * 0.5 - rng.uniform(1, 4)), rng.choice((VIOLET, VIOLET_L, PINK_L)))
+    if 6.5 <= t <= 9.0:  # a puff of dust where the spikes go back in
+        for j in range(14):
+            a = math.tau * j / 14
+            r = rng.uniform(10, 38)
+            if rng.random() < 0.7:
+                sdot(ov, round(m + math.cos(a) * r * 1.2), round(SPIKE_BASE + math.sin(a) * r * 0.4 - (t - 6.5)), VIOLET if j % 2 else VIOLET_L)
     img.alpha_composite(ov.img)
-    if k >= 7:
-        img = dither_out(img, (k - 6) / 4.0 * 0.6)
+    if t >= 7:
+        img = dither_out(img, min(1.0, (t - 6) / 4.0 * 0.6))
     return _clear_edge(img, 2)
 
 
-def spike_scorch_frame(k: int) -> Image.Image:
-    """The floor after the burst (112 px, centred on the spot, nothing before frame 2): a flash that cools to violet over a cracked black
-    stain whose cracks glow pink, then violet, then go dark, and which dithers away."""
+def spike_scorch_frame(i: int) -> Image.Image:
+    """The floor under the burst (112 px, centred on the spot): hairline pink cracks open before the impact (frames 1-7), then a flash
+    that cools to violet over a cracked black stain whose cracks glow pink, then violet, then go dark, and which dithers away."""
+    t = spike_t(i)
     n = 112
     m = n // 2
     c = Canvas(n)
-    if k < 2:
+    if i < 1:
         return c.img
     rng = random.Random(1600)
     r0 = 30
     pts = []
-    for i in range(14):
-        a = math.tau * i / 14
-        j = rng.uniform(0.7, 1.15)
-        pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.8))
-    heat = k - 2
-    if heat < 2:
-        c.flat(E((m - 30, m - 22, m + 30, m + 22)), PINK_L if heat == 0 else VIOLET_L)
-    c.flat(P(pts), VIOLET_D)
-    c.flat(P([(m + (x - m) * 0.62, m + (y - m) * 0.62) for x, y in pts]), OUTLINE)
+    for j in range(14):
+        a = math.tau * j / 14
+        jj = rng.uniform(0.7, 1.15)
+        pts.append((m + math.cos(a) * r0 * jj, m + math.sin(a) * r0 * jj * 0.8))
+    heat = max(0.0, t - 2.0)
+    appear = min(1.0, t / 2.0)
+    if t >= 2.0:
+        if heat < 2:
+            c.flat(E((m - 30, m - 22, m + 30, m + 22)), PINK_L if heat < 0.7 else VIOLET_L)
+        c.flat(P(pts), VIOLET_D)
+        c.flat(P([(m + (x - m) * 0.62, m + (y - m) * 0.62) for x, y in pts]), OUTLINE)
+    elif t >= 1.2:  # the stain begins to darken the floor
+        k2 = (t - 1.2) / 0.8
+        c.flat(P([(m + (x - m) * 0.5 * k2, m + (y - m) * 0.5 * k2) for x, y in pts]), OUTLINE)
     for _ in range(8):
         a = rng.uniform(0, math.tau)
-        ln = rng.uniform(r0 * 0.7, r0 * 1.5)
+        ln = rng.uniform(r0 * 0.7, r0 * 1.5) * appear
         mid = (m + math.cos(a + rng.uniform(-0.3, 0.3)) * ln * 0.55, m + math.sin(a) * ln * 0.45)
         end = (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.8)
-        c.flat(L([(m + math.cos(a) * 6, m + math.sin(a) * 5), mid, end], 1),
-               (PINK_L, PINK_L, VIOLET_L, VIOLET_L, VIOLET, VIOLET, VIOLET_D, VIOLET_D)[min(heat, 7)])
-    return dither_out(c.img, max(0.0, (k - 5) / 5.0))
+        c.flat(L([(m + math.cos(a) * 6 * appear, m + math.sin(a) * 5 * appear), mid, end], 1),
+               (PINK_L, PINK_L, VIOLET_L, VIOLET_L, VIOLET, VIOLET, VIOLET_D, VIOLET_D)[min(int(heat), 7)])
+    return dither_out(c.img, max(0.0, (t - 5) / 5.0))
 
 
 # ---- Tesla Coil (Bolt): a steel and copper coil that rises out of the floor and zaps the nearest enemy -------------

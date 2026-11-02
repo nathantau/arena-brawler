@@ -531,6 +531,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 ## A stun cuts channelled self-abilities short (Staff Whirl, Petal Drift, Shadow Step): they end cleanly, cooldown stays, and a
 ## stepping Shadow surfaces on free floor without his strike. Runs in the shared sim, so prediction and replay agree.
 func _interrupt_channels() -> void:
+	_windup_left = -1.0  # a wind-up in progress is cancelled: no damage, the weapon cooldown stays spent
 	for slot: CharacterSkill in skills:
 		if not slot.is_active():
 			continue
@@ -549,6 +550,7 @@ func _interrupt_channels() -> void:
 ## Countdown / results freeze the player: whatever he was doing ends here. A swing lands where it was going (not mid-air,
 ## possibly over a wall) and a burning-trail dash finishes at the end of its line.
 func _end_abilities(swing: CharacterSkill) -> void:
+	_windup_left = -1.0  # a pending weapon wind-up must not land after the freeze
 	if swing != null:
 		global_position = swing.anchor + swing.direction
 	var stepping: bool = false
@@ -1313,6 +1315,14 @@ func _draw_head_over_weapon() -> void:
 		Rect2(0, 0, cell.x, SPRITE_HEAD_ROWS), _sprite.modulate)
 
 
+## How far a thrusting melee weapon (Cloud Staff) is pushed out along the aim right now (0 at rest, peaks mid-stab).
+func thrust_hold() -> float:
+	var w: WeaponData = held_weapon().data
+	if _recoil_len <= 0.0:
+		return 0.0
+	return w.melee_range * THRUST_REACH * sin(_recoil / _recoil_len * PI)
+
+
 func _draw_guns(ci: CanvasItem) -> void:
 	_draw_gun(ci, Vector2.ZERO)
 
@@ -1330,7 +1340,7 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 		hold -= GUN_RECOIL_PX * t
 		angle -= deg_to_rad(GUN_KICK_DEG) * t * flip_v
 	elif w.thrust:
-		hold += w.melee_range * THRUST_REACH * sin(t * PI)
+		hold += thrust_hold()
 	elif _recoil > 0.0:
 		angle += deg_to_rad(w.melee_arc_deg) * (0.5 - t) * flip_v
 	else:

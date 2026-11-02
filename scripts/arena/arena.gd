@@ -80,7 +80,6 @@ const PARTICLE_SIZE: float = 4.0
 const PARTICLE_LIFE: float = 0.35
 const CRATE_DEBRIS_COLOR: Color = Color(0.55, 0.4, 0.25)
 const BEAM_WIDTH_SCALE: float = 2.0
-const THRUST_FX_WIDTH: float = 7.0
 
 var mode: Mode
 var match_seed: int
@@ -426,8 +425,10 @@ func _attach_effects() -> void:
 			effects.beam(from, to, w.color, w.projectile_radius * BEAM_WIDTH_SCALE))
 	projectiles.swung.connect(func(origin: Vector2, facing: Vector2, w: WeaponData) -> void:
 		if w.thrust:
-			var tip: Vector2 = origin + facing * (w.melee_range + Constants.PLAYER_RADIUS)
-			effects.beam(origin + facing * Constants.PLAYER_RADIUS, tip, w.color, THRUST_FX_WIDTH)
+			for p: Player in players:
+				if p.global_position.distance_squared_to(origin) < 1.0 and p.held_weapon().data == w:
+					effects.thrust(p)
+					break
 		else:
 			effects.swing(origin, facing, w.melee_range, w.melee_arc_deg, w.color))
 	projectiles.exploded.connect(_fx_explosion)
