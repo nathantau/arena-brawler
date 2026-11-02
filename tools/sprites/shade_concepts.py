@@ -340,11 +340,12 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         low.dot(x, 52 + dy, WHITE)
         low.flat(L([(x + 6, 55 + dy), (x + 6, 56 + dy)], 1), OUTLINE)  # tabi split toe
         low.dot(x, 54 + dy, STEEL_D)
-    # thigh kunai holster on the outer leg: a leather pouch and a red-wrapped handle with a tiny gold bead sticking out
+    # thigh holster on the outer leg: a dark-brown pouch and one kunai ring
     low.part(P([(39, 50), (43, 51), (43, 55), (40, 56), (39, 54)]), BROWN)
-    low.flat(L([(39, 51), (43, 52)], 1), OCHRE_D)
-    low.flat(L([(43, 52), (46, 51)], 2), RED)
-    low.dot(47, 51, YELLOW)
+    low.flat(L([(39, 51), (43, 52)], 1), SHADOW)
+    low.flat(L([(43, 52), (46, 51)], 2), STEEL_D)
+    low.dot(47, 51, WHITE)
+    low.dot(47, 50, STEEL)
     # ---- back hair
     if hair == "H1":  # high ponytail with volume
         pt = strand((29, 5), (13 - 3 * mv, -13), (-3 - 4 * mv, 8), (3 - 5 * mv, 36 - 3 * mv), t, 5.0, k=2.0, lag=0.8, n=18)
@@ -371,28 +372,22 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
             pt = strand(p0, (p1[0] - sh, p1[1]), (p2[0] - sh, p2[1]), (p3[0] - sh * 1.4, p3[1] - sh * 0.5), t, 2.4, k=2.0, lag=lag, n=16)
             hair_band(up, pt, [3, 6, 8, 9, 9.5, 9.5, 9.5, 9, 9, 8.5, 8, 7, 6, 4.5, 3, 1.5, 1],
                       clusters=((0.3, BLUE),), color=(NAVY if ci % 2 else HAIR_A), rim=(ci == 0))
-    elif hair == "H9":  # long straight hair seen from the front: two vertical panels falling behind the shoulders on both sides
+    elif hair == "H9":  # long straight hair: narrow vertical panels peeking out beside the shoulders, behind the arms
         b = sw_(t, 1.2, 1) - 2.0 * mv
         off = lambda y: b * max(0.0, (y - 28) / 20)
-        left = [(22, 16), (14, 20), (11, 26), (10, 33), (10, 40), (11, 44), (14, 48), (17, 49.5), (20, 47), (22, 40)]
+        left = [(22, 16), (14, 20), (12, 26), (11, 33), (11, 40), (12, 44), (14, 47.5), (16, 48.5), (18, 46), (19, 40), (19, 30), (21, 22)]
         for side in (0, 1):
             pts_ = [((x if side == 0 else 66 - x) + off(y), y) for x, y in left]
             up.part(P(ipts(pts_)), NAVY)
-            for yy in range(16, 60):  # a darker navy toward the body, on a gently curved boundary
+            for yy in range(16, 60):  # a darker navy toward the body
                 for xx in range(6, 62):
-                    near = (xx - 10) if side == 0 else (56 - xx)
-                    if near > 5.5 + 1.4 * math.sin(yy / 7.0) and up.at(xx, yy)[:3] == NAVY:
+                    near = (xx - 11) if side == 0 else (55 - xx)
+                    if near > 2.8 + 1.0 * math.sin(yy / 7.0) and up.at(xx, yy)[:3] == NAVY:
                         up.dot(xx, yy, SHADOW)
-            hx = 12 if side == 0 else 54  # one soft vertical highlight, nearer the outer edge
-            for yy in range(26, 43):
-                if not (yy % 6 == 0):
-                    up.dot(round(hx + off(yy)) , yy, BLUE if 28 < yy < 40 else STEEL_D)
-            for yy in range(31, 36):
-                up.dot(round(hx + off(yy)), yy, STEEL)
-            sx = 15 if side == 0 else 51  # one subtle strand line
-            for yy in range(30, 45):
-                if yy % 7:
-                    up.dot(round(sx + off(yy)), yy, SHADOW if side == 0 else OUTLINE)
+            hx = 13 if side == 0 else 53  # one soft vertical highlight
+            for yy in range(27, 43):
+                if yy % 6:
+                    up.dot(round(hx + off(yy)), yy, BLUE if 29 < yy < 40 else STEEL_D)
     elif hair == "H6":  # side ponytail on her far side, swinging out behind her head
         pt = strand((44, 6), (62 - 6 * mv, -6), (70 - 9 * mv, 22), (60 - 12 * mv, 42), t, 4.0, k=2.0, lag=0.8, n=18)
         hair_band(up, pt, [4, 8, 10, 11, 11, 10, 10, 9, 9, 8, 7, 6, 5, 4, 3, 2, 1.5, 1.2, 1])
@@ -405,13 +400,9 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         r1 = strand((rx, ry), (rx - 4, ry - 3), (rx - 8, ry + 1), (rx - 11 - 2 * mv, ry + 5), t, 2.0, k=2.0, lag=1.4, n=8)
         ribbon(up, r1, 3.2, 2.6, RED)
     # ---- scarf: a snug neck wrap with two SHORT rounded tails from the knot, an S-wave, the second lagging; gold bands
-    if hair == "H9":  # two short rounded stubs at the knot, so the hair panel shows
-        t1 = strand((22, 37), (19, 35.5), (16, 38), (13 - mv, 37 - mv), t, 1.4, k=2.4, lag=0.0, n=9)
-        t2 = strand((22, 39), (19, 41), (17, 43), (14 - mv, 45 - mv), t, 1.2, k=2.4, lag=1.0, n=9)
-        ribbon(up, t2, 4.2, 3.4, RED)
-        ribbon(up, t1, 4.8, 3.8, RED)
-        across(up, t1, 5, 2.0, GOLD)
-        across(up, t2, 5, 1.8, GOLD)
+    if hair == "H9":  # a single rounded tail from the scarf, streaming out past her shoulder
+        t1 = strand((22, 38), (16, 37.5 - mv), (11, 41), (9 - 2 * mv, 48 - mv), t, 1.6, k=2.2, lag=0.0, n=12)
+        ribbon(up, t1, 4.4, 3.4, RED)
     else:
         t1 = strand((22, 37), (16, 34 - mv), (10 - 2 * mv, 39 - 2 * mv), (3 - 3 * mv, 37 - 3 * mv), t, 3.0, k=2.6, lag=0.0, n=12)
         t2 = strand((22, 39), (17, 43), (12 - mv, 44 - mv), (6 - 3 * mv, 48 - 2 * mv), t, 2.6, k=2.6, lag=1.0, n=12)
@@ -420,44 +411,41 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         across(up, t1, 7, 2.4, GOLD)
         across(up, t2, 7, 2.2, GOLD)
     bw = sw_(t, 1.0, 1)
-    def tekko(x):  # a dark arm wrap and a steel plate on the back of the hand
-        up.flat(L([(x, 40), (x + 5, 42)], 1), STEEL)
-        up.flat(L([(x, 41), (x + 5, 43)], 1), SHADOW)
+    KIM = STEEL_D  # the kimono: a steel-blue one step lighter than the hair
+    def tekko(x):  # a lighter cuff edge and a small steel plate on the back of the hand
+        up.flat(R((x, 41, x + 5, 41)), SHADOW)
         up.flat(R((x + 1, 43, x + 4, 44)), STEEL)
         up.dot(x + 1, 43, WHITE)
         up.flat(R((x + 1, 45, x + 4, 45)), STEEL_D)
-    up.part(E((17, 34, 24, 40)), RED)  # knot of the scarf, behind her neck
-    up.flat(L([(18, 36), (22, 36)], 1), ORANGE)
-    up.flat(L([(19, 38), (23, 39)], 1), MAROON)
     ax = g.ARM_X[0]
-    arm(up, ax, NAVY, SKIN)
+    arm(up, ax, KIM, SKIN)
     tekko(ax)
-    # ---- kimono-style wrap top over a short, flared skirt with split flaps
-    flare = [(20, 43), (44, 43), (46, 46.5), (42, 48 + sw_(t, 1.0, 1)), (37, 47), (33, 44.5), (29, 47), (24, 48 - sw_(t, 0.5, 1)), (19, 46.5)]
-    up.part(lambda d, f: (d.rounded_rectangle((20, 33, 44, 44), 3, f), d.polygon(flare, f)), NAVY)
-    up.flat(L([(21, 38), (21, 42)], 1), BLUE)
-    up.flat(L([(21, 44), (19.5, 46)], 1), BLUE)
-    up.dither(R((38, 40, 44, 47)), SHADOW, "check", only_on=NAVY)
-    up.flat(L([(33, 45), (33, 46)], 1), SHADOW)  # skirt split
-    # slim neck scarf under her chin (the knot at the back of her neck and the short stubs are drawn behind)
+    # ---- kimono-style wrap top over a short flared skirt (same colour, darker underside)
+    flare = [(20, 45), (44, 45), (46, 47), (42, 48.5 + sw_(t, 1.0, 1)), (37, 47.5), (33, 46), (29, 47.5), (24, 48.5 - sw_(t, 0.5, 1)), (19, 47)]
+    up.part(lambda d, f: (d.rounded_rectangle((20, 33, 44, 46), 3, f), d.polygon(flare, f)), KIM)
+    up.flat(R((20, 47, 46, 47)), SHADOW)
+    up.dither(R((36, 38, 45, 48)), SHADOW, "check", only_on=KIM)
+    up.flat(L([(21, 38), (21, 44)], 1), STEEL)
+    up.flat(L([(33, 46), (33, 48)], 1), SHADOW)  # skirt split
+    # slim neck scarf under her chin
     up.part(RR((22, 37, 43, 38), 1), RED)
     up.flat(L([(24, 37), (36, 37)], 1), ORANGE)
-    # crossover collar, left over right: a cream inner edge on the top lapel, a dark edge under it
-    up.flat(L([(26, 39), (34, 43)], 1), CREAM)
-    up.flat(L([(26, 40), (33, 43)], 1), SHADOW)
-    up.flat(L([(43, 39), (36, 42)], 1), SHADOW)
-    up.flat(L([(42, 39), (36, 41)], 1), BLUE)
-    # red obi: a plain sash with a small knot in front of her right hip, two short hanging ends, a tiny gold bead
-    up.part(R((20, 42, 44, 44)), RED, line=False)
-    up.flat(R((20, 42, 44, 42)), ORANGE)
-    up.flat(R((20, 44, 44, 44)), MAROON)
-    up.part(P([(35, 45), (33, 49.5 + bw), (36, 48.5 + bw)]), RED)
-    up.part(P([(37, 45), (40, 49.5 + bw), (38, 47.5 + bw)]), RED)
-    up.part(E((34, 41, 39, 46)), RED)
-    up.dot(35, 42, ORANGE)
-    up.dot(36, 44, YELLOW)
+    # collar V: a dark inner layer between two bold 2 px cream lapels that meet at the sternum
+    up.part(P([(28, 39), (40, 39), (34, 43)]), SHADOW, shade=False, line=False)
+    up.flat(L([(26, 39), (34, 43)], 2), CREAM)
+    up.flat(L([(42, 39), (34, 43)], 2), CREAM)
+    up.flat(L([(26, 41), (33, 44)], 1), SHADOW)  # shadow under the lapels
+    up.flat(L([(42, 41), (35, 44)], 1), SHADOW)
+    # red obi: one bold 3 px band with a lit top row, a knot and two hanging ends at her side
+    up.part(R((20, 43, 44, 45)), RED, line=False)
+    up.flat(R((20, 43, 44, 43)), ORANGE)
+    up.flat(R((20, 45, 44, 45)), MAROON)
+    up.part(P([(38, 46), (36, 50.5 + bw), (39, 49.5 + bw), (40, 46)]), RED)
+    up.part(P([(40, 46), (42, 50.5 + bw), (44, 48.5 + bw), (42, 46)]), RED)
+    up.part(E((37, 42, 42, 47)), RED)
+    up.dot(38, 43, ORANGE)
     fx = g.ARM_X[1]
-    arm(up, fx, NAVY, SKIN)
+    arm(up, fx, KIM, SKIN)
     tekko(fx)
     # ---- head: hair mass, face
     if hair in ("H5", "H7", "H8", "H9"):
@@ -482,10 +470,10 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         up.dot(48, 38, GOLD)
         fringe = [(19, 10), (49, 10), (50, 18), (46, 18), (46, 17), (40, 17), (40, 18), (33, 18), (33, 17), (27, 17), (27, 18), (19, 18)]
     elif hair == "H9":  # long side locks in front of her ears, joined to the back hair; then bangs grow out of the crown seamlessly
-        for p0, p1, p2, p3, lag in (((21, 13), (18, 22), (21, 33), (22, 46), 0.5), ((47, 13), (52, 22), (48, 33), (47, 46), 0.2)):
-            sh = -1.5 * mv
-            hair_band(up, strand(p0, (p1[0] + sh, p1[1]), (p2[0] + sh, p2[1]), (p3[0] + sh * 1.5, p3[1]), t, 1.0, k=2.0, lag=lag, n=12),
-                      [7, 7.5, 7.5, 7, 6.5, 6, 5.2, 4.2, 3, 1.8, 1.2, 0.8, 0.6], clusters=((0.35, BLUE),))
+        for p0, p1, p2, p3, lag in (((22, 13), (21, 24), (23, 34), (22, 43), 0.5), ((47, 13), (48.5, 24), (46, 34), (47, 43), 0.2)):
+            sh = -1.0 * mv
+            hair_band(up, strand(p0, (p1[0] + sh, p1[1]), (p2[0] + sh, p2[1]), (p3[0] + sh * 1.5, p3[1]), t, 0.8, k=2.0, lag=lag, n=12),
+                      [4.2, 4.2, 4, 3.8, 3.5, 3.1, 2.7, 2.2, 1.7, 1.3, 1, 0.8, 0.6], clusters=((0.4, BLUE),))
         # bangs grow out of the crown seamlessly: one fill in the hair colour, outline only along the pointed tips
         zig = [(19, 13), (19, 19), (23.5, 24), (26, 16.5), (29.5, 18.5), (32, 15.5), (34.5, 17.5), (36.5, 15.5), (38, 20.5), (40, 15.5),
                (42.5, 17.5), (45, 15.5), (47.5, 22.5), (49, 17), (48.5, 12)]
@@ -641,7 +629,7 @@ def scale_sheet(out_dir):
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v9_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v10_scale.png")
 
 
 def head_check(out_dir):
@@ -649,7 +637,7 @@ def head_check(out_dir):
     h = HAIRS[0][1]
     f = frame(build_a, 0, hair=h, mouth_kind=DEFAULT_MOUTH)
     oy = PAD + UPPER_DY
-    f.crop((PAD + 10, oy - 4, PAD + 62, oy + 42)).resize((520, 460), Image.NEAREST).convert("RGB").save(out_dir / "shade_A_v9_head.png")
+    f.crop((PAD + 10, oy - 4, PAD + 62, oy + 42)).resize((520, 460), Image.NEAREST).convert("RGB").save(out_dir / "shade_A_v10_head.png")
     worst = {}
     for y in range(oy + 3, oy + 23):
         run, last = 0, None
@@ -678,7 +666,7 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v9.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v10.png")
     head_check(out_dir)
     scale_sheet(out_dir)
 
