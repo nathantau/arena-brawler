@@ -24,6 +24,16 @@ const CRATE_FOOT: Rect2i = Rect2i(4, 15, 24, 14)
 const EDGE_LIGHT: Color = Color(1, 1, 1, 0.38)
 const EDGE_DARK: Color = Color(0, 0, 0, 0.3)
 
+## Teams halfway line (court-style midline on the ground): MID_W art px wide, dashes MID_DASH on / MID_GAP off, translucent cream
+## over a thin dark edge so it reads on every floor. Never over wall tiles.
+const MID_W: int = 3
+const MID_DASH: int = 12
+const MID_GAP: int = 4
+const MID_COLOR: Color = Color(1.0, 0.96, 0.82, 0.78)
+const MID_EDGE: Color = Color(0, 0, 0, 0.3)
+## Soft halo: 2 art px either side, fainter outwards.
+const MID_HALO: Color = Color(1.0, 0.96, 0.82, 0.16)
+
 ## The theme's tile sheet; crates draw from it too.
 var tiles: Texture2D
 
@@ -34,6 +44,7 @@ var _rows: Array[String] = []
 var _size: Vector2 = Vector2.ZERO
 var _crate_spots := PackedVector2Array()
 var _walls: Array[Rect2] = []
+var _midline: bool = false
 
 
 func _init() -> void:
@@ -51,6 +62,13 @@ func setup(map: ArenaMap, theme: StringName) -> void:
 	var overlay_path: String = ART_DIR + "%s_overlay.png" % theme
 	_overlay = load(overlay_path) if ResourceLoader.exists(overlay_path) else null
 	queue_redraw()
+
+
+## Teams only: show / hide the halfway line.
+func set_midline(on: bool) -> void:
+	if on != _midline:
+		_midline = on
+		queue_redraw()
 
 
 static func region(t: Tile) -> Rect2:
@@ -74,6 +92,8 @@ func _draw() -> void:
 	_draw_cells(false)
 	if _decal != null:
 		draw_texture_rect(_decal, Rect2(Vector2.ZERO, _size), false)
+	if _midline:
+		_draw_midline()
 	var t: float = Constants.TILE_SIZE
 	for w: Rect2 in _walls:
 		_draw_drop_shadow(w)
@@ -81,6 +101,34 @@ func _draw() -> void:
 		var origin: Vector2 = c - Vector2.ONE * t * 0.5
 		var px: float = t / float(ART_TILE)
 		_draw_drop_shadow(Rect2(origin + Vector2(CRATE_FOOT.position) * px, Vector2(CRATE_FOOT.size) * px))
+
+
+## Dashed line at the map's halfway x, full height, snapped to the art pixel grid and skipped over wall tiles.
+func _draw_midline() -> void:
+	var t: float = Constants.TILE_SIZE
+	var px: float = t / float(ART_TILE)
+	var x: float = floorf(_size.x * 0.5 / px) * px - px * (MID_W / 2)
+	var cols: Array[int] = [int((x - 1.0) / t), int((x + px * MID_W) / t)]
+	var n: int = int(_size.y / px)
+	var i: int = 0
+	while i < n:
+		var len: int = mini(MID_DASH, n - i)
+		for k: int in len:
+			var y: float = (i + k) * px
+			var row: int = int(y / t)
+			var blocked: bool = false
+			for c: int in cols:
+				if row >= _rows.size() or c >= _rows[row].length() or _rows[row][c] == ArenaMap.WALL_CHAR:
+					blocked = true
+			if blocked:
+				continue
+			draw_rect(Rect2(x - px * 2.0, y, px, px), Color(MID_HALO, MID_HALO.a * 0.5))
+			draw_rect(Rect2(x - px, y, px, px), MID_HALO)
+			draw_rect(Rect2(x, y, px * MID_W, px), MID_COLOR)
+			draw_rect(Rect2(x + px * MID_W, y, px, px), MID_EDGE)
+			draw_rect(Rect2(x + px * (MID_W + 1), y, px, px), MID_HALO)
+			draw_rect(Rect2(x + px * (MID_W + 2), y, px, px), Color(MID_HALO, MID_HALO.a * 0.5))
+		i += MID_DASH + MID_GAP
 
 
 ## `foot` (world rect) casts SHADOW_OFFSET down-right: a solid block, a dithered edge, and AO round the footprint itself.
