@@ -352,19 +352,28 @@ func _mark_fighters(st: MatchState, me: Player, shown_teams: Dictionary, taker: 
 	if st.mode != MatchRules.Mode.TEAMS:
 		return
 	var picks: Dictionary = MatchRules.teammate_picks(me.player_id, shown_teams, _hovers(), st.locked)
-	for pid: int in picks:
-		var who: Player = arena.get_player(pid)
-		var fid: StringName = picks[pid][0]
-		if who == null or not _character_cards.has(fid):
-			continue
-		if not picks[pid][1]:  # hovering: a pill in their colour and an outline
-			_pill(fid, "P%d" % pid, who.display_color)
-			_frame(fid, who.display_color, Color(who.display_color, 0.1), 1)
-		elif who.is_bot:  # a bot yields to a human, so its card stays pickable
-			_badge(fid, "BOT", UiStyle.C_STEEL)
-		else:
-			_frame(fid, UiStyle.C_STEEL_D, Color(COLOR_BG, 0.6), 1)
-			_badge(fid, "LOCKED · P%d" % pid, UiStyle.C_ORANGE)
+	var order: Array = picks.keys()
+	order.sort()  # lowest id first: the outline colour on a shared card never flickers between teammates
+	var framed: Dictionary = {}
+	for pass_locks: bool in [true, false]:  # a lock's frame wins over a hover's on the same card
+		for pid: int in order:
+			var who: Player = arena.get_player(pid)
+			var fid: StringName = picks[pid][0]
+			var is_lock: bool = picks[pid][1]
+			if who == null or not _character_cards.has(fid) or is_lock != pass_locks:
+				continue
+			if is_lock:
+				if who.is_bot:  # a bot yields to a human, so its card stays pickable
+					_badge(fid, "BOT", UiStyle.C_STEEL)
+				else:
+					_frame(fid, UiStyle.C_STEEL_D, Color(COLOR_BG, 0.6), 1)
+					framed[fid] = true
+					_badge(fid, "LOCKED · P%d" % pid, UiStyle.C_ORANGE)
+			else:  # hovering: a pill in their colour (side by side when shared) and an outline
+				_pill(fid, "P%d" % pid, who.display_color)
+				if not framed.has(fid):
+					_frame(fid, who.display_color, Color(who.display_color, 0.1), 1)
+					framed[fid] = true
 	if not _character_cards.has(me.character.id):
 		return
 	if _is_ready():

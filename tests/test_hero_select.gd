@@ -150,3 +150,26 @@ func test_non_teams_modes_hold_no_locks() -> void:
 	assert_true(arena.match_state.locked.is_empty())
 	arena.select_character(arena.get_player(1), EDEN)
 	assert_eq(arena.get_player(1).character.id, EDEN, "FFA: READY doesn't fix the fighter")
+
+
+func test_two_teammates_hover_the_same_fighter_first_to_lock_wins() -> void:
+	var arena := Arena.new(Arena.Mode.OFFLINE, 1, MatchRules.Mode.TEAMS)
+	add_child_autofree(arena)
+	for id: int in [1, 2, 3]:
+		arena.add_player(id, id, BotBrain.new(arena, id))
+		arena.referee.set_team(id, A)
+	arena.select_character(arena.get_player(2), EDEN)
+	arena.select_character(arena.get_player(3), EDEN)
+	_step(arena, 3)
+	var st: MatchState = arena.match_state
+	var hovers: Dictionary = {1: arena.get_player(1).character.id, 2: EDEN, 3: EDEN}
+	var picks: Dictionary = MatchRules.teammate_picks(1, MatchRules.assign_teams(st.participants, st.teams), hovers, st.locked)
+	assert_eq(picks[2], [EDEN, false], "P2 hovering")
+	assert_eq(picks[3], [EDEN, false], "P3 hovering the same card")
+	assert_eq(arena.get_player(3).character.id, EDEN, "hovering is never refused")
+	assert_eq(arena.try_ready(3, true), 0, "first to lock gets it")
+	assert_eq(arena.try_ready(2, true), 3, "the second is refused, naming P3")
+	assert_false(st.ready.has(2))
+	assert_eq(arena.try_ready(3, false), 0)
+	assert_eq(arena.try_ready(2, true), 0, "free again after the unlock")
+	assert_eq(st.locked[2], EDEN)
