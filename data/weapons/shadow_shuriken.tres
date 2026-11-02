@@ -26,4 +26,4 @@ sfx = &"shot_light"
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"shadow"])
 boomerang = true
-hook = "Boomerang: hits out and back"
+hook = "Boomerang: out, back"

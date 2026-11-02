@@ -22,4 +22,4 @@ sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"arcane"])
 beam_ramp_time = 1.5
 beam_ramp_max = 2.0
-hook = "Damage ramps x2 on one target"
+hook = "Ramps x2 on a target"

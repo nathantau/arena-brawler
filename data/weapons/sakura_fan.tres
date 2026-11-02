@@ -29,4 +29,4 @@ sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"sakura"])
 snare_time = 0.6
 snare_factor = 0.75
-hook = "Petals slow what they hit"
+hook = "Petals slow targets"

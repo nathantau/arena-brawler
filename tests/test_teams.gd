@@ -640,3 +640,14 @@ func test_round_banner_and_result_text_are_viewer_relative() -> void:
 	assert_eq(MatchRules.result_title(0, B), "DRAW")
 	for t: String in [MatchRules.round_banner_text(A, cap, B), MatchRules.result_title(B, A)]:
 		assert_false(t.contains("Team A") or t.contains("Team B"), "no letters shown to the player")
+
+
+func test_every_weapon_hook_fits_its_lobby_card() -> void:
+	var avail: float = LobbyPanel.WEAPON_CARD_SIZE.x - LobbyPanel.SPACING * 2.0 - 8.0
+	for file: String in DirAccess.get_files_at("res://data/weapons"):
+		if not file.ends_with(".tres"):
+			continue
+		var w: WeaponData = load("res://data/weapons/" + file)
+		if w == null or w.hook == "":
+			continue
+		assert_lte(UiStyle.text_width(w.hook, UiStyle.SIZE_TINY - 4), avail, "%s hook fits the card: %s" % [file, w.hook])

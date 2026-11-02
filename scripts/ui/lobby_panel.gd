@@ -7,6 +7,8 @@ extends PanelContainer
 ## Cards are rebuilt when the local character changes; highlights follow the synced state.
 
 const SPACING: int = 10
+## Roster text for your side: a lighter blue than the HUD's so it reads on the dark panel (enemies use UiStyle.C_RED).
+const TEAM_ALLY_COLOR: Color = Color8(110, 160, 255)
 const BUTTON_MIN_SIZE: Vector2 = Vector2(190, UiStyle.TOUCH_MIN_H)
 const READY_MIN_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
 const LEAVE_MIN_SIZE: Vector2 = Vector2(140, UiStyle.TOUCH_MIN_H)
@@ -43,7 +45,7 @@ var _special_cards: Dictionary[StringName, Button] = {}
 var _special_badges: Dictionary[StringName, Label] = {}
 ## The slot a newly tapped special replaces: the one set least recently.
 var _older_slot: int = 1
-var _rows: HFlowContainer
+var _rows: VBoxContainer
 var _blocker: Label
 var _ready_button: Button
 ## Last highlighted (character, weapon, slots 0-2 specials), so _process only restyles on change.
@@ -133,8 +135,7 @@ func _ready() -> void:
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.alignment = BoxContainer.ALIGNMENT_END
 	footer.add_child(info)
-	_rows = HFlowContainer.new()
-	_rows.add_theme_constant_override("h_separation", SPACING * 2)
+	_rows = VBoxContainer.new()
 	info.add_child(_rows)
 	_blocker = _label(info, &"Label")
 	_blocker.add_theme_color_override("font_color", UiStyle.C_YELLOW)
@@ -202,10 +203,22 @@ func _refresh() -> void:
 		child.queue_free()
 	var order: Array[Player] = arena.players.duplicate()
 	var shown_teams: Dictionary[int, int] = {}
-	if st.mode == MatchRules.Mode.TEAMS:  # both teams side by side: balanced preview of who lands where
+	var my_team: int = MatchRules.TEAM_A
+	var flows: Dictionary[int, HFlowContainer] = {}  # team -> its line (Duel / FFA: one line under key 0)
+	if st.mode == MatchRules.Mode.TEAMS:  # your team on the first line, the enemy on the second, from YOUR side
 		shown_teams = MatchRules.assign_teams(st.participants, st.teams)
+		my_team = MatchRules.viewer_of(shown_teams.get(me.player_id, 0))
 		order.sort_custom(func(a: Player, b: Player) -> bool:
 			return shown_teams.get(a.player_id, 3) < shown_teams.get(b.player_id, 3))
+		for t: int in [my_team, MatchRules.other_team(my_team)]:
+			var flow: HFlowContainer = _new_row_flow()
+			flows[t] = flow
+			var head: Label = _label(flow, &"Label")
+			head.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+			head.add_theme_color_override("font_color", TEAM_ALLY_COLOR if t == my_team else UiStyle.C_RED)
+			head.text = "YOUR TEAM:" if t == my_team else "ENEMY:"
+	else:
+		flows[0] = _new_row_flow()
 	for p: Player in order:
 		var tag: String
 		if not st.is_participant(p.player_id):
@@ -217,15 +230,17 @@ func _refresh() -> void:
 		else:
 			tag = "picking"
 		var you: String = " (you)" if p == me else ""
-		var row: Label = _label(_rows, &"Label")
+		var team: int = shown_teams.get(p.player_id, 0)
+		var row: Label = _label(flows.get(team, flows[flows.keys()[0]]), &"Label")
 		row.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-		row.add_theme_color_override("font_color", p.display_color)
-		row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
-		if shown_teams.has(p.player_id):
-			var tag_team: String = MatchRules.LOBBY_TEAM_NAMES[shown_teams[p.player_id]]
-			if not _team_button.visible:  # offline there is no picker: just ally / enemy from your side
-				tag_team = "Ally" if shown_teams[p.player_id] == shown_teams.get(me.player_id, MatchRules.TEAM_A) else "Enemy"
-			row.text = "[%s] %s" % [tag_team, row.text]
+		if shown_teams.is_empty():
+			row.add_theme_color_override("font_color", p.display_color)
+			row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
+		else:  # no colour words in team names (they clash with ally blue / enemy red): the fighter + bot / you
+			row.add_theme_color_override("font_color", TEAM_ALLY_COLOR if team == my_team else UiStyle.C_RED)
+			var who: String = "You" if p == me else "%s (bot)" % p.character.display_name if p.is_bot \
+				else "Player %d" % p.player_id
+			row.text = "● %s" % who if p.is_bot and tag == "bot" else "● %s · %s" % [who, tag] if p.is_bot else "● %s · %s · %s" % [who, p.character.display_name, tag]
 
 	_blocker.text = st.blocker
 	_ready_button.text = "UNREADY" if _is_ready() else "READY!"
@@ -413,6 +428,13 @@ func _apply_background() -> void:
 	style.content_margin_right = i.z + SPACING
 	style.content_margin_bottom = i.w
 	add_theme_stylebox_override("panel", style)
+
+
+func _new_row_flow() -> HFlowContainer:
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", SPACING * 2)
+	_rows.add_child(flow)
+	return flow
 
 
 func _label(parent: Node, variation: StringName) -> Label:

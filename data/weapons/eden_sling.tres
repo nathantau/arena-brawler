@@ -31,4 +31,4 @@ sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"eden"])
 split_count = 3
 split_scale = 0.35
-hook = "Bursts into 3 thorn shards"
+hook = "Splits into 3 shards"
