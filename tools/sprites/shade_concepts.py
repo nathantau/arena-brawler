@@ -1,10 +1,11 @@
-"""Shade (id `flicker`) redesign concept A, "Crimson kunoichi" (picked from three directions). Design stage only: nothing is
-written into assets/. Drawn at the game's cell size (96 px) with the art-box helpers from generate.py: a long red scarf with two
-slim tails as her silhouette hook, one high volumetric ponytail with a kunai hairpin, a festival fox mask on the side of her head,
-crimson lips, navy top with a kimono crossover, red obi, gold bracers, thigh holster, grey shin wraps.
+"""Shade (id `flicker`) redesign concept A, "Crimson kunoichi". Design stage only: nothing is written into assets/.
+Drawn at the game's cell size (96 px) with the art-box helpers from generate.py: a neck scarf with two short rounded tails, a fox
+mask worn askew (tilted ~30 deg, drawn from rotated vertices) on the far side of her face, crimson lips (mouth options M1-M3),
+navy top with a kimono crossover, red obi, gold bracers, thigh holster, grey shin wraps, and five hair options (H1 high ponytail,
+H4 bun with crossed kunai, H5 hime cut, H6 side ponytail, H7 pixie with rat-tail).
 Run: tools/sprites/.venv/bin/python tools/sprites/shade_concepts.py [out_dir]
-Output: shade_A_v2.png (x6: rows = hair options H1 ponytail / H2 asymmetric bob / H3 twin low tails, each 2 idle + 2 walking
-frames) and shade_A_v2_scale.png (1x on an arena floor beside Sakura and Bolt, then 2x) in the repo root (or out_dir). Only palette colours are used."""
+Output in the repo root (or out_dir): shade_A_v3_hair.png (x6, a row per hair, 2 idle + 2 walking frames), shade_A_v3_mouth.png
+(x8 face close-ups + 1x) and shade_A_v3_scale.png (1x + 2x beside Sakura). Only palette colours are used."""
 import math
 import sys
 from pathlib import Path
@@ -193,6 +194,11 @@ def bandw(pts, widths):
     """Left / right edge points along `pts` with a width per point (volume: hair bulges then tapers)."""
     left, right = [], []
     n = len(pts)
+    m = len(widths)
+    if m != n:  # resample the width profile to the number of points
+        widths = [widths[min(m - 1, int(i * (m - 1) / (n - 1) + 0.5))] if False else
+                  widths[int(i * (m - 1) / (n - 1))] * (1 - (i * (m - 1) / (n - 1) % 1)) +
+                  widths[min(m - 1, int(i * (m - 1) / (n - 1)) + 1)] * (i * (m - 1) / (n - 1) % 1) for i in range(n)]
     for i, (x, y) in enumerate(pts):
         a, b = pts[max(0, i - 1)], pts[min(n - 1, i + 1)]
         dx, dy = b[0] - a[0], b[1] - a[1]
@@ -212,7 +218,7 @@ def lerp2(a, b, f):
 
 
 def ribbon(c, pts, w0, w1, base):
-    """A slim cloth tail along `pts`: lit upper edge, dark underside, a few soft fold dashes, a two-toothed frayed tip."""
+    """A soft cloth tail along `pts`: a rounded tip with one small notch, lit upper edge, dark underside, a few fold dashes."""
     n = len(pts)
     left, right = bandw(pts, [w0 + (w1 - w0) * i / (n - 1) for i in range(n)])
     (x, y), (px_, py_) = pts[-1], pts[-2]
@@ -221,8 +227,11 @@ def ribbon(c, pts, w0, w1, base):
     tx, ty = dx / ln, dy / ln
     nx, ny = -ty, tx
     h = w1 / 2
-    tip = [(x + nx * h * 0.6 + tx * 3.0, y + ny * h * 0.6 + ty * 3.0), (x + tx * 0.5, y + ty * 0.5),
-           (x - nx * h * 0.6 + tx * 4.5, y - ny * h * 0.6 + ty * 4.5)]
+    tip = []
+    for a in (60, 30, 0, -30, -60):  # rounded end, the middle point pulled back into a small notch
+        r = math.radians(a)
+        back = 1.6 if a == 0 else 0.0
+        tip.append((x + nx * h * math.sin(r) + tx * (h * math.cos(r) * 1.3 - back), y + ny * h * math.sin(r) + ty * (h * math.cos(r) * 1.3 - back)))
     c.part(P(ipts(left + tip + right[::-1])), base)
     top, bot = (left, right) if sum(p[1] for p in left) < sum(p[1] for p in right) else (right, left)
     c.flat(L(ipts(top[1:-1]), 1), LIGHTER[base])
@@ -233,7 +242,7 @@ def ribbon(c, pts, w0, w1, base):
 
 
 # ==================================================================================================================================
-# Crimson kunoichi (polish round)
+# Crimson kunoichi: hair options, side fox mask, mouth options
 # ==================================================================================================================================
 HAIR_A = SHADOW  # black hair: rim-lit by STEEL_D, shades to OUTLINE
 GOLD = OCHRE
@@ -250,36 +259,67 @@ def kunai_pin(c, ring, base, tip):
     c.dot(ring[0], ring[1], OUTLINE)
 
 
-def fox_mask(c, ox, oy):
-    """A festival fox mask pushed up on the side of her head (~30% bigger than round 2): symmetric ears with red tips,
-    mirrored eye slits, whiskers, forehead mark, nose, and a tiny tie cord going back into her hair. Axis at x = ox + 4.5."""
-    m = lambda x: 2 * ox + 9 - x  # mirror about the mask's axis
-    ear = [(ox - 3, oy + 1), (ox - 3, oy - 9), (ox + 3, oy - 3)]
-    c.part(P(ear), WHITE)
-    c.part(P([(m(x), y) for x, y in ear]), WHITE)
-    c.part(lambda d, f: (d.ellipse((ox - 4, oy - 4, ox + 13, oy + 10), f),
-                         d.polygon([(ox - 1, oy + 6), (ox + 4, oy + 13), (ox + 5, oy + 13), (ox + 10, oy + 6)], f)), WHITE)
-    for x in (ox - 2, m(ox - 2)):  # red ear tips + inner ear
-        c.dot(x, oy - 8, RED)
-        c.dot(x, oy - 7, RED)
-        c.dot(x, oy - 6, MAROON)
-    for a, b in (((ox - 1, oy + 1), (ox + 2, oy + 3)), ((m(ox - 1), oy + 1), (m(ox + 2), oy + 3))):  # slanted eye slits
-        c.flat(L([a, b], 1), OUTLINE)
-    for a, b in (((ox - 3, oy + 6), (ox + 1, oy + 5)), ((ox - 3, oy + 8), (ox, oy + 7))):  # cheek whiskers, mirrored
-        c.flat(L([a, b], 1), RED)
-        c.flat(L([(m(a[0]), a[1]), (m(b[0]), b[1])], 1), RED)
-    c.flat(R((ox + 4, oy - 3, ox + 5, oy)), RED)  # forehead mark
-    c.dot(ox + 4, oy - 4, RED)
-    c.dot(ox + 4, oy + 11, OUTLINE)  # nose
-    c.dot(ox + 5, oy + 11, OUTLINE)
-    c.flat(L([(ox, oy - 3), (ox + 1, oy - 4), (ox + 2, oy - 5)], 1), STEEL)  # lit rim, top left
-    c.dot(ox - 3, oy - 1, STEEL)
-    # tie cord: a red thread curling round the back of her head, with a gold bead
-    c.flat(L([(ox - 4, oy + 3), (ox - 6, oy + 6), (ox - 5, oy + 9)], 1), RED)
-    c.dot(ox - 5, oy + 9, GOLD)
+def hair_band(c, pts, widths, clusters=((0.28, BLUE), (0.55, OUTLINE), (0.7, BLUE)), shade=True):
+    """A tapered lock of hair along `pts`: a crisp lit rim on the outer edge and strand clusters inside."""
+    lw, rw = bandw(pts, widths)
+    c.part(P(ipts(lw + rw[::-1])), HAIR_A, shade=shade)
+    outer, inner = (lw, rw) if sum(x + y for x, y in lw) < sum(x + y for x, y in rw) else (rw, lw)
+    n = len(pts)
+    c.flat(L(ipts(outer[1:n - 2]), 1), STEEL_D)
+    for i, (f, col) in enumerate(clusters):
+        c.flat(L(ipts(lerp2(outer, inner, f)[3 + i:n - 3 - 2 * i]), 1), col)
+    return lw, rw
 
 
-def build_a(low, up, t, step=None, hair="H1"):
+def rot_pts(cx, cy, th, pts):
+    co, si = math.cos(th), math.sin(th)
+    return [(cx + u * co - v * si, cy + u * si + v * co) for u, v in pts]
+
+
+def fox_mask(c, cx, cy, deg=30):
+    """A festival fox mask pushed up and askew on the far (right) side of her face, drawn tilted `deg` degrees clockwise
+    directly from rotated vertices (no pixel rotation), so the outline stays crisp and the markings stay symmetric about
+    the tilted axis: ears with red tips, slanted eye slits, whiskers, forehead mark, nose, and a tie cord into her hair."""
+    th = math.radians(deg)
+    rp = lambda pts: rot_pts(cx, cy, th, pts)
+    mir = lambda pts: [(-u, v) for u, v in pts]
+    ear = [(-6.2, -1), (-5.8, -10), (-0.5, -4.5)]
+    c.part(P(ipts(rp(ear))), WHITE)
+    c.part(P(ipts(rp(mir(ear)))), WHITE)
+    face = [(6.8 * math.cos(math.radians(a)), 5.8 * math.sin(math.radians(a))) for a in range(0, 360, 15)]
+    muzzle = [(-4.2, 3), (-0.9, 9), (0.9, 9), (4.2, 3)]
+    c.part(lambda d, f: (d.polygon(ipts(rp(face)), f), d.polygon(ipts(rp(muzzle)), f)), WHITE)
+    line = lambda a, b, col: c.flat(L(ipts(rp([a, b])), 1), col)
+    for s in (1, -1):
+        line((-5.7 * s, -8.6), (-5.4 * s, -6.6), RED)  # red ear tips
+        line((-4.6 * s, -0.6), (-1.9 * s, 1.4), OUTLINE)  # slanted eye slits
+        line((-5.3 * s, 3.2), (-2.9 * s, 2.7), RED)  # whiskers
+        line((-4.5 * s, 4.9), (-2.3 * s, 4.3), RED)
+    line((0, -4.2), (0, -1.6), RED)  # forehead mark
+    line((-0.8, 7.4), (0.8, 7.4), OUTLINE)  # nose
+    for u, v in ((-4.4, -4.6), (-3.2, -5.4)):
+        x, y = rp([(u, v)])[0]
+        c.dot(round(x), round(y), STEEL)
+    # cord running up from the mask's inner top edge into her hair, with a gold bead
+    a = rp([(-6.2, -2.5)])[0]
+    c.flat(L(ipts([a, (a[0] - 2, a[1] - 3), (a[0] - 4, a[1] - 4)]), 1), RED)
+    c.dot(round(a[0] - 2), round(a[1] - 3), GOLD)
+
+
+def mouth(c, kind):
+    """Lipstick options (art px, mouth sits at x 36..41, y 29..31)."""
+    if kind == "M1":  # a clean 3 px crimson smirk line, one corner up
+        c.flat(R((37, 31, 39, 31)), RED)
+        c.dot(40, 30, RED)
+    elif kind == "M2":  # small closed lips: crimson upper 4 px, darker lower 2 px centred
+        c.flat(R((37, 30, 40, 30)), RED)
+        c.flat(R((38, 31, 39, 31)), MAROON)
+    else:  # M3: tiny cat smile ":3"
+        for x, y in ((37, 30), (38, 31), (39, 30), (40, 31), (41, 30)):
+            c.dot(x, y, RED)
+
+
+def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     mv = 1.0 if step is not None else 0.0  # walking: tails and hair stream further back
     # ---- legs: navy trousers, light grey shin wraps with wrap lines, a thigh strap, dark split-toe tabi
     for x, dy in legs(low, NAVY, SHADOW, step):
@@ -293,38 +333,41 @@ def build_a(low, up, t, step=None, hair="H1"):
         low.flat(L([(x + 6, 55 + dy), (x + 6, 56 + dy)], 1), OUTLINE)
         low.dot(x, 54 + dy, STEEL_D)
     # ---- back hair
-    if hair == "H1":  # ONE high ponytail with volume, clumped strands, a crisp lit rim, a pointed tip; it lags the head
+    if hair == "H1":  # high ponytail with volume
         pt = strand((29, 5), (13 - 3 * mv, -13), (-3 - 4 * mv, 8), (3 - 5 * mv, 36 - 3 * mv), t, 5.0, k=2.0, lag=0.8, n=18)
-        wid = [4, 8, 10, 11, 11, 10, 10, 9, 9, 8, 7, 7, 6, 5, 4, 3, 2, 1.5, 1]
-        lw, rw = bandw(pt, wid)
-        up.part(P(ipts(lw + rw[::-1])), HAIR_A)
-        outer, inner = (lw, rw) if sum(x + y for x, y in lw) < sum(x + y for x, y in rw) else (rw, lw)
-        n = len(pt)
-        up.flat(L(ipts(outer[1:n - 2]), 1), STEEL_D)
-        up.flat(L(ipts(lerp2(outer, inner, 0.28)[3:n - 3]), 1), BLUE)
-        up.flat(L(ipts(lerp2(outer, inner, 0.55)[4:n - 4]), 1), OUTLINE)
-        up.flat(L(ipts(lerp2(outer, inner, 0.7)[5:n - 6]), 1), BLUE)
-    elif hair == "H3":  # twin low tails: this one hangs behind her on the near side
-        pt = strand((22, 27), (4 - 2 * mv, 30), (11 - 3 * mv, 43), (5 - 4 * mv, 54), t, 3.5, k=2.2, lag=0.8, n=16)
-        lw, rw = bandw(pt, [5, 8, 9, 9, 9, 8, 8, 7, 7, 6, 5, 4, 3, 3, 2, 1.5, 1])
-        up.part(P(ipts(lw + rw[::-1])), HAIR_A)
-        outer, inner = (lw, rw) if sum(x + y for x, y in lw) < sum(x + y for x, y in rw) else (rw, lw)
-        n = len(pt)
-        up.flat(L(ipts(outer[1:n - 2]), 1), STEEL_D)
-        up.flat(L(ipts(lerp2(outer, inner, 0.3)[3:n - 3]), 1), BLUE)
-        up.flat(L(ipts(lerp2(outer, inner, 0.6)[4:n - 5]), 1), OUTLINE)
-        tx, ty = pt[2]
-        up.part(RR((round(tx) - 2, round(ty) - 2, round(tx) + 2, round(ty) + 2), 1), RED)  # tie
-        up.dot(round(tx) - 1, round(ty) - 1, ORANGE)
-    # ---- scarf: a snug neck wrap with two SHORT slim tails from the knot, an S-wave, the second lagging; gold bands
-    t1 = strand((22, 37), (16, 34 - 1 * mv), (10 - 2 * mv, 39 - 2 * mv), (3 - 3 * mv, 37 - 3 * mv), t, 3.5, k=2.6, lag=0.0, n=12)
-    t2 = strand((22, 39), (17, 43), (12 - 1 * mv, 44 - mv), (6 - 3 * mv, 48 - 2 * mv), t, 3.0, k=2.6, lag=1.0, n=12)
-    ribbon(up, t2, 4.5, 3.0, RED)
-    ribbon(up, t1, 5.0, 3.4, RED)
-    across(up, t1, 8, 1.8, GOLD)
-    across(up, t2, 8, 1.6, GOLD)
-    # obi bow behind her hip (small)
-    bw = sw_(t, 1.0, 1)
+        hair_band(up, pt, [4, 8, 10, 11, 11, 10, 10, 9, 9, 8, 7, 7, 6, 5, 4, 3, 2, 1.5, 1])
+    elif hair == "H4":  # high bun (odango)
+        up.part(E((21, -7, 41, 10)), HAIR_A)
+        up.flat(lambda d, f: d.arc((23, -5, 39, 8), 190, 290, f), STEEL_D)
+        up.flat(lambda d, f: d.arc((25, -3, 37, 6), 200, 280, f), BLUE)
+        up.flat(lambda d, f: d.arc((27, -1, 37, 8), 10, 120, f), BLUE)
+        up.flat(L([(26, -2), (29, -4), (33, -4)], 1), BLUE)
+        up.part(RR((26, 8, 36, 11), 1), RED)
+        up.dot(27, 9, ORANGE)
+        up.dot(35, 9, GOLD)
+    elif hair == "H5":  # long straight hime hair: a wide sheet behind her that sways with a lag
+        pt = strand((20, 16), (4 - 2 * mv, 24), (9 - 3 * mv, 40), (12 - 5 * mv, 54), t, 3.5, k=2.0, lag=0.8, n=15)
+        hair_band(up, pt, [7, 11, 13, 14, 14, 14, 14, 14, 14, 14, 14, 13, 13, 13, 12],
+                  clusters=((0.22, BLUE), (0.5, OUTLINE), (0.75, BLUE)))
+    elif hair == "H6":  # side ponytail on her far side, swinging out behind her head
+        pt = strand((44, 6), (62 - 6 * mv, -6), (70 - 9 * mv, 22), (60 - 12 * mv, 42), t, 4.0, k=2.0, lag=0.8, n=18)
+        hair_band(up, pt, [4, 8, 10, 11, 11, 10, 10, 9, 9, 8, 7, 6, 5, 4, 3, 2, 1.5, 1.2, 1])
+    elif hair == "H7":  # pixie with a single long tied rat-tail at the nape and a red ribbon
+        pt = strand((21, 28), (6 - 2 * mv, 33), (13 - 3 * mv, 45), (7 - 5 * mv, 57), t, 3.5, k=2.2, lag=0.8, n=16)
+        hair_band(up, pt, [4, 6, 7, 7, 6.5, 6, 5.5, 5, 5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1], clusters=((0.35, BLUE),))
+        rx, ry = pt[2]
+        up.part(RR((round(rx) - 2, round(ry) - 2, round(rx) + 2, round(ry) + 2), 1), RED)
+        up.dot(round(rx) - 1, round(ry) - 1, ORANGE)
+        r1 = strand((rx, ry), (rx - 4, ry - 3), (rx - 8, ry + 1), (rx - 11 - 2 * mv, ry + 5), t, 2.0, k=2.0, lag=1.4, n=8)
+        ribbon(up, r1, 3.2, 2.6, RED)
+    # ---- scarf: a snug neck wrap with two SHORT rounded tails from the knot, an S-wave, the second lagging; gold bands
+    t1 = strand((22, 37), (16, 34 - mv), (10 - 2 * mv, 39 - 2 * mv), (3 - 3 * mv, 37 - 3 * mv), t, 3.0, k=2.6, lag=0.0, n=12)
+    t2 = strand((22, 39), (17, 43), (12 - mv, 44 - mv), (6 - 3 * mv, 48 - 2 * mv), t, 2.6, k=2.6, lag=1.0, n=12)
+    ribbon(up, t2, 5.0, 4.0, RED)
+    ribbon(up, t1, 5.6, 4.4, RED)
+    across(up, t1, 7, 2.4, GOLD)
+    across(up, t2, 7, 2.2, GOLD)
+    bw = sw_(t, 1.0, 1)  # small obi bow behind her hip
     up.part(P([(21, 43), (15, 41 + bw), (14, 45 + bw), (18, 46), (21, 45)]), RED)
     up.part(P([(21, 44), (16, 48 + bw), (18, 51 + bw), (22, 47)]), RED)
     # ---- back arm: gold bracer
@@ -361,52 +404,74 @@ def build_a(low, up, t, step=None, hair="H1"):
     up.flat(R((fx, 39, fx + 5, 41)), GOLD)
     up.flat(R((fx, 39, fx + 5, 39)), YELLOW)
     up.flat(R((fx, 41, fx + 5, 41)), OCHRE_D)
-    # ---- thigh kunai holster (on the body so it sits over the hem; handle sticks out)
-    up.part(P([(39, 48), (44, 49), (44, 54), (41, 55), (39, 52)]), BROWN)
+    up.part(P([(39, 48), (44, 49), (44, 54), (41, 55), (39, 52)]), BROWN)  # thigh kunai holster
     up.flat(L([(39, 49), (44, 50)], 1), OCHRE_D)
     up.dot(41, 50, GOLD)
     up.flat(L([(42, 49), (45, 46)], 1), RED)
     disc(up, 46, 45, 2, GOLD)
     up.dot(46, 45, OUTLINE)
-    # ---- head
-    up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
-        [(16, 20), (14, 30), (18, 28), (19, 36), (22, 31), (24, 20)], f)), HAIR_A)
+    # ---- head: hair mass, face
+    if hair in ("H5", "H7"):
+        up.part(E((16, 5, 50, 36) if hair == "H5" else (17, 7, 49, 36)), HAIR_A)
+    else:
+        up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
+            [(16, 20), (14, 30), (18, 28), (19, 36), (22, 31), (24, 20)], f)), HAIR_A)
+    if hair == "H7":  # choppy layered crown tufts
+        for pts_ in ([(22, 12), (16, 4), (31, 9)], [(29, 9), (26, -3), (41, 8)], [(37, 9), (36, 0), (49, 13)]):
+            up.part(P(pts_), HAIR_A)
+            up.flat(L([pts_[0], pts_[1]], 1), STEEL_D)
     up.part(RR(FACE, FACE_R), SKIN)
     up.flat(L([(26, 35), (42, 36)], 1), SKIN_D)
-    if hair == "H2":  # asymmetric: swept fringe, one long lock down the far side
-        fringe = [(19, 11), (49, 11), (50, 15), (44, 14), (39, 17), (34, 15), (29, 19), (25, 17), (21, 22), (19, 18)]
-    else:
+    # side locks + fringe, per style
+    wv = sw_(t, 1.0, 1) + (1 if mv else 0)
+    if hair == "H4":  # short loose strands framing the face
+        for p0, p1, p2, p3, sgn in (((22, 14), (18, 22), (22, 29), (20, 36), 1), ((47, 14), (52, 22), (48, 30), (51, 38), -1)):
+            hair_band(up, strand(p0, p1, p2, p3, t, 1.5, k=2.0, lag=0.5, n=10), [3.5, 4.5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.8],
+                      clusters=((0.4, BLUE),), shade=False)
         fringe = [(19, 11), (49, 11), (50, 17), (45, 14), (42, 18), (37, 14), (33, 18), (29, 14), (25, 17), (22, 16), (19, 18)]
-    if hair == "H2":
-        lk = strand((48, 15), (54, 22), (49, 33), (53, 47), t, 2.0, k=2.0, lag=0.6, n=14)
-        lw, rw = bandw(lk, [5, 7, 7, 7, 7, 6, 6, 6, 5, 5, 4, 3, 2, 1.5, 1])
-        up.part(P(ipts(lw + rw[::-1])), HAIR_A, shade=False)
-        up.flat(L(ipts(lw[1:-3]), 1), STEEL_D)
-        bx, by = lk[6]
-        up.part(RR((round(bx) - 2, round(by) - 1, round(bx) + 2, round(by) + 1), 1), RED)
-        up.dot(round(lk[-1][0]), round(lk[-1][1]) + 1, GOLD)
-    elif hair == "H3":  # twin low tails: the far one hangs in front of her shoulder
-        lk = strand((48, 21), (54, 28), (50, 39), (54, 51), t, 2.5, k=2.2, lag=0.2, n=16)
-        lw, rw = bandw(lk, [5, 8, 9, 9, 9, 8, 8, 7, 7, 6, 5, 4, 3, 3, 2, 1.5, 1])
-        up.part(P(ipts(lw + rw[::-1])), HAIR_A, shade=False)
-        up.flat(L(ipts(lw[1:-3]), 1), STEEL_D)
-        up.flat(L(ipts(lerp2(lw, rw, 0.7)[3:-5]), 1), BLUE)
-        tx, ty = lk[2]
-        up.part(RR((round(tx) - 2, round(ty) - 2, round(tx) + 2, round(ty) + 2), 1), RED)
-        up.dot(round(tx) - 1, round(ty) - 1, ORANGE)
-    else:
-        up.part(P([(46, 14), (51, 17), (52 + sw_(t, 1.0, 1) + (1 if mv else 0), 28), (49, 26), (49, 31), (46, 27)]), HAIR_A, shade=False)
+    elif hair == "H5":  # blunt bangs and straight side locks to the jaw
+        up.part(P([(18, 12), (26, 14), (26, 31), (25, 37), (22, 38), (19, 34), (18, 24)]), HAIR_A, shade=False)
+        up.part(P([(45, 14), (51, 14), (52, 26), (51, 37), (48, 39), (46, 35)]), HAIR_A, shade=False)
+        up.flat(L([(19, 15), (19, 30)], 1), STEEL_D)
+        up.flat(L([(23, 18), (23, 33)], 1), BLUE)
+        up.flat(L([(47, 17), (47, 33)], 1), BLUE)
+        up.flat(L([(50, 17), (51, 33)], 1), STEEL_D)
+        up.dot(23, 37, GOLD)
+        up.dot(48, 38, GOLD)
+        fringe = [(19, 10), (49, 10), (50, 18), (46, 18), (46, 17), (40, 17), (40, 18), (33, 18), (33, 17), (27, 17), (27, 18), (19, 18)]
+    elif hair == "H6":  # swept fringe, a short lock on her near side
+        up.part(P([(19, 14), (25, 15), (25, 31), (22, 33), (19, 28)]), HAIR_A, shade=False)
+        up.flat(L([(20, 16), (20, 27)], 1), STEEL_D)
+        fringe = [(19, 11), (49, 11), (50, 15), (44, 14), (39, 17), (34, 15), (29, 19), (25, 17), (21, 22), (19, 18)]
+    elif hair == "H7":  # choppy pixie
+        up.part(P([(18, 14), (24, 16), (23, 29), (20, 31), (18, 25)]), HAIR_A, shade=False)
+        up.part(P([(47, 14), (51, 16), (50, 28), (47, 31), (46, 22)]), HAIR_A, shade=False)
+        up.flat(L([(19, 17), (19, 25)], 1), STEEL_D)
+        fringe = [(19, 11), (49, 11), (50, 17), (46, 14), (43, 19), (40, 14), (36, 19), (32, 14), (28, 18), (24, 14), (21, 19), (19, 16)]
+    else:  # H1
+        up.part(P([(46, 14), (51, 17), (52 + wv, 28), (49, 26), (49, 31), (46, 27)]), HAIR_A, shade=False)
+        fringe = [(19, 11), (49, 11), (50, 17), (45, 14), (42, 18), (37, 14), (33, 18), (29, 14), (25, 17), (22, 16), (19, 18)]
     up.part(P(fringe), HAIR_A, shade=False)
-    up.flat(L([(30, 9), (41, 8)], 1), STEEL_D)
-    up.dot(46, 12, STEEL_D)
+    if hair != "H4":
+        up.flat(L([(30, 9), (41, 8)], 1), STEEL_D)
+    if hair == "H5":
+        up.flat(L([(22, 8), (27, 6), (34, 5)], 1), STEEL_D)
+        up.flat(L([(24, 10), (29, 8)], 1), BLUE)
     if hair == "H1":
-        up.part(RR((26, 2, 33, 8), 2), RED)  # tie
+        up.part(RR((26, 2, 33, 8), 2), RED)
         up.dot(28, 4, ORANGE)
-    fox_mask(up, 13, 17)
+    if hair == "H6":
+        up.part(RR((41, 3, 48, 9), 2), RED)
+        up.dot(43, 5, ORANGE)
+    # the mask rides the far side of her face, diagonal; then the pins
+    fox_mask(up, 52, 15, 30)
     if hair == "H1":
         kunai_pin(up, (39, 0), (34, 3), (24, 8))
-    else:
-        kunai_pin(up, (40, 1), (36, 4), (30, 7))
+    elif hair == "H4":  # two crossed kunai through the bun like kanzashi
+        kunai_pin(up, (38, -7), (34, -2), (26, 8))
+        kunai_pin(up, (24, -7), (28, -2), (36, 8))
+    elif hair == "H6":
+        kunai_pin(up, (50, -3), (45, 2), (37, 7))
     # eyes: orange iris with a bright lower rim, a heavy top lid and a lash flick with a red tip
     big_eyes(up, g.EYES_Y - 1, g.EYES_X, ORANGE, h=6)
     for x in g.EYES_X:
@@ -417,12 +482,7 @@ def build_a(low, up, t, step=None, hair="H1"):
         up.dot(x + 1, 26, YELLOW)
         up.dot(x + 2, 26, YELLOW)
     g.face(up, g.BLUSH, None)
-    # lips: bright crimson upper, darker lower with one gloss pixel, a raised smirk corner
-    up.flat(R((36, 30, 39, 30)), RED)
-    up.flat(R((37, 31, 39, 31)), MAROON)
-    up.dot(38, 31, PINK)
-    up.dot(40, 29, MAROON)
-    up.dot(35, 31, SKIN_D)
+    mouth(up, mouth_kind)
 
 
 # ==================================================================================================================================
@@ -448,46 +508,88 @@ def floor_bg(w, h):
     return out
 
 
-HAIRS = [("H1  high ponytail", "H1"), ("H2  asymmetric bob + long side lock", "H2"), ("H3  twin low tails", "H3")]
+HAIRS = [("H1  high ponytail (reference)", "H1"), ("H4  high bun, two crossed kunai kanzashi", "H4"),
+         ("H5  long hime cut, blunt bangs", "H5"), ("H6  side ponytail on the far side", "H6"),
+         ("H7  choppy pixie + rat-tail with red ribbon", "H7")]
+MOUTHS = [("M1  clean crimson smirk line", "M1"), ("M2  small closed lips", "M2"), ("M3  cat smile :3", "M3")]
 SHOTS = ((0, None), (2, None), (1, 1), (3, 5))  # two idle + two walking frames
+DEFAULT_MOUTH = "M2"
+
+
+def label_tile(img, text):
+    out = Image.new("RGBA", (img.width, img.height + 16), (24, 24, 32, 255))
+    out.alpha_composite(img, (0, 16))
+    ImageDraw.Draw(out).text((4, 2), text, fill=(240, 240, 230, 255))
+    return out
+
+
+def mouth_sheet(out_dir):
+    k = 8
+    box = (20, 8, 58, 42)  # art px round her face
+    cbox = (PAD + box[0], PAD + UPPER_DY + box[1], PAD + box[2], PAD + UPPER_DY + box[3])
+    tiles = []
+    for name, m in MOUTHS:
+        f = frame(build_a, 0, hair="H1", mouth_kind=m)
+        big = Image.new("RGBA", ((cbox[2] - cbox[0]) * k, (cbox[3] - cbox[1]) * k), (46, 44, 50, 255))
+        big.alpha_composite(nn(f.crop(cbox), k))
+        small = floor_bg(CELL, CELL)
+        small.alpha_composite(f)
+        one = Image.new("RGBA", (big.width, CELL + 8), (24, 24, 32, 255))
+        one.alpha_composite(small, (4, 4))
+        one.alpha_composite(nn(small.crop((24, 18, 84, 66)), 2), (CELL + 12, 4))
+        tiles.append(label_tile(stack(big, one), name))
+    sheet = Image.new("RGBA", (sum(t.width for t in tiles) + 8 * (len(tiles) + 1), max(t.height for t in tiles) + 16), (24, 24, 32, 255))
+    x = 8
+    for t_ in tiles:
+        sheet.alpha_composite(t_, (x, 8))
+        x += t_.width + 8
+    sheet.convert("RGB").save(out_dir / "shade_A_v3_mouth.png")
+
+
+def stack(a, b):
+    out = Image.new("RGBA", (max(a.width, b.width), a.height + b.height), (24, 24, 32, 255))
+    out.alpha_composite(a, (0, 0))
+    out.alpha_composite(b, (0, a.height))
+    return out
 
 
 def scale_sheet(out_dir):
-    """1x on an arena floor beside Sakura and Bolt, then the three hair options at 2x."""
-    def ref(name):
-        return Image.open(ROOT / "assets" / "sprites" / f"{name}.png").convert("RGBA").crop((0, 0, CELL, CELL))
-    mine = [frame(build_a, 0, hair=h) for _, h in HAIRS]
-    figs = [ref("sakura"), ref("bolt")] + mine
+    """1x on an arena floor beside Sakura, then every hair option at 2x."""
+    sak = Image.open(ROOT / "assets" / "sprites" / "sakura.png").convert("RGBA").crop((0, 0, CELL, CELL))
+    mine = [frame(build_a, 0, hair=h, mouth_kind=DEFAULT_MOUTH) for _, h in HAIRS]
+    figs = [sak] + mine
     w = 3 * (2 * CELL + 4) + 4
     row = floor_bg(w, CELL + 8)
     x0 = (w - len(figs) * (CELL + 4)) // 2
     for i, f in enumerate(figs):
         row.alpha_composite(f, (x0 + i * (CELL + 4), 4))
-    big = floor_bg(w, 2 * CELL + 8)
+    rows = 2
+    big = floor_bg(w, rows * (2 * CELL + 4) + 4)
     for i, f in enumerate(mine):
-        big.alpha_composite(nn(f, 2), (4 + i * (2 * CELL + 4), 4))
-    out = Image.new("RGBA", (w, 3 * CELL + 20), (24, 24, 32, 255))
+        big.alpha_composite(nn(f, 2), (4 + (i % 3) * (2 * CELL + 4), 4 + (i // 3) * (2 * CELL + 4)))
+    out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v2_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v3_scale.png")
 
 
 def main():
     out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT
     k, bg = 6, (46, 44, 50, 255)
-    crop = (0, 8, 78, CELL - 8)
+    crop = (0, 4, 90, CELL - 6)
     tw, th = (crop[2] - crop[0]) * k, (crop[3] - crop[1]) * k
-    sheet = Image.new("RGBA", (4 * (tw + 8) + 8, 3 * (th + 30) + 8), (24, 24, 32, 255))
+    sheet = Image.new("RGBA", (4 * (tw + 8) + 8, len(HAIRS) * (th + 30) + 8), (24, 24, 32, 255))
     for r, (name, h) in enumerate(HAIRS):
         y = 8 + r * (th + 30)
         ImageDraw.Draw(sheet).text((10, y + 6), name, fill=(240, 240, 230, 255))
         for i, (t, step) in enumerate(SHOTS):
-            f = frame(build_a, t, step, hair=h)
-            assert all(f.getpixel((0, yy))[3] == 0 for yy in range(CELL)), f"{h} clipped at the cell edge"
+            f = frame(build_a, t, step, hair=h, mouth_kind=DEFAULT_MOUTH)
+            assert all(f.getpixel((0, yy))[3] == 0 and f.getpixel((CELL - 1, yy))[3] == 0 for yy in range(CELL)), f"{h} clipped"
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v2.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v3_hair.png")
+    mouth_sheet(out_dir)
     scale_sheet(out_dir)
 
 
