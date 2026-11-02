@@ -66,7 +66,7 @@ func shows_aim_marker() -> bool:
 	return not manual and not Input.is_action_pressed(&"fire_mouse")
 
 
-## Enemies hidden in their smoke are skipped; shadow clones count as targets (that's the trick).
+## Enemies hidden in their smoke are skipped (walls don't hide anyone); shadow clones count as targets (that's the trick).
 func _update_auto_target(player: Player) -> void:
 	_candidates.clear()
 	_positions.clear()
@@ -89,11 +89,12 @@ func _update_auto_target(player: Player) -> void:
 		auto_aim_point = _aim_spots[idx]
 
 
+## Walls don't hide targets: you still face the nearest enemy and shoot into the wall. A visible part is preferred.
 func _is_visible(i: int) -> bool:
 	var spot: Variant = AutoAim.visible_point(_space, _query, _origin, _positions[i])
 	if spot != null:
 		_aim_spots[i] = spot
-	return spot != null
+	return spot != null or not autopilot  # the test autopilot still hunts what it can see
 
 
 ## Circle-strafe and fire when a target is visible, otherwise walk toward the nearest enemy.
