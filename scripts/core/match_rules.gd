@@ -14,9 +14,8 @@ const TEAM_NAMES: Array[String] = ["", "Team A", "Team B"]
 ## The LAN lobby's team picker + roster labels (a lobby has no viewer yet): A = Blue, B = Red.
 const LOBBY_TEAM_NAMES: Array[String] = ["Auto", "Blue", "Red"]
 ## Why a round ended (MatchState.round_reason).
-enum Reason { NONE, WIPE, TIMEOUT, CAPTURE }
+enum Reason { NONE, TIMEOUT, CAPTURE }
 ## round_result() while both teams still have someone in.
-const ROUND_ON: int = -1
 
 
 static func is_valid_mode(value: int) -> bool:
@@ -114,37 +113,12 @@ static func teammate_picks(viewer: int, teams: Dictionary, hovers: Dictionary, l
 	return out
 
 
-## ROUND_ON while both teams have a player with lives left; else the team still standing (0 if both are out).
-static func round_result(teams: Dictionary, lives: Dictionary) -> int:
-	var in_a: bool = false
-	var in_b: bool = false
-	for id: int in teams:
-		if lives.get(id, 0) > 0:
-			in_a = in_a or teams[id] == TEAM_A
-			in_b = in_b or teams[id] == TEAM_B
-	if in_a and in_b:
-		return ROUND_ON
-	return TEAM_A if in_a else TEAM_B if in_b else 0
-
-
-## Round clock ran out: the team with more players alive wins, then more total HP; a full tie is 0 (no point).
-## `hp` = id -> hp of every player alive right now. `carrying` = teams currently carrying the enemy flag (not dropped):
-## when exactly one team does, it wins before any of that.
-static func timeout_winner(teams: Dictionary, hp: Dictionary, carrying: Array[int] = []) -> int:
-	if carrying.size() == 1:
-		return carrying[0]
-	var alive: Array[int] = [0, 0, 0]
-	var total: Array[int] = [0, 0, 0]
-	for id: int in hp:
-		var t: int = teams.get(id, 0)
-		if t == TEAM_A or t == TEAM_B:
-			alive[t] += 1
-			total[t] += hp[id]
-	if alive[TEAM_A] != alive[TEAM_B]:
-		return TEAM_A if alive[TEAM_A] > alive[TEAM_B] else TEAM_B
-	if total[TEAM_A] != total[TEAM_B]:
-		return TEAM_A if total[TEAM_A] > total[TEAM_B] else TEAM_B
-	return 0
+## Round clock ran out: the team with more kills this round wins; equal = 0 (nobody scores).
+## `kills` is indexed by team id.
+static func timeout_winner(kills: Array[int]) -> int:
+	if kills[TEAM_A] == kills[TEAM_B]:
+		return 0
+	return TEAM_A if kills[TEAM_A] > kills[TEAM_B] else TEAM_B
 
 
 ## Humans always get a seat; bots fill the rest up to the mode's player count.

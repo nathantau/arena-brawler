@@ -1,5 +1,5 @@
 extends GutTest
-## Teams 3v3: team balancing, no friendly fire, round flow (2 lives, elimination, timeout tiebreak, first to 5,
+## Teams 3v3: team balancing, no friendly fire, round flow (unlimited 10 s respawns, timeout goes to the team with more kills, first to 5,
 ## reset between rounds) and Smoke Bomb visibility for allies.
 
 const A: int = MatchRules.TEAM_A
@@ -27,10 +27,11 @@ func _playing_controller() -> MatchController:
 	return c
 
 
-func _kill_team(c: MatchController, team: int) -> void:
-	for id: int in MatchRules.members(c.state.teams, team):
-		c.on_death(id)
-		c.on_death(id)
+## `winner` takes one kill off the other team, then the round clock runs out.
+func _win_round(c: MatchController, winner: int) -> void:
+	var loser: int = MatchRules.other_team(winner)
+	c.on_death(MatchRules.members(c.state.teams, loser)[0], Vector2.ZERO, MatchRules.members(c.state.teams, winner)[0])
+	_tick(c, Constants.TEAMS_ROUND_TIME + 1.0)
 
 
 func _tick(c: MatchController, secs: float) -> void:
@@ -69,14 +70,12 @@ func test_lobby_pick_and_full_team() -> void:
 	assert_eq(c.state.team_of(4), A)
 
 
-func test_match_start_locks_in_teams_and_lives() -> void:
+func test_match_start_locks_in_teams() -> void:
 	var c := _playing_controller()
 	assert_eq(MatchRules.members(c.state.teams, A).size(), 3)
 	assert_eq(MatchRules.members(c.state.teams, B).size(), 3)
 	assert_eq(c.state.team_of(1), A)
 	assert_eq(c.state.round_number, 1)
-	for id: int in c.state.teams:
-		assert_eq(c.state.lives_of(id), Constants.TEAMS_LIVES)
 
 
 func test_state_roundtrip_carries_teams_and_round_score() -> void:
@@ -87,7 +86,6 @@ func test_state_roundtrip_carries_teams_and_round_score() -> void:
 	var b := MatchState.new()
 	assert_true(b.apply_array(c.state.to_array()))
 	assert_eq(b.teams, c.state.teams)
-	assert_eq(b.lives, c.state.lives)
 	assert_eq(b.round_scores, [0, 2, 1] as Array[int])
 	assert_eq(b.round_number, 1)
 	assert_eq(b.round_winner, A)
@@ -99,73 +97,72 @@ func test_state_roundtrip_carries_teams_and_round_score() -> void:
 
 # --- rounds -----------------------------------------------------------------
 
-func test_two_lives_per_round() -> void:
+func test_teams_respawn_waits_10_s_and_never_runs_out() -> void:
 	var c := _playing_controller()
-	c.on_death(1)
-	assert_eq(c.state.lives_of(1), 1)
-	assert_true(c.state.may_respawn(1), "one respawn mid-round")
-	c.on_death(1)
-	assert_eq(c.state.lives_of(1), 0)
-	assert_false(c.state.may_respawn(1), "out until the next round")
-	assert_eq(c.state.round_number, 1, "the round goes on: their team still has players in")
-
-
-func test_round_ends_when_a_team_is_out() -> void:
-	var c := _playing_controller()
-	var b_id: int = MatchRules.members(c.state.teams, B)[0]
-	_kill_team(c, B)
+	assert_eq(Constants.TEAMS_RESPAWN_DELAY, 10.0)
+	for i: int in 20:
+		c.on_death(1)
+		assert_true(c.state.may_respawn(1), "death %d: still allowed back" % (i + 1))
+	assert_eq(c.state.round_number, 1, "a wipe doesn't end the round")
+	for id: int in MatchRules.members(c.state.teams, B):
+		c.on_death(id)
 	_tick(c, DT)
-	assert_eq(c.state.round_scores[A], 1)
-	assert_eq(c.state.round_scores[B], 0)
-	assert_eq(c.state.round_winner, A)
+	assert_eq(c.state.round_scores, [0, 0, 0] as Array[int], "a whole team dead is not a round result")
+	assert_eq(c.state.intermission, 0.0)
+
+
+func test_no_respawns_during_the_intermission() -> void:
+	var c := _playing_controller()
+	_win_round(c, A)
 	assert_gt(c.state.intermission, 0.0)
 	assert_true(c.state.inputs_locked(), "frozen between rounds")
-	assert_false(c.state.may_respawn(b_id), "no respawns during the intermission")
+	assert_false(c.state.may_respawn(MatchRules.members(c.state.teams, B)[0]))
 
 
-func test_one_survivor_keeps_the_round_alive() -> void:
-	var c := _playing_controller()
-	var b: Array[int] = MatchRules.members(c.state.teams, B)
-	c.on_death(b[0])
-	c.on_death(b[0])
-	c.on_death(b[1])
-	c.on_death(b[1])
-	c.on_death(b[2])
-	_tick(c, DT)
-	assert_eq(c.state.round_scores[A], 0, "the last one still has a life")
-	c.on_death(b[2])
-	_tick(c, DT)
-	assert_eq(c.state.round_scores[A], 1)
-
-
-func test_timeout_more_players_alive_wins() -> void:
+func test_timeout_goes_to_the_team_with_more_kills() -> void:
 	var c := _playing_controller()
 	var a: Array[int] = MatchRules.members(c.state.teams, A)
 	var b: Array[int] = MatchRules.members(c.state.teams, B)
-	c.living_hp = func() -> Dictionary: return {a[0]: 10, a[1]: 10, b[0]: 500}
-	_tick(c, Constants.TEAMS_ROUND_TIME + 1.0)
-	assert_eq(c.state.round_winner, A, "2 alive beat 1 alive however much HP")
+	c.on_death(b[0], Vector2.ZERO, a[0])
+	c.on_death(b[1], Vector2.ZERO, a[1])
+	c.on_death(a[0], Vector2.ZERO, b[0])
+	c.on_death(a[2], Vector2.ZERO, a[1])  # a team kill and a suicide count for nobody
+	c.on_death(a[2], Vector2.ZERO, a[2])
+	_tick(c, Constants.TEAMS_ROUND_TIME - 1.0)
+	assert_eq(c.state.round_scores, [0, 0, 0] as Array[int], "the clock is still running")
+	_tick(c, 2.0)
+	assert_eq(c.state.round_winner, A, "2 kills beat 1")
+	assert_eq(c.state.round_reason, MatchRules.Reason.TIMEOUT)
 	assert_eq(c.state.round_scores[A], 1)
 
 
-func test_timeout_then_total_hp_then_tie() -> void:
-	assert_eq(MatchRules.timeout_winner({1: A, 2: B}, {1: 40, 2: 70}), B, "equal alive: more total HP")
-	assert_eq(MatchRules.timeout_winner({1: A, 2: B}, {1: 70, 2: 70}), 0, "full tie: no point")
+func test_timeout_tie_scores_nobody() -> void:
+	assert_eq(MatchRules.timeout_winner([0, 3, 1] as Array[int]), A)
+	assert_eq(MatchRules.timeout_winner([0, 1, 3] as Array[int]), B)
+	assert_eq(MatchRules.timeout_winner([0, 2, 2] as Array[int]), 0, "equal kills: nobody")
 	var c := _playing_controller()
-	c.living_hp = func() -> Dictionary: return {1: 50, 11: 50}
-	var b_first: int = MatchRules.members(c.state.teams, B)[0]
-	c.living_hp = func() -> Dictionary: return {1: 50, b_first: 50}
 	_tick(c, Constants.TEAMS_ROUND_TIME + 1.0)
 	assert_eq(c.state.round_winner, 0)
 	assert_eq(c.state.round_scores, [0, 0, 0] as Array[int])
 	assert_gt(c.state.intermission, 0.0, "a tied round still moves on")
 
 
-func test_next_round_resets_lives_and_clock_after_intermission() -> void:
+func test_round_kills_reset_for_the_next_round() -> void:
+	var c := _playing_controller()
+	var a: Array[int] = MatchRules.members(c.state.teams, A)
+	var b: Array[int] = MatchRules.members(c.state.teams, B)
+	c.on_death(b[0], Vector2.ZERO, a[0])
+	_tick(c, Constants.TEAMS_ROUND_TIME + 1.0)
+	_tick(c, Constants.TEAMS_INTERMISSION + 0.1)
+	assert_eq(c.state.round_number, 2)
+	_tick(c, Constants.TEAMS_ROUND_TIME + 1.0)
+	assert_eq(c.state.round_winner, 0, "round 1's kill doesn't carry over")
+
+
+func test_next_round_resets_the_clock_after_intermission() -> void:
 	var c := _playing_controller()
 	watch_signals(c)
-	_kill_team(c, B)
-	_tick(c, DT)
+	_win_round(c, A)
 	_tick(c, Constants.TEAMS_INTERMISSION - 0.5)
 	assert_signal_not_emitted(c, "round_started")
 	_tick(c, 1.0)
@@ -173,8 +170,6 @@ func test_next_round_resets_lives_and_clock_after_intermission() -> void:
 	assert_eq(c.state.round_number, 2)
 	assert_eq(c.state.intermission, 0.0)
 	assert_almost_eq(c.state.time_left, Constants.TEAMS_ROUND_TIME, 0.01)
-	for id: int in c.state.teams:
-		assert_eq(c.state.lives_of(id), Constants.TEAMS_LIVES)
 	assert_eq(c.state.round_scores[A], 1, "score carries over")
 	assert_true(c.state.may_respawn(MatchRules.members(c.state.teams, B)[0]))
 
@@ -182,12 +177,10 @@ func test_next_round_resets_lives_and_clock_after_intermission() -> void:
 func test_first_to_five_takes_the_match() -> void:
 	var c := _playing_controller()
 	for round_no: int in Constants.TEAMS_ROUND_TARGET - 1:
-		_kill_team(c, B)
-		_tick(c, DT)
+		_win_round(c, A)
 		assert_eq(c.state.phase, MatchState.Phase.PLAYING, "%d wins is not enough" % (round_no + 1))
 		_tick(c, Constants.TEAMS_INTERMISSION + 0.1)
-	_kill_team(c, B)
-	_tick(c, DT)
+	_win_round(c, A)
 	assert_eq(c.state.round_scores[A], Constants.TEAMS_ROUND_TARGET)
 	assert_eq(c.state.phase, MatchState.Phase.RESULTS)
 	assert_eq(c.state.round_winner, A, "round_winner is the match winner at RESULTS")
@@ -195,7 +188,6 @@ func test_first_to_five_takes_the_match() -> void:
 
 func test_ties_do_not_count_toward_five() -> void:
 	var c := _playing_controller()
-	c.living_hp = func() -> Dictionary: return {}
 	for i: int in Constants.TEAMS_ROUND_TARGET + 2:
 		_tick(c, Constants.TEAMS_ROUND_TIME + 1.0)
 		_tick(c, Constants.TEAMS_INTERMISSION + 0.1)
@@ -206,8 +198,7 @@ func test_ties_do_not_count_toward_five() -> void:
 func test_back_to_lobby_clears_the_teams() -> void:
 	var c := _playing_controller()
 	c.state.round_scores = [0, Constants.TEAMS_ROUND_TARGET - 1, 0]
-	_kill_team(c, B)
-	_tick(c, DT)
+	_win_round(c, A)
 	assert_eq(c.state.phase, MatchState.Phase.RESULTS)
 	_tick(c, Constants.MATCH_RESULTS_TIME + 0.1)
 	assert_eq(c.state.phase, MatchState.Phase.LOBBY)
@@ -307,10 +298,10 @@ func test_teams_spawn_on_opposite_sides_and_round_reset_restores_everyone() -> v
 		assert_ne(p.team, 0)
 		assert_eq(p.global_position.x < half, p.team == A, "team %d starts on its own side" % p.team)
 		p.stats.spawn_protect = 0.0
-	# 2 lives: the first death respawns on the team's side, the second keeps them out for the round.
+	# Unlimited respawns after 10 s, on the team's side.
 	me.take_hit(9999, false, Vector2.ZERO, 11)
 	assert_true(me.dead)
-	assert_eq(arena.match_state.lives_of(1), 1)
+	assert_eq(me.respawn_timer, Constants.TEAMS_RESPAWN_DELAY, "the countdown the HUD shows (clients get it in the snapshot)")
 	me.respawn_timer = 0.01
 	await wait_physics_frames(3)
 	assert_false(me.dead, "respawned")
@@ -319,7 +310,7 @@ func test_teams_spawn_on_opposite_sides_and_round_reset_restores_everyone() -> v
 	me.take_hit(9999, false, Vector2.ZERO, 11)
 	me.respawn_timer = 0.01
 	await wait_physics_frames(3)
-	assert_true(me.dead, "out for the rest of the round")
+	assert_false(me.dead, "and again: never out")
 	# Round reset: full HP, back on their side, alive.
 	var other: Player = arena.get_player(Constants.BOT_ID_BASE)
 	other.stats.hp = 5
@@ -447,20 +438,6 @@ func test_a_carrier_who_leaves_sends_the_flag_home() -> void:
 	assert_eq(c.state.flag_state[A], MatchState.Flag.HOME)
 
 
-func test_timeout_the_team_holding_the_flag_wins_first() -> void:
-	var c := _playing_controller()
-	var a: Array[int] = MatchRules.members(c.state.teams, A)
-	var b: Array[int] = MatchRules.members(c.state.teams, B)
-	c.flag_pickup(b[0], A)  # B holds A's flag
-	c.living_hp = func() -> Dictionary: return {a[0]: 150, a[1]: 150, a[2]: 150, b[0]: 10}
-	_tick(c, Constants.TEAMS_ROUND_TIME + 1.0)
-	assert_eq(c.state.round_winner, B, "the flag beats 3 alive vs 1 alive")
-	assert_eq(c.state.round_reason, MatchRules.Reason.TIMEOUT)
-	assert_eq(MatchRules.timeout_winner({1: A, 2: B}, {1: 90, 2: 10}, [B] as Array[int]), B)
-	assert_eq(MatchRules.timeout_winner({1: A, 2: B}, {1: 90, 2: 10}, [A, B] as Array[int]), A, "both holding: the usual tiebreak")
-	assert_eq(MatchRules.timeout_winner({1: A, 2: B}, {1: 90, 2: 10}, [] as Array[int]), A, "a dropped flag doesn't count")
-
-
 func test_flags_reset_for_the_next_round_and_survive_state_sync() -> void:
 	var c := _playing_controller()
 	var thief: int = _thief(c)
@@ -472,8 +449,7 @@ func test_flags_reset_for_the_next_round_and_survive_state_sync() -> void:
 	assert_eq(copy.flag_state[A], MatchState.Flag.DROPPED)
 	assert_eq(copy.flag_pos[A], Vector2(12, 34))
 	assert_almost_eq(copy.flag_timer[A], 5.5, 0.01)
-	_kill_team(c, A)
-	_tick(c, DT)
+	_win_round(c, B)
 	_tick(c, Constants.TEAMS_INTERMISSION + 0.1)
 	assert_eq(c.state.flag_state[A], MatchState.Flag.HOME)
 
@@ -484,8 +460,6 @@ func _flag_arena() -> Arena:
 	st.phase = MatchState.Phase.PLAYING
 	st.participants = [1, 2, 3]
 	st.time_left = 60.0
-	for id: int in [1, 2, 3]:
-		st.lives[id] = Constants.TEAMS_LIVES
 	st.round_number = 1
 	return arena
 
@@ -627,7 +601,7 @@ func test_team_picker_is_hidden_offline_and_shown_on_lan() -> void:
 
 func test_round_banner_and_result_text_are_viewer_relative() -> void:
 	var cap: int = MatchRules.Reason.CAPTURE
-	var wipe: int = MatchRules.Reason.WIPE
+	var wipe: int = MatchRules.Reason.TIMEOUT
 	for viewer: int in [A, B]:
 		var other: int = MatchRules.other_team(viewer)
 		assert_eq(MatchRules.round_banner_text(viewer, cap, viewer), "Your team captured the flag!")
@@ -651,3 +625,15 @@ func test_every_weapon_hook_fits_its_lobby_card() -> void:
 		if w == null or w.hook == "":
 			continue
 		assert_lte(UiStyle.text_width(w.hook, UiStyle.SIZE_TINY - 4), avail, "%s hook fits the card: %s" % [file, w.hook])
+
+
+func test_duel_respawn_is_still_2_s() -> void:
+	assert_eq(Constants.RESPAWN_DELAY, 2.0)
+	var arena := Arena.new(Arena.Mode.OFFLINE, 1, MatchRules.Mode.DUEL)
+	add_child_autofree(arena)
+	var me: Player = arena.add_player(1, 0, BotBrain.new(arena, 1))
+	await wait_physics_frames(2)
+	me.stats.spawn_protect = 0.0
+	me.take_hit(9999, false, Vector2.ZERO, 11)
+	assert_true(me.dead)
+	assert_eq(me.respawn_timer, 2.0)
