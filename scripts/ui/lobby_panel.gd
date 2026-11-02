@@ -23,7 +23,9 @@ const FIGHTER_ART_SIZE: Vector2 = Vector2(150, 112)
 const SKILL_ROW_H: float = 64.0
 const SKILL_ICON_SIZE: Vector2 = Vector2(38, 38)
 ## Loadout pane: card height, and how an icon flies from its row into its slot (then the slot pops).
-const SLOT_CARD_H: float = 92.0
+const SLOT_CARD_H: float = 84.0
+## Weapons carry a warm accent (slot card, selected card, header); abilities the blue one.
+const WEAPON_COLOR: Color = Color8(240, 170, 70)
 const SLOT_ICON_SIZE: Vector2 = Vector2(64, 40)
 const FLY_TIME: float = 0.2
 const POP_TIME: float = 0.12
@@ -381,8 +383,16 @@ func _build_details(body: BoxContainer) -> void:
 	var pane := HBoxContainer.new()
 	pane.add_theme_constant_override("separation", SPACING)
 	p.add_child(pane)
-	for i: int in Constants.SKILL_SLOTS + 1:
-		_build_slot_card(pane, i)
+	# Two clearly different groups: three ability slots (blue), a divider, the weapon slot (amber).
+	var abilities := _pane_group(pane, "ABILITIES", TEAM_ALLY_COLOR, 3.0)
+	for i: int in Constants.SKILL_SLOTS:
+		_build_slot_card(abilities, i)
+	var divider := ColorRect.new()
+	divider.color = UiStyle.C_SHADOW
+	divider.custom_minimum_size.x = 2.0
+	pane.add_child(divider)
+	var weapon_group := _pane_group(pane, "WEAPON", WEAPON_COLOR, 1.5)
+	_build_slot_card(weapon_group, Constants.SKILL_SLOTS)
 	_ability_hint = _label(p, &"DimLabel")
 	_ability_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 	_ability_hint.add_theme_font_override("font", UiStyle.body_font())
@@ -403,11 +413,30 @@ func _build_details(body: BoxContainer) -> void:
 	var weapon_head := _label(p, &"HeaderLabel")
 	weapon_head.text = "Weapon"
 	weapon_head.add_theme_font_size_override("font_size", UiStyle.SIZE_BODY + 2)
+	weapon_head.add_theme_color_override("font_color", WEAPON_COLOR)
 	_weapon_scroller = HScroller.new()
 	_weapon_scroller.fade_color = COLOR_BG
 	p.add_child(_weapon_scroller)
 	_weapon_row = _weapon_scroller.content
 	_weapon_row.add_theme_constant_override("separation", SPACING)
+
+
+## A labelled group of loadout cards: a small coloured caption over a row of cards.
+func _pane_group(pane: Node, caption: String, color: Color, ratio: float) -> HBoxContainer:
+	var group := VBoxContainer.new()
+	group.add_theme_constant_override("separation", 2)
+	group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	group.size_flags_stretch_ratio = ratio
+	pane.add_child(group)
+	var label := _label(group, &"Label")
+	label.text = caption
+	label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	label.add_theme_font_override("font", UiStyle.body_font(true))
+	label.add_theme_color_override("font_color", color)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", SPACING)
+	group.add_child(row)
+	return row
 
 
 ## One loadout card: its number (or "Weapon"), the icon and the name. Ability cards are buttons that make their slot
@@ -424,10 +453,10 @@ func _build_slot_card(parent: Node, i: int) -> void:
 	else:
 		card.pressed.connect(func() -> void: _on_slot_pressed(i))
 	parent.add_child(card)
-	var box := VBoxContainer.new()
+	var box: BoxContainer = HBoxContainer.new() if weapon else VBoxContainer.new()  # weapon: icon left, name right
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 8)
 	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 2)
+	box.add_theme_constant_override("separation", 2 if not weapon else SPACING)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(box)
 	var pic := TextureRect.new()
@@ -436,19 +465,22 @@ func _build_slot_card(parent: Node, i: int) -> void:
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	pic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	pic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(pic)
 	var name_label := _label(box, &"Label")
 	name_label.add_theme_font_override("font", UiStyle.body_font(true))
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if weapon else HORIZONTAL_ALIGNMENT_CENTER
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tag := _label(card, &"Label")  # "1" / "2" / "3" / "Weapon", top left
-	tag.text = "Weapon" if weapon else str(i + 1)
-	tag.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
-	tag.add_theme_font_override("font", UiStyle.body_font(true))
-	tag.add_theme_color_override("font_color", UiStyle.C_STEEL if weapon else UiStyle.C_YELLOW)
-	tag.position = Vector2(10, 4)
-	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not weapon:
+		var tag := _label(card, &"Label")  # slot number, top left
+		tag.text = str(i + 1)
+		tag.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		tag.add_theme_font_override("font", UiStyle.body_font(true))
+		tag.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+		tag.position = Vector2(10, 4)
+		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mark := Control.new()  # an emptied slot: a dashed outline with a "+"
 	mark.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -779,7 +811,7 @@ func _refresh() -> void:
 		_character_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[0] else &"Card"
 	for id: StringName in _weapon_cards:
 		_weapon_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[1] else &"Card"
-		_outline_selected(_weapon_cards[id], id == _shown_pick[1])
+		_outline_selected(_weapon_cards[id], id == _shown_pick[1], WEAPON_COLOR)
 	for id: StringName in _special_cards:
 		var slot: int = _shown_pick.slice(2).find(id)
 		_special_cards[id].theme_type_variation = &"CardSelected" if slot >= 0 else &"Card"
@@ -1144,8 +1176,8 @@ func _refresh_loadout() -> void:
 		_slot_names[i].visible = not empty
 		_empty_marks[i].visible = empty
 		_empty_marks[i].queue_redraw()
-		if _flash_tween == null:
-			_outline_selected(_slot_cards[i], false)
+		if _flash_tween == null:  # filled ability slots carry the blue accent, like the equipped rows below
+			_outline_selected(_slot_cards[i], not empty)
 		if not empty:
 			_slot_icons[i].texture = me.skills[i].data.icon
 			_fit_body(_slot_names[i], me.skills[i].data.display_name, 140.0, UiStyle.SIZE_SMALL, true)
@@ -1155,7 +1187,8 @@ func _refresh_loadout() -> void:
 	_ability_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW if gap or _full_hint_left > 0.0 else UiStyle.C_DIM)
 	var w: int = Constants.SKILL_SLOTS
 	_slot_icons[w].texture = me.weapon.data.sprite
-	_fit_body(_slot_names[w], me.weapon.data.display_name, 140.0, UiStyle.SIZE_SMALL, true)
+	_fit_body(_slot_names[w], me.weapon.data.display_name, 118.0, UiStyle.SIZE_SMALL, true)
+	_outline_selected(_slot_cards[w], true, WEAPON_COLOR)
 
 
 ## The preview's lock state: dimmed with "LOCKED · Px" when a teammate holds this fighter, gold when you locked in.
