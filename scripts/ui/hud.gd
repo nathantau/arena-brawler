@@ -400,6 +400,20 @@ func _round_score_text() -> String:
 	return "%d – %d" % [st.round_scores[mine], st.round_scores[MatchRules.other_team(mine)]]
 
 
+## "2 – 1": your team's score in blue first, the enemy's in red.
+func _draw_round_score(c: CanvasItem, r: Rect2) -> void:
+	var st: MatchState = arena.match_state
+	var mine: int = MatchRules.viewer_of(player.team)
+	var parts: Array = [[str(st.round_scores[mine]), UiStyle.C_BLUE], [" – ", UiStyle.C_WHITE],
+		[str(st.round_scores[MatchRules.other_team(mine)]), UiStyle.C_RED]]
+	var total: float = UiStyle.text_width(_round_score_text(), UiStyle.SIZE_HEADING, true)
+	var x: float = r.get_center().x - total * 0.5
+	var y: float = r.get_center().y + UiStyle.SIZE_HEADING * 0.35
+	for part: Array in parts:
+		UiStyle.draw_text(c, Vector2(x, y), part[0], UiStyle.SIZE_HEADING, part[1], HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
+		x += UiStyle.text_width(part[0], UiStyle.SIZE_HEADING, true)
+
+
 func _draw_score(c: CanvasItem) -> void:
 	var st: MatchState = arena.match_state
 	var r: Rect2 = _score_pill()
@@ -407,8 +421,7 @@ func _draw_score(c: CanvasItem) -> void:
 	var clock: String = ""
 	var urgent: bool = false
 	if _teams_hud(st):
-		UiStyle.draw_text(c, Vector2(r.position.x, r.get_center().y + UiStyle.SIZE_HEADING * 0.35), _round_score_text(),
-			UiStyle.SIZE_HEADING, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, true)
+		_draw_round_score(c, r)
 		if st.phase == MatchState.Phase.PLAYING:
 			clock = "Round %d · %d:%02d" % [st.round_number, ceili(st.time_left) / 60, ceili(st.time_left) % 60]
 			urgent = st.intermission <= 0.0 and _tick_clock(st)

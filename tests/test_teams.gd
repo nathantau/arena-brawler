@@ -616,3 +616,27 @@ func test_carried_flag_rides_the_carrier_and_hides_when_he_dies() -> void:
 	await wait_process_frames(2)
 	assert_true(field._flags[A].visible, "the dropped flag stands where it fell")
 	assert_false(field._carried[A].visible)
+
+
+func test_team_picker_is_hidden_offline_and_shown_on_lan() -> void:
+	assert_false(LobbyPanel.shows_team_picker(MatchRules.Mode.TEAMS, Arena.Mode.OFFLINE), "offline: auto-placed")
+	assert_true(LobbyPanel.shows_team_picker(MatchRules.Mode.TEAMS, Arena.Mode.SERVER), "friends group up on a LAN")
+	assert_true(LobbyPanel.shows_team_picker(MatchRules.Mode.TEAMS, Arena.Mode.CLIENT))
+	assert_false(LobbyPanel.shows_team_picker(MatchRules.Mode.FFA, Arena.Mode.SERVER), "no teams in FFA")
+
+
+func test_round_banner_and_result_text_are_viewer_relative() -> void:
+	var cap: int = MatchRules.Reason.CAPTURE
+	var wipe: int = MatchRules.Reason.WIPE
+	for viewer: int in [A, B]:
+		var other: int = MatchRules.other_team(viewer)
+		assert_eq(MatchRules.round_banner_text(viewer, cap, viewer), "Your team captured the flag!")
+		assert_eq(MatchRules.round_banner_text(other, cap, viewer), "Enemies captured your flag!")
+		assert_eq(MatchRules.round_banner_text(viewer, wipe, viewer), "Your team wins the round!")
+		assert_eq(MatchRules.round_banner_text(other, wipe, viewer), "Enemy team wins the round")
+		assert_eq(MatchRules.result_title(viewer, viewer), "VICTORY!")
+		assert_eq(MatchRules.result_title(other, viewer), "DEFEAT")
+	assert_eq(MatchRules.round_banner_text(0, wipe, A), "Round drawn")
+	assert_eq(MatchRules.result_title(0, B), "DRAW")
+	for t: String in [MatchRules.round_banner_text(A, cap, B), MatchRules.result_title(B, A)]:
+		assert_false(t.contains("Team A") or t.contains("Team B"), "no letters shown to the player")

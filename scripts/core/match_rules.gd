@@ -9,7 +9,10 @@ const SHORT_NAMES: Array[String] = ["Duel", "FFA", "3v3"]
 ## Team ids (0 = unassigned / no teams).
 const TEAM_A: int = 1
 const TEAM_B: int = 2
+## Internal / tool names only: players never read A / B in game (see viewer-relative wording below).
 const TEAM_NAMES: Array[String] = ["", "Team A", "Team B"]
+## The LAN lobby's team picker + roster labels (a lobby has no viewer yet): A = Blue, B = Red.
+const LOBBY_TEAM_NAMES: Array[String] = ["Auto", "Blue", "Red"]
 ## Why a round ended (MatchState.round_reason).
 enum Reason { NONE, WIPE, TIMEOUT, CAPTURE }
 ## round_result() while both teams still have someone in.
@@ -37,6 +40,28 @@ static func kill_target(mode: Mode) -> int:
 		Mode.TEAMS:
 			return Constants.TEAMS_ROUND_TARGET
 	return Constants.FFA_KILL_TARGET
+
+
+## The viewer's own team: unassigned (0) viewers see team A as theirs.
+static func viewer_of(team: int) -> int:
+	return team if team != 0 else TEAM_A
+
+
+## Round-end banner text from the viewer's side (ally blue / enemy red), "" when the round was drawn.
+static func round_banner_text(winner: int, reason: int, viewer: int) -> String:
+	if winner == 0:
+		return "Round drawn"
+	var mine: bool = winner == viewer_of(viewer)
+	if reason == Reason.CAPTURE:
+		return "Your team captured the flag!" if mine else "Enemies captured your flag!"
+	return "Your team wins the round!" if mine else "Enemy team wins the round"
+
+
+## Teams results title from the viewer's side.
+static func result_title(winner: int, viewer: int) -> String:
+	if winner == 0:
+		return "DRAW"
+	return "VICTORY!" if winner == viewer_of(viewer) else "DEFEAT"
 
 
 static func other_team(team: int) -> int:

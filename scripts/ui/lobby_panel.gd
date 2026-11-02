@@ -176,9 +176,8 @@ func _refresh() -> void:
 	_join_hint.visible = arena.host_address != ""
 	_join_hint.text = "Friends join: %s" % LanAddress.friendly(arena.host_address)
 	_mode_button.text = "Mode: %s" % MatchRules.SHORT_NAMES[st.mode]
-	_team_button.visible = st.mode == MatchRules.Mode.TEAMS
-	var pick: int = st.team_of(me.player_id)
-	_team_button.text = "Team: %s" % (MatchRules.TEAM_NAMES[pick].trim_prefix("Team ") if pick != 0 else "Auto")
+	_team_button.visible = shows_team_picker(st.mode, arena.mode)
+	_team_button.text = "Team: %s" % MatchRules.LOBBY_TEAM_NAMES[st.team_of(me.player_id)]
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
 	if _weapons_for != me.character.id:
 		_build_weapon_cards(me.character)
@@ -223,7 +222,10 @@ func _refresh() -> void:
 		row.add_theme_color_override("font_color", p.display_color)
 		row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
 		if shown_teams.has(p.player_id):
-			row.text = "[%s] %s" % [MatchRules.TEAM_NAMES[shown_teams[p.player_id]].trim_prefix("Team "), row.text]
+			var tag_team: String = MatchRules.LOBBY_TEAM_NAMES[shown_teams[p.player_id]]
+			if not _team_button.visible:  # offline there is no picker: just ally / enemy from your side
+				tag_team = "Ally" if shown_teams[p.player_id] == shown_teams.get(me.player_id, MatchRules.TEAM_A) else "Enemy"
+			row.text = "[%s] %s" % [tag_team, row.text]
 
 	_blocker.text = st.blocker
 	_ready_button.text = "UNREADY" if _is_ready() else "READY!"
@@ -321,6 +323,11 @@ func _on_mode_pressed() -> void:
 
 
 ## Cycles Auto -> A -> B.
+## Only a LAN lobby with friends needs to pick a side; offline the player is auto-placed and bots fill the rest.
+static func shows_team_picker(match_mode: MatchRules.Mode, arena_mode: Arena.Mode) -> bool:
+	return match_mode == MatchRules.Mode.TEAMS and arena_mode != Arena.Mode.OFFLINE
+
+
 func _on_team_pressed() -> void:
 	arena.team_requested.emit((arena.match_state.team_of(arena.local_player.player_id) + 1) % (MatchRules.TEAM_B + 1))
 
