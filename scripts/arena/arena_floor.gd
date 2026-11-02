@@ -26,11 +26,13 @@ const EDGE_DARK: Color = Color(0, 0, 0, 0.3)
 
 ## Teams halfway line (court-style midline on the ground): MID_W art px wide, dashes MID_DASH on / MID_GAP off, translucent cream
 ## over a thin dark edge so it reads on every floor. Never over wall tiles.
-const MID_W: int = 2
-const MID_DASH: int = 10
-const MID_GAP: int = 5
-const MID_COLOR: Color = Color(1.0, 0.96, 0.82, 0.5)
-const MID_EDGE: Color = Color(0, 0, 0, 0.22)
+const MID_W: int = 3
+const MID_DASH: int = 12
+const MID_GAP: int = 4
+const MID_COLOR: Color = Color(1.0, 0.96, 0.82, 0.78)
+const MID_EDGE: Color = Color(0, 0, 0, 0.3)
+## Soft halo: 2 art px either side, fainter outwards.
+const MID_HALO: Color = Color(1.0, 0.96, 0.82, 0.16)
 
 ## The theme's tile sheet; crates draw from it too.
 var tiles: Texture2D
@@ -120,8 +122,12 @@ func _draw_midline() -> void:
 					blocked = true
 			if blocked:
 				continue
+			draw_rect(Rect2(x - px * 2.0, y, px, px), Color(MID_HALO, MID_HALO.a * 0.5))
+			draw_rect(Rect2(x - px, y, px, px), MID_HALO)
 			draw_rect(Rect2(x, y, px * MID_W, px), MID_COLOR)
 			draw_rect(Rect2(x + px * MID_W, y, px, px), MID_EDGE)
+			draw_rect(Rect2(x + px * (MID_W + 1), y, px, px), MID_HALO)
+			draw_rect(Rect2(x + px * (MID_W + 2), y, px, px), Color(MID_HALO, MID_HALO.a * 0.5))
 		i += MID_DASH + MID_GAP
 
 
