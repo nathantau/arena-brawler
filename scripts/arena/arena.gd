@@ -994,8 +994,8 @@ func _pick_spawn_for(who: Player) -> Vector2:
 	for p: Player in players:
 		if p != who and not p.dead and (who.team == 0 or p.team == who.team):
 			_threats.append(p.global_position)
-	if who.team != 0:  # Teams: own side of the map, away from teammates
-		return ArenaMap.pick_spawn(ArenaMap.side_spawns(map.spawns, map.size.x, who.team), _threats)
+	if who.team != 0:  # Teams: around own flag base, away from teammates
+		return ArenaMap.pick_spawn(map.base_spawns(who.team, Constants.TILE_SIZE), _threats)
 	return ArenaMap.pick_spawn(map.spawns, _threats)
 
 

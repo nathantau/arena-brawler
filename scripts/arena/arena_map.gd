@@ -16,6 +16,7 @@ var energy_spots: PackedVector2Array = PackedVector2Array()
 var weapon_spots: PackedVector2Array = PackedVector2Array()
 var crate_spots: PackedVector2Array = PackedVector2Array()
 var size: Vector2 = Vector2.ZERO
+var _base_spawns: Dictionary = {}  # team -> PackedVector2Array, built on first use
 
 
 static func parse(rows: Array[String], tile: float) -> ArenaMap:
@@ -78,6 +79,33 @@ func flag_base(team: int, tile: float) -> Vector2:
 				best_d = d
 				best = at
 	return best
+
+
+## Teams spawn points: open floor tile centres within `reach` tiles of the team's flag base (not the base itself), with no
+## wall/crate on the tile or its orthogonal neighbours so a player never clips a wall. Falls back to side_spawns.
+func base_spawns(team: int, tile: float, reach: float = 3.0) -> PackedVector2Array:
+	if _base_spawns.has(team):
+		return _base_spawns[team]
+	var base: Vector2 = flag_base(team, tile)
+	var out := PackedVector2Array()
+	for y: int in rows.size():
+		for x: int in rows[y].length():
+			var at := Vector2((x + 0.5) * tile, (y + 0.5) * tile)
+			if at.is_equal_approx(base) or at.distance_to(base) > reach * tile:
+				continue
+			if _open(x, y) and _open(x + 1, y) and _open(x - 1, y) and _open(x, y + 1) and _open(x, y - 1):
+				out.append(at)
+	if out.is_empty():
+		out = ArenaMap.side_spawns(spawns, size.x, team)
+	_base_spawns[team] = out
+	return out
+
+
+func _open(x: int, y: int) -> bool:
+	if y < 0 or y >= rows.size() or x < 0 or x >= rows[y].length():
+		return false
+	var c: String = rows[y][x]
+	return c != WALL_CHAR and c != CRATE_CHAR
 
 
 ## The spawn whose nearest threat is farthest away. With no threats, the first spawn.

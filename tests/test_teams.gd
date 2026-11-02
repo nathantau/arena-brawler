@@ -651,3 +651,20 @@ func test_every_weapon_hook_fits_its_lobby_card() -> void:
 		if w == null or w.hook == "":
 			continue
 		assert_lte(UiStyle.body_font().get_string_size(w.hook, HORIZONTAL_ALIGNMENT_LEFT, -1, LobbyPanel.LIST_TEXT_SIZE).x, avail, "%s hook fits the card: %s" % [file, w.hook])
+
+
+# --- team spawns around the flag base ---------------------------------------
+func test_team_spawns_cluster_at_own_flag_base() -> void:
+	var tile: float = Constants.TILE_SIZE
+	for i: int in ArenaLayouts.count():
+		var map: ArenaMap = ArenaMap.parse(ArenaLayouts.get_layout(i), tile)
+		for team: int in [A, B]:
+			var base: Vector2 = map.flag_base(team, tile)
+			var pts: PackedVector2Array = map.base_spawns(team, tile)
+			assert_gte(pts.size(), 3, "layout %d team %d has spawns" % [i, team])
+			for p: Vector2 in pts:
+				assert_lte(p.distance_to(base), 4.0 * tile, "near base")
+				assert_eq(p.x < map.size.x * 0.5, team == A, "own half")
+				var r: Rect2 = Rect2(p - Vector2.ONE * Constants.PLAYER_RADIUS, Vector2.ONE * Constants.PLAYER_RADIUS * 2.0)
+				for w: Rect2 in map.walls:
+					assert_false(w.intersects(r), "spawn %s overlaps wall" % p)
