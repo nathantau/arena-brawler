@@ -259,6 +259,12 @@ func add_player(id: int, color_index: int, ctrl: PlayerController,
 	p.burning.connect(func(who: Player) -> void:
 		if effects != null:
 			effects.ember(who.global_position + who.visual_offset + Vector2(0.0, EMBER_BODY_Y)))
+	p.dripping.connect(func(who: Player) -> void:
+		if effects != null:
+			effects.drip(who.global_position + who.visual_offset + Vector2(0.0, EMBER_BODY_Y)))
+	p.trap_popped.connect(func(at: Vector2) -> void:
+		if effects != null:
+			effects.bubble_pop(at))
 	p.healed.connect(func(user: Player, amount: int) -> void:
 		if effects != null:
 			effects.heal_number(user.global_position + user.visual_offset - Vector2(0.0, Constants.HEAL_NUMBER_RISE), amount))
@@ -508,6 +514,7 @@ func _attach_effects() -> void:
 	projectiles.deflected.connect(effects.deflect)
 	projectiles.exploded.connect(_fx_explosion)
 	projectiles.burst_shown.connect(effects.burst_strip)
+	projectiles.fx_spawned.connect(effects.fun_impact)
 	hit_landed.connect(_fx_hit)
 	match_updated.connect(_on_match_updated)
 	kill_registered.connect(_fx_kill)

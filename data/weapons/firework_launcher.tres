@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/firework_launcher.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/firework_launcher.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/firework_burst.png" id="10_x"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/firework_spark.png" id="11_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"firework_launcher"
+display_name = "Firework Launcher"
+muzzle_x = 42.0
+burst_art = ExtResource("10_x")
+burst_art_radius = 46.0
+pickup = true
+damage = 18
+fire_interval = 0.9
+spread_deg = 2.0
+projectile_speed = 500.0
+projectile_range = 520.0
+projectile_radius = 6.0
+energy_cost = 90
+knockback = 110.0
+color = Color(1, 0.8, 0.4, 1)
+screen_shake = 0.2
+sfx = &"shot_rocket"
+splash_radius = 46.0
+splash_edge_scale = 0.5
+rainbow_trail = true
+split_count = 8
+split_scale = 0.35
+split_fan_deg = 360.0
+split_range = 150.0
+split_speed = 300.0
+split_sprite = ExtResource("11_x")
+hook = "Bursts into a star"

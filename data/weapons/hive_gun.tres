@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/hive_gun.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/hive_gun.png" id="9_proj"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"hive_gun"
+display_name = "Hive Gun"
+muzzle_x = 38.0
+pickup = true
+damage = 5
+fire_interval = 0.75
+pellets = 3
+pellet_spread_deg = 36.0
+spread_deg = 6.0
+projectile_speed = 270.0
+projectile_range = 400.0
+projectile_radius = 5.0
+energy_cost = 60
+knockback = 10.0
+color = Color(0.96, 0.82, 0.34, 1)
+sfx = &"shot_light"
+homing = 3.5
+wobble_amp = 2.6
+wobble_hz = 3.0
+sting_delay = 0.5
+hook = "3 bees home and sting"

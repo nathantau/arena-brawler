@@ -217,6 +217,15 @@ const SPLIT_RANGE: float = 200.0
 const SPLIT_RADIUS_SCALE: float = 0.6
 ## Shard pellet keys start here (parent pellet + this * (i + 1)) so they never match a normal pellet.
 const SPLIT_PELLET_BASE: int = 100
+## Soaked targets move at this x speed (and cannot burn).
+const SOAK_SLOW: float = 0.8
+## The Snowball Cannon's slow factor: shown as an icy wash instead of the Blossom Snare's pink vines.
+const CHILL_SLOW: float = 0.7
+## A bee circles its target at this turn rate (rad/s) once it is within BEE_ORBIT_RADIUS px.
+const BEE_ORBIT_RATE: float = 7.0
+const BEE_ORBIT_RADIUS: float = 60.0
+## ...then dives at its target this much faster.
+const BEE_DIVE_SCALE: float = 1.3
 ## A beam's ramp survives this long between ticks that touch the same target.
 const BEAM_RAMP_GRACE: float = 0.3
 ## Spin-up resets after the trigger is released this long.

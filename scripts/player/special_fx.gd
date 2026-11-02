@@ -646,7 +646,7 @@ func sync(p: Player) -> void:
 	_sync_storm(p)
 	_sync_eden(p)
 	_sync_shadow(p)
-	var slow: float = 0.0 if p.dead else p.stats.slow_remaining
+	var slow: float = 0.0 if p.dead or p.is_chilled() else p.stats.slow_remaining  # (a chill has its own look: no pink vines)
 	if slow > _snare_left + SNARE_NEW_MARGIN:  # a snare landed (or was refreshed): petals burst
 		_poof(p.global_position + p.visual_offset, SNARE_BURST_ART, SNARE_BURST_TIME)
 	_snare_left = slow
