@@ -48,6 +48,13 @@ const WISPS_PER_FRAME: int = 3
 const WISP_LIFE: float = 0.5
 const WISP_RISE: Vector2 = Vector2(0.0, -110.0)
 const SWING_TIME: float = 0.18
+## Thrust trail (Cloud Staff): rides the staff itself for this long, easing in over the first THRUST_IN of it and
+## out over the rest; the staff is THRUST_LEN art px long from the grip to the tip.
+const THRUST_TIME: float = 0.24
+const THRUST_IN: float = 0.3
+const THRUST_LEN: float = 41.0
+const THRUST_GOLD: Color = Color8(255, 226, 120)
+const THRUST_ORANGE: Color = Color8(240, 150, 60)
 const RING_TIME: float = 0.5
 const SLAM_TIME: float = 0.4
 const BLAST_ART: Texture2D = preload("res://assets/fx/blast.png")
@@ -139,6 +146,11 @@ class Swing:
 	var color: Color = Color.WHITE
 
 
+class Thrust:
+	var life: float = 0.0
+	var shooter: Player
+
+
 class Ring:
 	var life: float = 0.0
 	var duration: float = RING_TIME
@@ -154,6 +166,7 @@ class Ring:
 var _particles: Array[Particle] = []
 var _numbers: Array[DamageNumber] = []
 var _beams: Array[Beam] = []
+var _thrusts: Array[Thrust] = []
 var _held: Dictionary = {}  # player_id -> HeldBeam
 var _wisps: Array[Wisp] = []
 var _wc: int = 0
@@ -190,6 +203,8 @@ func _ready() -> void:
 		_numbers.append(DamageNumber.new())
 	for i: int in BEAM_POOL:
 		_beams.append(Beam.new())
+	for i: int in 8:
+		_thrusts.append(Thrust.new())
 	for i: int in MARKER_POOL:
 		_markers.append(Marker.new())
 	for i: int in WISP_POOL:
@@ -228,6 +243,8 @@ func clear() -> void:
 		w.life = 0.0
 	for s: Swing in _swings:
 		s.life = 0.0
+	for t: Thrust in _thrusts:
+		t.life = 0.0
 	for r: Ring in _rings:
 		r.life = 0.0
 	for m: Marker in _markers:
@@ -319,6 +336,15 @@ func _held_ends(b: HeldBeam) -> PackedVector2Array:
 	return PackedVector2Array([from, from + p.facing * b.length])
 
 
+## A stab with a staff: a gold streak and tip glint that ride the staff (they follow the shooter every frame).
+func thrust(shooter: Player) -> void:
+	for t: Thrust in _thrusts:
+		if t.life <= 0.0:
+			t.life = THRUST_TIME
+			t.shooter = shooter
+			return
+
+
 func swing(origin: Vector2, facing: Vector2, radius: float, arc_deg: float, color: Color) -> void:
 	var s: Swing = _swings[_sc]
 	_sc = (_sc + 1) % _swings.size()
@@ -390,6 +416,8 @@ func _process(delta: float) -> void:
 			w.pos += w.vel * delta
 	for s: Swing in _swings:
 		s.life -= delta
+	for t: Thrust in _thrusts:
+		t.life -= delta
 	for r: Ring in _rings:
 		r.life -= delta
 	for m: Marker in _markers:
@@ -416,6 +444,9 @@ func _draw() -> void:
 		draw_line(b.from, b.to, b.color, w)
 		if w > px:
 			draw_line(b.from, b.to, BEAM_CORE_COLOR, maxf(px, snappedf(w * BEAM_CORE_SCALE, px)))
+	for t: Thrust in _thrusts:
+		if t.life > 0.0 and is_instance_valid(t.shooter):
+			_draw_thrust(t, px)
 	_draw_held_beams(px)
 	_draw_aim_marker(px)
 	for p: Particle in _particles:
@@ -465,6 +496,45 @@ func _draw_strip(ci: CanvasItem, art: Texture2D, t: float, at: Vector2, angle: f
 	tint.a *= clampf((1.0 - t) / STRIP_TAIL_FADE, 0.0, 1.0)  # the last sparks ease out instead of vanishing
 	ci.draw_texture_rect_region(art, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2(k * h, 0, h, h), tint)
 	ci.draw_set_transform(Vector2.ZERO)
+
+
+func _snap_rect(at: Vector2, size: float, color: Color) -> void:
+	draw_rect(Rect2((at / size).floor() * size - Vector2(size, size) * 0.5, Vector2(size, size)), color)
+
+
+## Streak along the staff's own axis (so it sits on the staff, mirrored with the facing): a tapered gold wedge from
+## where the stab started out to the tip, then a four-point glint at the tip. Eases in then out over several frames.
+func _draw_thrust(t: Thrust, px: float) -> void:
+	var p: Player = t.shooter
+	var u: float = 1.0 - t.life / THRUST_TIME
+	var env: float = smoothstep(0.0, THRUST_IN, u) * (1.0 - smoothstep(THRUST_IN, 1.0, u))
+	if env <= 0.02:
+		return
+	var dir: Vector2 = p.facing
+	var base: Vector2 = p.global_position + p.visual_offset + Player.hand_offset(dir)
+	var tip_len: float = THRUST_LEN * px
+	var hold: float = p.thrust_hold()
+	var tip: Vector2 = base + dir * (hold + tip_len)
+	var tail: Vector2 = base + dir * (tip_len * 0.15)  # the streak starts back on the shaft and runs out past the tip
+	var side: Vector2 = dir.orthogonal()
+	var steps: int = int(tail.distance_to(tip) / px)
+	for i: int in steps:
+		var k: float = float(i) / maxf(1.0, steps - 1.0)  # 0 at the tail, 1 at the tip
+		var half: int = roundi(lerpf(0.0, 3.0, k) * env)  # whole art pixels either side of the axis
+		var at: Vector2 = tail.lerp(tip, k)
+		var col: Color = THRUST_ORANGE if k < 0.5 else THRUST_GOLD
+		col.a = env * lerpf(0.45, 1.0, k)
+		for j: int in range(-half, half + 1):
+			_snap_rect(at + side * (j * px), px, col)
+		if half > 0:
+			_snap_rect(at, px, Color(1, 1, 1, env * k))
+	var r: int = roundi(4.0 * env)  # tip glint: a plus
+	for j: int in range(1, r + 1):
+		var c: Color = THRUST_GOLD if j < r else THRUST_ORANGE
+		c.a = env
+		for d: Vector2 in [dir, -dir, side, -side]:
+			_snap_rect(tip + d * (j * px), px, c)
+	_snap_rect(tip, px, Color(1, 1, 1, env))
 
 
 func _draw_held_beams(px: float) -> void:

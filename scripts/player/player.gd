@@ -1294,6 +1294,14 @@ func _draw_head_over_weapon() -> void:
 		Rect2(0, 0, cell.x, SPRITE_HEAD_ROWS), _sprite.modulate)
 
 
+## How far a thrusting melee weapon (Cloud Staff) is pushed out along the aim right now (0 at rest, peaks mid-stab).
+func thrust_hold() -> float:
+	var w: WeaponData = held_weapon().data
+	if _recoil_len <= 0.0:
+		return 0.0
+	return w.melee_range * THRUST_REACH * sin(_recoil / _recoil_len * PI)
+
+
 func _draw_guns(ci: CanvasItem) -> void:
 	_draw_gun(ci, Vector2.ZERO)
 
@@ -1311,7 +1319,7 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 		hold -= GUN_RECOIL_PX * t
 		angle -= deg_to_rad(GUN_KICK_DEG) * t * flip_v
 	elif w.thrust:
-		hold += w.melee_range * THRUST_REACH * sin(t * PI)
+		hold += thrust_hold()
 	elif _recoil > 0.0:
 		angle += deg_to_rad(w.melee_arc_deg) * (0.5 - t) * flip_v
 	else:
