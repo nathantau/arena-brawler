@@ -843,15 +843,17 @@ def sakura(step=None, t=0):
     return low, up
 
 
-def flint(step=None, t=0, heat=0.0):
+def flint(step=None, t=0, heat=0.0, form=False):
     """Fire: a little fire elemental with a molten face, a scorched dark suit
     burning up from its hem (heat burns it off) over a glowing molten body and legs with veins and an ember heart, flames curling up him and wisps breaking off, and fists of fire. His flaming hair is drawn above the
     art box (CROWNS: flint_crown). `heat` 0..1 stokes him into his Inferno form:
-    bigger hand flames, white-hot cracks, flames off his shoulders and blazing eyes trailing fire."""
+    bigger hand flames, white-hot cracks, flames off his shoulders and blazing eyes trailing fire. `form` = the Inferno
+    form (and its morph): its blaze comes from fire_tongues (inferno_fire behind him, a soft layer in front) instead of the
+    bonfire, foot / leg licks and wisps Flare Burst's charge pose still uses."""
     hot = heat >= 0.5
     crack = (ORANGE, YELLOW)[t % 2] if not hot else (YELLOW, WHITE)[t % 2]  # cracks pulse every tick
     low = Canvas()
-    if heat > 0:  # a bonfire roaring up behind him (on the legs' canvas, so behind everything): jagged tongues all
+    if heat > 0 and not form:  # a bonfire roaring up behind him (on the legs' canvas, so behind everything): jagged tongues all
         # licking upwards, flickering every tick, rising out of a rounded mass of fire; grows with heat
         rx, ry = 25 * heat, 9 * heat
         low.part(E((32 - rx, 49 - ry, 32 + rx, 49 + ry)), RED, shade=False, line=False)
@@ -862,13 +864,13 @@ def flint(step=None, t=0, heat=0.0):
         low.flat(R((x + 2, 46 + dy, x + 3, 52 + dy)), YELLOW if hot else ORANGE)  # glowing inside
         low.flat(R((x + 2, 47 + dy, x + 2, 51 + dy)), crack)  # a vein of fire down each
         low.flat(R((x + 1, 54 + dy, x + 5, 55 + dy)), YELLOW if hot else ORANGE)  # hot toes
-        for j, fx in enumerate((x - 2, x + 7)):  # little flames licking up beside each foot, flickering out of step
+        for j, fx in enumerate(() if form else (x - 2, x + 7)):  # little flames licking up beside each foot, flickering out of step
             h = 4 + (t + k + j) % 3 + round(heat * 3)
             low.part(P([(fx - 2, 57 + dy), (fx + SWAY[(t + j + k) % 4], 57 + dy - h), (fx + 2, 57 + dy)]), RED,
                      shade=False, line=False)
             low.part(P([(fx - 1, 57 + dy), (fx, 58 + dy - h + 1), (fx + 1, 57 + dy)]), YELLOW if h > 5 else ORANGE,
                      shade=False, line=False)
-    if heat > 0:  # licks of fire curling up round his legs, out of step
+    if heat > 0 and not form:  # licks of fire curling up round his legs, out of step
         for k, (root, ctrl, tip, side) in enumerate((((21, 57), (15, 51), (21, 43), 1), ((27, 58), (23, 53), (28, 46), 1),
                                                      ((37, 58), (41, 53), (36, 46), 1), ((43, 57), (49, 51), (43, 43), 1))):
             sh = (0.7 + 0.3 * ((t + k) % 2)) * heat
@@ -879,7 +881,11 @@ def flint(step=None, t=0, heat=0.0):
 
     def fist(cx, k):  # a ball of fire for a hand, its flame licking up and flickering every tick
         hh = 7 + round(heat * 6) + (t + k) % 2
-        flame(up, cx - 4, cx + 4, 46, hh, t + k, tongues=2)
+        if form:  # a small soft flame, not a spiky one
+            fire_tongues(up, cx, 46, [(0, hh * 1.9, 5.0, 0.12 * (1 - 2 * (k % 2)), 0.3 * k, 1)],
+                         ((t + k * 3) % FIRE_PERIOD) / FIRE_PERIOD, sway=1.0, sheds=False)
+        else:
+            flame(up, cx - 4, cx + 4, 46, hh, t + k, tongues=2)
         up.part(E((cx - 3, 41, cx + 3, 47)), ORANGE)
         up.flat(E((cx - 1, 43, cx + 1, 45)), YELLOW if not hot else WHITE)
 
@@ -932,11 +938,16 @@ def flint(step=None, t=0, heat=0.0):
     for k, (root, ctrl, tip) in enumerate((((25, 48), (20, 42), (26, 33)), ((39, 48), (44, 43), (38, 35))) if heat else ()):
         flame_tongue(up, root, [r + (q - r) * reach for r, q in zip(root, ctrl)], [r + (q - r) * reach for r, q in zip(root, tip)],
                (t + k * 2) * math.pi / 2, wide=2.5 + heat)
+    if form:  # flames licking up over his legs and hem in front of him (a thin soft layer, his body stays readable)
+        fire_tongues(up, 32, 57, [(-17, 13 * heat, 5.0, -0.25, 0.1, 1), (-9, 9 * heat, 4.0, -0.1, 0.6, 1),
+                                  (9, 10 * heat, 4.0, 0.1, 0.35, 1), (17, 13 * heat, 5.0, 0.25, 0.85, 1)],
+                     ((t + FIRE_PERIOD // 2) % FIRE_PERIOD) / FIRE_PERIOD, shift=-0.1, sway=1.2, sheds=False, ragged=3,
+                     hollow=0.3)
     fist(47, 3)  # front hand
     # wisps of flame breaking off him: each rises and shrinks away over 4 ticks, out of step (more when hot)
     # wisps of flame breaking off his edges: each drifts up and out and shrinks away over 4 ticks, out of step
     # (more when hot)
-    spots = [(21, 41, -1), (43, 39, 1), (22, 47, -1), (42, 46, 1)] + ([(20, 35, -1), (44, 34, 1)] if heat else [])
+    spots = [] if form else [(21, 41, -1), (43, 39, 1), (22, 47, -1), (42, 46, 1)] + ([(20, 35, -1), (44, 34, 1)] if heat else [])
     for k, (wx, wy, out) in enumerate(spots):
         phase = (t + k * 2 + (k > 3)) % 4
         r = (3, 2, 1, 0)[phase]
@@ -957,7 +968,8 @@ def flint(step=None, t=0, heat=0.0):
         for x in EYES_X:
             up.flat(R((x, EYES_Y, x + 3, EYES_Y + 5)), YELLOW)  # same eye shape, lit from inside
             up.flat(R((x + 1, EYES_Y + 1, x + 2, EYES_Y + 4)), WHITE)
-            up.flat(L([(x + 1, EYES_Y - 1), (x - 1, EYES_Y - 3 - (t % 2))], 1), YELLOW)  # flame flicking up off it
+            if not form:
+                up.flat(L([(x + 1, EYES_Y - 1), (x - 1, EYES_Y - 3 - (t % 2))], 1), YELLOW)  # flame flicking up off it
     else:
         big_eyes(up, EYES_Y, EYES_X, YELLOW)
     up.flat(R((MOUTH[0] - 1, MOUTH[1] + 1, MOUTH[0] + 1, MOUTH[1] + 1)), MAROON)  # little grin
@@ -980,25 +992,122 @@ def flint_ragged_base(c: Canvas, t: int, heat: float) -> None:
                 px[x, y] = (0, 0, 0, 0)
 
 
+FIRE_PERIOD = 4  # frames in the fire loop being drawn: 4 for idle, 8 for walk (frames() sets it), 8 for the morph
+
+
+def fire_tongues(c: Canvas, cx: int, base: int, tongues, u: float, shift: float = 0.0, sway: float = 2.5,
+                 sheds: bool = True, ragged: int = 0, hollow: float = 0.0) -> None:
+    """Real-looking pixel fire from soft teardrop tongues. Each tongue = (dx, height, width, lean, phase, beats):
+    wide at the root, tapering to a rounded tip, its centre line an S-curve (it leans out and sways on a rolling wave),
+    its height breathing `beats` whole times per loop (u 0..1), so a loop is seamless and nothing pops. Colour is the heat:
+    white-yellow core near the root, then yellow, orange, red, maroon at the thin edges and tips. The tip of a tall tongue
+    sheds a small flame that rises, shrinks and cools over the loop (never a lone pixel). A last pass removes specks and
+    1 px spikes. `shift` warms (+) or cools (-) everything. `ragged` = depth (px) of the uneven underside: notches are cut
+    up between little tongues of different lengths (flickering on the loop), so the base is broken, not a flat edge. `hollow`
+    leaves the inner part of each tongue empty (below that lateral fraction), so what is behind shows through."""
+    tau = math.tau
+    n = c.size
+    heat: dict[tuple[int, int], float] = {}
+    tips = []
+    for dx, hgt, w0, lean, ph, beats in tongues:
+        hcur = hgt * (0.9 + 0.1 * math.sin(tau * (beats * u + ph)))
+        if hcur < 3:
+            continue
+        y_top = int(base - hcur) - 1
+        for y in range(max(1, y_top), min(n - 1, base + 1)):
+            v = (base - y) / hcur
+            if v >= 1.0:
+                continue
+            xc = cx + dx + lean * hcur * v ** 1.7 + sway * v * math.sin(tau * (u + v * 0.7 + ph))
+            hw = w0 * (1.0 - v ** 1.9) ** 0.7 * (1.0 + 0.12 * math.sin(tau * (2 * u - 1.5 * v + ph)))
+            if hw < 1.7:  # the tip ends blunt and round, never a needle
+                continue
+            for x in range(int(xc - hw) - 1, int(xc + hw) + 2):
+                lat = abs(x - xc) / hw
+                if lat > 1.0 or lat < hollow or not 0 < x < n - 1:
+                    continue
+                h = (1.0 - v ** 1.5) * (1.0 - 0.75 * lat ** 1.5) + shift
+                if h > heat.get((x, y), -9.0):
+                    heat[(x, y)] = h
+        tips.append((cx + dx + lean * hcur * 0.9, base - hcur, hgt, w0, ph))
+    if ragged:
+        teeth = (5, 2, 4, 1, 5, 3, 2, 5, 1, 4, 3, 2, 5, 3, 4)
+        centres = [(cx - 33 + k * 4.6 + ((k * 5) % 3 - 1), teeth[k] / 5.0, k) for k in range(15)]
+        for (x, y) in list(heat):
+            reach = max(hh * ragged * (0.75 + 0.25 * math.sin(tau * (u + k * 0.37))) * max(0.0, 1 - abs(x - tx) / 2.6)
+                        for tx, hh, k in centres)
+            if y > base - ragged + reach:
+                del heat[(x, y)]
+    for _ in range(2):  # no specks, no 1 px spikes
+        drop = [(x, y) for (x, y) in heat
+                if ((x - 1, y) in heat) + ((x + 1, y) in heat) + ((x, y - 1) in heat) + ((x, y + 1) in heat) < 2
+                or (((x - 1, y) not in heat) and ((x + 1, y) not in heat) and (x, y - 1) not in heat)]
+        for k in drop:
+            del heat[k]
+    for (x, y), h in heat.items():
+        col = WHITE if h >= 1.0 else YELLOW if h >= 0.55 else ORANGE if h >= 0.3 else RED if h >= 0.08 else MAROON
+        c.px[x, y] = col + (255,)
+    if sheds:
+        for tx, ty, hgt, w0, ph in tips:
+            if hgt < 25:
+                continue
+            f = (u + ph) % 1.0  # 0 just pinched off the tip, 1 gone
+            size = 1.0 - f
+            bx = round(tx + 2.5 * math.sin(tau * (f + ph)))
+            by = max(5, round(ty + 2 - 10 * f))
+            col = (YELLOW, ORANGE, RED, MAROON)[min(3, int(f * 4))]
+            if f < 0.4:
+                c.part(R((bx, by - 1, bx + 1, by + 1)), col, shade=False, line=False)
+            elif f < 0.75:
+                c.part(R((bx, by, bx + 1, by + 1)), col, shade=False, line=False)
+
+
+INFERNO_BACK = (  # (dx from his centre, height, width, lean, phase, beats): the blaze rising off the ground round his body, hugging his shoulders and the sides of his head
+    (0, 31, 19, 0.0, 0.0, 1),  # the mass of fire round his body (its edges are what shows)
+    (-20, 62, 6.5, -0.08, 0.65, 1), (20, 57, 6.5, 0.08, 0.2, 1),
+    (-26, 42, 6.0, -0.12, 0.45, 1), (26, 37, 6.0, 0.12, 0.8, 1), (-31, 25, 5.2, -0.14, 0.9, 1), (31, 22, 5.2, 0.14, 0.3, 1),
+)
+INFERNO_CROWN = (  # the flame crown, rooted on his head: tongues of varied height, tallest in the middle / back, leaning together
+    (0, 11, 18, 0.0, 0.0, 1),
+    (-14, 30, 6.0, 0.16, 0.6, 1), (-7, 35, 6.2, 0.09, 0.1, 1), (0, 37, 6.4, 0.0, 0.45, 1), (7, 33, 6.2, -0.09, 0.8, 1),
+    (14, 27, 5.8, -0.16, 0.3, 1),
+)
+
+
+def inferno_fire(t: int, dy: int, heat: float = 1.0) -> Canvas:
+    """Inferno's blaze behind him (CELL canvas, outlined with him): fire rising off the ground round his body and a tall
+    crown of flame over his head, as soft tongues that sway, taper, curl and shed small flames (fire_tongues). `heat` 0..1
+    grows it for the morph."""
+    c = Canvas(CELL)
+    u = (t % FIRE_PERIOD) / FIRE_PERIOD
+    h = max(0.0, min(1.0, heat))
+    if h < 0.1:
+        return c
+    base = PAD + 59
+    fire_tongues(c, CELL // 2, base, [(dx * h ** 0.5, hg * h ** 0.6, w * h ** 0.5, ln, ph, bt) for dx, hg, w, ln, ph, bt in INFERNO_BACK],
+                 u, shift=-0.12, sheds=h > 0.7, ragged=6)
+    root = PAD + UPPER_DY + dy + HEAD[1] + 10  # the crown grows out of the head's top edge
+    fire_tongues(c, CELL // 2, root, [(dx * h ** 0.5, hg * h ** 0.6, w * h ** 0.5, ln, ph, bt) for dx, hg, w, ln, ph, bt in INFERNO_CROWN],
+                 u + 0.15, shift=-0.02, sheds=h > 0.7, sway=1.8)
+    return fill_notches(c)
+
+
 def flint_ground_glow(t: int, heat: float = 1.0) -> Canvas:
     """Under Inferno Flint (CELL canvas, laid UNDER his outlined sprite, no outline of its own): a dithered pool of firelight
-    fading into the ground (hot orange / red / maroon, flickering with `t`), with a few embers dropping off the base."""
+    fading into the ground (hot orange / red / maroon, flickering with the fire's loop)."""
     c = Canvas(CELL)
-    gx, gy = CELL // 2, PAD + 57
+    gx, gy = CELL // 2, PAD + 58
     rx, ry = 33 * heat, 10 * heat
+    u = (t % FIRE_PERIOD) / FIRE_PERIOD
     if heat > 0.05:
         for y in range(gy - 10, gy + 14):
             for x in range(gx - 36, gx + 37):
                 r = ((x - gx) / rx) ** 2 + ((y - gy) / ry) ** 2
                 if r >= 1.0:
                     continue
-                k = 1 - r + 0.12 * math.sin(x * 0.7 + t * 1.57)  # brightness, flickering
+                k = 1 - r + 0.12 * math.sin(x * 0.7 + math.tau * u)  # brightness, flickering
                 if BAYER[y % 4][x % 4] / 16 < k * 1.0 - 0.05:
                     c.px[x, y] = (ORANGE if k > 0.7 else RED if k > 0.4 else MAROON) + (255,)
-        for k in range(5):  # embers lifting off the base and dying out
-            ph = (t + k * 3) % 4
-            ex = gx - 24 + k * 12 + (k * 7) % 5 + SWAY[(t + k) % 4]
-            c.dot(ex, gy + 1 - 3 * ph - (k % 2) * 2, (YELLOW, ORANGE, RED, MAROON)[ph])
     return c
 
 
@@ -1088,7 +1197,7 @@ def flint_embers(i: int, heat: float = 0.0) -> Canvas:
 
 
 def flint_inferno(step=None, t=0):
-    return flint(step, t, heat=1.0)
+    return flint(step, t, heat=1.0, form=True)
 
 
 INFERNO_MORPH_FRAMES = 24
@@ -1097,17 +1206,21 @@ INFERNO_MORPH_FRAMES = 24
 def flint_inferno_morph() -> Image.Image:
     """Flint stoking up: his idle frame with heat rising 0 -> 1 over 24 frames (no growth: form_scale 1), flames licking up
     round him more and more and a spray of fire sparks building to a burst as he flares into Inferno."""
+    global FIRE_PERIOD
     out = []
     n = INFERNO_MORPH_FRAMES
+    FIRE_PERIOD = 8
     for k in range(n):
         h = k / (n - 1)
-        low, up = flint(None, k % 4, heat=h)
+        low, up = flint(None, k % 8, heat=h, form=True)
         f = flint_inferno_aura(k % 4, h * h).img
         f.alpha_composite(low.img)
         f.alpha_composite(up.img, (0, UPPER_DY))
-        cell_img = flint_crown(k % 4, 0, h).img
+        cell_img = inferno_fire(k % 8, 0, h).img  # (the 8-frame fire loop runs 3 times over the strip)
+        if h < 0.85:  # his own hair flame, swallowed by the blaze as it rises
+            cell_img.alpha_composite(flint_crown(k % 4, 0, h).img)
         cell_img.alpha_composite(f, (PAD, PAD))
-        under = flint_ground_glow(k % 4, h).img
+        under = flint_ground_glow(k % 8, h).img
         under.alpha_composite(outline(cell_img))
         img = under
         ov = Canvas(CELL)
@@ -1118,6 +1231,7 @@ def flint_inferno_morph() -> Image.Image:
             spark_cloud(ov, 31, 36, k - (n - 6), (cx, cy), (1.5, 4.5), (4, 8), 3, g=0.1, trail=3)
         img.alpha_composite(ov.img)
         out.append(img)
+    FIRE_PERIOD = 4
     return strip(out)
 
 
@@ -4554,20 +4668,11 @@ CHARACTERS = {"flicker": flicker, "warden": warden, "twinshot": twinshot, "wukon
               "sakura": sakura}
 ## Transformation sheets (SkillData.form_sprite_sheet): laid out like characters, no hands.
 # --- Inferno (Flint's form): flames licking up round him and fire sparks flying off ----------------------------------
-INFERNO_LICKS = ((8, 52, 15, -1), (56, 52, 16, 1), (5, 34, 12, -1), (59, 36, 13, 1), (14, 22, 10, -1), (50, 20, 11, 1))
-
-
 def flint_inferno_aura(i: int, h: float = 1.0) -> Canvas:
     """Behind Inferno Flint (period 4): flames licking up on both sides of him, each on its own beat, with fire sparks
     (bright heads, cooling trails) streaming up and out. `h` 0..1 scales it for the morph."""
     c = flint_embers(i, h)
     ph = math.tau * i / 4
-    for n, (x, y, height, side) in enumerate(INFERNO_LICKS):
-        hh = height * h * (1 + 0.18 * math.sin(ph + n * 1.9))
-        if hh < 4:
-            continue
-        sw = side * (1.2 + 1.5 * math.sin(ph + n)) + side * 1.5
-        flame_tongue(c, (x, y), (x + sw * 0.5, y - hh * 0.55), (x + sw + side * 1.5, y - hh), ph + n * 2.3, 1, 3.2 * min(1.0, 0.4 + h) , 32)
     spark_cloud(c, 17, int(3 + 7 * h), i, lambda r: (r.choice((r.uniform(4, 14), r.uniform(50, 60))), r.uniform(20, 52)),
                 (0.2, 0.8), (3, 4), 4, angle=(-2.4, -0.75), loop=4, up=1.4, trail=2)
     return c
@@ -4650,7 +4755,7 @@ AURAS = {"wukong": wukong_clouds, "flint": flint_embers,
 ## Optional per-frame art above the 64 px box (tall hair, flames), drawn on the CELL behind the frame:
 ## fn(tick, head_dy) -> Canvas(CELL). Not on death frames.
 GROUND_GLOWS = {"flint_inferno": flint_ground_glow}  # optional floor glow laid under each frame
-CROWNS = {"flint": flint_crown, "flint_inferno": lambda t, dy: flint_crown(t, dy, 1.0)}  # optional per-frame effects drawn behind
+CROWNS = {"flint": flint_crown, "flint_inferno": lambda t, dy: inferno_fire(t, dy, 1.0)}  # optional per-frame effects drawn behind
 HITS = {}  # per-character hit frames: fn(idle frame 0) -> 2 frames (default: white flash, then one step lighter)
 DEATHS = {}  # per-character death frames: fn() -> 8 CELL frames (default: death_frames)
 SHEETS = {}  # whole hand-built sheets (idle, hit, walk, death): fn() -> list of CELL frames, written after the loop in main()
@@ -6190,9 +6295,15 @@ def frames(build, aura=None, crown=None, ground=None) -> list[Image.Image]:
             return under
         return outline(f)
 
+    global FIRE_PERIOD
+    FIRE_PERIOD = 4
     idle = [frame(None, dy, i) for i, dy in enumerate(IDLE_BOB)]
     hit = [recolor(idle[0], lambda _c: WHITE), recolor(idle[0], LIGHTER.__getitem__)]
-    walk = [frame(i, dy, i) for i, dy in enumerate(WALK_BOB)]
+    FIRE_PERIOD = 8  # the walk loop is 8 frames: the fire rises at half the speed per frame
+    try:
+        walk = [frame(i, dy, i) for i, dy in enumerate(WALK_BOB)]
+    finally:
+        FIRE_PERIOD = 4
     return idle + hit + walk
 
 
