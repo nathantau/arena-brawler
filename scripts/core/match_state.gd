@@ -4,7 +4,7 @@ extends RefCounted
 ## sends it whole, reliably, on every change; clients only count time_left down for display.
 
 enum Phase { LOBBY, COUNTDOWN, PLAYING, RESULTS }
-enum Field { PHASE, MODE, ARENA, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, TEAMS, ROUND_SCORES, ROUND, ROUND_WINNER, INTERMISSION, COUNT }
+enum Field { PHASE, MODE, ARENA, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, TEAMS, ROUND_SCORES, ROUND, ROUND_WINNER, INTERMISSION, FLAGS, ROUND_REASON, COUNT }
 ## One results row: [id, kills, deaths].
 enum ResultField { ID, KILLS, DEATHS, COUNT }
 
@@ -36,6 +36,15 @@ var round_number: int = 0
 var round_winner: int = 0
 ## Seconds left in the pause between rounds (0 = a round is running). Counts down on clients too.
 var intermission: float = 0.0
+## Why the last round ended (MatchRules.Reason).
+var round_reason: int = MatchRules.Reason.NONE
+## Capture the flag, per team (index = the flag's owner, 0 unused): where it is, who carries it (an enemy's id),
+## where it lies when dropped and how long until it flies home. The server owns these; clients count the timer down.
+enum Flag { HOME, CARRIED, DROPPED }
+var flag_state: Array[int] = [0, 0, 0]
+var flag_carrier: Array[int] = [0, 0, 0]
+var flag_pos: PackedVector2Array = PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+var flag_timer: Array[float] = [0.0, 0.0, 0.0]
 
 
 func is_participant(id: int) -> bool:
@@ -58,6 +67,29 @@ func may_respawn(id: int) -> bool:
 				return is_participant(id) and intermission <= 0.0 and lives_of(id) > 0
 			return is_participant(id)
 	return false
+
+
+func reset_flags() -> void:
+	flag_state = [Flag.HOME, Flag.HOME, Flag.HOME]
+	flag_carrier = [0, 0, 0]
+	flag_timer = [0.0, 0.0, 0.0]
+
+
+## The team whose flag `id` is carrying, or 0.
+func carried_flag_of(id: int) -> int:
+	for t: int in [MatchRules.TEAM_A, MatchRules.TEAM_B]:
+		if flag_state[t] == Flag.CARRIED and flag_carrier[t] == id:
+			return t
+	return 0
+
+
+## Teams holding the enemy flag right now (carried, not dropped).
+func teams_carrying() -> Array[int]:
+	var out: Array[int] = []
+	for t: int in [MatchRules.TEAM_A, MatchRules.TEAM_B]:
+		if flag_state[MatchRules.other_team(t)] == Flag.CARRIED:
+			out.append(t)
+	return out
 
 
 func team_of(id: int) -> int:
@@ -89,6 +121,11 @@ func to_array() -> Array:
 	a[Field.ROUND] = round_number
 	a[Field.ROUND_WINNER] = round_winner
 	a[Field.INTERMISSION] = intermission
+	var fl := PackedFloat32Array()
+	for t: int in [MatchRules.TEAM_A, MatchRules.TEAM_B]:
+		fl.append_array([flag_state[t], flag_carrier[t], flag_pos[t].x, flag_pos[t].y, flag_timer[t]])
+	a[Field.FLAGS] = fl
+	a[Field.ROUND_REASON] = round_reason
 	return a
 
 
@@ -104,7 +141,8 @@ func apply_array(a: Array) -> bool:
 			or typeof(a[Field.BLOCKER]) != TYPE_STRING \
 			or typeof(a[Field.TEAMS]) != TYPE_PACKED_INT32_ARRAY or typeof(a[Field.ROUND_SCORES]) != TYPE_PACKED_INT32_ARRAY \
 			or typeof(a[Field.ROUND]) != TYPE_INT or typeof(a[Field.ROUND_WINNER]) != TYPE_INT \
-			or typeof(a[Field.INTERMISSION]) != TYPE_FLOAT:
+			or typeof(a[Field.INTERMISSION]) != TYPE_FLOAT or typeof(a[Field.ROUND_REASON]) != TYPE_INT \
+			or typeof(a[Field.FLAGS]) != TYPE_PACKED_FLOAT32_ARRAY or (a[Field.FLAGS] as PackedFloat32Array).size() != 10:
 		return false
 	var tl: PackedInt32Array = a[Field.TEAMS]
 	var rs: PackedInt32Array = a[Field.ROUND_SCORES]
@@ -134,6 +172,14 @@ func apply_array(a: Array) -> bool:
 	round_number = a[Field.ROUND]
 	round_winner = a[Field.ROUND_WINNER]
 	intermission = a[Field.INTERMISSION]
+	round_reason = a[Field.ROUND_REASON]
+	var fl: PackedFloat32Array = a[Field.FLAGS]
+	for i: int in 2:
+		var t: int = i + 1
+		flag_state[t] = clampi(roundi(fl[i * 5]), 0, Flag.size() - 1)
+		flag_carrier[t] = roundi(fl[i * 5 + 1])
+		flag_pos[t] = Vector2(fl[i * 5 + 2], fl[i * 5 + 3])
+		flag_timer[t] = fl[i * 5 + 4]
 	return true
 
 

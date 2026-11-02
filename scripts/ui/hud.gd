@@ -34,6 +34,12 @@ const BANNER_TIME: float = 1.1
 const BANNER_Y: float = 0.28
 const BANNER_POP_TIME: float = 0.14
 ## Last seconds of a match: the clock turns red, pulses and ticks.
+const FLAG_LINE_Y: float = 118.0
+const FLAG_ARROW_INSET: float = 46.0
+const FLAG_ARROW_SIZE: float = 15.0
+const COLOR_FLAG_ENEMY: Color = Color(1.0, 0.35, 0.3)
+const COLOR_ARROW_OUTLINE: Color = Color(0.1, 0.1, 0.18)
+const COLOR_FLAG_ALLY: Color = Color(0.4, 0.7, 1.0)
 const URGENT_SECONDS: int = 10
 const COLOR_URGENT: Color = Color(1.0, 0.45, 0.4)
 ## Red edge glow at low HP (stepped bands, pixel style): fraction of max HP it starts at, band count and width.
@@ -240,6 +246,7 @@ func _draw() -> void:
 			HORIZONTAL_ALIGNMENT_RIGHT, size.x - STATUS_RIGHT_MARGIN)
 	_draw_feed()
 	_draw_messages()
+	_draw_flags()
 	_draw_banners()
 
 
@@ -450,6 +457,79 @@ func _draw_clock(c: CanvasItem, r: Rect2, st: MatchState, clock: String, urgent:
 			cc = COLOR_URGENT
 			y += (cf - UiStyle.SIZE_SMALL) * 0.5
 		UiStyle.draw_text(c, Vector2(0.0, y), clock, cf, cc, HORIZONTAL_ALIGNMENT_CENTER, size.x)
+
+
+## Capture the flag (Teams): a status line under the clock, and an arrow on the screen edge toward the enemy flag when it
+## is off screen (toward your own base while you carry it).
+func _draw_flags() -> void:
+	var st: MatchState = arena.match_state
+	if st.mode != MatchRules.Mode.TEAMS or st.phase != MatchState.Phase.PLAYING or player.team == 0:
+		return
+	var own: int = player.team
+	var enemy: int = MatchRules.other_team(own)
+	var line: String = ""
+	var color: Color = UiStyle.C_WHITE
+	var target := Vector2.INF
+	var target_color: Color = COLOR_FLAG_ENEMY
+	if player.flag_carrier:
+		line = "You have the flag! Run to your base"
+		color = UiStyle.C_YELLOW
+		target = arena.flag_base(own)
+		target_color = UiStyle.C_YELLOW
+	else:
+		if st.flag_state[own] == MatchState.Flag.CARRIED:
+			line = "Your flag taken!"
+			color = COLOR_FLAG_ENEMY
+		elif st.flag_state[own] == MatchState.Flag.DROPPED:
+			line = "Your flag dropped: touch it to return it"
+			color = UiStyle.C_YELLOW
+		elif st.flag_state[enemy] == MatchState.Flag.CARRIED:
+			line = "Your team has the flag!"
+			color = COLOR_FLAG_ALLY
+		elif st.flag_state[enemy] == MatchState.Flag.DROPPED:
+			line = "Enemy flag dropped!"
+			color = UiStyle.C_YELLOW
+		if st.flag_state[enemy] != MatchState.Flag.CARRIED or st.flag_carrier[enemy] != player.player_id:
+			target = _flag_spot(st, enemy)
+	if line != "" and st.intermission <= 0.0:
+		UiStyle.draw_text(self, Vector2(0.0, FLAG_LINE_Y), line, UiStyle.SIZE_BODY, color, HORIZONTAL_ALIGNMENT_CENTER, size.x, true)
+	if target != Vector2.INF and st.intermission <= 0.0:
+		_draw_edge_arrow(target, target_color)
+
+
+## Where a team's flag is now: carried (on its carrier), lying, or at its base.
+func _flag_spot(st: MatchState, team: int) -> Vector2:
+	match st.flag_state[team]:
+		MatchState.Flag.CARRIED:
+			var carrier: Player = arena.get_player(st.flag_carrier[team])
+			return carrier.global_position if carrier != null else arena.flag_base(team)
+		MatchState.Flag.DROPPED:
+			return st.flag_pos[team]
+	return arena.flag_base(team)
+
+
+## A triangle on the screen edge pointing at the world point `at`, only while it is off screen.
+func _draw_edge_arrow(at: Vector2, color: Color) -> void:
+	var inv: Transform2D = get_global_transform().affine_inverse()
+	var local: Vector2 = inv * (arena.get_global_transform_with_canvas() * at)
+	var box := Rect2(Vector2.ZERO, size).grow(-FLAG_ARROW_INSET)
+	if box.has_point(local):
+		return
+	var centre: Vector2 = size * 0.5
+	var dir: Vector2 = (local - centre).normalized()
+	# Where the ray from the centre leaves the box, so the arrow keeps pointing at the target.
+	var t: float = INF
+	if absf(dir.x) > 0.001:
+		t = minf(t, ((box.end.x if dir.x > 0.0 else box.position.x) - centre.x) / dir.x)
+	if absf(dir.y) > 0.001:
+		t = minf(t, ((box.end.y if dir.y > 0.0 else box.position.y) - centre.y) / dir.y)
+	var spot: Vector2 = centre + dir * t
+	var side: Vector2 = dir.orthogonal()
+	var tip: Vector2 = spot + dir * FLAG_ARROW_SIZE
+	var back: Vector2 = spot - dir * FLAG_ARROW_SIZE * 0.5
+	var pts := PackedVector2Array([tip, back + side * FLAG_ARROW_SIZE * 0.8, back - side * FLAG_ARROW_SIZE * 0.8])
+	draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[0]]), COLOR_ARROW_OUTLINE, 5.0)
+	draw_colored_polygon(pts, color)
 
 
 func _draw_messages() -> void:

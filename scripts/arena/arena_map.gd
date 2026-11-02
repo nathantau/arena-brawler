@@ -57,6 +57,29 @@ static func side_spawns(spawns: PackedVector2Array, width: float, team: int) -> 
 	return spawns if out.is_empty() else out
 
 
+## Where a team's flag stands: the open floor tile nearest the middle of its back wall (A left, B right), found from
+## the outermost spawn on that side. Mirrored layouts give mirrored bases.
+func flag_base(team: int, tile: float) -> Vector2:
+	var near: PackedVector2Array = ArenaMap.side_spawns(spawns, size.x, team)
+	var x: float = near[0].x
+	for s: Vector2 in near:
+		x = minf(x, s.x) if team == MatchRules.TEAM_A else maxf(x, s.x)
+	var ideal := Vector2(x, size.y * 0.5)
+	var best: Vector2 = ideal
+	var best_d: float = INF
+	for y: int in rows.size():
+		for cx: int in rows[y].length():
+			var c: String = rows[y][cx]
+			if c == WALL_CHAR or c == CRATE_CHAR:
+				continue
+			var at := Vector2((cx + 0.5) * tile, (y + 0.5) * tile)
+			var d: float = at.distance_squared_to(ideal)
+			if d < best_d:
+				best_d = d
+				best = at
+	return best
+
+
 ## The spawn whose nearest threat is farthest away. With no threats, the first spawn.
 static func pick_spawn(spawns: PackedVector2Array, threats: PackedVector2Array) -> Vector2:
 	if threats.is_empty():

@@ -110,6 +110,14 @@ var is_local: bool = false
 var is_bot: bool = false
 ## Teams mode: 0 = no team (Duel / FFA), else MatchRules.TEAM_A / TEAM_B. Allies never hurt or target each other.
 var team: int = 0
+## Teams: true while this player carries the enemy flag (set from the match state on every peer): slower, no movement
+## specials, and Smoke Bomb doesn't hide them.
+var flag_carrier: bool = false
+## Max HP multiplier from the mode (Constants.TEAMS_HP_SCALE in Teams, else 1).
+var hp_scale: float = 1.0
+## Movement specials a flag carrier can't use.
+const CARRIER_BLOCKED_KINDS: Array[SkillData.Kind] = [SkillData.Kind.DASH, SkillData.Kind.SWING, SkillData.Kind.GRAPPLE,
+	SkillData.Kind.TRAIL, SkillData.Kind.DRIFT, SkillData.Kind.OVERDRIVE, SkillData.Kind.STEP]
 ## The team of the player this device watches (0 = none): its Smoke Bomb users stay visible to it.
 static var viewer_team: int = 0
 ## Countdown / results screen: inputs are ignored (timers still run).
@@ -216,11 +224,21 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	set_character(p_character)
 
 
+## Teams give everyone more HP: a full-health player stays full when the maximum changes.
+func set_hp_scale(scale: float) -> void:
+	if is_equal_approx(scale, hp_scale):
+		return
+	var full: bool = stats.hp >= stats.max_hp
+	hp_scale = scale
+	stats.max_hp = roundi(character.max_hp * scale)
+	stats.hp = stats.max_hp if full else mini(stats.hp, stats.max_hp)
+
+
 ## Switch character (lobby pick or a snapshot saying so): new stat maxes, fresh skills. Keeps the picked specials
 ## and weapon if the new character can use them.
 func set_character(data: CharacterData) -> void:
 	character = data
-	stats = PlayerStats.new(data.max_hp, data.max_armor, data.max_energy)
+	stats = PlayerStats.new(roundi(data.max_hp * hp_scale), data.max_armor, data.max_energy)
 	var defaults: Array[SkillData] = default_skills(data)
 	var kept: Array[SkillData] = []
 	for i: int in Constants.SKILL_SLOTS:
@@ -498,6 +516,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
 		if smoke != null:
 			speed *= smoke.data.smoke_speed_scale
+		if flag_carrier:
+			speed *= Constants.FLAG_CARRIER_SPEED_SCALE
 		var steer: Vector2 = input.move_vec
 		if drift != null:  # glides on its own way until the stick says otherwise
 			speed *= drift.data.drift_speed_scale
@@ -573,6 +593,8 @@ func _end_abilities(swing: CharacterSkill) -> void:
 
 ## True while the other slot is in a phase that blocks this one (see CharacterSkill.blocks_other): the press is ignored.
 func skill_locked(slot: int) -> bool:
+	if flag_carrier and CARRIER_BLOCKED_KINDS.has(skills[slot].data.kind):
+		return true
 	for i: int in skills.size():
 		if i != slot and skills[i].blocks_other():
 			return true
@@ -906,7 +928,7 @@ func is_friendly_to_viewer() -> bool:
 
 ## Smoke Bomb is running: she is invisible to everyone but herself (and her team).
 func is_vanished() -> bool:
-	return active_skill(SkillData.Kind.SMOKE) != null
+	return active_skill(SkillData.Kind.SMOKE) != null and not flag_carrier
 
 
 ## Not drawn at all on this peer: vanished and not the one playing her.

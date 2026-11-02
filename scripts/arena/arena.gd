@@ -129,6 +129,8 @@ var _hit_owner: int = 0
 var _streak: int = 0
 var _fx_phase: MatchState.Phase = MatchState.Phase.LOBBY
 var _fx_round: int = 0
+var _flag_bases: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+var flags: FlagField
 var _client_break: bool = false
 var _fx_break: bool = false
 var _input: LocalInput
@@ -171,7 +173,7 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 				referee.set_team(local_player.player_id, team))
 		referee.living_hp = _living_hp
 		referee.round_started.connect(_on_round_started)
-		referee.round_ended.connect(func(_winner: int) -> void: projectiles.clear())
+		referee.round_ended.connect(func(_winner: int, _reason: int) -> void: projectiles.clear())
 		arena_requested.connect(referee.set_arena)
 		character_requested.connect(func(id: StringName) -> void:
 			if local_player != null:
@@ -208,11 +210,18 @@ func _load_layout(index: int) -> void:
 		b.queue_free()
 	_ghosted.clear()
 	_wall_blocks = _floor.build_walls(self, map)
+	for t: int in [MatchRules.TEAM_A, MatchRules.TEAM_B]:
+		_flag_bases[t] = map.flag_base(t, Constants.TILE_SIZE)
 	crates.setup(map, _floor.tiles)
 	pickups.setup(map)
 	projectiles.clear()
 	for p: Player in players:
 		p.arena_bounds = play_area()
+
+
+## Where team `team`'s flag stands (and its capture pad).
+func flag_base(team: int) -> Vector2:
+	return _flag_bases[team]
 
 
 ## The floor inside the border walls (one tile thick in every layout).
@@ -415,6 +424,10 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	hud.input = input
 	touch.ready_sfx = func() -> void: sfx.play(&"ready")
 	_attach_effects()
+	flags = FlagField.new()
+	flags.name = "Flags"
+	flags.arena = self
+	add_child(flags)
 	_apply_teams()
 
 
@@ -602,7 +615,8 @@ func _round_banners() -> void:
 		if st.round_winner == 0:
 			hud.banner("Round drawn", UiStyle.C_STEEL)
 		else:
-			hud.banner("%s wins the round" % MatchRules.TEAM_NAMES[st.round_winner],
+			hud.banner(("%s captured the flag!" if st.round_reason == MatchRules.Reason.CAPTURE else "%s wins the round")
+				% MatchRules.TEAM_NAMES[st.round_winner],
 				UiStyle.C_YELLOW if st.round_winner == Player.viewer_team else UiStyle.C_WHITE)
 	_fx_break = on_break
 
@@ -710,11 +724,15 @@ func _physics_process(delta: float) -> void:
 		if mode == Mode.OFFLINE:
 			_fill_teams_bots()
 		referee.tick(delta, _human_ids, _bot_ids, scores)
+		_tick_flags()
 		_tick_respawns(delta)
 		if not match_state.inputs_locked():
 			pickups.collect(players)
 	elif match_state.phase != MatchState.Phase.LOBBY:
 		# Display only; the server sends the real value on every phase change.
+		for t: int in [MatchRules.TEAM_A, MatchRules.TEAM_B]:  # display only, like the clock
+			if match_state.flag_state[t] == MatchState.Flag.DROPPED:
+				match_state.flag_timer[t] = maxf(0.0, match_state.flag_timer[t] - delta)
 		if match_state.intermission > 0.0:
 			match_state.intermission = maxf(0.0, match_state.intermission - delta)
 			if match_state.intermission == 0.0:
@@ -745,6 +763,32 @@ func _fill_teams_bots() -> void:
 		add_bot(Constants.BOT_ID_BASE + _bot_ids.size(), free_color_index())
 
 
+## Authoritative, Teams: touching flags. An enemy picks up a flag at its base or where it lies, the owner's touch sends
+## a dropped flag home, and a carrier reaching their own base pad captures (the referee ends the round).
+func _tick_flags() -> void:
+	var st: MatchState = match_state
+	if st.mode != MatchRules.Mode.TEAMS or st.phase != MatchState.Phase.PLAYING or st.intermission > 0.0:
+		return
+	var r: float = Constants.FLAG_TOUCH_RADIUS
+	for p: Player in players:
+		if p.dead or p.team == 0 or not st.is_participant(p.player_id):
+			continue
+		var enemy: int = MatchRules.other_team(p.team)
+		if st.carried_flag_of(p.player_id) == 0:
+			var at := Vector2.INF
+			if st.flag_state[enemy] == MatchState.Flag.HOME:
+				at = _flag_bases[enemy]
+			elif st.flag_state[enemy] == MatchState.Flag.DROPPED:
+				at = st.flag_pos[enemy]
+			if at != Vector2.INF and p.global_position.distance_to(at) <= r:
+				referee.flag_pickup(p.player_id, enemy)
+		if st.flag_state[p.team] == MatchState.Flag.DROPPED and p.global_position.distance_to(st.flag_pos[p.team]) <= r:
+			referee.flag_return(p.team)
+		if st.carried_flag_of(p.player_id) != 0 and p.global_position.distance_to(_flag_bases[p.team]) <= r:
+			referee.flag_capture(p.player_id, scores)
+			return
+
+
 ## id -> hp of every participant standing right now (for the round-timeout tiebreak).
 func _living_hp() -> Dictionary:
 	var out: Dictionary = {}
@@ -761,8 +805,11 @@ func _team_for(id: int) -> int:
 
 ## Every player's team (and the viewer's, for ally/enemy colours) follows the match state.
 func _apply_teams() -> void:
+	var hp_scale: float = Constants.TEAMS_HP_SCALE if match_state.mode == MatchRules.Mode.TEAMS else 1.0
 	for p: Player in players:
 		p.team = _team_for(p.player_id)
+		p.flag_carrier = p.team != 0 and match_state.carried_flag_of(p.player_id) != 0
+		p.set_hp_scale(hp_scale)
 	Player.viewer_team = local_player.team if local_player != null else 0
 
 
@@ -852,7 +899,7 @@ func _on_projectile_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: in
 
 func _on_player_died(victim: Player, killer_id: int) -> void:
 	if referee != null:
-		referee.on_death(victim.player_id)
+		referee.on_death(victim.player_id, victim.global_position)
 	scores.register_kill(killer_id, victim.player_id)
 	kill_registered.emit(killer_id, victim.player_id)
 

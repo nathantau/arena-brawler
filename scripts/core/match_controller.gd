@@ -8,8 +8,8 @@ extends RefCounted
 ## Emitted whenever the state should be re-broadcast to clients.
 signal changed
 signal phase_changed(phase: MatchState.Phase)
-## Teams: a round ended (winner team, 0 = nobody), and the next round is starting after the intermission.
-signal round_ended(winner: int)
+## Teams: a round ended (winner team, 0 = nobody; reason = MatchRules.Reason), and the next round is starting after the intermission.
+signal round_ended(winner: int, reason: int)
 signal round_started
 
 var state := MatchState.new()
@@ -44,12 +44,49 @@ func set_team(id: int, team: int) -> void:
 	changed.emit()
 
 
-## Teams: a participant died. Spends a life while a round is running.
-func on_death(id: int) -> void:
+## Teams: a participant died at `at`. Spends a life while a round is running, and a carried flag drops there.
+func on_death(id: int, at: Vector2 = Vector2.ZERO) -> void:
 	if not _round_running() or not state.teams.has(id):
 		return
 	state.lives[id] = maxi(0, state.lives_of(id) - 1)
+	var flag: int = state.carried_flag_of(id)
+	if flag != 0:
+		state.flag_state[flag] = MatchState.Flag.DROPPED
+		state.flag_carrier[flag] = 0
+		state.flag_pos[flag] = at
+		state.flag_timer[flag] = Constants.FLAG_RETURN_TIME
 	changed.emit()
+
+
+## Teams: `carrier_id` (on the other team) touched `flag_team`'s flag at its base or where it lies.
+func flag_pickup(carrier_id: int, flag_team: int) -> void:
+	if not _round_running() or state.flag_state[flag_team] == MatchState.Flag.CARRIED \
+			or state.team_of(carrier_id) != MatchRules.other_team(flag_team) or state.carried_flag_of(carrier_id) != 0:
+		return
+	state.flag_state[flag_team] = MatchState.Flag.CARRIED
+	state.flag_carrier[flag_team] = carrier_id
+	state.flag_timer[flag_team] = 0.0
+	changed.emit()
+
+
+## Teams: a flag goes back to its base (its owner touched it, or it lay there too long).
+func flag_return(flag_team: int) -> void:
+	if not _round_running() or state.flag_state[flag_team] == MatchState.Flag.HOME:
+		return
+	state.flag_state[flag_team] = MatchState.Flag.HOME
+	state.flag_carrier[flag_team] = 0
+	state.flag_timer[flag_team] = 0.0
+	changed.emit()
+
+
+## Teams: the carrier reached their own base pad: their team wins the round on the spot.
+func flag_capture(carrier_id: int, scores: ScoreBoard) -> void:
+	var flag: int = state.carried_flag_of(carrier_id)
+	if not _round_running() or flag == 0 or state.team_of(carrier_id) != MatchRules.other_team(flag):
+		return
+	state.flag_state[flag] = MatchState.Flag.HOME
+	state.flag_carrier[flag] = 0
+	_end_round(MatchRules.other_team(flag), MatchRules.Reason.CAPTURE, scores)
 
 
 func set_ready(id: int, is_ready: bool) -> void:
@@ -68,6 +105,10 @@ func remove_player(id: int, scores: ScoreBoard, humans: Array[int]) -> void:
 	var was_in: bool = state.participants.has(id) or state.ready.has(id)
 	state.ready.erase(id)
 	state.participants.erase(id)
+	var held: int = state.carried_flag_of(id)
+	if held != 0:  # a carrier who leaves: the flag flies home
+		state.flag_state[held] = MatchState.Flag.HOME
+		state.flag_carrier[held] = 0
 	state.teams.erase(id)
 	state.lives.erase(id)
 	var running: bool = state.phase == MatchState.Phase.COUNTDOWN or state.phase == MatchState.Phase.PLAYING
@@ -127,23 +168,32 @@ func _tick_round(delta: float, scores: ScoreBoard) -> void:
 			state.round_number += 1
 			state.time_left = _round_time()
 			_refill_lives()
+			state.reset_flags()
 			round_started.emit()
 			changed.emit()
 		return
 	state.time_left -= delta
+	for flag: int in [MatchRules.TEAM_A, MatchRules.TEAM_B]:  # a dropped flag left alone flies home
+		if state.flag_state[flag] == MatchState.Flag.DROPPED:
+			state.flag_timer[flag] -= delta
+			if state.flag_timer[flag] <= 0.0:
+				flag_return(flag)
 	var result: int = MatchRules.round_result(state.teams, state.lives)
+	var reason: int = MatchRules.Reason.WIPE
 	if result == MatchRules.ROUND_ON and state.time_left <= 0.0:
 		var hp: Dictionary = living_hp.call() if living_hp.is_valid() else {}
-		result = MatchRules.timeout_winner(state.teams, hp)
+		result = MatchRules.timeout_winner(state.teams, hp, state.teams_carrying())
+		reason = MatchRules.Reason.TIMEOUT
 	if result != MatchRules.ROUND_ON:
-		_end_round(result, scores)
+		_end_round(result, reason, scores)
 
 
-func _end_round(winner: int, scores: ScoreBoard) -> void:
+func _end_round(winner: int, reason: int, scores: ScoreBoard) -> void:
+	state.round_reason = reason
 	state.round_winner = winner
 	if winner != 0:
 		state.round_scores[winner] += 1
-	round_ended.emit(winner)
+	round_ended.emit(winner, reason)
 	if winner != 0 and state.round_scores[winner] >= Constants.TEAMS_ROUND_TARGET:
 		_end(scores)
 		return
@@ -195,7 +245,9 @@ func _reset_teams() -> void:
 	state.round_scores = [0, 0, 0]
 	state.round_number = 0
 	state.round_winner = 0
+	state.round_reason = MatchRules.Reason.NONE
 	state.intermission = 0.0
+	state.reset_flags()
 
 
 ## Teams: lock in everyone's team (picks kept, the rest balanced), round 1, full lives, 0-0.

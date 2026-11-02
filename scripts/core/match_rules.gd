@@ -10,6 +10,8 @@ const SHORT_NAMES: Array[String] = ["Duel", "FFA", "3v3"]
 const TEAM_A: int = 1
 const TEAM_B: int = 2
 const TEAM_NAMES: Array[String] = ["", "Team A", "Team B"]
+## Why a round ended (MatchState.round_reason).
+enum Reason { NONE, WIPE, TIMEOUT, CAPTURE }
 ## round_result() while both teams still have someone in.
 const ROUND_ON: int = -1
 
@@ -82,8 +84,11 @@ static func round_result(teams: Dictionary, lives: Dictionary) -> int:
 
 
 ## Round clock ran out: the team with more players alive wins, then more total HP; a full tie is 0 (no point).
-## `hp` = id -> hp of every player alive right now.
-static func timeout_winner(teams: Dictionary, hp: Dictionary) -> int:
+## `hp` = id -> hp of every player alive right now. `carrying` = teams currently carrying the enemy flag (not dropped):
+## when exactly one team does, it wins before any of that.
+static func timeout_winner(teams: Dictionary, hp: Dictionary, carrying: Array[int] = []) -> int:
+	if carrying.size() == 1:
+		return carrying[0]
 	var alive: Array[int] = [0, 0, 0]
 	var total: Array[int] = [0, 0, 0]
 	for id: int in hp:

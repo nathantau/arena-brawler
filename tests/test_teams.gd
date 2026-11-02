@@ -355,3 +355,234 @@ func test_allies_still_see_a_vanished_teammate_enemies_do_not() -> void:
 	Player.viewer_team = A
 	assert_false(p.is_concealed(), "a teammate still sees her (faded)")
 	assert_true(p.is_hidden(), "but she is still untargetable")
+
+
+# --- capture the flag ---------------------------------------------------------
+
+func _thief(c: MatchController) -> int:
+	return MatchRules.members(c.state.teams, B)[0]
+
+
+func test_enemy_picks_up_the_flag_and_only_enemies_do() -> void:
+	var c := _playing_controller()
+	var a_id: int = MatchRules.members(c.state.teams, A)[0]
+	c.flag_pickup(a_id, A)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.HOME, "an owner can't pick up their own flag")
+	var thief: int = _thief(c)
+	c.flag_pickup(thief, A)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.CARRIED)
+	assert_eq(c.state.flag_carrier[A], thief)
+	assert_eq(c.state.carried_flag_of(thief), A)
+	var other: int = MatchRules.members(c.state.teams, B)[1]
+	c.flag_pickup(other, A)
+	assert_eq(c.state.flag_carrier[A], thief, "already carried")
+
+
+func test_capture_wins_the_round_at_once() -> void:
+	var c := _playing_controller()
+	var thief: int = _thief(c)
+	c.flag_pickup(thief, A)
+	c.flag_capture(thief, ScoreBoard.new())
+	assert_eq(c.state.round_scores[B], 1)
+	assert_eq(c.state.round_winner, B)
+	assert_eq(c.state.round_reason, MatchRules.Reason.CAPTURE)
+	assert_gt(c.state.intermission, 0.0)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.HOME)
+	var nobody: int = MatchRules.members(c.state.teams, A)[0]
+	c.state.intermission = 0.0
+	c.flag_capture(nobody, ScoreBoard.new())
+	assert_eq(c.state.round_scores[A], 0, "no flag, no capture")
+
+
+func test_capture_works_while_your_own_flag_is_away() -> void:
+	var c := _playing_controller()
+	var a: Array[int] = MatchRules.members(c.state.teams, A)
+	var b: Array[int] = MatchRules.members(c.state.teams, B)
+	c.flag_pickup(a[0], B)  # their flag is carried off...
+	c.flag_pickup(b[0], A)
+	c.flag_capture(b[0], ScoreBoard.new())
+	assert_eq(c.state.round_scores[B], 1, "...and the capture still counts")
+
+
+func test_flag_drops_where_the_carrier_dies() -> void:
+	var c := _playing_controller()
+	var thief: int = _thief(c)
+	c.flag_pickup(thief, A)
+	c.on_death(thief, Vector2(321, 654))
+	assert_eq(c.state.flag_state[A], MatchState.Flag.DROPPED)
+	assert_eq(c.state.flag_pos[A], Vector2(321, 654))
+	assert_eq(c.state.flag_carrier[A], 0)
+	assert_almost_eq(c.state.flag_timer[A], Constants.FLAG_RETURN_TIME, 0.001)
+	var again: int = MatchRules.members(c.state.teams, B)[1]
+	c.flag_pickup(again, A)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.CARRIED, "an enemy touching it picks it up again")
+
+
+func test_owner_returns_a_dropped_flag() -> void:
+	var c := _playing_controller()
+	var thief: int = _thief(c)
+	c.flag_pickup(thief, A)
+	c.on_death(thief, Vector2(100, 100))
+	c.flag_return(A)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.HOME)
+	assert_eq(c.state.flag_timer[A], 0.0)
+
+
+func test_dropped_flag_flies_home_after_8_seconds() -> void:
+	var c := _playing_controller()
+	var thief: int = _thief(c)
+	c.flag_pickup(thief, A)
+	c.on_death(thief, Vector2(100, 100))
+	_tick(c, Constants.FLAG_RETURN_TIME - 1.0)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.DROPPED, "still lying after 7 s")
+	_tick(c, 1.5)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.HOME)
+
+
+func test_a_carrier_who_leaves_sends_the_flag_home() -> void:
+	var c := _playing_controller()
+	var thief: int = _thief(c)
+	c.flag_pickup(thief, A)
+	c.remove_player(thief, ScoreBoard.new(), HUMANS)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.HOME)
+
+
+func test_timeout_the_team_holding_the_flag_wins_first() -> void:
+	var c := _playing_controller()
+	var a: Array[int] = MatchRules.members(c.state.teams, A)
+	var b: Array[int] = MatchRules.members(c.state.teams, B)
+	c.flag_pickup(b[0], A)  # B holds A's flag
+	c.living_hp = func() -> Dictionary: return {a[0]: 150, a[1]: 150, a[2]: 150, b[0]: 10}
+	_tick(c, Constants.TEAMS_ROUND_TIME + 1.0)
+	assert_eq(c.state.round_winner, B, "the flag beats 3 alive vs 1 alive")
+	assert_eq(c.state.round_reason, MatchRules.Reason.TIMEOUT)
+	assert_eq(MatchRules.timeout_winner({1: A, 2: B}, {1: 90, 2: 10}, [B] as Array[int]), B)
+	assert_eq(MatchRules.timeout_winner({1: A, 2: B}, {1: 90, 2: 10}, [A, B] as Array[int]), A, "both holding: the usual tiebreak")
+	assert_eq(MatchRules.timeout_winner({1: A, 2: B}, {1: 90, 2: 10}, [] as Array[int]), A, "a dropped flag doesn't count")
+
+
+func test_flags_reset_for_the_next_round_and_survive_state_sync() -> void:
+	var c := _playing_controller()
+	var thief: int = _thief(c)
+	c.flag_pickup(thief, A)
+	c.on_death(thief, Vector2(12, 34))
+	c.state.flag_timer[A] = 5.5
+	var copy := MatchState.new()
+	assert_true(copy.apply_array(c.state.to_array()))
+	assert_eq(copy.flag_state[A], MatchState.Flag.DROPPED)
+	assert_eq(copy.flag_pos[A], Vector2(12, 34))
+	assert_almost_eq(copy.flag_timer[A], 5.5, 0.01)
+	_kill_team(c, A)
+	_tick(c, DT)
+	_tick(c, Constants.TEAMS_INTERMISSION + 0.1)
+	assert_eq(c.state.flag_state[A], MatchState.Flag.HOME)
+
+
+func _flag_arena() -> Arena:
+	var arena: Arena = _arena_with(3)  # 1, 2 on A; 3 on B
+	var st: MatchState = arena.match_state
+	st.phase = MatchState.Phase.PLAYING
+	st.participants = [1, 2, 3]
+	st.time_left = 60.0
+	for id: int in [1, 2, 3]:
+		st.lives[id] = Constants.TEAMS_LIVES
+	st.round_number = 1
+	return arena
+
+
+func test_touching_flags_picks_up_returns_and_captures() -> void:
+	var arena: Arena = _flag_arena()
+	var st: MatchState = arena.match_state
+	var thief: Player = arena.get_player(3)
+	thief.global_position = arena.flag_base(A)
+	arena._tick_flags()
+	assert_eq(st.flag_state[A], MatchState.Flag.CARRIED, "walking over the enemy flag picks it up")
+	assert_true(thief.flag_carrier, "and the player knows")
+	assert_ne(arena.flag_base(A), arena.flag_base(B))
+	assert_lt(arena.flag_base(A).x, arena.map.size.x * 0.5, "A's base is on A's side")
+	thief.global_position = arena.flag_base(B)
+	arena._tick_flags()
+	assert_eq(st.round_scores[B], 1, "bringing it to their own pad captures")
+	assert_eq(st.round_reason, MatchRules.Reason.CAPTURE)
+
+
+func test_owner_touching_a_dropped_flag_returns_it() -> void:
+	var arena: Arena = _flag_arena()
+	var st: MatchState = arena.match_state
+	st.flag_state[A] = MatchState.Flag.DROPPED
+	st.flag_pos[A] = Vector2(300, 72)
+	st.flag_timer[A] = 5.0
+	arena.get_player(1).global_position = Vector2(300, 72)
+	arena.get_player(3).global_position = Vector2(1500, 1000)
+	arena._tick_flags()
+	assert_eq(st.flag_state[A], MatchState.Flag.HOME, "the owner's touch returns it instantly")
+
+
+func test_carrier_is_slower_cannot_dash_and_is_never_concealed() -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var p := Player.new()
+	var chars: CharacterCatalog = CharacterCatalog.load_all()
+	p.setup(2, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
+		chars.get_character(&"flicker"))
+	world.add_child(p)
+	p.team = A
+	p.global_position = Vector2(300, 300)
+	p.set_skill(1, SkillCatalog.shared().get_skill(&"smoke_bomb"))
+	var f := InputFrame.new()
+	f.aim_vec = Vector2.RIGHT
+	f.move_vec = Vector2.RIGHT
+	for i: int in 40:
+		f.seq += 1
+		p.simulate(f, DT)
+	var free_speed: float = p.velocity.length()
+	p.velocity = Vector2.ZERO
+	p.flag_carrier = true
+	for i: int in 40:
+		f.seq += 1
+		p.simulate(f, DT)
+	assert_almost_eq(p.velocity.length() / free_speed, Constants.FLAG_CARRIER_SPEED_SCALE, 0.02, "0.85x speed")
+	assert_true(p.skill_locked(0), "Dash is locked")
+	f.move_vec = Vector2.ZERO
+	f.skill = true
+	f.seq += 1
+	p.simulate(f, DT)
+	assert_null(p.active_skill(SkillData.Kind.DASH), "no dash while carrying")
+	assert_true(p.skills[0].is_ready(), "and no cooldown spent")
+	f.skill = false
+	f.special = true  # Smoke Bomb: allowed to cast, but it does not hide a carrier
+	f.seq += 1
+	p.simulate(f, DT)
+	Player.viewer_team = B
+	assert_false(p.is_concealed(), "a carrier is never concealed")
+	assert_false(p.is_hidden(), "and can be targeted")
+
+
+func test_every_movement_special_is_locked_for_a_carrier() -> void:
+	for kind: SkillData.Kind in [SkillData.Kind.DASH, SkillData.Kind.SWING, SkillData.Kind.GRAPPLE, SkillData.Kind.STEP,
+			SkillData.Kind.DRIFT, SkillData.Kind.TRAIL]:
+		assert_true(Player.CARRIER_BLOCKED_KINDS.has(kind), "kind %d" % kind)
+
+
+func test_one_and_a_half_times_hp_only_in_teams() -> void:
+	var teams := Arena.new(Arena.Mode.SERVER, 1, MatchRules.Mode.TEAMS)
+	add_child_autofree(teams)
+	var a: Player = teams.add_player(1, 0, BotBrain.new(teams, 1))
+	var ffa := Arena.new(Arena.Mode.SERVER, 1, MatchRules.Mode.FFA)
+	add_child_autofree(ffa)
+	var b: Player = ffa.add_player(1, 0, BotBrain.new(ffa, 1))
+	var duel := Arena.new(Arena.Mode.SERVER, 1, MatchRules.Mode.DUEL)
+	add_child_autofree(duel)
+	var c: Player = duel.add_player(1, 0, BotBrain.new(duel, 1))
+	assert_eq(a.stats.max_hp, roundi(a.character.max_hp * Constants.TEAMS_HP_SCALE))
+	assert_eq(a.stats.hp, a.stats.max_hp, "spawns full")
+	assert_eq(b.stats.max_hp, b.character.max_hp)
+	assert_eq(c.stats.max_hp, c.character.max_hp)
+	a.stats.hp = 10
+	a.stats.heal(1000)
+	assert_eq(a.stats.hp, a.stats.max_hp, "heals cap at the new maximum")
+	teams.match_state.mode = MatchRules.Mode.FFA
+	teams._apply_teams()
+	assert_eq(a.stats.max_hp, a.character.max_hp, "switching the mode back restores it")

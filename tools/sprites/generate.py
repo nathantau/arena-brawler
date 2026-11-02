@@ -9641,6 +9641,127 @@ FX.update({
 })
 
 
+# --- Capture the flag (Teams 3v3): banner flag on a pole, glowing base pad, capture burst, return poof ---
+# Ally (blue) / enemy (red) are separate strips because the game tints by the VIEWER's team, not by team id.
+
+FLAG_FRAMES = 6  # the cloth waves one full period over these
+FLAG_CELL = 48  # frame size; the pole's foot is on row FLAG_FOOT
+FLAG_FOOT = 43
+FLAG_COLORS = {"ally": (BLUE, NAVY, STEEL), "enemy": (RED, MAROON, ORANGE)}  # cloth, shade, highlight
+FLAG_PAD_FRAMES = 6
+FLAG_PAD_CELL = 64
+FLAG_BURST_FRAMES = 10
+FLAG_BURST_CELL = 96
+FLAG_RETURN_CELL = 64
+
+
+def flag_frame(team: str, k: int) -> Image.Image:
+    """A small banner on a steel pole with a gold finial and a stone foot: the cloth ripples (a travelling sine, bigger
+    toward the free end), folds that turn away from the light go a shade darker, and the swallow-tail end flutters."""
+    cloth, shade, light = FLAG_COLORS[team]
+    c = Canvas(FLAG_CELL)
+    c.part(E((9, 39, 25, 45)), STEEL_D)  # stone foot
+    c.part(R((14, 9, 16, 42)), STEEL)  # pole
+    c.part(E((12, 4, 18, 10)), YELLOW)  # finial
+    phase0 = math.tau * k / FLAG_FRAMES
+    x0, x1, top0, height = 17, 39, 10, 13
+    for x in range(x0, x1 + 1):
+        u = (x - x0) / (x1 - x0)
+        ph = phase0 - x * 0.42
+        dy = round(math.sin(ph) * (0.6 + 2.6 * u))
+        slope = math.cos(ph)
+        top, bottom = top0 + dy, top0 + height + dy - (1 if x > x1 - 3 else 0)
+        mid = (top + bottom) / 2
+        for y in range(top, bottom + 1):
+            if x > x1 - 7 and abs(y - mid) < (x - (x1 - 7)) * 0.55:
+                continue  # swallow-tail notch
+            col = cloth
+            if y <= top:
+                col = light
+            if y >= bottom - 1 or slope < -0.35:
+                col = shade
+            c.dot(x, y, col)
+        if x0 + 4 <= x <= x0 + 10:  # emblem: a white chevron riding the cloth
+            ey = round(mid) - 2 + abs(x - (x0 + 7)) // 1
+            c.dot(x, ey, WHITE)
+            c.dot(x, ey + 1, WHITE)
+    return outline(c.img)
+
+
+def flag_pad_frame(team: str, k: int) -> Image.Image:
+    """The base pad, drawn flat on the floor (3/4 view, so everything is squashed): a steel plate, a channel of team colour
+    that pulses, chevron dashes marching round it, a dithered glow inside and motes rising off it."""
+    cloth, shade, light = FLAG_COLORS[team]
+    n = FLAG_PAD_CELL
+    cx, cy, rx, ry = n // 2, n // 2 + 6, 28, 14
+    c = Canvas(n)
+    c.part(E((cx - rx, cy - ry, cx + rx, cy + ry + 3)), STEEL_D)  # plate with a thick edge
+    c.flat(E((cx - rx + 1, cy - ry + 1, cx + rx - 1, cy + ry)), STEEL)
+    pulse = 0.5 + 0.5 * math.sin(math.tau * k / FLAG_PAD_FRAMES)
+    ring = light if pulse > 0.5 else cloth
+    c.flat(E((cx - rx + 3, cy - ry + 2, cx + rx - 3, cy + ry - 1)), shade)
+    c.flat(E((cx - rx + 5, cy - ry + 3, cx + rx - 5, cy + ry - 2)), ring)  # glowing channel
+    c.flat(E((cx - rx + 8, cy - ry + 5, cx + rx - 8, cy + ry - 4)), shade)  # inner floor
+    for y in range(n):  # dithered glow, fuller on the bright beat
+        for x in range(n):
+            if ((x - cx) / (rx - 9)) ** 2 + ((y - cy + 1) / (ry - 5)) ** 2 < 1.0 and dither_at(x + k, y, 0.25 + 0.3 * pulse):
+                c.dot(x, y, cloth)
+    for i in range(8):  # dashes marching round the channel
+        a = math.tau * (i / 8 + k / (FLAG_PAD_FRAMES * 8.0))
+        c.dot(round(cx + math.cos(a) * (rx - 5)), round(cy - 0.5 + math.sin(a) * (ry - 2.5)), WHITE if i % 2 == 0 else light)
+    for j in range(3):  # motes drifting up off the pad
+        t = ((k / FLAG_PAD_FRAMES) + j / 3.0) % 1.0
+        c.dot(cx + (j - 1) * 9 + round(math.sin(t * math.tau + j) * 2), round(cy - 2 - t * 14), WHITE if t < 0.6 else light)
+    return outline(c.img)
+
+
+def flag_burst_frame(k: int) -> Image.Image:
+    """Capture burst: a gold shock ring racing out over the floor (squashed), a pillar of light that thins and fades, and
+    confetti sparks flying up and falling."""
+    n = FLAG_BURST_CELL
+    c = Canvas(n)
+    ov = Canvas(n)
+    cx, cy = n // 2, n // 2 + 14
+    t = k / (FLAG_BURST_FRAMES - 1)
+    r = 6 + 38 * t ** 0.7
+    if t < 0.9:
+        col = WHITE if t < 0.2 else YELLOW if t < 0.55 else ORANGE
+        widths = (1, 2) if t < 0.5 else (1,)
+        for w in widths:
+            c.flat(lambda d, f, w=w: d.ellipse((cx - r + w, cy - r * 0.45 + w, cx + r - w, cy + r * 0.45 - w), None, f, 1), col)
+    if t < 0.75:  # pillar of light
+        half = round(7 * (1 - t / 0.75)) + 1
+        for y in range(6, cy):
+            for x in range(cx - half, cx + half + 1):
+                if abs(x - cx) < half // 2:
+                    c.dot(x, y, WHITE)
+                elif dither_at(x, y, 0.9 * (1 - t / 0.75) * (0.4 + 0.6 * y / cy)):
+                    c.dot(x, y, YELLOW)
+    rng = random.Random(7)
+    for i in range(14):  # confetti
+        a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
+        v = rng.uniform(26, 54)
+        px = cx + math.cos(a) * v * t * 1.1
+        py = cy - 8 + math.sin(a) * v * t + 35 * t * t * (0.6 + 0.4 * rng.random())
+        if t < 0.95:
+            sdot2(ov, round(px), round(py), (WHITE, YELLOW, ORANGE, TEAL_L)[i % 4] if t < 0.7 else ORANGE)
+    return finish(c, ov)
+
+
+def flag_return_frame(k: int) -> Image.Image:
+    """The flag flies home: the shared cloud poof at half the frames (a quick puff and burst)."""
+    return poof_frame(FLAG_RETURN_CELL, min(POOF_FRAMES - 1, k * 2), WHITE)
+
+
+FX.update({
+    "flag_ally": lambda: strip([flag_frame("ally", k) for k in range(FLAG_FRAMES)]),
+    "flag_enemy": lambda: strip([flag_frame("enemy", k) for k in range(FLAG_FRAMES)]),
+    "flag_pad_ally": lambda: strip([flag_pad_frame("ally", k) for k in range(FLAG_PAD_FRAMES)]),
+    "flag_pad_enemy": lambda: strip([flag_pad_frame("enemy", k) for k in range(FLAG_PAD_FRAMES)]),
+    "flag_capture": lambda: strip([flag_burst_frame(k) for k in range(FLAG_BURST_FRAMES)]),
+    "flag_return": lambda: strip([flag_return_frame(k) for k in range(POOF_FRAMES // 2)]),
+})
+
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
