@@ -10,6 +10,12 @@ var _carrier: Player
 var win: bool = false  ## screenshot: the local player captures the flag, shot taken during the round-end banner
 var lobby: bool = false
 var shared: int = 0  ## screenshot with lobby=1: 1 = P2 + P3 hover one card, 2 = P3 locked and P2 hovers that card  ## screenshot: the loading room (nobody readies up)
+var step: int = 0  ## screenshot with lobby=1: which character select step is showing (0 the fighter grid, 1 the detail overlay open)
+var toggle: bool = false  ## screenshot with lobby=1 strip=1 fly=1: first remove an equipped ability, then add one
+var sheet: bool = false  ## screenshot with lobby=1: a contact sheet of the showcase backdrop of all nine fighters
+var pick: StringName = &"eden"  ## screenshot with lobby=1 step=1: the fighter the overlay opens on
+var fly: bool = false  ## screenshot with lobby=1 strip=1: capture an ability flying into a slot instead of the slide-in
+var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the overlay sliding in
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
 
 var arena: Arena
@@ -36,7 +42,15 @@ func _initialize() -> void:
 				"win": win = kv[1] == "1"
 				"lobby": lobby = kv[1] == "1"
 				"shared": shared = int(kv[1])
+				"step": step = int(kv[1])
+				"strip": strip = kv[1] == "1"
+				"fly": fly = kv[1] == "1"
+				"char": pick = StringName(kv[1])
+				"backdrops": sheet = kv[1] == "1"
+				"toggle": toggle = kv[1] == "1"
 	InputSetup.ensure_actions()
+	if lobby and shot_path != "":
+		UiStyle.install()  # Main does this in the real game
 	arena = Arena.new(Arena.Mode.OFFLINE, base_seed, MatchRules.Mode.TEAMS, round_secs)
 	arena.match_state.arena_index = 0
 	root.add_child(arena)
@@ -72,7 +86,9 @@ func _tick() -> void:
 				arena.try_ready(3, true)
 		arena.referee.round_ended.connect(_on_round_ended)
 	if lobby and shot_path != "" and frames == 60:
-		_shoot()
+		_shoot_lobby()
+		return
+	if lobby and shot_path != "" and frames > 60:
 		return
 	if arena.match_state.phase == MatchState.Phase.PLAYING:
 		_play_frames += 1
@@ -139,4 +155,85 @@ func _shoot() -> void:
 	await process_frame
 	var img: Image = root.get_texture().get_image()
 	print("[teams_sim] screenshot ", shot_path, " ", img.save_png(shot_path))
+	quit(0)
+
+
+func _find_lobby(n: Node) -> LobbyPanel:
+	if n is LobbyPanel:
+		return n
+	for c: Node in n.get_children():
+		var l: LobbyPanel = _find_lobby(c)
+		if l != null:
+			return l
+	return null
+
+
+## Loading room: the fighter grid (step=0), the overlay open on Eden (step=1), or (strip=1) 6 frames of the overlay
+## sliding in after tapping Bolt. The window size comes from `--resolution WxH` (before the `--`).
+func _shoot_lobby() -> void:
+	var lp: LobbyPanel = _find_lobby(root)
+	physics_frame.disconnect(_tick)
+	for i: int in 8:
+		await process_frame
+	var ratio: float = float(root.size.x) / root.get_visible_rect().size.x
+	if sheet:
+		lp._on_fighter_pressed(&"eden")
+		lp._slide_overlay(false)
+		var cells: Array[Image] = []
+		for id: StringName in [&"eden", &"flint", &"bolt", &"flicker", &"shadow", &"sakura", &"wukong", &"twinshot", &"warden"]:
+			arena.select_character(arena.get_player(1), id)
+			for i: int in 40:  # the zoom-in and the crossfade finish; the backdrop has moved on a little
+				await process_frame
+			var rect := Rect2i(lp._stage.get_global_rect().position * ratio, lp._stage.size * ratio)
+			var cell: Image = root.get_texture().get_image().get_region(rect)
+			cell.convert(Image.FORMAT_RGBA8)
+			cell.resize(cell.get_width() / 2, cell.get_height() / 2, Image.INTERPOLATE_BILINEAR)
+			cells.append(cell)
+		var cs: Vector2i = cells[0].get_size()
+		var sheet_img := Image.create(cs.x * 5, cs.y * 2, false, Image.FORMAT_RGBA8)
+		for k: int in cells.size():
+			sheet_img.blit_rect(cells[k], Rect2i(Vector2i.ZERO, cs), Vector2i((k % 5) * cs.x, (k / 5) * cs.y))
+		print("[teams_sim] backdrops ", shot_path, " ", sheet_img.save_png(shot_path))
+		quit(0)
+		return
+	if strip:
+		lp._on_fighter_pressed(&"bolt")
+		if fly:  # let the slide finish
+			for i: int in 24:
+				await process_frame
+		var removed: StringName = lp._pick()[3]
+		var crops: Array[Image] = []
+		var picks: Array = [1, 4, 7, 9, 11, 14] if toggle else [0, 1, 2, 3, 4, 6] if fly else [0, 2, 4, 6, 9, 14]
+		for i: int in 18:
+			if toggle and i == 0:
+				lp._on_special_pressed(removed)  # tapping an equipped ability empties its slot
+			if toggle and i == 8:
+				lp._on_special_pressed(removed)  # and tapping it again puts it back in the first empty slot
+			elif fly and not toggle and i == 0:
+				for id: StringName in lp._special_cards.keys().slice(3):
+					if not lp._pick().slice(2).has(id):
+						lp._on_special_pressed(id)
+						break
+			await process_frame
+			if i in picks:
+				var frame: Image = root.get_texture().get_image()
+				frame.convert(Image.FORMAT_RGBA8)
+				frame.resize(frame.get_width() / 2, frame.get_height() / 2, Image.INTERPOLATE_BILINEAR)
+				crops.append(frame)
+		var cell: Vector2i = crops[0].get_size()
+		var out := Image.create(cell.x * 3, cell.y * 2, false, Image.FORMAT_RGBA8)
+		for k: int in crops.size():
+			out.blit_rect(crops[k], Rect2i(Vector2i.ZERO, cell), Vector2i((k % 3) * cell.x, (k / 3) * cell.y))
+		print("[teams_sim] strip ", shot_path, " ", out.save_png(shot_path))
+		quit(0)
+		return
+	if step > 0:
+		lp._on_fighter_pressed(pick)
+		lp._slide_overlay(false)
+		if step == 2:  # one ability slot emptied
+			lp._on_special_pressed(lp._pick()[3])
+	for i: int in 10:
+		await process_frame
+	var img: Image = root.get_texture().get_image()
+	print("[teams_sim] lobby screenshot ", shot_path, " ", img.get_size(), " ", img.save_png(shot_path))
 	quit(0)

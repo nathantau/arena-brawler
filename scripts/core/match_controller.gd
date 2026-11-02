@@ -98,6 +98,8 @@ func flag_capture(carrier_id: int, scores: ScoreBoard) -> void:
 func set_ready(id: int, is_ready: bool, fighter: StringName = &"") -> int:
 	if state.phase != MatchState.Phase.LOBBY or state.ready.has(id) == is_ready:
 		return 0
+	if is_ready and state.has_gap(id):  # an emptied ability slot: pick three first
+		return 0
 	if is_ready:
 		if state.mode == MatchRules.Mode.TEAMS and fighter != &"":
 			var holder: int = MatchRules.lock_holder(lobby_teams(), _human_locks(), id, fighter)
@@ -110,6 +112,17 @@ func set_ready(id: int, is_ready: bool, fighter: StringName = &"") -> int:
 		state.locked.erase(id)
 	changed.emit()
 	return 0
+
+
+## Lobby: the emptied ability slots of a player as a bitmask (0 = all filled).
+func set_gap_mask(id: int, mask: int) -> void:
+	if state.phase != MatchState.Phase.LOBBY or state.gaps.get(id, 0) == mask:
+		return
+	if mask == 0:
+		state.gaps.erase(id)
+	else:
+		state.gaps[id] = mask
+	changed.emit()
 
 
 ## Teams lobby: the team everyone would play on right now (picks kept, the rest balanced).
@@ -150,6 +163,7 @@ func remove_player(id: int, scores: ScoreBoard, humans: Array[int]) -> void:
 	var was_in: bool = state.participants.has(id) or state.ready.has(id)
 	state.ready.erase(id)
 	state.locked.erase(id)
+	state.gaps.erase(id)
 	state.participants.erase(id)
 	var held: int = state.carried_flag_of(id)
 	if held != 0:  # a carrier who leaves: the flag flies home
