@@ -255,8 +255,14 @@ def kunai_pin(c, ring, base, tip):
     c.flat(L([(base[0] - 1, base[1] - 1), (mx - 1, my - 1)], 1), WHITE)
     c.flat(L([ring, (base[0] + 1, base[1])], 2), RED)
     c.flat(L([ring, (base[0] + 1, base[1])], 1), MAROON)
-    disc(c, ring[0], ring[1], 2, GOLD)
-    c.dot(ring[0], ring[1], OUTLINE)
+    rx, ry = ring
+    c.flat(R((rx - 1, ry - 1, rx, ry)), GOLD)  # small gold bead, then a red tassel hanging from it
+    c.dot(rx - 1, ry - 1, YELLOW)
+    c.flat(R((rx - 1, ry + 1, rx, ry + 3)), RED)
+    c.flat(L([(rx - 2, ry + 3), (rx - 2, ry + 5)], 1), RED)
+    c.flat(L([(rx + 1, ry + 3), (rx + 1, ry + 4)], 1), MAROON)
+    c.dot(rx - 1, ry + 4, MAROON)
+    c.dot(rx, ry + 5, RED)
 
 
 def hair_band(c, pts, widths, clusters=((0.28, BLUE), (0.55, OUTLINE), (0.7, BLUE)), shade=True):
@@ -276,12 +282,12 @@ def rot_pts(cx, cy, th, pts):
     return [(cx + u * co - v * si, cy + u * si + v * co) for u, v in pts]
 
 
-def fox_mask(c, cx, cy, deg=30):
+def fox_mask(c, cx, cy, deg=30, k=1.25):
     """A festival fox mask pushed up and askew on the far (right) side of her face, drawn tilted `deg` degrees clockwise
     directly from rotated vertices (no pixel rotation), so the outline stays crisp and the markings stay symmetric about
     the tilted axis: ears with red tips, slanted eye slits, whiskers, forehead mark, nose, and a tie cord into her hair."""
     th = math.radians(deg)
-    rp = lambda pts: rot_pts(cx, cy, th, pts)
+    rp = lambda pts: rot_pts(cx, cy, th, [(u * k, v * k) for u, v in pts])
     mir = lambda pts: [(-u, v) for u, v in pts]
     ear = [(-6.2, -1), (-5.8, -10), (-0.5, -4.5)]
     c.part(P(ipts(rp(ear))), WHITE)
@@ -337,11 +343,13 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         pt = strand((29, 5), (13 - 3 * mv, -13), (-3 - 4 * mv, 8), (3 - 5 * mv, 36 - 3 * mv), t, 5.0, k=2.0, lag=0.8, n=18)
         hair_band(up, pt, [4, 8, 10, 11, 11, 10, 10, 9, 9, 8, 7, 7, 6, 5, 4, 3, 2, 1.5, 1])
     elif hair == "H4":  # high bun (odango)
-        up.part(E((21, -7, 41, 10)), HAIR_A)
+        up.part(E((21, -7, 41, 10)), NAVY)
+        up.flat(lambda d, f: d.arc((22, -6, 40, 9), 185, 300, f), STEEL)
         up.flat(lambda d, f: d.arc((23, -5, 39, 8), 190, 290, f), STEEL_D)
         up.flat(lambda d, f: d.arc((25, -3, 37, 6), 200, 280, f), BLUE)
-        up.flat(lambda d, f: d.arc((27, -1, 37, 8), 10, 120, f), BLUE)
-        up.flat(L([(26, -2), (29, -4), (33, -4)], 1), BLUE)
+        up.flat(lambda d, f: d.arc((27, -1, 37, 8), 10, 120, f), SHADOW)
+        up.flat(L([(25, -2), (28, -4), (33, -5)], 1), STEEL)
+        up.dot(26, -3, WHITE)
         up.part(RR((26, 8, 36, 11), 1), RED)
         up.dot(27, 9, ORANGE)
         up.dot(35, 9, GOLD)
@@ -464,7 +472,7 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         up.part(RR((41, 3, 48, 9), 2), RED)
         up.dot(43, 5, ORANGE)
     # the mask rides the far side of her face, diagonal; then the pins
-    fox_mask(up, 52, 15, 30)
+    fox_mask(up, 51, 18, 30)
     if hair == "H1":
         kunai_pin(up, (39, 0), (34, 3), (24, 8))
     elif hair == "H4":  # two crossed kunai through the bun like kanzashi
@@ -508,9 +516,8 @@ def floor_bg(w, h):
     return out
 
 
-HAIRS = [("H1  high ponytail (reference)", "H1"), ("H4  high bun, two crossed kunai kanzashi", "H4"),
-         ("H5  long hime cut, blunt bangs", "H5"), ("H6  side ponytail on the far side", "H6"),
-         ("H7  choppy pixie + rat-tail with red ribbon", "H7")]
+HAIRS = [("H1  high ponytail", "H1"), ("H4  high bun, crossed kunai kanzashi with red tassels", "H4"),
+         ("H6  side ponytail on the far side", "H6")]
 MOUTHS = [("M1  clean crimson smirk line", "M1"), ("M2  small closed lips", "M2"), ("M3  cat smile :3", "M3")]
 SHOTS = ((0, None), (2, None), (1, 1), (3, 5))  # two idle + two walking frames
 DEFAULT_MOUTH = "M2"
@@ -555,22 +562,22 @@ def stack(a, b):
 
 def scale_sheet(out_dir):
     """1x on an arena floor beside Sakura, then every hair option at 2x."""
-    sak = Image.open(ROOT / "assets" / "sprites" / "sakura.png").convert("RGBA").crop((0, 0, CELL, CELL))
+    ref = lambda n: Image.open(ROOT / "assets" / "sprites" / f"{n}.png").convert("RGBA").crop((0, 0, CELL, CELL))
     mine = [frame(build_a, 0, hair=h, mouth_kind=DEFAULT_MOUTH) for _, h in HAIRS]
-    figs = [sak] + mine
+    figs = [ref("sakura"), ref("bolt")] + mine
     w = 3 * (2 * CELL + 4) + 4
     row = floor_bg(w, CELL + 8)
     x0 = (w - len(figs) * (CELL + 4)) // 2
     for i, f in enumerate(figs):
         row.alpha_composite(f, (x0 + i * (CELL + 4), 4))
-    rows = 2
+    rows = 1
     big = floor_bg(w, rows * (2 * CELL + 4) + 4)
     for i, f in enumerate(mine):
         big.alpha_composite(nn(f, 2), (4 + (i % 3) * (2 * CELL + 4), 4 + (i // 3) * (2 * CELL + 4)))
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v3_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v4_scale.png")
 
 
 def main():
@@ -588,8 +595,7 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v3_hair.png")
-    mouth_sheet(out_dir)
+    sheet.convert("RGB").save(out_dir / "shade_A_v4.png")
     scale_sheet(out_dir)
 
 
