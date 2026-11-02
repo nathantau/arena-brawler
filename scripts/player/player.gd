@@ -971,10 +971,10 @@ func held_weapon() -> WeaponState:
 	return tf.form_weapon if tf != null else weapon
 
 
-## Dash goes where you're moving (else where you face); the barrier goes where you aim.
+## Movement abilities go where the joystick points (else where you aim / face); the barrier goes where you aim.
 func _skill_direction(data: SkillData, input: InputFrame) -> Vector2:
-	var moves: bool = data.kind == SkillData.Kind.DASH or data.kind == SkillData.Kind.DRIFT \
-		or data.kind == SkillData.Kind.STEP
+	var moves: bool = data.kind in [SkillData.Kind.DASH, SkillData.Kind.DRIFT, SkillData.Kind.STEP,
+		SkillData.Kind.GRAPPLE, SkillData.Kind.SWING, SkillData.Kind.TRAIL]
 	if moves and input.move_vec.length() > Constants.INPUT_DEADZONE:
 		return input.move_vec
 	if input.aim_vec.length_squared() > 0.0:
