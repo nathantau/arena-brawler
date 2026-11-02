@@ -396,9 +396,17 @@ class Poof:
 	var scale: float = 1.0
 	var on_floor: bool = false  # drawn on the floor layer, under the players
 	var tint: Color = Color.WHITE
+	## World y of the floor line an upright poof stands on (NAN = an overlay drawn over everything). Upright poofs are
+	## depth-sorted with the fighters (see _rebuild_upright).
+	var base: float = NAN
 
 
 var _clones: Array[AnimatedSprite2D] = []
+## Depth-sorted art (upright ability objects, shadow clones): ArtBlocks in the Arena's y-sorted layer, placed on the
+## foot line of what they draw. `_cur` is the CanvasItem the draw functions paint on (this node, or the block).
+var _blocks: Array[ArtBlock] = []
+var _clone_blocks: Array[ArtBlock] = []
+var _cur: CanvasItem = self
 var _points := PackedVector2Array()
 var _owner: Player
 var _was_vanished: bool = false
@@ -536,6 +544,7 @@ func _init() -> void:
 	process_priority = -100  # timers end before the Player reads them (no one-frame gap when a pose ends)
 	z_index = 1
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	tree_exiting.connect(_free_blocks)
 	_floor.z_as_relative = false
 	_floor.z_index = Effects.GROUND_Z
 	_floor.draw.connect(_draw_floor)
@@ -648,7 +657,10 @@ func sync(p: Player) -> void:
 		var c := AnimatedSprite2D.new()
 		c.scale = Vector2.ONE * Constants.SPRITE_SCALE
 		c.show_behind_parent = true
-		add_child(c)
+		var block := ArtBlock.new()
+		p.get_parent().add_child(block)
+		block.add_child(c)
+		_clone_blocks.append(block)
 		_clones.append(c)
 	var alpha: float = 0.0
 	if cloning:
@@ -657,13 +669,15 @@ func sync(p: Player) -> void:
 	for i: int in _clones.size():
 		var c: AnimatedSprite2D = _clones[i]
 		c.visible = i < _points.size()
+		_clone_blocks[i].visible = c.visible
 		if not c.visible:
 			continue
 		if c.sprite_frames != frames:
 			c.sprite_frames = frames
 		if c.animation != &"walk" or not c.is_playing():
 			c.play(&"walk")
-		c.position = _points[i]
+		_clone_blocks[i].place(Rect2(), _points[i].y + Player.FOOT_RING_Y, _draw_clone.bind(i))
+		c.position = _points[i] - _clone_blocks[i].global_position
 		c.flip_h = _points[i].x < clones.anchor.x
 		c.modulate.a = alpha
 	_sync_grapple(p)
@@ -672,9 +686,10 @@ func sync(p: Player) -> void:
 	var erupting: bool = eruption != null and eruption.is_active() and not p.dead
 	if erupting and not _erupt_started and eruption.active_remaining <= ERUPTION_LEAD:  # the pillar comes up
 		var lift: float = (ERUPTION_ART.get_height() * 0.5 - ERUPTION_BASE_Y) * Constants.SPRITE_SCALE
-		_poof(eruption.anchor + Vector2(0.0, lift), ERUPTION_ART, ERUPTION_TIME)
+		_poof(eruption.anchor + Vector2(0.0, lift), ERUPTION_ART, ERUPTION_TIME, 1.0, false, eruption.anchor.y)
 	_erupt_started = erupting and (_erupt_started or eruption.active_remaining <= ERUPTION_LEAD)
 	_crack = eruption if erupting and eruption.active_remaining > ERUPTION_LEAD else null
+	_rebuild_upright()
 	queue_redraw()
 	_floor.queue_redraw()
 
@@ -874,7 +889,9 @@ func _sync_thunder(p: Player) -> void:
 		var art: Array = THUNDER_ART_SETS.get(slot.data.id, THUNDER_DEFAULT_ART)
 		var bolt_art: Texture2D = art[1]
 		var lift: float = (bolt_art.get_height() * 0.5 - THUNDER_BASE_Y) * Constants.SPRITE_SCALE
-		_poof(slot.anchor + Vector2(0.0, lift), bolt_art, THUNDER_BOLT_TIME)
+		# Umbral Spikes burst up out of the floor (sorted); Thunder Strike's bolt drops from the sky (overlay).
+		_poof(slot.anchor + Vector2(0.0, lift), bolt_art, THUNDER_BOLT_TIME, 1.0, false,
+			slot.anchor.y if THUNDER_ART_SETS.has(slot.data.id) else NAN)
 		_poof(slot.anchor, art[2], THUNDER_BOLT_TIME, slot.data.thunder_blast.splash_radius / THUNDER_ART_RADIUS, true)
 	_thunder_started = on and (_thunder_started or slot.active_remaining <= lead)
 	_thunder_mark = slot if on and slot.active_remaining > lead else null
@@ -886,7 +903,7 @@ func _sync_quake(p: Player) -> void:
 	var on: bool = slot != null and slot.is_active() and not p.dead
 	if on and not _quake_started and slot.active_remaining <= QUAKE_LEAD:
 		var lift: float = (QUAKE_BURST_ART.get_height() * 0.5 - QUAKE_BASE_Y) * Constants.SPRITE_SCALE
-		_poof(slot.anchor + Vector2(0.0, lift), QUAKE_BURST_ART, QUAKE_BURST_TIME)
+		_poof(slot.anchor + Vector2(0.0, lift), QUAKE_BURST_ART, QUAKE_BURST_TIME, 1.0, false, slot.anchor.y)
 		_poof(slot.anchor, QUAKE_SCAR_ART, QUAKE_BURST_TIME, slot.data.thunder_blast.splash_radius / QUAKE_ART_RADIUS, true)
 	_quake_started = on and (_quake_started or slot.active_remaining <= QUAKE_LEAD)
 	_quake_mark = slot if on and slot.active_remaining > QUAKE_LEAD else null
@@ -919,12 +936,13 @@ func _volley(p: Player, slot: CharacterSkill, tick: int) -> void:
 		if target != null and target != p and not target.dead \
 				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius \
 				and AutoAim.has_line_of_sight(space, query, slot.anchor, target.global_position):
-			_poof(target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y) + lift, drop, RAIN_KUNAI_TIME)
+			var ground: Vector2 = target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y)
+			_poof(ground + lift, drop, RAIN_KUNAI_TIME, 1.0, false, ground.y)
 	for i: int in RAIN_EXTRA:  # varied spots, the same on every peer (a hash of the tick), kept inside the ring
 		var h: float = fposmod(sin(float(tick * 7 + i * 13) * 12.9898 + slot.anchor.x * 0.01) * 43758.5453, 1.0)
 		var h2: float = fposmod(sin(float(tick * 5 + i * 31) * 78.233 + slot.anchor.y * 0.01) * 24634.6345, 1.0)
 		var at: Vector2 = slot.anchor + Vector2.from_angle(h * TAU) * (0.25 + 0.6 * h2) * slot.data.storm_radius
-		_poof(at + lift, drop, RAIN_KUNAI_TIME)
+		_poof(at + lift, drop, RAIN_KUNAI_TIME, 1.0, false, at.y)
 
 
 func _sync_godspeed(p: Player) -> void:
@@ -1087,6 +1105,8 @@ func _process(delta: float) -> void:
 		b.t += delta
 	_bolts = _bolts.filter(func(b: Poof) -> bool: return b.t < b.duration)
 	_poofs = _poofs.filter(func(pf: Poof) -> bool: return pf.t < pf.duration)
+	if not _blocks.is_empty() or not _poofs.is_empty():
+		_rebuild_upright()
 	_time += delta
 	if _miss_t >= 0.0:
 		_miss_t += delta
@@ -1206,13 +1226,15 @@ func _start_morph(p: Player, back: bool) -> void:
 	_morph_t = 0.0
 
 
-func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME, scale: float = 1.0, on_floor: bool = false) -> void:
+func _poof(at: Vector2, art: Texture2D, duration: float = POOF_TIME, scale: float = 1.0, on_floor: bool = false,
+		base_y: float = NAN) -> void:
 	var pf := Poof.new()
 	pf.pos = at
 	pf.art = art
 	pf.duration = duration
 	pf.scale = scale
 	pf.on_floor = on_floor
+	pf.base = base_y
 	_poofs.append(pf)
 
 
@@ -1230,9 +1252,58 @@ func _ward_scale() -> float:
 	return _ward_radius / WARD_ART_RADIUS
 
 
+## The depth-sorted art (ArtBlocks in the Arena's y-sorted layer, so fighters in front of it draw over it and the ones
+## behind it under it): Tesla Coil / Cherry Sapling, Gloom Hound, upright poofs (bursts, kunai), and the clone weapons.
+func _rebuild_upright() -> void:
+	var items: Array = []
+	if _sapling != null:
+		items.append([_sapling.anchor.y, _draw_sapling])
+	if _hound != null:
+		items.append([_hound_pos.y + Player.FOOT_RING_Y, _draw_hound])
+	for pf: Poof in _poofs:
+		if not pf.on_floor and not is_nan(pf.base):
+			items.append([pf.base, _draw_poof.bind(pf)])
+	var arena: Node = _owner.get_parent() if _owner != null else null
+	while arena != null and _blocks.size() < items.size():
+		var block := ArtBlock.new()
+		arena.add_child(block)
+		_blocks.append(block)
+	for i: int in _blocks.size():
+		var block: ArtBlock = _blocks[i]
+		block.visible = i < items.size()
+		if block.visible:
+			block.place(Rect2(), items[i][0], _paint_block.bind(items[i][1]))
+	for i: int in _points.size():
+		_clone_blocks[i].queue_redraw()
+
+
+func _paint_block(ci: CanvasItem, draw_fn: Callable) -> void:
+	_cur = ci
+	draw_fn.call()
+	_cur = self
+
+
+func _draw_clone(ci: CanvasItem, i: int) -> void:
+	if _owner == null or i >= _clones.size():
+		return
+	_cur = ci
+	_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
+	_cur = self
+
+
+func _free_blocks() -> void:
+	for block: ArtBlock in _blocks + _clone_blocks:
+		if is_instance_valid(block):
+			block.queue_free()
+	_blocks.clear()
+	_clone_blocks.clear()
+
+
 ## Frame `frame` of a horizontal strip of square frames, centred on `at`, at the sprite scale.
 func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_px: float, alpha: float = 1.0,
-		on: CanvasItem = self, tint: Color = Color.WHITE) -> void:
+		on: CanvasItem = null, tint: Color = Color.WHITE) -> void:
+	if on == null:
+		on = _cur
 	var h: float = art.get_height()
 	var size := Vector2(frame_w, h) * scale_px
 	on.draw_texture_rect_region(art, Rect2(at - size * 0.5, size), Rect2(frame * frame_w, 0, frame_w, h),
@@ -1254,7 +1325,6 @@ func _draw() -> void:
 	_draw_heal()
 	_draw_gust()
 	_draw_snare()
-	_draw_sapling()
 	_draw_arc()
 	_draw_blaze()
 	_draw_storm()
@@ -1262,8 +1332,6 @@ func _draw() -> void:
 	_draw_flourishes()
 	if _owner == null:
 		return
-	for i: int in _points.size():
-		_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
 
 
 func _draw_floor() -> void:
@@ -1338,12 +1406,12 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 	var flip_v: float = -1.0 if dir.x < 0.0 else 1.0
 	var s: float = Constants.SPRITE_SCALE
 	if w.upright:
-		draw_set_transform(at + Player.hand_offset(dir), 0.0, Vector2(s * flip_v, s))
+		_cur.draw_set_transform(at + Player.hand_offset(dir), 0.0, Vector2(s * flip_v, s))
 	else:
-		draw_set_transform(at + Player.hand_offset(dir), dir.angle(), Vector2(s, s * flip_v))
+		_cur.draw_set_transform(at + Player.hand_offset(dir), dir.angle(), Vector2(s, s * flip_v))
 	var tint := Color(1, 1, 1, alpha)
-	w.draw_held(self, Player.WEAPON_GRIP, tint)
-	draw_set_transform(Vector2.ZERO)
+	w.draw_held(_cur, Player.WEAPON_GRIP, tint)
+	_cur.draw_set_transform(Vector2.ZERO)
 
 
 ## Frame by frame from the character into the form (or back). The strip has the growth baked in.
@@ -1448,18 +1516,21 @@ func _draw_storm() -> void:
 
 
 func _draw_flourishes() -> void:
-	var px: float = Constants.SPRITE_SCALE
 	for pf: Poof in _poofs:
-		if pf.on_floor:
-			continue
-		var n: int = pf.art.get_width() / pf.art.get_height()
-		var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
-		if pf.scale < 0.0:  # a negative scale mirrors the strip (faces left)
-			draw_set_transform(pf.pos, 0.0, Vector2(-1.0, 1.0))
-			_draw_frame(pf.art, frame, pf.art.get_height(), Vector2.ZERO, px * -pf.scale, 1.0, self, pf.tint)
-			draw_set_transform(Vector2.ZERO)
-		else:
-			_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale, 1.0, self, pf.tint)
+		if not pf.on_floor and is_nan(pf.base):
+			_draw_poof(pf)
+
+
+func _draw_poof(pf: Poof) -> void:
+	var px: float = Constants.SPRITE_SCALE
+	var n: int = pf.art.get_width() / pf.art.get_height()
+	var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
+	if pf.scale < 0.0:  # a negative scale mirrors the strip (faces left)
+		_cur.draw_set_transform(pf.pos, 0.0, Vector2(-1.0, 1.0))
+		_draw_frame(pf.art, frame, pf.art.get_height(), Vector2.ZERO, px * -pf.scale, 1.0, null, pf.tint)
+		_cur.draw_set_transform(Vector2.ZERO)
+	else:
+		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale, 1.0, null, pf.tint)
 
 
 ## Where the kunai bit: the stop point is a player radius short of the feet-level wall; the wall itself is drawn
@@ -1822,7 +1893,7 @@ func _sync_step(p: Player) -> void:
 	if _step != null and not on and not p.dead:  # he rises: spikes burst where he emerges
 		var feet: Vector2 = _step_at + Vector2(0.0, Player.FOOT_RING_Y)
 		var k: float = _step.data.step_radius / (SH_BURST_ART_RADIUS * Constants.SPRITE_SCALE)
-		_poof(feet, SH_BURST_ART, SH_BURST_TIME, k)
+		_poof(feet, SH_BURST_ART, SH_BURST_TIME, k, false, feet.y)
 		_poof(feet, SH_BURST_FLOOR_ART, SH_BURST_TIME, k, true)
 	_step = slot if on else null
 
@@ -1933,9 +2004,9 @@ func _draw_hound() -> void:
 	var cell: float = art.get_height()
 	var feet: Vector2 = _hound_pos + Vector2(0.0, Player.FOOT_RING_Y)
 	var centre: Vector2 = feet - Vector2(0.0, (HOUND_FEET_ROW - cell * 0.5) * px)
-	draw_set_transform(centre, 0.0, Vector2(-1.0 if _hound_flip else 1.0, 1.0))
+	_cur.draw_set_transform(centre, 0.0, Vector2(-1.0 if _hound_flip else 1.0, 1.0))
 	_draw_frame(art, frame, cell, Vector2.ZERO, px)
-	draw_set_transform(Vector2.ZERO)
+	_cur.draw_set_transform(Vector2.ZERO)
 
 
 func _sync_bind(p: Player) -> void:
@@ -2000,7 +2071,6 @@ func _draw_stun_floor() -> void:
 
 func _draw_shadow() -> void:
 	_draw_step()
-	_draw_hound()
 	_draw_stun()
 
 

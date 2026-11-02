@@ -19,6 +19,7 @@ var art: Texture2D
 
 var _cs := CollisionShape2D.new()
 var _feet: StaticBody2D
+var _art_block: ArtBlock
 
 
 func setup(p_index: int, center: Vector2, tile: float) -> void:
@@ -56,13 +57,26 @@ func set_hp(value: int) -> void:
 		visible = is_intact()
 		_cs.set_deferred("disabled", not is_intact())
 		_feet.get_child(0).set_deferred("disabled", not is_intact())
-	queue_redraw()
+	if _art_block != null:
+		_art_block.queue_redraw()
 
 
-func _draw() -> void:
+func _ready() -> void:
+	y_sort_enabled = true  # its art sorts with the fighters (the Arena and CrateField sort too)
+	_art_block = ArtBlock.new()
+	add_child(_art_block)
+	_art_block.place(Rect2(position - Vector2.ONE * Constants.TILE_SIZE * 0.5, Vector2.ONE * Constants.TILE_SIZE),
+		position.y + size * 0.5, _paint)
+
+
+func art_block() -> ArtBlock:
+	return _art_block
+
+
+func _paint(ci: CanvasItem) -> void:
 	if art == null:
 		return
 	var t: float = Constants.TILE_SIZE
 	var damaged: bool = hp < Constants.CRATE_HP * DAMAGED_FRACTION
 	var frame: ArenaFloor.Tile = ArenaFloor.Tile.CRATE_DAMAGED if damaged else ArenaFloor.Tile.CRATE
-	draw_texture_rect_region(art, Rect2(-t * 0.5, -t * 0.5, t, t), ArenaFloor.region(frame))
+	ci.draw_texture_rect_region(art, Rect2(position - Vector2(t, t) * 0.5, Vector2(t, t)), ArenaFloor.region(frame))

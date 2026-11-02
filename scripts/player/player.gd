@@ -1275,6 +1275,20 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 	return true
 
 
+## For the see-through ghost drawn when a wall hides him (Arena._update_ghosts): the sprite's current frame, the
+## world rect it covers, whether it is mirrored and the foot line; empty while there is nothing to show.
+func ghost_info() -> Dictionary:
+	if dead or is_concealed() or not _sprite.visible or _sprite.sprite_frames == null or _sprite.modulate.a < 0.05:
+		return {}
+	var tex: Texture2D = _sprite.sprite_frames.get_frame_texture(_sprite.animation, _sprite.frame)
+	if tex == null:
+		return {}
+	var size: Vector2 = tex.get_size() * _sprite.scale
+	var c: Vector2 = global_position + _sprite.position
+	return {"texture": tex, "rect": Rect2(c - size * 0.5, size), "flip": _sprite.flip_h,
+		"foot": global_position.y + visual_offset.y + FOOT_RING_Y}
+
+
 ## Ground layer (under the sprite child): the shadow under the feet.
 func _draw() -> void:
 	if is_concealed():  # invisible to this viewer: no shadow either
