@@ -5,7 +5,8 @@ extends SceneTree
 ##     char=sakura special=petal_drift move=1,0 hold=0 press=1 aim=1,0
 ## Args: char, special (slot 1), move (stick while it runs), aim, press (extra presses at these seconds after the first
 ## after the run starts, comma separated, e.g. press=0,1.5 to start / end), fire (hold the weapon the whole time),
-## target=x,y (the passive bot stands there, relative to the fighter), edge=1 (fighter starts near the right wall).
+## target=x,y (the passive bot stands there, relative to the fighter), edge=1 (fighter starts near the right wall) /
+## edge=-1 (near the left wall), flip_at=S (the stick and aim mirror in x after S seconds: a turn-round).
 
 const START_FRAME: int = 420  # the match countdown is over
 const PRESS_AT: int = 30  # frames after START_FRAME
@@ -73,6 +74,9 @@ func _tick() -> void:
 		if args.get("edge", "0") == "1":  # stand 330 px off the arena's right edge, so a wall is in range along +x
 			var area: Rect2 = arena.play_area()
 			home = Vector2(area.end.x - 330.0, area.get_center().y)
+		elif args.get("edge", "0") == "-1":  # the mirror: 330 px off the left edge, so a wall is in range along -x
+			var area_l: Rect2 = arena.play_area()
+			home = Vector2(area_l.position.x + 330.0, area_l.get_center().y)
 	if bot != null and is_instance_valid(bot):  # passive; far away unless target=x,y (pixels from the fighter) puts it in reach
 		bot.controller = null
 		bot.stats.tick(1.0 / 60.0)  # nothing simulates it, so let its stun / slow run down here
@@ -83,6 +87,9 @@ func _tick() -> void:
 	runner.aim = _vec("aim", Vector2.RIGHT)
 	runner.move = _vec("move", Vector2.ZERO) if n >= PRESS_AT else Vector2.ZERO
 	runner.fire = args.get("fire", "0") == "1"
+	if args.has("flip_at") and n >= PRESS_AT + int(float(args["flip_at"]) * 60.0):  # turn round: stick and aim mirror (x)
+		runner.move.x = -runner.move.x
+		runner.aim.x = -runner.aim.x
 	if n == PRESS_AT - 5:
 		me.global_position = home
 		for s: CharacterSkill in me.skills:
