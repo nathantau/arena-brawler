@@ -18,7 +18,7 @@ import generate as g  # noqa: E402
 from generate import BODY, FACE, FACE_R, IDLE_BOB, L, P, R, RR, E, Canvas, arm, legs, big_eyes  # noqa: E402
 from palette import (OUTLINE, SHADOW, STEEL, STEEL_D, WHITE, YELLOW, RED, TEAL_L, TEAL, ORANGE, SKIN, SKIN_D, MAROON, NAVY,
                      BLUE, BROWN, DARKER, LIGHTER, VIOLET_D, VIOLET, VIOLET_L, OCHRE, OCHRE_D, PINK, PINK_L, CREAM,
-                     CREAM_D)  # noqa: E402
+                     CREAM_D, GREEN, GREEN_L)  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 CELL, PAD, UPPER_DY = g.CELL, g.PAD, g.UPPER_DY
@@ -192,138 +192,197 @@ def frame(build, t):
 
 
 # ==================================================================================================================================
+# shared cloth / hair helpers
+# ==================================================================================================================================
+def bandw(pts, widths):
+    """Polygon along `pts` with a width per point (volume: hair bulges then tapers)."""
+    left, right = [], []
+    n = len(pts)
+    for i, (x, y) in enumerate(pts):
+        a, b = pts[max(0, i - 1)], pts[min(n - 1, i + 1)]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        ln = math.hypot(dx, dy) or 1
+        w = widths[i] / 2
+        left.append((x - dy / ln * w, y + dx / ln * w))
+        right.append((x + dy / ln * w, y - dx / ln * w))
+    return left, right
+
+
+def ipts(ps):
+    return [(round(x), round(y)) for x, y in ps]
+
+
+def ribbon(c, pts, w0, w1, base, frayed=True, folds=True):
+    """A cloth tail along `pts`: lit upper edge, dark underside, broken fold line, frayed (jagged) end."""
+    n = len(pts)
+    left, right = bandw(pts, [w0 + (w1 - w0) * i / (n - 1) for i in range(n)])
+    (x, y), (px_, py_) = pts[-1], pts[-2]
+    dx, dy = x - px_, y - py_
+    ln = math.hypot(dx, dy) or 1
+    tx, ty = dx / ln, dy / ln
+    nx, ny = -ty, tx
+    h = w1 / 2
+    tip = []
+    if frayed:
+        for a, b in ((0.55, 2.5), (0.2, -1.0), (-0.15, 4.0), (-0.5, -0.5), (-0.75, 2.0)):
+            tip.append((x + nx * h * a + tx * b, y + ny * h * a + ty * b))
+    poly = left + tip + right[::-1]
+    c.part(P(ipts(poly)), base)
+    top, bot = (left, right) if sum(p[1] for p in left) < sum(p[1] for p in right) else (right, left)
+    c.flat(L(ipts(top[1:-1]), 1), LIGHTER[base])
+    c.flat(L([(a, b + 1) for a, b in ipts(bot[1:-1])], 1), DARKER[base])
+    if folds:
+        mid = [((a[0] + b[0]) / 2 + (bb[0] - a[0]) * 0.0, (a[1] + b[1]) / 2 + 1) for a, b, bb in zip(left, right, left)]
+        for i in range(2, n - 2, 3):
+            c.flat(L(ipts(mid[i:i + 2]), 1), DARKER[base])
+
+
+def lock_highlight(c, pts, off, color):
+    c.flat(L([(round(x + off[0]), round(y + off[1])) for x, y in pts], 1), color)
+
+
+# ==================================================================================================================================
 # A  Crimson kunoichi
 # ==================================================================================================================================
 HAIR_A = SHADOW  # black hair: rim-lit by STEEL_D, shades to OUTLINE
 GOLD = OCHRE
 
 
-def kunai_pin(c, base, tip, ring):
-    """A kunai: leaf blade from `base` out to `tip`, red-wrapped grip, gold ring at `ring`."""
+def kunai_pin(c, ring, base, tip):
+    """A kunai hairpin: gold ring, red grip, leaf blade."""
     c.flat(L([ring, base], 1), RED)
-    c.flat(L([base, (base[0] + (tip[0] - base[0]) // 3, base[1] + (tip[1] - base[1]) // 3)], 1), GOLD)
     mx, my = (base[0] + tip[0]) // 2, (base[1] + tip[1]) // 2
-    c.part(P([(base[0] + (tip[0] - base[0]) // 4, base[1] + (tip[1] - base[1]) // 4 - 1), (mx + 1, my - 2), tip,
-              (mx - 1, my + 2)]), STEEL)
+    c.part(P([(base[0], base[1] - 2), (mx, my - 2), tip, (mx, my + 2), (base[0], base[1] + 1)]), STEEL)
+    c.flat(L([(base[0] + 1, base[1] - 1), (mx + 1, my - 1)], 1), WHITE)
     disc(c, ring[0], ring[1], 2, GOLD)
     c.dot(ring[0], ring[1], OUTLINE)
 
 
-def build_a(low, up, t):
-    # ---- legs: navy trousers, red ankle wraps, a gold-studded thigh strap and a kunai holster on the front leg
-    for i, (x, dy) in enumerate(legs(low, NAVY, SHADOW, None)):
-        low.flat(L([(x + 1, 49 + dy), (x + 1, 52 + dy)], 1), BLUE)
-        low.flat(R((x, 52 + dy, x + 5, 52 + dy)), RED)  # ankle wrap
-        low.flat(R((x, 53 + dy, x + 5, 53 + dy)), MAROON)
-        low.dot(x + 1, 52 + dy, ORANGE)
-        low.flat(R((x, 50 + dy, x + 5, 50 + dy)), BROWN)  # thigh strap
-        low.dot(x + 2, 50 + dy, GOLD)
-    fx, fdy = 34, 0
-    low.part(P([(fx + 5, 49), (fx + 9, 50), (fx + 9, 55), (fx + 6, 56), (fx + 5, 53)]), BROWN)  # holster pouch on the outer thigh
-    low.flat(L([(fx + 6, 50), (fx + 8, 50)], 1), OCHRE)  # buckle strap
-    low.flat(L([(fx + 7, 49), (fx + 8, 46)], 1), RED)  # kunai grip sticking up
-    low.dot(fx + 8, 46, GOLD)
-    low.dot(fx + 8, 45, GOLD)
+def fox_mask(c, ox, oy):
+    """A festival fox mask pushed up and tilted on the side of her head."""
+    c.part(P([(ox - 1, oy + 1), (ox - 3, oy - 6), (ox + 3, oy - 2)]), WHITE)  # ears
+    c.part(P([(ox + 5, oy - 2), (ox + 9, oy - 7), (ox + 10, oy + 1)]), WHITE)
+    c.dot(ox - 2, oy - 3, RED)
+    c.dot(ox - 2, oy - 2, RED)
+    c.dot(ox + 8, oy - 4, RED)
+    c.dot(ox + 8, oy - 3, RED)
+    c.part(lambda d, f: (d.ellipse((ox - 3, oy - 3, ox + 10, oy + 8), f), d.polygon([(ox - 2, oy + 4), (ox + 3, oy + 10), (ox + 8, oy + 5)], f)), WHITE)
+    c.flat(L([(ox, oy + 1), (ox + 2, oy + 2)], 1), OUTLINE)  # slanted eye slits
+    c.flat(L([(ox + 6, oy + 2), (ox + 8, oy + 1)], 1), OUTLINE)
+    c.flat(L([(ox - 2, oy + 4), (ox + 1, oy + 5)], 1), RED)  # cheek marks
+    c.flat(L([(ox + 7, oy + 5), (ox + 9, oy + 4)], 1), RED)
+    c.flat(L([(ox + 1, oy), (ox + 4, oy - 1)], 1), RED)  # forehead mark
+    c.dot(ox + 3, oy + 8, OUTLINE)  # nose
+    c.dot(ox + 4, oy + 8, OUTLINE)
+    c.dot(ox + 2, oy - 1, STEEL)
 
-    # ---- scarf tails, streaming behind her (the silhouette hook): three trailing ribbons, each lagging the one before
-    tails = [((22, 37), (6, 31), (-8, 46), (-20, 40), 5.5, 1.4, 8.0, 5.0, 0.0),
-             ((22, 39), (8, 44), (-3, 52), (-12, 56), 5.0, 1.0, 7.0, 3.5, 0.8),
-             ((22, 38), (10, 26), (-2, 28), (-8, 20), 4.0, 1.4, 6.0, 3.0, 1.6)]
-    for p0, p1, p2, p3, w0, k, amp, w1, lag in reversed(tails):
-        pts = strand(p0, p1, p2, p3, t, amp, k=1.8 + k, lag=lag)
-        poly = band(pts, w0 + 1, w1 + 1, notch=2.2)
-        up.part(P(poly), RED)
-        mid = pts[len(pts) // 2]
-        up.flat(L([(round(x), round(y) + 1) for x, y in pts[2:-2]], 1), MAROON)  # centre fold
-        across(up, pts, len(pts) - 3, w1 / 2 + 1, GOLD)
-        across(up, pts, len(pts) - 4, w1 / 2 + 1, OCHRE_D)
-    # ---- ponytail (high, from a tie on the crown)
-    tie = (27, 5)
-    pt = strand(tie, (12, -12), (-4, 6), (-2, 34), t, 4.0, k=1.7, lag=0.7)
-    up.part(P(band(pt, 7, 2, notch=0)), HAIR_A)
-    pt2 = strand((tie[0] - 1, tie[1] + 2), (14, -2), (4, 14), (8, 36), t, 3.5, k=1.7, lag=1.4)
-    up.part(P(band(pt2, 4, 1)), HAIR_A)
-    for (x, y) in pt[3:9:2]:
-        up.dot(round(x) - 1, round(y) - 1, STEEL_D)
-    up.flat(L([(round(x) - 1, round(y)) for x, y in pt[2:6]], 1), STEEL_D)
-    # ---- back arm
-    arm(up, g.ARM_X[0], NAVY, SKIN)
-    up.flat(R((g.ARM_X[0], 39, g.ARM_X[0] + 5, 40)), GOLD)
-    up.flat(R((g.ARM_X[0], 39, g.ARM_X[0] + 5, 39)), YELLOW)
-    # ---- body: tunic with a flared, split hem
-    flare = [(20, 44), (44, 44), (46, 50), (42, 52 + round(phase(t, 1.0)) ), (38, 49), (33, 52), (27, 49), (22, 52 - round(phase(t, 0.5))), (18, 50)]
+
+def build_a(low, up, t):
+    # ---- legs: navy trousers, light grey shin wraps, a strap with a gold stud, kunai holster on the front thigh
+    for x, dy in legs(low, NAVY, SHADOW, None):
+        low.flat(L([(x + 1, 47 + dy), (x + 1, 50 + dy)], 1), BLUE)
+        low.flat(R((x, 50 + dy, x + 5, 50 + dy)), BROWN)
+        low.dot(x + 2, 50 + dy, GOLD)
+        low.flat(R((x, 51 + dy, x + 5, 53 + dy)), STEEL)
+        low.flat(R((x, 53 + dy, x + 5, 53 + dy)), STEEL_D)
+        low.dot(x, 51 + dy, WHITE)
+        low.flat(L([(x + 1, 52 + dy), (x + 4, 51 + dy)], 1), WHITE)
+    low.part(P([(39, 49), (43, 50), (43, 55), (40, 56), (39, 53)]), BROWN)
+    low.flat(L([(40, 50), (42, 50)], 1), GOLD)
+    low.flat(L([(41, 49), (42, 46)], 1), RED)
+    low.dot(42, 45, GOLD)
+
+    # ---- ponytail: ONE high tail with volume, tapering in clumps, lagging the head
+    tie = (29, 5)
+    pt = strand(tie, (13, -13), (-3, 8), (3, 36), t, 6.0, k=2.0, lag=0.8, n=16)
+    lw, rw = bandw(pt, [5, 9, 11, 11, 10, 10, 9, 9, 8, 7, 7, 6, 5, 4, 3, 2, 1])
+    up.part(P(ipts(lw + rw[::-1])), HAIR_A)
+    # clumps: two lighter strand lines inside the mass, a bright rim on the top edge, a split tip
+    lock_highlight(up, [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(lw[1:12], rw[1:12])], (0, -1), STEEL_D)
+    lock_highlight(up, [((a[0] * 2 + b[0]) / 3, (a[1] * 2 + b[1]) / 3) for a, b in zip(lw[3:14], rw[3:14])], (0, 0), BLUE)
+    up.flat(L(ipts(rw[2:10]), 1), OUTLINE)
+    tip = pt[-1]
+    up.part(P(ipts([(tip[0] - 2, tip[1] - 3), (tip[0] - 4 - sw_(t, 1.5, 2), tip[1] + 4), (tip[0], tip[1] - 1)])), HAIR_A, shade=False)
+    # ---- scarf tails: two broad cloth tails with an S-wave (drawn over the ponytail)
+    t1 = strand((23, 37), (9, 29), (-4, 49), (-19, 41), t, 7.0, k=3.4, lag=0.0, n=14)
+    t2 = strand((23, 39), (11, 47), (2, 53), (-9, 58), t, 6.0, k=3.0, lag=0.9, n=14)
+    ribbon(up, t2, 6, 5, RED)
+    ribbon(up, t1, 7, 5, RED)
+    across(up, t1, 9, 4, GOLD)
+    across(up, t1, 10, 4, OCHRE_D)
+    across(up, t2, 9, 3, GOLD)
+    # obi bow behind her hip
+    bw = sw_(t, 1.0, 2)
+    up.part(P([(21, 42), (11, 38 + bw), (9, 44 + bw), (15, 46), (21, 45)]), RED)
+    up.part(P([(21, 44), (13, 49 + bw), (15, 54 + bw), (22, 48)]), RED)
+    up.flat(L([(12, 40 + bw), (19, 43)], 1), ORANGE)
+    # ---- back arm: gold bracer
+    ax = g.ARM_X[0]
+    arm(up, ax, NAVY, SKIN)
+    up.flat(R((ax, 39, ax + 5, 41)), GOLD)
+    up.flat(R((ax, 39, ax + 5, 39)), YELLOW)
+    up.flat(R((ax, 41, ax + 5, 41)), OCHRE_D)
+    # ---- fitted navy top over a short flared hem
+    flare = [(20, 44), (44, 44), (46, 50), (42, 52 + sw_(t, 1.0, 1)), (37, 49), (32, 52), (26, 49), (22, 52 - sw_(t, 0.5, 1)), (18, 50)]
     up.part(lambda d, f: (d.rounded_rectangle(BODY, 3, f), d.polygon(flare, f)), NAVY)
-    up.flat(L([(21, 40), (21, 46)], 1), BLUE)
-    up.flat(L([(22, 36), (28, 33)], 1), BLUE)
-    up.dither(R((36, 38, 43, 49)), SHADOW, "check", only_on=NAVY)
-    # crossed collar
-    up.flat(L([(26, 34), (33, 41)], 1), SHADOW)
-    up.flat(L([(40, 34), (33, 41)], 1), SHADOW)
-    up.flat(L([(26, 35), (32, 41)], 1), BLUE)
-    # hem trim: gold piping along the flare's bottom edge
-    for (x0, y0, x1, y1) in ((18, 50, 22, 52), (38, 49, 42, 52), (42, 52, 46, 50)):
-        pass
-    up.flat(L([(20, 47), (44, 47)], 1), SHADOW)
-    # red obi with a gold knot
-    up.part(R((20, 41, 44, 45)), RED, line=False)
-    up.flat(R((20, 41, 44, 41)), ORANGE)
-    up.flat(R((20, 45, 44, 45)), MAROON)
-    up.part(RR((29, 40, 36, 46), 1), GOLD)
-    up.flat(R((30, 41, 31, 41)), YELLOW)
-    up.flat(L([(32, 42), (34, 44)], 1), OCHRE_D)
-    # ---- scarf wrap round the neck, with a hanging front tail and the knot on her far shoulder
-    up.part(RR((20, 34, 46, 40), 3), RED)
-    up.flat(L([(23, 35), (35, 36)], 1), ORANGE)
-    ft = strand((24, 38), (20, 44), (21, 50), (19, 53), t, 2.0, k=1.5, lag=0.5)
-    up.part(P(band(ft, 5, 3, notch=2)), RED)
-    up.flat(L([(round(x) + 1, round(y)) for x, y in ft[1:-2]], 1), MAROON)
-    up.part(E((18, 35, 24, 41)), RED)  # knot
-    up.flat(L([(19, 37), (22, 36)], 1), ORANGE)
-    up.dot(21, 39, MAROON)
-    # ---- front arm
-    arm(up, g.ARM_X[1], NAVY, SKIN)
-    up.flat(R((g.ARM_X[1], 39, g.ARM_X[1] + 5, 40)), GOLD)
-    up.flat(R((g.ARM_X[1], 39, g.ARM_X[1] + 5, 39)), YELLOW)
-    up.flat(R((g.ARM_X[1], 41, g.ARM_X[1] + 5, 41)), OCHRE_D)
-    up.part(RR((42, 34, 48, 38), 2), SHADOW)  # shoulder pad
-    up.flat(R((43, 34, 45, 34)), STEEL_D)
+    up.flat(L([(21, 38), (21, 46)], 1), BLUE)  # lit left edge
+    up.flat(L([(23, 35), (29, 34)], 1), BLUE)
+    up.dither(R((35, 37, 44, 49)), SHADOW, "check", only_on=NAVY)
+    up.flat(L([(26, 34), (33, 41)], 1), SHADOW)  # crossed collar
+    up.flat(L([(41, 34), (33, 41)], 1), SHADOW)
+    up.flat(L([(27, 35), (33, 41)], 1), BLUE)
+    # red obi, a big gold-buckled knot
+    up.part(R((19, 43, 45, 46)), RED, line=False)
+    up.flat(R((19, 43, 45, 43)), ORANGE)
+    up.flat(R((19, 46, 45, 46)), MAROON)
+    up.part(RR((29, 42, 36, 47), 2), GOLD)
+    up.flat(R((30, 43, 32, 43)), YELLOW)
+    up.flat(R((32, 45, 34, 46)), OCHRE_D)
+    # ---- neck scarf: a thick wrap with a knot on her far side
+    up.part(RR((19, 34, 46, 39), 2), RED)
+    up.flat(L([(22, 35), (36, 35)], 1), ORANGE)
+    up.flat(L([(22, 38), (44, 38)], 1), MAROON)
+    up.part(E((16, 34, 24, 41)), RED)
+    up.flat(L([(18, 36), (22, 36)], 1), ORANGE)
+    up.flat(L([(19, 39), (23, 40)], 1), MAROON)
+    # ---- front arm + shoulder pad
+    fx = g.ARM_X[1]
+    arm(up, fx, NAVY, SKIN)
+    up.flat(R((fx, 39, fx + 5, 41)), GOLD)
+    up.flat(R((fx, 39, fx + 5, 39)), YELLOW)
+    up.flat(R((fx, 41, fx + 5, 41)), OCHRE_D)
     # ---- head
     up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
         [(16, 20), (14, 30), (18, 28), (19, 36), (22, 31), (24, 20)], f)), HAIR_A)
     up.part(RR(FACE, FACE_R), SKIN)
     up.flat(L([(26, 35), (42, 36)], 1), SKIN_D)
-    # far side lock + fringe
-    up.part(P([(46, 14), (51, 17), (52 + round(phase(t, 1.0) * 0.8), 28), (49, 26), (49, 31), (46, 27)]), HAIR_A, shade=False)
+    up.part(P([(46, 14), (51, 17), (52 + sw_(t, 1.0, 1), 28), (49, 26), (49, 31), (46, 27)]), HAIR_A, shade=False)
     up.part(P([(19, 11), (49, 11), (50, 17), (45, 14), (42, 18), (37, 14), (33, 18), (29, 14), (25, 17), (22, 16), (19, 18)]),
             HAIR_A, shade=False)
-    up.flat(L([(24, 9), (33, 7)], 1), STEEL_D)
-    up.dot(22, 12, STEEL_D)
-    # hairpin tie (red) and the kunai through it
-    up.part(RR((23, 3, 31, 9), 2), RED)
-    up.dot(25, 5, ORANGE)
-    kunai_pin(up, (30, 5), (18, 13), (33, 1))
-    # eyes: gold, with a red flick at the outer corner
+    up.flat(L([(28, 9), (40, 8)], 1), STEEL_D)
+    up.dot(45, 12, STEEL_D)
+    # tie + kunai hairpin through it
+    up.part(RR((26, 2, 33, 8), 2), RED)
+    up.dot(28, 4, ORANGE)
+    kunai_pin(up, (15, 10), (21, 8), (37, 4))
+    # fox mask on the side of her head, string round the back
+    fox_mask(up, 17, 16)
+    # eyes + soft little smile (no lower-face mask)
     big_eyes(up, g.EYES_Y - 1, g.EYES_X, ORANGE, h=6)
     for x in g.EYES_X:
         up.flat(R((x + 3, 19, x + 4, 19)), OUTLINE)
         up.dot(x + 5, 18, RED)
         up.dot(x + 4, 20, RED)
-    # fox half-mask: white, pointed muzzle to the front, red markings, gold studs
-    mask = [(29, 33), (34, 33), (40, 31), (45, 31), (50, 34), (46, 36), (42, 38), (34, 38), (29, 37)]
-    up.part(P(mask), WHITE)
-    up.flat(L([(31, 35), (35, 36)], 1), RED)
-    up.flat(L([(38, 31), (42, 34)], 1), RED)
-    up.flat(L([(41, 31), (44, 33)], 1), RED)
-    up.flat(R((48, 32, 49, 33)), OUTLINE)  # nose
-    up.dot(48, 32, STEEL_D)
-    up.dot(34, 33, GOLD)
-    up.flat(L([(29, 34), (24, 31)], 1), RED)  # mask cord
-    up.flat(R((26, 29, 27, 29)), PINK)  # blush above the mask
-    up.flat(R((30, 37, 44, 37)), STEEL)
+    g.face(up, g.BLUSH, None)
+    up.flat(L([(36, 30), (37, 31), (39, 31), (40, 30)], 1), MAROON)
+
+
+def sw_(t, lag, amp):
+    return round(amp * phase(t, lag))
 
 
 # ==================================================================================================================================
-# B  Moon assassin, C  Street ninja are added below
+# B  Moon assassin
 # ==================================================================================================================================
 def crescent(c, cx, cy, r1, r2, dx, dy, col, rim=OUTLINE):
     """A crescent moon: the disc (cx, cy, r1) minus a disc offset by (dx, dy); lit at its top left, outlined."""
@@ -340,67 +399,68 @@ def crescent(c, cx, cy, r1, r2, dx, dy, col, rim=OUTLINE):
         c.dot(x, y, LIGHTER[col] if lit else (DARKER[col] if dark else col))
 
 
+def chakram(c, cx, cy, rot):
+    """A sleek ring of three curved blades (a polished steel ring with hooked crescent blades sweeping round it)."""
+    pol = lambda r, a: (cx + r * math.cos(a), cy + r * math.sin(a))
+    for k in range(3):
+        a = rot + k * 2 * math.pi / 3
+        blade = [pol(9.5, a), pol(13, a + 0.35), pol(16, a + 0.85), pol(13.5, a + 1.0), pol(10.5, a + 0.75), pol(8.5, a + 0.45)]
+        c.part(P(ipts(blade)), STEEL)
+    c.part(E((cx - 10, cy - 10, cx + 10, cy + 10)), STEEL, line=False)
+    for yy in range(cy - 9, cy + 10):  # hollow centre
+        for xx in range(cx - 9, cx + 10):
+            if (xx - cx) ** 2 + (yy - cy) ** 2 <= 52:
+                c.px[xx + c.ox, yy + c.oy] = (0, 0, 0, 0)
+    # polish: white glints on the upper-left rim, shaded lower-right, cyan edge glow inside the hole
+    for a in [math.pi + 0.15 * k for k in range(1, 8)]:
+        x, y = pol(9.2, a)
+        c.dot(round(x), round(y), WHITE)
+    for a in [0.25 * k for k in range(1, 6)]:
+        x, y = pol(9.2, a)
+        c.dot(round(x), round(y), STEEL_D)
+
+
 def build_b(low, up, t):
     IND = VIOLET_D
-    # ---- legs: indigo with a glowing cyan seam, silver greaves, cyan toe glow
     for x, dy in legs(low, IND, SHADOW, None):
         low.flat(L([(x + 4, 46 + dy), (x + 4, 52 + dy)], 1), TEAL_L)
-        low.dot(x + 3, 49 + dy, TEAL)
         low.flat(R((x, 51 + dy, x + 5, 53 + dy)), STEEL)
         low.flat(R((x, 53 + dy, x + 5, 53 + dy)), STEEL_D)
         low.dot(x, 51 + dy, WHITE)
         low.flat(R((x + 5, 55 + dy, x + 7, 56 + dy)), TEAL_L)
-        low.flat(L([(x - 1, 55 + dy), (x + 2, 55 + dy)], 1), VIOLET)
-    sw = lambda lag, a: round(a * phase(t, lag))
-    # ---- chakram on her back (rotates a little each frame), the cape hangs over its lower rim
-    cx, cy, rot = 9, 22, t * math.pi / 8
-    pts_ = []
-    for k in range(8):
-        a = rot + k * math.pi / 4
-        pts_ += [(cx + 13 * math.cos(a), cy + 13 * math.sin(a)), (cx + 9 * math.cos(a + math.pi / 8), cy + 9 * math.sin(a + math.pi / 8))]
-    up.part(P(pts_), STEEL)
-    up.part(E((cx - 9, cy - 9, cx + 9, cy + 9)), STEEL, line=False)
-    for yy in range(cy - 6, cy + 7):  # hollow centre
-        for xx in range(cx - 6, cx + 7):
-            if (xx - cx) ** 2 + (yy - cy) ** 2 <= 30:
-                up.px[xx + up.ox, yy + up.oy] = (0, 0, 0, 0)
-    for x, y in set((cx + round(6 * math.cos(a)), cy + round(6 * math.sin(a))) for a in [k * math.pi / 12 for k in range(24)]):
-        up.dot(x, y, OUTLINE)
-    for x, y in set((cx + round(7.5 * math.cos(a)), cy + round(7.5 * math.sin(a))) for a in [k * math.pi / 12 for k in range(24)]):
-        up.dot(x, y, TEAL_L if (x + y) % 3 else WHITE)
-    # ---- tattered cape: ragged hem, cyan edge
-    cape = [(25, 34), (14, 36 + sw(0, 1)), (8 + sw(0.5, 2), 44), (9 + sw(1, 2), 52), (13 + sw(1, 2), 48), (15 + sw(1.5, 2), 56),
-            (20 + sw(1.5, 2), 50), (23 + sw(2, 2), 55), (27, 48), (31, 42)]
+    # ---- chakram on her back, slowly turning
+    chakram(up, 9, 19, -t * math.pi / 6 + 0.5)
+    # ---- short tattered cape behind the shoulders: flat indigo, one cyan hem line, ragged teeth
+    cape = [(25, 34), (15, 35), (11, 42), (10 + sw_(t, 0.5, 1), 49), (14 + sw_(t, 0.8, 1), 46), (17 + sw_(t, 1, 2), 52),
+            (21 + sw_(t, 1.2, 1), 47), (25 + sw_(t, 1.4, 2), 51), (29, 45), (31, 40)]
     up.part(P(cape), IND)
-    up.flat(L([(14, 38), (10 + sw(0.5, 2), 45), (11 + sw(1, 2), 51)], 1), TEAL_L)
-    up.flat(L([(24, 36), (28, 47)], 1), VIOLET)
-    up.dither(R((8, 44, 20, 56)), OUTLINE, "check", only_on=IND)
-    # ---- braid: long, woven, tied in cyan, swinging with a lag
-    br = strand((22, 24), (13, 30), (17, 42), (15, 55), t, 3.5, k=1.8, lag=0.8, n=14)
-    for i, (x, y) in enumerate(br[:-1]):
-        r = 3 if i < 9 else 2
-        up.part(E((round(x) - r, round(y) - 2, round(x) + r, round(y) + 2)), WHITE if i % 2 == 0 else STEEL)
-    ex, ey = round(br[-1][0]), round(br[-1][1])
-    up.part(P([(ex - 2, ey - 2), (ex + 2, ey - 2), (ex + 3, ey + 3), (ex, ey + 5), (ex - 3, ey + 2)]), WHITE)
-    bx, by = round(br[-3][0]), round(br[-3][1])
-    up.flat(R((bx - 2, by, bx + 2, by + 1)), TEAL_L)
-    # ---- back arm: silver gauntlet with a cyan band
+    up.flat(L([(13, 44), (11 + sw_(t, 0.5, 1), 49)], 1), TEAL_L)
+    up.flat(L([(14, 37), (13, 41)], 1), VIOLET)
+    # ---- braid: one smooth braid with cross-weave lines, a cyan tie and a tassel, swinging with lag
+    br = strand((22, 26), (12, 31), (17, 44), (13, 56), t, 3.5, k=2.0, lag=0.8, n=16)
+    lw, rw = bandw(br, [6 if i < 11 else 6 - (i - 10) for i in range(len(br))])
+    up.part(P(ipts(lw + rw[::-1])), WHITE)
+    for i in range(1, len(br) - 5, 2):
+        up.flat(L(ipts([lw[i], rw[i + 1]]), 1), STEEL)
+    up.flat(L(ipts(lw[1:12]), 1), WHITE)
+    bx, by = br[-5]
+    across(up, br, len(br) - 5, 3, TEAL_L, 2)
+    ex, ey = br[-1]
+    up.part(P(ipts([(ex - 1, ey), (ex + 2, ey), (ex + 3 + sw_(t, 1.5, 1), ey + 6), (ex - 3, ey + 6)])), TEAL_L)
+    up.flat(L(ipts([(ex, ey + 2), (ex - 1, ey + 5)]), 1), WHITE)
+    # ---- back arm
     ax = g.ARM_X[0]
     arm(up, ax, IND, SKIN)
     up.flat(R((ax, 39, ax + 5, 41)), STEEL)
     up.flat(R((ax, 41, ax + 5, 41)), STEEL_D)
     up.dot(ax, 39, WHITE)
-    up.flat(R((ax + 1, 40, ax + 4, 40)), TEAL_L)
-    # ---- body
+    up.flat(R((ax, 40, ax + 5, 40)), TEAL_L)
+    # ---- body: plain indigo with ONE cyan V trim, a moon-gem belt
     up.part(RR(BODY, 3), IND)
     up.flat(L([(21, 38), (21, 44)], 1), VIOLET)
-    up.dither(R((36, 37, 43, 47)), OUTLINE, "check", only_on=IND)
-    up.flat(L([(28, 35), (33, 44)], 1), TEAL)
-    up.flat(L([(27, 35), (32, 44)], 1), TEAL_L)
-    up.flat(L([(40, 35), (34, 44)], 1), TEAL)
-    up.dot(33, 45, TEAL_L)
-    crescent(up, 25, 41, 3, 3, 1, -1, STEEL)
-    up.dot(23, 39, TEAL_L)
+    up.dither(R((36, 38, 43, 47)), OUTLINE, "check", only_on=IND)
+    up.flat(L([(26, 35), (33, 43)], 1), TEAL_L)
+    up.flat(L([(41, 35), (34, 43)], 1), TEAL)
     up.part(R((20, 44, 44, 46)), VIOLET, line=False)
     up.flat(R((20, 44, 44, 44)), VIOLET_L)
     up.flat(R((20, 46, 44, 46)), OUTLINE)
@@ -408,123 +468,133 @@ def build_b(low, up, t):
     up.flat(R((32, 44, 34, 46)), TEAL_L if t % 2 == 0 else WHITE)
     up.part(RR((21, 34, 45, 38), 2), VIOLET)
     up.flat(L([(23, 35), (30, 35)], 1), VIOLET_L)
-    up.flat(L([(23, 37), (43, 38)], 1), TEAL)
     # ---- front arm + crescent pauldron
     fx = g.ARM_X[1]
     arm(up, fx, IND, SKIN)
     up.flat(R((fx, 39, fx + 5, 41)), STEEL)
     up.flat(R((fx, 41, fx + 5, 41)), STEEL_D)
     up.dot(fx, 39, WHITE)
-    up.flat(R((fx + 1, 40, fx + 4, 40)), TEAL_L)
+    up.flat(R((fx, 40, fx + 5, 40)), TEAL_L)
     crescent(up, 45, 36, 5, 4, -1, 1, STEEL)
-    up.dot(44, 33, TEAL_L)
-    # ---- head: silver hair, face, fringe, headband with the crescent plate
+    # ---- head: silver hair, face, fringe, dark band and a BIG crescent plate cradling a cyan gem
     up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon(
         [(16, 20), (14, 28), (18, 27), (19, 33), (23, 28), (24, 20)], f)), WHITE)
     up.flat(L([(22, 8), (32, 6)], 1), STEEL)
     up.dither(R((18, 24, 24, 34)), STEEL, "check", only_on=WHITE)
     up.part(RR(FACE, FACE_R), SKIN)
     up.flat(L([(26, 35), (42, 36)], 1), SKIN_D)
-    up.part(P([(46, 14), (51, 17), (52 + round(phase(t, 1.0) * 0.8), 29), (49, 27), (49, 32), (46, 27)]), WHITE, shade=False)
+    up.part(P([(46, 14), (51, 17), (52 + sw_(t, 1.0, 1), 29), (49, 27), (49, 32), (46, 27)]), WHITE, shade=False)
     up.flat(L([(50, 20), (51, 27)], 1), STEEL)
-    up.part(P([(19, 11), (49, 11), (50, 17), (46, 14), (43, 18), (39, 14), (35, 18), (31, 14), (27, 17), (23, 14), (19, 18)]),
+    up.part(P([(19, 12), (49, 12), (50, 17), (46, 15), (43, 18), (39, 15), (35, 18), (31, 15), (27, 17), (23, 15), (19, 18)]),
             WHITE, shade=False)
-    up.flat(L([(21, 17), (24, 15)], 1), STEEL)
-    up.part(P([(19, 10), (30, 8), (40, 8), (49, 10), (49, 13), (40, 11), (30, 11), (19, 14)]), IND, shade=False)
+    up.flat(L([(21, 17), (24, 16)], 1), STEEL)
+    up.part(P([(19, 10), (30, 8), (40, 8), (49, 10), (49, 14), (40, 12), (30, 12), (19, 15)]), IND, shade=False)
     up.flat(L([(21, 11), (28, 10)], 1), VIOLET_L)
-    crescent(up, 35, 11, 4, 3, 1, -1, STEEL)
-    up.dot(36, 11, TEAL_L)
+    crescent(up, 35, 10, 7, 6, 0, -3, STEEL)
+    up.flat(R((35, 6, 36, 7)), TEAL_L)
+    up.dot(35, 6, WHITE)
     big_eyes(up, g.EYES_Y - 1, g.EYES_X, TEAL_L, h=6)
     for x in g.EYES_X:
         up.flat(R((x + 3, 19, x + 4, 19)), OUTLINE)
         up.dot(x + 5, 18, OUTLINE)
     up.dot(33, 29, TEAL_L)
     up.dot(34, 30, TEAL_L)
-    up.dot(33, 31, TEAL)
     up.flat(R((g.BLUSH[0], 30, g.BLUSH[0] + 1, 30)), PINK)
     up.flat(R((g.MOUTH[0], g.MOUTH[1], g.MOUTH[0] + 1, g.MOUTH[1])), MAROON)
 
 
+# ==================================================================================================================================
+# C  Street ninja: charcoal techwear, acid-lime accent
+# ==================================================================================================================================
 def build_c(low, up, t):
-    JACKET, MESH, PANTS = OUTLINE, STEEL_D, STEEL_D
-    ACC = TEAL_L
-    # ---- legs: cargo pants with straps, a shin pad, chunky white sneakers with LED soles
-    for x, dy in legs(low, PANTS, WHITE, None):
-        low.flat(L([(x + 1, 50 + dy), (x + 1, 52 + dy)], 1), STEEL)
-        low.flat(R((x, 51 + dy, x + 5, 51 + dy)), OUTLINE)
-        low.dot(x + 3, 51 + dy, STEEL)
-        low.flat(R((x, 52 + dy, x + 5, 53 + dy)), SHADOW)
-        low.dot(x, 52 + dy, STEEL)
+    JK, HAIR = STEEL_D, NAVY
+    ACC, ACC2 = GREEN_L, GREEN
+    # ---- legs: dark cargo pants (lit left edge, strap + lime tab, knee pad), white sneakers with lime soles
+    for x, dy in legs(low, SHADOW, WHITE, None):
+        low.flat(L([(x, 46 + dy), (x, 52 + dy)], 1), STEEL_D)
+        low.flat(R((x, 50 + dy, x + 5, 50 + dy)), OUTLINE)
+        low.dot(x + 3, 50 + dy, ACC)
+        low.flat(R((x + 1, 52 + dy, x + 4, 53 + dy)), STEEL_D)
+        low.flat(R((x + 1, 53 + dy, x + 4, 53 + dy)), STEEL)
         low.flat(R((x - 1, 57 + dy, x + 7, 57 + dy)), ACC)
         low.flat(R((x + 5, 55 + dy, x + 7, 55 + dy)), STEEL)
-        low.flat(L([(x - 1, 55 + dy), (x + 1, 55 + dy)], 1), SHADOW)
-    low.part(RR((39, 49, 44, 53), 1), SHADOW)
-    low.flat(R((40, 50, 43, 50)), STEEL_D)
-    low.dot(41, 52, ACC)
-    # ---- hair behind: a long asymmetric back lock with a cyan streak
-    lock = strand((20, 14), (3, 20), (10, 34), (5, 50), t, 4.0, k=1.8, lag=0.8)
-    up.part(P(band(lock, 9, 2)), NAVY)
-    up.flat(L([(round(x) + 1, round(y)) for x, y in lock[2:-1]], 1), ACC)
-    up.flat(L([(round(x) - 2, round(y)) for x, y in lock[2:6]], 1), STEEL_D)
+        low.flat(L([(x - 1, 55 + dy), (x + 1, 55 + dy)], 1), STEEL)
+    low.part(RR((39, 49, 44, 54), 1), STEEL_D)
+    low.flat(R((40, 50, 43, 50)), STEEL)
+    low.dot(42, 52, ACC)
+    # ---- long back lock of hair with a lime streak
+    lock = strand((20, 14), (3, 20), (10, 34), (5, 50), t, 4.5, k=2.0, lag=0.8)
+    lw, rw = bandw(lock, [10, 11, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1])
+    up.part(P(ipts(lw + rw[::-1])), HAIR)
+    up.flat(L(ipts([((a[0] * 2 + b[0]) / 3, (a[1] * 2 + b[1]) / 3) for a, b in zip(lw[1:11], rw[1:11])]), 1), ACC)
+    up.flat(L(ipts([((a[0] + b[0]) / 2 - 1, (a[1] + b[1]) / 2) for a, b in zip(lw[1:7], rw[1:7])]), 1), BLUE)
     ax = g.ARM_X[0]
-    arm(up, ax, JACKET, SKIN)
-    up.flat(R((ax, 38, ax + 5, 39)), STEEL_D)
-    up.dot(ax + 1, 38, STEEL)
-    # ---- body: mesh top with a cropped jacket over it
-    up.part(RR(BODY, 3), MESH)
-    up.dither(R((20, 40, 44, 48)), SHADOW, "check", only_on=MESH)
-    up.flat(R((20, 47, 44, 48)), SHADOW)
-    up.part(P([(20, 34), (44, 34), (46, 38), (44, 43), (38, 43), (36, 45), (28, 45), (26, 43), (20, 43), (18, 38)]), JACKET)
-    up.flat(L([(21, 36), (21, 41)], 1), SHADOW)
-    up.flat(L([(23, 35), (30, 35)], 1), STEEL_D)
-    up.flat(L([(33, 36), (33, 44)], 1), ACC)
-    up.dot(34, 37, STEEL)
-    up.flat(L([(26, 35), (31, 42)], 1), STEEL_D)
-    up.flat(L([(41, 35), (35, 42)], 1), STEEL_D)
-    up.flat(R((29, 41, 31, 42)), STEEL)
-    up.dot(29, 41, WHITE)
-    up.flat(R((22, 40, 25, 42)), SHADOW)
-    up.dot(24, 40, ACC)
-    up.flat(L([(40, 39), (43, 40)], 1), ACC)
-    up.dither(R((37, 36, 44, 43)), SHADOW, "check", only_on=JACKET)
-    # ---- front arm: sleeve, a kunai chain wrapped round the forearm, the kunai swinging from it
+    arm(up, ax, JK, SKIN)
+    up.flat(R((ax, 38, ax + 5, 39)), SHADOW)
+    up.flat(R((ax, 37, ax + 5, 37)), STEEL)
+    # ---- mesh top (black with silver mesh dots) and the cropped jacket
+    up.part(RR(BODY, 3), OUTLINE)
+    jacket = [(19, 36), (45, 36), (48, 40), (46, 44), (38, 44), (36, 46), (28, 46), (26, 44), (19, 44), (17, 40)]
+    up.part(P(jacket), JK)
+    up.dither(R((36, 38, 46, 44)), SHADOW, "check", only_on=JK)
+    up.flat(L([(20, 38), (20, 43)], 1), STEEL)  # lit left edge
+    up.flat(L([(22, 37), (29, 37)], 1), STEEL)
+    # folds: a dark crease with a lit ridge beside it, following the cloth
+    for (x0, y0, x1, y1) in ((26, 38, 28, 43), (40, 38, 38, 43)):
+        up.flat(L([(x0, y0), (x1, y1)], 1), SHADOW)
+        up.flat(L([(x0 - 1, y0 + 1), (x1 - 1, y1)], 1), STEEL)
+    up.flat(L([(33, 37), (33, 45)], 1), SHADOW)  # zip
+    up.flat(L([(32, 38), (32, 44)], 1), STEEL)
+    up.flat(R((33, 38, 33, 39)), ACC)  # lime pull
+    up.flat(R((28, 41, 31, 42)), SHADOW)  # chest pocket + lime tab
+    up.dot(29, 41, ACC)
+    up.dot(31, 45, ACC)  # hem toggles
+    up.dot(37, 45, ACC)
+    # high collar flaring up round the neck
+    up.part(P([(19, 33), (24, 31), (26, 37), (22, 38), (18, 37)]), JK)
+    up.part(P([(46, 33), (41, 31), (39, 37), (43, 38), (47, 37)]), JK)
+    up.flat(L([(20, 33), (24, 32)], 1), STEEL)
+    up.flat(L([(41, 32), (45, 33)], 1), STEEL)
+    # ---- front arm: sleeve with a chain wrapped in diagonals round the forearm; the kunai swings from the wrist
     fx = g.ARM_X[1]
-    arm(up, fx, JACKET, SKIN)
-    for i, y in enumerate(range(37, 43)):
-        up.flat(R((fx, y, fx + 5, y)), STEEL if i % 2 == 0 else STEEL_D)
-        up.dot(fx + (i % 3) + 1, y, OUTLINE)
-    up.dot(fx, 37, WHITE)
-    ch = strand((fx + 4, 43), (fx + 7, 47), (fx + 2, 52), (fx + 6, 56), t, 2.5, k=1.5, lag=0.4, n=8)
+    arm(up, fx, JK, SKIN)
+    up.flat(R((fx, 37, fx + 5, 37)), STEEL)
+    for k in range(2):
+        y = 37 + k * 3
+        up.flat(L([(fx, y), (fx + 5, y + 2)], 1), WHITE)
+        up.flat(L([(fx, y + 1), (fx + 5, y + 3)], 1), SHADOW)
+    up.dot(fx + 5, 39, ACC)
+    ch = strand((fx + 4, 43), (fx + 8, 47), (fx + 3, 52), (fx + 6, 56), t, 2.5, k=1.5, lag=0.4, n=8)
     for i, (x, y) in enumerate(ch[:-2]):
         up.dot(round(x), round(y), STEEL if i % 2 == 0 else STEEL_D)
     kx, ky = round(ch[-1][0]), round(ch[-1][1])
     up.part(P([(kx - 1, ky - 3), (kx + 1, ky - 3), (kx + 2, ky), (kx, ky + 4), (kx - 2, ky)]), STEEL)
     up.flat(L([(kx, ky - 2), (kx, ky + 2)], 1), WHITE)
-    up.dot(kx, ky - 4, ACC)
-    up.part(RR((42, 33, 48, 38), 2), SHADOW)
-    up.flat(R((43, 33, 45, 33)), STEEL_D)
-    # ---- head
-    up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon([(16, 20), (14, 28), (20, 26), (24, 20)], f)), NAVY)
+    up.flat(R((kx - 1, ky - 4, kx + 1, ky - 4)), ACC)
+    up.part(RR((42, 33, 49, 38), 2), JK)
+    up.flat(R((43, 33, 46, 33)), STEEL)
+    # ---- head: dark blue asymmetric hair, a long sweep on her left and a short undercut on the right
+    up.part(lambda d, f: (d.ellipse((16, 5, 50, 36), f), d.polygon([(16, 20), (14, 28), (20, 26), (24, 20)], f)), HAIR)
     up.part(RR(FACE, FACE_R), SKIN)
     up.flat(L([(26, 35), (42, 36)], 1), SKIN_D)
-    up.part(P([(19, 10), (49, 10), (50, 15), (44, 14), (36, 14), (30, 19), (25, 24), (22, 27), (23, 19), (19, 17)]), NAVY, shade=False)
-    up.flat(L([(26, 22), (23, 27)], 1), ACC)
-    up.flat(L([(28, 20), (25, 24)], 1), TEAL)
+    up.part(P([(19, 10), (49, 10), (50, 15), (44, 14), (36, 14), (31, 18), (26, 22), (23, 26), (23, 19), (19, 17)]), HAIR, shade=False)
+    up.flat(L([(27, 20), (24, 25)], 1), ACC)
+    up.flat(L([(29, 18), (26, 21)], 1), ACC2)
     up.flat(L([(22, 9), (34, 7)], 1), BLUE)
     up.flat(L([(40, 11), (47, 12)], 1), BLUE)
-    up.part(E((21, 24, 26, 30)), SHADOW)
-    up.dot(23, 26, ACC if t % 2 == 0 else TEAL)
-    big_eyes(up, g.EYES_Y - 1, g.EYES_X, TEAL_L, h=6)
+    up.part(E((21, 24, 26, 30)), SHADOW)  # headset + LED
+    up.dot(23, 26, ACC if t % 2 == 0 else ACC2)
+    big_eyes(up, g.EYES_Y - 1, g.EYES_X, ACC, h=6)
     up.flat(L([(g.EYES_X[1] - 1, 20), (g.EYES_X[1] + 4, 19)], 1), OUTLINE)
     mask = [(26, 31), (34, 31), (40, 30), (46, 31), (48, 34), (45, 37), (40, 38), (32, 38), (27, 37)]
-    up.part(P(mask), SHADOW)
-    up.flat(L([(28, 33), (31, 33)], 1), STEEL_D)
-    up.flat(L([(28, 35), (31, 35)], 1), STEEL_D)
-    up.flat(R((35, 34, 45, 34)), ACC if t % 4 != 3 else TEAL)
-    up.flat(R((36, 33, 44, 33)), TEAL)
+    up.part(P(mask), STEEL_D)
+    up.flat(L([(28, 33), (31, 33)], 1), STEEL)
+    up.flat(L([(28, 35), (31, 35)], 1), SHADOW)
+    up.flat(R((35, 34, 45, 34)), ACC if t % 4 != 3 else ACC2)
+    up.flat(R((36, 33, 44, 33)), ACC2)
     up.dot(34, 34, WHITE)
-    up.dot(46, 33, STEEL)
     up.flat(R((26, 29, 27, 29)), PINK)
+
 
 
 CONCEPTS = [("A  Crimson kunoichi", build_a), ("B  Moon assassin", build_b), ("C  Street ninja", build_c)]
@@ -554,9 +624,12 @@ def scale_sheet(out_dir):
     row = floor_bg(w, CELL + 8)
     for i, (_, f) in enumerate(figs):
         row.alpha_composite(f, (4 + i * (CELL + 4), 4))
-    out = Image.new("RGBA", (w * 2, (CELL + 8) * 3 + 8), (24, 24, 32, 255))
-    out.alpha_composite(row, (0, 0))  # true 1x
-    out.alpha_composite(nn(row, 2).crop((0, 0, w * 2, (CELL + 8) * 2)), (0, CELL + 8 + 4))
+    mine = floor_bg(w, 2 * CELL + 8)
+    for i, (_, f) in enumerate(figs[3:]):
+        mine.alpha_composite(nn(f, 2), (4 + i * (2 * CELL + 4), 4))
+    out = Image.new("RGBA", (w, 3 * CELL + 20), (24, 24, 32, 255))
+    out.alpha_composite(row, (0, 0))
+    out.alpha_composite(mine, (0, CELL + 12))
     out.convert("RGB").save(out_dir / "shade_concepts_scale.png")
 
 
