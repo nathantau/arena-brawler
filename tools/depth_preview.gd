@@ -3,7 +3,7 @@ extends SceneTree
 ## of a fighter hidden behind a wall) and the obstacle shading of the three arena themes. Stages one scene, saves a PNG
 ## of the viewport and quits. Needs a window (focus-safe launch as in CLAUDE.md Commands, add `viewport_width/height`
 ## to override.cfg for a phone layout):
-##   ... -s tools/depth_preview.gd -- scene=coil|sapling|hound_a|hound_b|quake|eruption|wall|crate|themes arena=0|1|2 cap=N out=/tmp/x.png
+##   ... -s tools/depth_preview.gd -- scene=coil|sapling|hound_a|hound_b|clones|quake|eruption|wall|crate|themes arena=0|1|2 cap=N out=/tmp/x.png
 ## `arena` is the layout index (0 Pit, 1 Foundry, 2 Gym), `cap` the frame to grab after the special is pressed.
 
 var arena: Arena
@@ -121,6 +121,11 @@ func stage() -> void:
 			var dy: float = 14.0 if scene == "hound_a" else -14.0
 			spawn(1, &"shadow", &"gloom_hound", p, Vector2.RIGHT)
 			spawn(2, &"flint", &"", p + Vector2(210, dy))
+		"clones":  # Shade casts Shadow Clones right beside a wall, aiming into it
+			var w: Rect2 = wall_run()
+			var c: Vector2 = w.get_center()
+			focus = Vector2(c.x, w.end.y + 20.0)
+			spawn(1, &"flicker", &"shadow_clones", Vector2(c.x, w.end.y + 36.0), Vector2.UP)
 		"quake", "eruption":
 			var w: Rect2 = wall_run()
 			var c: Vector2 = w.get_center()

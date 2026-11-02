@@ -1277,6 +1277,17 @@ func _rebuild_upright() -> void:
 		_clone_blocks[i].queue_redraw()
 
 
+## Transform for drawing world-space art on `_cur`. An ArtBlock paints in world coordinates by offsetting its own
+## transform by -global_position, and draw_set_transform REPLACES that, so a block's art must subtract it again
+## (else the Gloom Hound, mirrored poofs and clone weapons landed a block-height off screen).
+func _set_xf(at: Vector2, rot: float, scl: Vector2) -> void:
+	_cur.draw_set_transform(at - _cur.global_position, rot, scl)
+
+
+func _reset_xf() -> void:
+	_cur.draw_set_transform(-_cur.global_position)
+
+
 func _paint_block(ci: CanvasItem, draw_fn: Callable) -> void:
 	_cur = ci
 	draw_fn.call()
@@ -1406,12 +1417,12 @@ func _draw_clone_weapon(at: Vector2, dir: Vector2, alpha: float) -> void:
 	var flip_v: float = -1.0 if dir.x < 0.0 else 1.0
 	var s: float = Constants.SPRITE_SCALE
 	if w.upright:
-		_cur.draw_set_transform(at + Player.hand_offset(dir), 0.0, Vector2(s * flip_v, s))
+		_set_xf(at + Player.hand_offset(dir), 0.0, Vector2(s * flip_v, s))
 	else:
-		_cur.draw_set_transform(at + Player.hand_offset(dir), dir.angle(), Vector2(s, s * flip_v))
+		_set_xf(at + Player.hand_offset(dir), dir.angle(), Vector2(s, s * flip_v))
 	var tint := Color(1, 1, 1, alpha)
 	w.draw_held(_cur, Player.WEAPON_GRIP, tint)
-	_cur.draw_set_transform(Vector2.ZERO)
+	_reset_xf()
 
 
 ## Frame by frame from the character into the form (or back). The strip has the growth baked in.
@@ -1526,9 +1537,9 @@ func _draw_poof(pf: Poof) -> void:
 	var n: int = pf.art.get_width() / pf.art.get_height()
 	var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
 	if pf.scale < 0.0:  # a negative scale mirrors the strip (faces left)
-		_cur.draw_set_transform(pf.pos, 0.0, Vector2(-1.0, 1.0))
+		_set_xf(pf.pos, 0.0, Vector2(-1.0, 1.0))
 		_draw_frame(pf.art, frame, pf.art.get_height(), Vector2.ZERO, px * -pf.scale, 1.0, null, pf.tint)
-		_cur.draw_set_transform(Vector2.ZERO)
+		_reset_xf()
 	else:
 		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale, 1.0, null, pf.tint)
 
@@ -2004,9 +2015,9 @@ func _draw_hound() -> void:
 	var cell: float = art.get_height()
 	var feet: Vector2 = _hound_pos + Vector2(0.0, Player.FOOT_RING_Y)
 	var centre: Vector2 = feet - Vector2(0.0, (HOUND_FEET_ROW - cell * 0.5) * px)
-	_cur.draw_set_transform(centre, 0.0, Vector2(-1.0 if _hound_flip else 1.0, 1.0))
+	_set_xf(centre, 0.0, Vector2(-1.0 if _hound_flip else 1.0, 1.0))
 	_draw_frame(art, frame, cell, Vector2.ZERO, px)
-	_cur.draw_set_transform(Vector2.ZERO)
+	_reset_xf()
 
 
 func _sync_bind(p: Player) -> void:
