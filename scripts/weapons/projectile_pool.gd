@@ -347,9 +347,14 @@ static func _in_cone(at: Vector2, origin: Vector2, dir: Vector2, reach: float, h
 ## Enemy projectiles within `radius` of `origin` vanish (every peer: the cosmetic copies go too).
 func _destroy_shots(owner_id: int, origin: Vector2, radius: float) -> void:
 	for s: Slot in _slots:
-		if s.active and s.attacker_id != owner_id and s.pos.distance_to(origin) <= radius + s.radius:
+		if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= radius + s.radius:
 			s.active = false
 			_add_impact(s.pos, s.radius, s.color)
+
+
+## Whether `s` is an enemy of `owner_id` (the one place to widen for teams: treat teammates' shots as friendly).
+func _is_enemy_shot(s: Slot, owner_id: int) -> bool:
+	return s.attacker_id != owner_id
 
 
 func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData) -> void:

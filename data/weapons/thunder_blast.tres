@@ -14,5 +14,6 @@ color = Color(0.96, 0.82, 0.34, 1)
 splash_radius = 100.0
 splash_edge_scale = 0.4
 blast = true
+destroys_shots = true
 held_art = false
 tags = Array[StringName]([&"bolt_thunder"])
