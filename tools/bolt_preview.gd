@@ -57,6 +57,8 @@ func _tick() -> void:
 		arena.select_character(buddy, &"bolt")
 		arena.select_special(me, 1, &"overdrive")
 		st.phase = phase
+		for pl: Player in arena.players:
+			arena.fill_gaps(pl)  # the lobby starts with empty ability slots
 		arena.referee.set_ready(1, true)
 		arena.referee.set_ready(2, true)
 	if frames == START:

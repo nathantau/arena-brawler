@@ -35,6 +35,8 @@ var discover: bool = false
 var no_broadcast: bool = false
 var net_debug: bool = false
 var match_mode: MatchRules.Mode = MatchRules.Mode.FFA
+## True when `--mode` was given (it then beats the mode picked on the home screen).
+var mode_set: bool = false
 var time_limit: float = Constants.MATCH_TIME_LIMIT
 ## -1 = not given: the server / offline lobby picks a random arena (see pick_arena).
 var arena_index: int = -1
@@ -83,6 +85,7 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 			"--mode":
 				a.match_mode = MatchRules.Mode.DUEL if next == "duel" else MatchRules.Mode.TEAMS if next == "teams" \
 					else MatchRules.Mode.FFA
+				a.mode_set = true
 				i += 1
 			"--character":
 				a.character = StringName(next)

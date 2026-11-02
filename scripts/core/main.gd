@@ -98,7 +98,7 @@ func _start_server() -> void:
 func _start_host() -> void:
 	_arena_rng.randomize()
 	_hide_menu()
-	_server_arena = Arena.new(Arena.Mode.SERVER, randi(), args.match_mode, args.time_limit)
+	_server_arena = Arena.new(Arena.Mode.SERVER, randi(), _chosen_mode(), args.time_limit)
 	_server_arena.match_state.arena_index = args.pick_arena(_arena_rng)
 	add_child(_server_arena)
 	var err: Error = session.start_server(_server_arena, args.port, args.bots, args.net_debug,
@@ -128,6 +128,7 @@ func _start_host() -> void:
 	if args.special != &"":
 		_server_arena.select_special(me, 1, args.special)
 	if args.autopilot:
+		_server_arena.fill_gaps(me)  # the lobby starts with empty ability slots
 		_server_arena.referee.set_ready(me.player_id, true)
 
 
@@ -147,7 +148,7 @@ func _start_offline() -> void:
 	_hide_menu()
 	if _offline_arena != null:
 		_offline_arena.queue_free()
-	_offline_arena = Arena.new(Arena.Mode.OFFLINE, Constants.DEFAULT_MATCH_SEED, args.match_mode, args.time_limit)
+	_offline_arena = Arena.new(Arena.Mode.OFFLINE, Constants.DEFAULT_MATCH_SEED, _chosen_mode(), args.time_limit)
 	_offline_arena.match_state.arena_index = args.pick_arena(_arena_rng)
 	add_child(_offline_arena)
 	_offline_arena.leave_requested.connect(_on_offline_leave, CONNECT_DEFERRED)
@@ -165,6 +166,7 @@ func _start_offline() -> void:
 	if args.special != &"":
 		_offline_arena.select_special(me, 1, args.special)
 	if args.autopilot:
+		_offline_arena.fill_gaps(me)  # the lobby starts with empty ability slots
 		_offline_arena.referee.set_ready(me.player_id, true)
 
 
@@ -195,6 +197,12 @@ func _on_client_disconnected(reason: String) -> void:
 		get_tree().quit(1)
 		return
 	_show_menu(reason)
+
+
+## Offline and host matches: `--mode` if given, else what the home screen has picked.
+func _chosen_mode() -> MatchRules.Mode:
+	GameSettings.ensure_loaded()
+	return args.match_mode if args.mode_set else GameSettings.mode
 
 
 func _show_menu(status: String) -> void:

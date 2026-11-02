@@ -101,6 +101,8 @@ var match_seed: int
 var map: ArenaMap
 var players: Array[Player] = []
 var local_player: Player
+## Lobby (authoritative side): humans who have picked a fighter; the first pick, even of the default one, empties their slots.
+var _picked: Dictionary[int, bool] = {}
 ## Set on a listen-server host: "ip:port" shown in the loading room so friends can join.
 var host_address: String = ""
 var projectiles: ProjectilePool
@@ -284,6 +286,7 @@ func add_bot(id: int, color_index: int) -> Player:
 
 
 func remove_player(id: int) -> void:
+	_picked.erase(id)
 	var p: Player = _by_id.get(id)
 	if p == null:
 		return
@@ -332,11 +335,15 @@ func is_locked_in(p: Player) -> bool:
 ## Lobby only (authoritative): switch a player's character. Takes effect immediately.
 func select_character(p: Player, id: StringName) -> void:
 	var c: CharacterData = characters.get_character(id)
-	if c == null or c == p.character or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p):
+	if c == null or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p):
+		return
+	var first_pick: bool = referee != null and not p.is_bot and not _picked.has(p.player_id)
+	if c == p.character and not first_pick:
 		return
 	p.set_character(c)
-	if referee != null:
-		referee.set_gap_mask(p.player_id, 0)  # a new fighter comes with all three default slots
+	if referee != null and not p.is_bot:  # a human's new fighter starts with every ability slot empty (bots keep defaults)
+		_picked[p.player_id] = true
+		referee.set_gap_mask(p.player_id, (1 << Constants.SKILL_SLOTS) - 1)
 	match_updated.emit()
 
 

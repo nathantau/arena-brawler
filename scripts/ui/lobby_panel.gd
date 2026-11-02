@@ -20,8 +20,12 @@ const CHARACTER_CARD_SIZE: Vector2 = Vector2(172, 176)
 const FIGHTER_ART_SCALE: float = 1.75
 const FIGHTER_ART_SIZE: Vector2 = Vector2(150, 112)
 ## Specials are rows (icon, name + cooldown, one-line description) in a column; 7 (5 own + Dash + Barrier) fit.
-const SKILL_ROW_H: float = 64.0
-const SKILL_ICON_SIZE: Vector2 = Vector2(38, 38)
+const SKILL_ROW_H: float = 92.0
+const SKILL_ICON_SIZE: Vector2 = Vector2(52, 52)
+## Text in the lists under the tabs (the pixel body font): names, then descriptions / stats.
+const LIST_NAME_SIZE: int = 24
+const LIST_TEXT_SIZE: int = 20
+const TAB_H: float = 56.0
 ## Loadout pane: card height, and how an icon flies from its row into its slot (then the slot pops).
 const SLOT_CARD_H: float = 84.0
 ## Weapons carry a warm accent (slot card, selected card, header); abilities the blue one.
@@ -31,9 +35,12 @@ const FLY_TIME: float = 0.2
 const POP_TIME: float = 0.12
 const POP_SCALE: float = 1.12
 ## The ability list gets two columns once it is at least this wide.
-const SKILL_TWO_COL_W: float = 700.0
-const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 140)
-const WEAPON_ART_SCALE: float = 1.5
+## (Two 24 / 20 px text columns need far more than the sheet has on a phone, so in practice it is one column.)
+const SKILL_TWO_COL_W: float = 1000.0
+const WEAPON_CARD_H: float = 108.0
+const WEAPON_ART_SCALE: float = 2.0
+## Room for a weapon's stats / hook line on a phone-width sheet (the card minus its art).
+const WEAPON_TEXT_W: float = 380.0
 ## Teams hero select: the lock / bot strip across the foot of a fighter's portrait.
 const BADGE_H: float = 24.0
 const TOAST_TIME: float = 2.5
@@ -47,7 +54,7 @@ const ZOOM_FROM: float = 0.72
 const ZOOM_TIME: float = 0.25
 const SLIDE_TIME: float = 0.25
 ## The detail overlay: how much of the width its sheet takes, and how dark the scrim over the grid gets.
-const SHEET_FRACTION: float = 0.97
+const SHEET_FRACTION: float = 0.87
 const SCRIM_ALPHA: float = 0.6
 ## Seconds between the preview's idle and a short walk / attack loop.
 const FLAIR_GAP: Vector2 = Vector2(2.5, 4.5)
@@ -59,7 +66,6 @@ var _overlay_state := LobbyOverlay.new()
 var _title: Label
 var _rules: Label
 var _join_hint: Label
-var _mode_button: Button
 var _team_button: Button
 var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
@@ -68,6 +74,8 @@ var _fighter_scroller: HScroller
 var _detail_scroller: HScroller
 var _weapon_scroller: HScroller
 var _weapon_row: BoxContainer
+var _tab_buttons: Array[Button] = []
+var _tab_tween: Tween
 var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
 var _special_row: GridContainer
@@ -176,13 +184,11 @@ func _build_top_bar(box: BoxContainer) -> void:
 	for l: Label in [_title, _rules, _join_hint]:
 		l.clip_text = true
 		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_mode_button = _button(header, BUTTON_MIN_SIZE)
-	_mode_button.pressed.connect(_on_mode_pressed)
 	_team_button = _button(header, BUTTON_MIN_SIZE)
 	_team_button.pressed.connect(_on_team_pressed)
 	_arena_button = _button(header, BUTTON_MIN_SIZE)
 	# These grow to fit their text: the arena name must never be clipped to "...".
-	for b: Button in [_mode_button, _team_button, _arena_button]:
+	for b: Button in [_team_button, _arena_button]:
 		b.clip_text = false
 		b.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	_arena_button.pressed.connect(func() -> void:
@@ -401,8 +407,20 @@ func _build_details(body: BoxContainer) -> void:
 	pane.add_child(divider)
 	var weapon_group := _pane_group(pane, "WEAPON", WEAPON_COLOR, 1.5)
 	_build_slot_card(weapon_group, Constants.SKILL_SLOTS)
+	# Two big tabs pick which list shows below; the loadout pane above stays put.
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", SPACING)
+	p.add_child(tabs)
+	for t: int in 2:
+		var tb: Button = _button(tabs, Vector2(0.0, TAB_H))
+		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tb.text = "Abilities" if t == LobbyOverlay.Tab.ABILITIES else "Weapon"
+		tb.add_theme_font_override("font", UiStyle.body_font(true))
+		tb.add_theme_font_size_override("font_size", LIST_NAME_SIZE + 2)
+		tb.pressed.connect(func() -> void: _show_tab(t as LobbyOverlay.Tab))
+		_tab_buttons.append(tb)
 	_ability_hint = _label(p, &"DimLabel")
-	_ability_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	_ability_hint.add_theme_font_size_override("font_size", LIST_TEXT_SIZE)
 	_ability_hint.add_theme_font_override("font", UiStyle.body_font())
 	_ability_hint.clip_text = true
 	_ability_hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -414,19 +432,41 @@ func _build_details(body: BoxContainer) -> void:
 	_special_row.columns = 1
 	_special_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_special_row.add_theme_constant_override("h_separation", SPACING)
-	_special_row.add_theme_constant_override("v_separation", 4)
+	_special_row.add_theme_constant_override("v_separation", 6)
 	_detail_scroller.content.add_child(_special_row)
 	_detail_scroller.resized.connect(func() -> void:
 		_special_row.columns = 2 if _detail_scroller.size.x >= SKILL_TWO_COL_W else 1)
-	var weapon_head := _label(p, &"HeaderLabel")
-	weapon_head.text = "Weapon"
-	weapon_head.add_theme_font_size_override("font_size", UiStyle.SIZE_BODY + 2)
-	weapon_head.add_theme_color_override("font_color", WEAPON_COLOR)
-	_weapon_scroller = HScroller.new()
+	_weapon_scroller = HScroller.new(true)
 	_weapon_scroller.fade_color = COLOR_BG
+	_weapon_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	p.add_child(_weapon_scroller)
 	_weapon_row = _weapon_scroller.content
-	_weapon_row.add_theme_constant_override("separation", SPACING)
+	_weapon_row.add_theme_constant_override("separation", 6)
+	_show_tab(LobbyOverlay.Tab.ABILITIES, false)
+
+
+## Shows one list under the loadout pane (a short fade in) and restyles the tabs: the active one wears its accent.
+func _show_tab(t: LobbyOverlay.Tab, animate: bool = true) -> void:
+	var changed: bool = _overlay_state.show_tab(t)
+	var weapons: bool = _overlay_state.tab == LobbyOverlay.Tab.WEAPON
+	_detail_scroller.visible = not weapons
+	_weapon_scroller.visible = weapons
+	_ability_hint.visible = not weapons
+	for i: int in _tab_buttons.size():
+		var on: bool = (i == LobbyOverlay.Tab.WEAPON) == weapons
+		var color: Color = WEAPON_COLOR if i == LobbyOverlay.Tab.WEAPON else TEAM_ALLY_COLOR
+		_outline_selected(_tab_buttons[i], on, color)
+		_tab_buttons[i].add_theme_color_override("font_color", color if on else UiStyle.C_WHITE)
+		_tab_buttons[i].add_theme_color_override("font_hover_color", color if on else UiStyle.C_WHITE)
+		_tab_buttons[i].add_theme_color_override("font_pressed_color", color)
+	if _tab_tween != null:
+		_tab_tween.kill()
+	var shown: Control = _weapon_scroller if weapons else _detail_scroller
+	shown.modulate.a = 1.0
+	if animate and changed and is_inside_tree():
+		shown.modulate.a = 0.0
+		_tab_tween = create_tween()
+		_tab_tween.tween_property(shown, "modulate:a", 1.0, SLIDE_TIME * 0.6)
 
 
 ## A labelled group of loadout cards: a small coloured caption over a row of cards.
@@ -456,10 +496,7 @@ func _build_slot_card(parent: Node, i: int) -> void:
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.focus_mode = Control.FOCUS_NONE
 	card.theme_type_variation = &"Card"
-	if weapon:
-		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	else:
-		card.pressed.connect(func() -> void: _on_slot_pressed(i))
+	card.pressed.connect(func() -> void: _on_slot_pressed(i))
 	parent.add_child(card)
 	var box: BoxContainer = HBoxContainer.new() if weapon else VBoxContainer.new()  # weapon: icon left, name right
 	box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 8)
@@ -501,8 +538,12 @@ func _build_slot_card(parent: Node, i: int) -> void:
 	_slot_names.append(name_label)
 
 
-## Tapping a filled ability slot empties it.
+## Tapping a slot card shows its list; a filled ability slot is also emptied.
 func _on_slot_pressed(i: int) -> void:
+	if i >= Constants.SKILL_SLOTS:  # the weapon slot: show the weapons
+		_show_tab(LobbyOverlay.Tab.WEAPON)
+		return
+	_show_tab(LobbyOverlay.Tab.ABILITIES)
 	var slots: Array = _slots()
 	if slots[i] == &"":
 		return
@@ -613,6 +654,7 @@ func _add_ready_button(parent: Node) -> void:
 func _on_fighter_pressed(id: StringName) -> void:
 	arena.character_requested.emit(id)
 	var slides_in: bool = _overlay_state.open_for(id)
+	_show_tab(_overlay_state.tab, false)  # (a fresh fighter resets it to the abilities)
 	if arena.local_player != null and arena.local_player.character.id == id:
 		_show_preview(arena.local_player.character)  # already your fighter: replay the zoom (else _refresh does it)
 	if slides_in:
@@ -803,7 +845,6 @@ func _refresh() -> void:
 			int(st.time_limit) / 60, int(st.time_limit) % 60]
 	_join_hint.visible = arena.host_address != ""
 	_join_hint.text = "Friends join: %s" % LanAddress.friendly(arena.host_address)
-	_mode_button.text = "Mode: %s" % MatchRules.SHORT_NAMES[st.mode]
 	_team_button.visible = shows_team_picker(st.mode, arena.mode)
 	_team_button.text = "Team: %s" % MatchRules.LOBBY_TEAM_NAMES[st.team_of(me.player_id)]
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
@@ -999,9 +1040,7 @@ func _build_weapon_cards(c: CharacterData) -> void:
 		child.queue_free()
 	for w: WeaponData in arena.weapons_for(c):
 		var art: TextureRect = _art(w.sprite, WEAPON_ART_SCALE)
-		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, art,
-			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
-				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost], w.hook])
+		var card: Button = _weapon_card(art, w)
 		var id: StringName = w.id
 		_weapon_scroller.on_tap(card, func() -> void: _on_weapon_pressed(id))
 		_weapon_cards[id] = card
@@ -1037,6 +1076,10 @@ func _on_special_pressed(id: StringName) -> void:
 			if _special_icons.has(id):
 				_fly_icon(_special_icons[id], slot)
 			_refresh_loadout()
+			var after: Array = _slots()  # (the server's answer may not be back yet)
+			after[slot] = id
+			if _overlay_state.ability_added(after):
+				_show_tab(LobbyOverlay.Tab.WEAPON)
 		"remove":
 			_remove_slot(r["slot"])
 		_:
@@ -1105,6 +1148,40 @@ func _pop_slot(slot: int) -> void:
 	card.set_meta(&"pop", tween)
 
 
+## A weapon row: art on the left; name, stats and hook stacked on the right, all in the pixel body font.
+func _weapon_card(art: Control, w: WeaponData) -> Button:
+	var card := _button(_weapon_row, Vector2(0.0, WEAPON_CARD_H))
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var row := HBoxContainer.new()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, SPACING)
+	row.add_theme_constant_override("separation", SPACING * 2)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(row)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	art.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	art.custom_minimum_size.x = 100.0
+	row.add_child(art)
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.alignment = BoxContainer.ALIGNMENT_CENTER
+	text.add_theme_constant_override("separation", 0)
+	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(text)
+	var lines: Array[String] = [w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
+		"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost], w.hook]
+	for i: int in lines.size():
+		if lines[i] == "":
+			continue
+		var l: Label = _label(text, &"Label" if i == 0 else &"DimLabel")
+		l.add_theme_font_override("font", UiStyle.body_font(i == 0))
+		l.add_theme_font_size_override("font_size", LIST_NAME_SIZE if i == 0 else LIST_TEXT_SIZE)
+		l.text = lines[i]
+		l.clip_text = true
+		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return card
+
+
 ## A special row: icon, bold name with its cooldown on the right, one-line description below.
 func _skill_row(sk: SkillData) -> Button:
 	var b := _button(_special_row, Vector2(0.0, SKILL_ROW_H))
@@ -1112,7 +1189,7 @@ func _skill_row(sk: SkillData) -> Button:
 	b.theme_type_variation = &"Card"
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, SPACING - 2)
-	row.offset_right = -(SPACING + 34.0)  # room for the 1 / 2 / 3 badge
+	row.offset_right = -(SPACING + 40.0)  # room for the 1 / 2 / 3 badge
 	row.add_theme_constant_override("separation", SPACING)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(row)
@@ -1137,17 +1214,17 @@ func _skill_row(sk: SkillData) -> Button:
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text.add_child(top)
 	var name_label: Label = _label(top, &"Label")
-	name_label.add_theme_font_override("font", UiStyle.bold())
-	name_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL + 2)
+	name_label.add_theme_font_override("font", UiStyle.body_font(true))
+	name_label.add_theme_font_size_override("font_size", LIST_NAME_SIZE)
 	name_label.text = sk.display_name
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var cd_label: Label = _label(top, &"Label")
-	cd_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	cd_label.add_theme_font_size_override("font_size", LIST_TEXT_SIZE)
 	cd_label.add_theme_font_override("font", UiStyle.body_font(true))
 	cd_label.add_theme_color_override("font_color", UiStyle.C_TEAL_L)
 	cd_label.text = "CD %ds" % roundi(sk.cooldown)
 	var blurb_label: Label = _label(text, &"DimLabel")
-	blurb_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	blurb_label.add_theme_font_size_override("font_size", LIST_TEXT_SIZE)
 	blurb_label.add_theme_font_override("font", UiStyle.body_font())
 	blurb_label.text = sk.blurb
 	for l: Label in [name_label, blurb_label]:
@@ -1187,14 +1264,14 @@ func _refresh_loadout() -> void:
 			_outline_selected(_slot_cards[i], not empty)
 		if not empty:
 			_slot_icons[i].texture = me.skills[i].data.icon
-			_fit_body(_slot_names[i], me.skills[i].data.display_name, 140.0, UiStyle.SIZE_SMALL, true)
+			_fit_body(_slot_names[i], me.skills[i].data.display_name, 140.0, LIST_TEXT_SIZE, true)
 	var gap: bool = arena.match_state.has_gap(me.player_id)
 	_ability_hint.text = "Pick 3 abilities" if gap else "Tap an ability to remove it first" if _full_hint_left > 0.0 \
 		else "Tap an ability to equip or remove it"
 	_ability_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW if gap or _full_hint_left > 0.0 else UiStyle.C_DIM)
 	var w: int = Constants.SKILL_SLOTS
 	_slot_icons[w].texture = me.weapon.data.sprite
-	_fit_body(_slot_names[w], me.weapon.data.display_name, 118.0, UiStyle.SIZE_SMALL, true)
+	_fit_body(_slot_names[w], me.weapon.data.display_name, 118.0, LIST_TEXT_SIZE, true)
 	_outline_selected(_slot_cards[w], true, WEAPON_COLOR)
 
 
@@ -1227,11 +1304,6 @@ func _pick() -> Array[StringName]:
 
 func _is_ready() -> bool:
 	return arena.local_player != null and arena.match_state.ready.has(arena.local_player.player_id)
-
-
-func _on_mode_pressed() -> void:
-	var next: int = (arena.match_state.mode + 1) % MatchRules.Mode.size()
-	arena.mode_requested.emit(next as MatchRules.Mode)
 
 
 ## Cycles Auto -> A -> B.
