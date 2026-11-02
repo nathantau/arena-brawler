@@ -115,8 +115,8 @@ const CLONE_WOBBLE_SPEED: float = 4.0
 ## cloud clears, then run.
 const CLONE_START_DISTANCE: float = 48.0
 const CLONE_EMERGE_TIME: float = 0.3
-const BAR_WIDTH: float = 40.0
-const BAR_HEIGHT: float = 5.0
+const BAR_WIDTH: float = 52.0
+const BAR_HEIGHT: float = 6.0
 const BAR_GAP: float = 2.0
 const BAR_OFFSET_Y: float = 28.0
 ## Shadow ellipse under the feet, squashed for a top-down look.
@@ -125,14 +125,14 @@ const FOOT_RING_Y: float = 40.0
 const SHADOW_COLOR: Color = Color(0, 0, 0, 0.3)
 const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
 const COLOR_ARMOR: Color = Color(0.7, 0.75, 0.85)
-const COLOR_ALLY: Color = Color(0.3, 0.6, 1.0, 0.9)
-const COLOR_ENEMY: Color = Color(1.0, 0.3, 0.3, 0.9)
+const COLOR_ALLY: Color = Color(0.2, 0.55, 1.0, 1.0)
+const COLOR_ENEMY: Color = Color(1.0, 0.2, 0.2, 1.0)
 const COLOR_ME: Color = Color(1.0, 0.85, 0.35, 0.9)  ## the local player's own (gold) ring
 const COLOR_BAR_ALLY: Color = Color(0.3, 0.62, 1.0)
 const COLOR_BAR_ENEMY: Color = Color(0.95, 0.22, 0.22)
-const TEAM_RING_SCALE: float = 1.4
-const TEAM_RING_WIDTH: float = 4.0
-const TEAM_RING_FILL: float = 0.4  ## alpha of the translucent disc inside the ring
+const TEAM_RING_SCALE: float = 2.4
+const TEAM_RING_WIDTH: float = 5.0
+const TEAM_RING_FILL: float = 0.55  ## alpha of the translucent disc inside the ring
 const COLOR_BAR_OUTLINE: Color = Color(0.05, 0.04, 0.1, 0.9)
 const COLOR_BAR_BG: Color = Color(0, 0, 0, 0.5)
 
@@ -1570,5 +1570,5 @@ func _draw_bars(r: float) -> void:
 	_overlay.draw_rect(Rect2(top_left, Vector2(BAR_WIDTH, BAR_HEIGHT)), COLOR_BAR_BG)
 	_overlay.draw_rect(Rect2(top_left, Vector2(BAR_WIDTH * armor_frac, BAR_HEIGHT)), COLOR_ARMOR)
 	var hp_pos: Vector2 = top_left + Vector2(0.0, BAR_HEIGHT + BAR_GAP)
-	_overlay.draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH, BAR_HEIGHT)), COLOR_BAR_BG)
+	_overlay.draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH, BAR_HEIGHT)), bar_color().darkened(0.65))
 	_overlay.draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH * hp_frac, BAR_HEIGHT)), bar_color())
