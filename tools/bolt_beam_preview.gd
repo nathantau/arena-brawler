@@ -8,6 +8,9 @@ const START: int = 420  ## the countdown is over by here
 const BEAM_AT: int = 40
 const THUNDER_AT: int = 200
 const GAP: float = 280.0
+## Optional user args: `aim=<degrees>` (0 = right, 90 = down) and `away` (the buddy stands off, so the beam hits a wall).
+var aim_deg: float = 0.0
+var away: bool = false
 
 var arena: Arena
 var me: Player
@@ -18,17 +21,23 @@ var frames: int = 0
 
 class Runner extends LocalInput:
 	var press: bool = false
+	var aim_deg: float = 0.0
 
 	func get_input(p: Player, d: float) -> InputFrame:
 		var f: InputFrame = super.get_input(p, d)
 		f.move_vec = Vector2.ZERO
 		f.fire = false
-		f.aim_vec = Vector2.RIGHT
+		f.aim_vec = Vector2.RIGHT.rotated(deg_to_rad(aim_deg))
 		f.special = press
 		return f
 
 
 func _initialize() -> void:
+	for a: String in OS.get_cmdline_user_args():
+		if a.begins_with("aim="):
+			aim_deg = float(a.substr(4))
+		elif a == "away":
+			away = true
 	InputSetup.ensure_actions()
 	arena = Arena.new(Arena.Mode.OFFLINE)
 	root.add_child(arena)
@@ -38,6 +47,7 @@ func _initialize() -> void:
 func _bolt(id: int, color: int, view: bool) -> Player:
 	var input := Runner.new()
 	input.arena = arena
+	input.aim_deg = aim_deg
 	var p: Player = arena.add_player(id, color, input)
 	if view:
 		arena.attach_local_view(p, input)
@@ -66,7 +76,7 @@ func _tick() -> void:
 				home = spot
 		home += Vector2(-100, 90)
 		me.global_position = home
-		buddy.global_position = home + Vector2(GAP, 22.0)  # level with his hand, where the beam runs
+		buddy.global_position = home + (Vector2(GAP, 22.0) if not away else Vector2(900.0, -300.0))  # level with his hand, where the beam runs
 	var n: int = frames - START
 	if n < 0:
 		return
