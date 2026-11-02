@@ -18,6 +18,7 @@ enum StateField {
 	ID, POSITION, VELOCITY, FACING,
 	HP, ARMOR, ENERGY, ENERGY_ACCUM, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
 	CHARACTER, SKILL_IDS, SKILL_COOLDOWNS, SKILL_ACTIVE, SKILL_DIRECTIONS, SKILL_ANCHORS, SKILL_WEAPON_COOLDOWNS,
+	SKILL_HITS,
 	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ, SLOW_REMAINING, SLOW_FACTOR,
 	STUN_REMAINING, SPAWN_PROTECT,
 	COUNT,
@@ -185,7 +186,6 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	_shape.shape = circle
 	add_child(_shape)
 	_shield.owner_id = id
-	_shield.color = color
 	add_child(_shield)
 	_ward.owner_id = id
 	add_child(_ward)
@@ -196,6 +196,7 @@ func setup(id: int, p_color_index: int, color: Color, weapons: Array[WeaponData]
 	add_child(_overlay)
 	add_child(_special_fx)
 	_ward.caught.connect(_special_fx.petal_pop)
+	_shield.struck.connect(_special_fx.bubble_ripple)
 	_special_fx.healed.connect(func(amount: int) -> void: healed.emit(self, amount))
 	# The walls players move against (shifted to the feet): standing under a wall puts the centre inside the wall
 	# itself, and a ray starting inside a wall misses it, so clones ran out through it (even past the border).
@@ -865,6 +866,11 @@ func _slot_of(kind: SkillData.Kind) -> CharacterSkill:
 	return skills[0]
 
 
+## The barrier bubble while it's up, else null (shots that reach him inside it are absorbed too).
+func bubble() -> ShieldWall:
+	return _shield if _shield.is_up() else null
+
+
 ## The Blossom Ward ring while it's up, else null. Shots that reach the player inside it (fired from within the
 ## ring, or the ring moved onto them) are caught too.
 func ward() -> ShieldWall:
@@ -1168,18 +1174,21 @@ func capture_state() -> Array:
 	var dirs: Array[Vector2] = []
 	var anchors: Array[Vector2] = []
 	var form_cds: Array[float] = []
+	var hits: Array[int] = []
 	for slot: CharacterSkill in skills:
 		ids.append(slot.data.id)
 		cds.append(slot.cooldown_remaining)
 		act.append(slot.active_remaining)
 		dirs.append(slot.direction)
 		anchors.append(slot.anchor)
+		hits.append(slot.hits)
 		form_cds.append(slot.form_weapon.cooldown if slot.form_weapon != null else 0.0)
 	s[StateField.SKILL_IDS] = ids
 	s[StateField.SKILL_COOLDOWNS] = cds
 	s[StateField.SKILL_ACTIVE] = act
 	s[StateField.SKILL_DIRECTIONS] = dirs
 	s[StateField.SKILL_ANCHORS] = anchors
+	s[StateField.SKILL_HITS] = hits
 	s[StateField.SKILL_WEAPON_COOLDOWNS] = form_cds
 	s[StateField.WEAPON_ID] = weapon.data.id
 	s[StateField.WEAPON_COOLDOWN] = weapon.cooldown
@@ -1224,6 +1233,7 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 		slot.active_remaining = s[StateField.SKILL_ACTIVE][i]
 		slot.direction = s[StateField.SKILL_DIRECTIONS][i]
 		slot.anchor = s[StateField.SKILL_ANCHORS][i]
+		slot.hits = s[StateField.SKILL_HITS][i]
 		if slot.form_weapon != null:
 			slot.form_weapon.cooldown = s[StateField.SKILL_WEAPON_COOLDOWNS][i]
 	if s[StateField.WEAPON_ID] != weapon.data.id:

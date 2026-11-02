@@ -54,11 +54,16 @@ func test_dash_and_barrier_are_generic_specials() -> void:
 			assert_true(skills.specials_for(c).has(sk), "%s for %s" % [id, c.id])
 
 
-func test_signature_special_comes_first_and_is_exclusive() -> void:
+func test_dash_and_barrier_lead_every_list_then_the_signature() -> void:
 	for c: CharacterData in characters.ordered:
-		if c.signature_skill == null:
-			continue
-		assert_eq(skills.specials_for(c)[0], c.signature_skill, String(c.id))
+		var pool: Array[SkillData] = skills.specials_for(c)
+		assert_eq(pool[0], skills.dash(), "%s: Dash first" % c.id)
+		assert_eq(pool[1], skills.get_skill(&"barrier"), "%s: Barrier second" % c.id)
+		if c.signature_skill != null:
+			assert_eq(pool[2], c.signature_skill, "%s: signature third" % c.id)
+
+
+func test_signature_special_is_exclusive() -> void:
 	var ape: SkillData = skills.get_skill(&"great_ape")
 	for c: CharacterData in characters.ordered:
 		assert_eq(c.can_use_skill(ape), c.id == &"wukong", String(c.id))
@@ -102,7 +107,7 @@ func test_movement_abilities_follow_the_joystick_not_the_aim() -> void:
 	p.free()
 
 
-func test_barrier_is_placed_in_front_and_expires() -> void:
+func test_barrier_is_a_bubble_with_a_hit_budget_and_expires() -> void:
 	var stats := PlayerStats.new()
 	var barrier: SkillData = skills.get_skill(&"barrier")
 	var skill := CharacterSkill.new(barrier)
@@ -110,9 +115,21 @@ func test_barrier_is_placed_in_front_and_expires() -> void:
 	assert_true(skill.is_shielding())
 	assert_false(skill.is_dashing())
 	assert_false(stats.is_invulnerable(), "barrier gives no i-frames")
-	assert_eq(skill.anchor, Vector2(100, 100) + Vector2.UP * barrier.shield_distance)
+	assert_eq(skill.hits, 0)
+	for i: int in barrier.shield_hits - 1:
+		assert_false(skill.absorb_hit())
+	assert_true(skill.is_shielding())
+	assert_true(skill.absorb_hit(), "the last hit breaks it")
+	assert_false(skill.is_shielding())
+	assert_true(skill.is_broken())
+	assert_gt(skill.cooldown_remaining, 0.0, "the cooldown keeps running")
+	assert_true(skill.try_activate(Vector2.UP, Vector2.ZERO, stats) == false)
+	skill.tick(barrier.cooldown)
+	assert_true(skill.try_activate(Vector2.UP, Vector2.ZERO, stats))
+	assert_eq(skill.hits, 0, "a new bubble starts fresh")
 	skill.tick(barrier.duration + 0.01)
 	assert_false(skill.is_shielding())
+	assert_false(skill.is_broken(), "a timeout is not a break")
 
 
 func test_dash_velocity_overrides_input() -> void:
@@ -259,7 +276,7 @@ func test_flicker_can_pick_all_ninja_specials() -> void:
 	var ids: Array[StringName] = []
 	for sk: SkillData in skills.specials_for(flicker):
 		ids.append(sk.id)
-	assert_eq(ids[0], &"shadow_clones", "signature first")
+	assert_eq(ids.slice(0, 3), [&"dash", &"barrier", &"shadow_clones"], "Dash, Barrier, then the signature")
 	for id: StringName in [&"smoke_bomb", &"fan_of_blades", &"grapple_kunai"]:
 		assert_has(ids, id)
 	assert_false(ids.has(&"blink"), "Blink was cut from her kit")

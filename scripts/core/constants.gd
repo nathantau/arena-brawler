@@ -52,7 +52,6 @@ const ENERGY_REGEN_PER_SEC: float = 60.0
 const SKILL_SLOTS: int = 3
 
 # --- Skills (per-character tunables are in data/characters/*.tres) ---
-const SHIELD_THICKNESS: float = 10.0
 ## Vine Swing tries landing spots this far apart, from its full range inwards.
 const SWING_SAMPLE_STEP: float = 8.0
 

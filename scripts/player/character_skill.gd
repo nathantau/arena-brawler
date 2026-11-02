@@ -2,7 +2,8 @@ class_name CharacterSkill
 extends RefCounted
 ## One skill slot (the shared Dash or the picked special), on cooldown. Behaviour by SkillData.kind:
 ## - DASH: burst of speed in `direction` with i-frames (movement reads is_dashing()).
-## - SHIELD: a barrier centred on `anchor`, facing `direction`, that blocks enemy projectiles.
+## - SHIELD: a force-field bubble centred on the player (follows them) that blocks enemy projectiles from every side; `hits`
+##   enemy shots absorbed so far, at `shield_hits` it breaks (the slot ends early).
 ## - TRANSFORM: a stronger form; fires `form_weapon` (its cooldown is snapshotted).
 ## - VOLLEY: the Player fires it.
 ## - SMOKE / CLONES: centred on `anchor` (where you stood), aimed along `direction`.
@@ -42,6 +43,8 @@ var cooldown_remaining: float = 0.0
 var active_remaining: float = 0.0
 var direction: Vector2 = Vector2.ZERO
 var anchor: Vector2 = Vector2.ZERO
+## SHIELD: enemy shots the bubble has absorbed since it went up (synced; the authoritative pool counts them).
+var hits: int = 0
 ## The transformed form's weapon (null for other kinds).
 var form_weapon: WeaponState
 
@@ -83,6 +86,20 @@ func is_dashing() -> bool:
 
 func is_shielding() -> bool:
 	return data.kind == SkillData.Kind.SHIELD and is_active()
+
+
+## SHIELD: one more enemy shot absorbed; true when that broke the bubble (it ends now, the cooldown keeps running).
+func absorb_hit() -> bool:
+	hits += 1
+	if data.shield_hits > 0 and hits >= data.shield_hits:
+		active_remaining = 0.0
+		return true
+	return false
+
+
+## SHIELD: the bubble ended because it was shot down rather than timing out.
+func is_broken() -> bool:
+	return data.kind == SkillData.Kind.SHIELD and data.shield_hits > 0 and hits >= data.shield_hits
 
 
 func is_transformed() -> bool:
@@ -244,7 +261,7 @@ func try_activate(dir: Vector2, origin: Vector2, stats: PlayerStats) -> bool:
 		SkillData.Kind.DASH:
 			stats.invulnerable_time = maxf(stats.invulnerable_time, data.dash_iframes)
 		SkillData.Kind.SHIELD:
-			anchor = origin + direction * data.shield_distance
+			hits = 0
 		SkillData.Kind.SMOKE, SkillData.Kind.CLONES:
 			anchor = origin
 		SkillData.Kind.SWING, SkillData.Kind.TRAIL:
@@ -272,5 +289,6 @@ func tick(delta: float) -> void:
 func reset() -> void:
 	cooldown_remaining = 0.0
 	active_remaining = 0.0
+	hits = 0
 	if form_weapon != null:
 		form_weapon.cooldown = 0.0

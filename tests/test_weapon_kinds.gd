@@ -207,6 +207,65 @@ func test_shield_blocks_enemy_shots_not_own() -> void:
 	assert_lt(target.stats.armor, target.stats.max_armor)
 
 
+func _warden_with_bubble(at: Vector2) -> Player:
+	var warden: Player = _player(SHOOTER, at, &"warden")
+	warden.set_skill(1, SkillCatalog.shared().get_skill(&"barrier"))
+	warden.skills[1].try_activate(Vector2.RIGHT, warden.global_position, warden.stats)
+	warden._sync_shields()
+	return warden
+
+
+func test_bubble_blocks_a_shot_from_behind_and_follows_the_player() -> void:
+	var warden: Player = _warden_with_bubble(Vector2(300, 300))
+	var enemy: Player = _player(TARGET, Vector2(100, 300))
+	await wait_physics_frames(2)
+	assert_not_null(warden.bubble())
+	# The warden faces right but the shot comes from the left, behind him: the bubble still takes it.
+	pool.fire_shot(TARGET, 1, Vector2(150, 300), Vector2.RIGHT, _w(&"pistol"), SEED)
+	await wait_physics_frames(25)
+	assert_eq(warden.stats.armor, warden.stats.max_armor, "blocked from behind")
+	assert_eq(warden.skills[1].hits, 1, "and it spent a hit")
+	# He walks away: the bubble goes with him, so a shot at his new spot is blocked too.
+	warden.global_position = Vector2(300, 500)
+	enemy.global_position = Vector2(100, 500)
+	await wait_physics_frames(2)
+	pool.fire_shot(TARGET, 2, Vector2(150, 500), Vector2.RIGHT, _w(&"pistol"), SEED)
+	await wait_physics_frames(25)
+	assert_eq(warden.stats.armor, warden.stats.max_armor, "the bubble followed him")
+	assert_eq(warden.skills[1].hits, 2)
+
+
+func test_bubble_breaks_after_its_hit_budget_then_shots_get_through() -> void:
+	var warden: Player = _warden_with_bubble(Vector2(300, 300))
+	_player(TARGET, Vector2(100, 300))
+	var broken: Array[Vector2] = []
+	warden._shield.struck.connect(func(at: Vector2) -> void: broken.append(at))
+	var budget: int = warden.skills[1].data.shield_hits
+	await wait_physics_frames(2)
+	for i: int in budget:
+		pool.fire_shot(TARGET, i + 1, Vector2(150, 300), Vector2.RIGHT, _w(&"pistol"), SEED)
+		await wait_physics_frames(25)
+		assert_eq(warden.stats.armor, warden.stats.max_armor, "hit %d is blocked" % (i + 1))
+	assert_eq(broken.size(), budget, "every blocked shot rippled")
+	assert_true(warden.skills[1].is_broken())
+	assert_false(warden.skills[1].is_shielding())
+	assert_null(warden.bubble(), "the field is down")
+	await wait_physics_frames(2)
+	pool.fire_shot(TARGET, 99, Vector2(150, 300), Vector2.RIGHT, _w(&"pistol"), SEED)
+	await wait_physics_frames(25)
+	assert_lt(warden.stats.armor, warden.stats.max_armor, "the next shot gets through")
+
+
+func test_bubble_hits_travel_in_snapshots() -> void:
+	var a: Player = _warden_with_bubble(Vector2(300, 300))
+	a.skills[1].hits = 2
+	var b: Player = _player(9, Vector2(0, 0), &"warden")
+	b.set_skill(1, SkillCatalog.shared().get_skill(&"barrier"))
+	assert_true(b.apply_state(a.capture_state(), catalog, characters))
+	assert_eq(b.skills[1].hits, 2)
+	assert_true(b.skills[1].is_shielding())
+
+
 func _sakura_warding(at: Vector2) -> Player:
 	var sakura: Player = _player(SHOOTER, at, &"sakura")
 	sakura.set_skill(1, SkillCatalog.shared().get_skill(&"blossom_ward"))
@@ -471,4 +530,4 @@ func test_barrier_reflects_enemy_shots_back_as_the_owners() -> void:
 	assert_eq(bullet.attacker_id, SHOOTER, "now the barrier owner's")
 	assert_eq(bullet.owner_id, TARGET, "pellet key kept for hit events")
 	assert_eq(warden.stats.armor, warden.stats.max_armor, "the owner takes nothing")
-	assert_lt(target.stats.armor, target.stats.max_armor, "it came back and hit the shooter")
+	assert_gt(bullet.vel.x, 0.0, "it was sent back at the shooter (a round bubble bends the angle, so no exact hit)")

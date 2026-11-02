@@ -8520,6 +8520,237 @@ FX.update({
 })
 
 
+# --- Barrier bubble (shared special): a force field round the player. CELL px frames, centred on the player ---
+BUBBLE_R = 33  # art px; x SPRITE_SCALE 1.5 = 50 = barrier.tres shield_radius (keep in sync)
+BUBBLE_LOOP = 8  # frames per damage stage (a seamless shimmer loop)
+BUBBLE_STAGES = 4  # hit budget (barrier.tres shield_hits): stage = hits taken, the last is badly cracked
+BUBBLE_OPEN_FRAMES = 8
+BUBBLE_FADE_FRAMES = 8
+BUBBLE_BREAK_FRAMES = 12
+BUBBLE_BREAK_CELL = 128  # the shards fly out past the rim
+BUBBLE_RIPPLE_FRAMES = 8
+BUBBLE_RIPPLE_CELL = 48
+HEX_S = 7.0  # hex lattice size
+
+
+def _hex_edge(x: float, y: float) -> float:
+    """Distance (px) from (x, y) to the nearest edge of a pointy-top hex lattice of size HEX_S."""
+    q = (math.sqrt(3) / 3 * x - y / 3) / HEX_S
+    r = (2 / 3 * y) / HEX_S
+    cx, cz = q, r
+    cy = -cx - cz
+    rx, ry, rz = round(cx), round(cy), round(cz)
+    dx, dy, dz = abs(rx - cx), abs(ry - cy), abs(rz - cz)
+    if dx > dy and dx > dz:
+        rx = -ry - rz
+    elif dy > dz:
+        ry = -rx - rz
+    else:
+        rz = -rx - ry
+    px = HEX_S * math.sqrt(3) * (rx + rz / 2)
+    py = HEX_S * 1.5 * rz
+    ddx, ddy = abs(x - px), abs(y - py)
+    return HEX_S * math.sqrt(3) / 2 - max(ddx, ddx * 0.5 + ddy * math.sqrt(3) / 2)
+
+
+def _bubble_cracks(stage: int) -> list:
+    """Jagged crack polylines (CELL px) for a damage stage: more and longer with each hit."""
+    rng = random.Random(11)
+    n = (0, 2, 4, 6)[stage]
+    out = []
+    for i in range(n):
+        a = math.tau * (i / max(1, n)) + 0.4 + rng.uniform(-0.2, 0.2)
+        length = BUBBLE_R * (0.1 + 0.05 * stage + rng.uniform(0, 0.05))  # short: they stay on the rim, never across her face
+        pts = []
+        for j in range(5):
+            r = BUBBLE_R - length * j / 4
+            aa = a + rng.uniform(-0.09, 0.09) * j
+            pts.append((CELL / 2 + math.cos(aa) * r, CELL / 2 + math.sin(aa) * r))
+        out.append(pts)
+    return out
+
+
+def bubble_img(stage: int, k: int, n: int, scale: float = 1.0, flash: float = 0.0, cell: int = CELL,
+               fill: bool = True) -> Image.Image:
+    """The bubble at loop frame k of n: dithered glass thicker toward the rim, a bright rim with a fixed highlight and a
+    travelling glint, a hex lattice lit by a diagonal sweep, cracks for `stage`; `flash` (0..1) whitens it for the pop-in."""
+    img = Image.new("RGBA", (cell, cell), (0, 0, 0, 0))
+    px = img.load()
+    m = cell / 2 - 0.5
+    R = BUBBLE_R * scale
+    glint = math.tau * k / n
+    for y in range(cell):
+        for x in range(cell):
+            dx, dy = x - m, y - m
+            r = math.hypot(dx, dy)
+            if r > R + 1.4:
+                continue
+            bay = BAYER4[y % 4][x % 4] / 16
+            ang = math.atan2(dy, dx)
+            col = None
+            if r > R:
+                col = OUTLINE
+            elif r > R - 1.5:
+                col = TEAL_L
+                da = (ang - glint + math.pi) % math.tau - math.pi
+                hl = (ang + 2.36 + math.pi) % math.tau - math.pi  # fixed highlight, upper left
+                if abs(da) < 0.38 or abs(hl) < 0.5 or flash > 0.5:
+                    col = WHITE
+            elif r > R - 2.6:  # the lighter inner rim line
+                col = TEAL if bay < 0.8 else TEAL_L
+            elif fill:
+                t = r / R
+                lit = None
+                edge = _hex_edge(x - m, y - m) if scale > 0.6 else 9
+                if edge < 0.7 and t > 0.45:  # the lattice: sparse, fading toward the centre
+                    band = ((x * 0.8 + y * 0.6) / (2.0 * R) - k / n) % 1.0
+                    if band < 0.14 and bay < 1.3 * t - 0.25:
+                        lit = WHITE if band < 0.06 else TEAL_L
+                    elif bay < 0.55 * t ** 2.5:
+                        lit = TEAL
+                if lit is not None:
+                    col = lit
+                elif t > 0.82 and bay < 0.5 * ((t - 0.82) / 0.18) ** 2:  # a very light tint hugging the rim
+                    col = TEAL
+            if col is not None:
+                px[x, y] = col + (255,)
+    d = ImageDraw.Draw(img)
+    off = (cell - CELL) / 2
+    for pts in _bubble_cracks(stage):
+        pts = [(x + off, y + off) for x, y in pts]
+        d.line(pts, OUTLINE + (255,), 1)
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            px[round((x0 + x1) / 2) + 1, round((y0 + y1) / 2)] = WHITE + (255,)
+    if stage >= 3:  # the rim gives out in places
+        for y in range(cell):
+            for x in range(cell):
+                dx, dy = x - m, y - m
+                if math.hypot(dx, dy) > R - 3.2 and px[x, y][3]:
+                    if math.sin(math.atan2(dy, dx) * 3 + 1) > 0.78 and BAYER4[y % 4][x % 4] > 5 + 3 * math.sin(k * math.tau / n):
+                        px[x, y] = (0, 0, 0, 0)
+    return img
+
+
+def bubble_open_frame(k: int) -> Image.Image:
+    sc = (0.3, 0.52, 0.76, 0.94, 1.07, 1.03, 0.99, 1.0)[k]
+    return bubble_img(0, 0, BUBBLE_LOOP, sc, flash=max(0.0, 1 - k / 4))
+
+
+def bubble_fade_frame(k: int) -> Image.Image:
+    t = (k + 1) / (BUBBLE_FADE_FRAMES + 1)
+    img = bubble_img(0, k, BUBBLE_FADE_FRAMES, 1 + 0.06 * t)
+    px = img.load()
+    for y in range(CELL):
+        for x in range(CELL):
+            if px[x, y][3] and BAYER4[y % 4][x % 4] / 16 + 0.03 < t * 1.1:
+                px[x, y] = (0, 0, 0, 0)
+    return img
+
+
+def bubble_break_frame(k: int) -> Image.Image:
+    """The cracked bubble flashes white, bursts into glass pieces that fly out and dither away, with a shock ring."""
+    cell = BUBBLE_BREAK_CELL
+    out = Image.new("RGBA", (cell, cell), (0, 0, 0, 0))
+    if k == 0:
+        return bubble_img(3, 0, BUBBLE_LOOP, 1.02, flash=1.0, cell=cell)
+    base = bubble_img(3, 0, BUBBLE_LOOP, 1.0, cell=cell).load()
+    o = out.load()
+    m = cell / 2 - 0.5
+    rng = random.Random(5)
+    n = 9
+    speeds = [rng.uniform(0.7, 1.15) for _ in range(n * 2)]
+    t = k / (BUBBLE_BREAK_FRAMES - 1)
+    for y in range(cell):
+        for x in range(cell):
+            if not base[x, y][3]:
+                continue
+            dx, dy = x - m, y - m
+            r = math.hypot(dx, dy)
+            if r < BUBBLE_R - 3.2:  # the interior stays clear: only the rim breaks into shards
+                continue
+            ang = math.atan2(dy, dx)
+            sect = int(((ang + math.pi) / math.tau + 0.03 * math.sin(r * 0.3)) * n) % n
+            layer = 1
+            piece = sect + layer * n
+            mid = (sect + 0.5) / n * math.tau - math.pi
+            dist = 22 * speeds[piece] * (t ** 0.5)
+            ox, oy = round(math.cos(mid) * dist), round(math.sin(mid) * dist + 7 * t * t)
+            gone = BAYER4[(y + piece) % 4][(x + piece) % 4] / 16 + 0.1 * piece / (2 * n)
+            if gone < (t - 0.4) * 1.7:
+                continue
+            nx, ny = x + ox, y + oy
+            if 1 <= nx < cell - 1 and 1 <= ny < cell - 1:
+                o[nx, ny] = base[x, y]
+    if k <= 5:  # shock ring
+        rr = BUBBLE_R * (1.0 + 0.09 * k)
+        c = (TEAL_L if k % 2 else WHITE) + (255,)
+        for a in range(0, 360, 3):
+            if (a // 3 + k) % 3 == 0 and k > 1:
+                continue
+            xx = m + math.cos(math.radians(a)) * rr
+            yy = m + math.sin(math.radians(a)) * rr
+            if 1 <= xx < cell - 1 and 1 <= yy < cell - 1:
+                o[round(xx), round(yy)] = c
+    for i in range(16):  # sparks
+        a = i * 2.4
+        r0 = BUBBLE_R * (0.95 + 0.5 * t ** 0.7 * (0.6 + 0.4 * ((i * 7) % 5) / 4))
+        xx, yy = round(m + math.cos(a) * r0), round(m + math.sin(a) * r0 + 6 * t * t)
+        if t < 0.85 and 1 <= xx < cell - 1 and 1 <= yy < cell - 1 and (i + k) % 4:
+            o[xx, yy] = (WHITE if i % 2 else YELLOW) + (255,)
+    return out
+
+
+def bubble_ripple_frame(k: int) -> Image.Image:
+    """A shot hits the field: a white flash with a ring of light spreading from the point and a few sparks."""
+    cell = BUBBLE_RIPPLE_CELL
+    img = Image.new("RGBA", (cell, cell), (0, 0, 0, 0))
+    px = img.load()
+    m = cell / 2 - 0.5
+
+    def put(x: float, y: float, col) -> None:
+        xi, yi = round(x), round(y)
+        if 1 <= xi < cell - 1 and 1 <= yi < cell - 1:
+            px[xi, yi] = col + (255,)
+
+    if k <= 2:
+        arm = (5, 7, 4)[k]
+        for i in range(-arm, arm + 1):
+            col = WHITE if abs(i) < arm - 1 else TEAL_L
+            put(m + i, m, col)
+            put(m, m + i, col)
+    r = 3 + 2.4 * k
+    for a in range(0, 360, 2):
+        if (k >= 5 and (a // 2 + k) % 2) or (k >= 7 and (a // 2) % 3):
+            continue
+        put(m + math.cos(math.radians(a)) * r, m + math.sin(math.radians(a)) * r,
+            WHITE if k < 3 else TEAL_L if k < 6 else TEAL)
+    if 2 <= k <= 6:
+        r2 = r * 0.6
+        for a in range(0, 360, 4):
+            put(m + math.cos(math.radians(a)) * r2, m + math.sin(math.radians(a)) * r2, TEAL)
+    for i in range(6):
+        a = i * 1.05 + 0.3
+        rs = 2 + 1.7 * k * (0.7 + 0.3 * (i % 2))
+        if k < 7:
+            put(m + math.cos(a) * rs, m + math.sin(a) * rs, WHITE if i % 2 else YELLOW)
+    return img
+
+
+FX.update({
+    "bubble_open": lambda: strip([bubble_open_frame(k) for k in range(BUBBLE_OPEN_FRAMES)]),
+    "bubble_loop": lambda: strip([bubble_img(s, k, BUBBLE_LOOP) for s in range(BUBBLE_STAGES) for k in range(BUBBLE_LOOP)]),
+    "bubble_fade": lambda: strip([bubble_fade_frame(k) for k in range(BUBBLE_FADE_FRAMES)]),
+    "bubble_break": lambda: strip([bubble_break_frame(k) for k in range(BUBBLE_BREAK_FRAMES)]),
+    "bubble_ripple": lambda: strip([bubble_ripple_frame(k) for k in range(BUBBLE_RIPPLE_FRAMES)]),
+})
+# The barrier icon: a figure inside a bubble (a rim with a highlight, a little hex shimmer).
+ICONS["barrier"] = lambda c: (c.flat(lambda d, f: d.ellipse((0, 0, 12, 12), outline=f, width=1), TEAL_L),
+                              c.flat(lambda d, f: d.ellipse((1, 1, 11, 11), outline=f, width=1), TEAL),
+                              c.flat(E((5, 3, 7, 5)), SKIN), c.flat(R((4, 6, 8, 9)), BLUE),
+                              c.flat(R((4, 6, 8, 6)), YELLOW), c.flat(R((5, 10, 7, 10)), NAVY),
+                              c.flat(L([(2, 4), (3, 2), (5, 1)], 1), WHITE), c.dot(9, 9, WHITE), c.dot(10, 7, TEAL_L))
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
