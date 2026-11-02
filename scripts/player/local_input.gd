@@ -42,6 +42,7 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 	fire_held = _frame.fire
 	_frame.skill = Input.is_action_pressed(&"skill") or (touch_on and touch.skill_held)
 	_frame.special = Input.is_action_pressed(&"special") or (touch_on and touch.special_held)
+	_frame.special2 = Input.is_action_pressed(&"special2") or (touch_on and touch.special2_held)
 	_update_auto_target(player)
 	if autopilot:
 		_drive_autopilot(player)
@@ -101,6 +102,7 @@ func _drive_autopilot(player: Player) -> void:
 		_frame.fire = false
 		_frame.skill = false
 		_frame.special = false
+		_frame.special2 = false
 		_frame.move_vec = Vector2.ZERO
 		return
 	_frame.fire = auto_target != null

@@ -33,6 +33,26 @@ func test_touch_release_all_clears_every_held_input() -> void:
 	assert_gt(tc.move_vec.x, 0.5)
 
 
+func test_three_special_buttons_dont_overlap_and_press_independently() -> void:
+	var tc: TouchControls = autofree(TouchControls.new())
+	tc.size = Vector2(1000, 500)
+	var centers: Array[Vector2] = [tc._attack_center(), tc._skill_center(), tc._special_center(), tc._special2_center()]
+	var radii: Array[float] = [TouchControls.ATTACK_RADIUS, TouchControls.SKILL_RADIUS, TouchControls.SPECIAL_RADIUS,
+		TouchControls.SPECIAL2_RADIUS]
+	for i: int in centers.size():
+		for j: int in range(i + 1, centers.size()):
+			var reach: float = (radii[i] + radii[j]) * TouchControls.HIT_SLOP
+			assert_gt(centers[i].distance_to(centers[j]), reach, "buttons %d and %d: hit areas apart" % [i, j])
+	tc._on_press(1, tc._special2_center())
+	assert_true(tc.special2_held)
+	assert_false(tc.attack_held or tc.skill_held or tc.special_held)
+	tc._on_release(1)
+	assert_false(tc.special2_held)
+	tc._on_press(2, tc._special2_center())
+	tc.release_all()
+	assert_false(tc.special2_held)
+
+
 func test_joystick_base_is_fixed_and_move_vec_is_relative_to_it() -> void:
 	var tc: TouchControls = autofree(TouchControls.new())
 	tc.size = Vector2(1000, 500)

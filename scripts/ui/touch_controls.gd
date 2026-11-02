@@ -3,7 +3,7 @@ extends Control
 ## Multi-touch mobile controls inside the safe area, drawn with the pixel UI kit:
 ## - fixed joystick bottom-left (a touch anywhere on the left part of the screen steers the knob)
 ## - attack button (hold = fire with auto-aim; drag off-centre = manual aim)
-## - two skill buttons, one per equipped special (skill icon, cooldown sweep + seconds)
+## - three skill buttons, one per equipped special (skill icon, cooldown sweep + seconds)
 ## Touches that start on a visible `blockers` control (e.g. lobby buttons) are left to the GUI.
 
 const JOYSTICK_ZONE_FRACTION: float = 0.45
@@ -22,6 +22,10 @@ const SKILL_OFFSET: Vector2 = Vector2(-152, 24)
 const SPECIAL_RADIUS: float = 50.0
 const SPECIAL_SCALE: float = 3.0
 const SPECIAL_OFFSET: Vector2 = Vector2(-140, -104)
+## Slot 2's button sits straight above FIRE (clear of its hit area, so the thumb never grazes both).
+const SPECIAL2_RADIUS: float = 50.0
+const SPECIAL2_SCALE: float = 3.0
+const SPECIAL2_OFFSET: Vector2 = Vector2(0, -152)
 const HIT_SLOP: float = 1.25
 const PRESS_DROP: float = 4.0
 const AIM_LINE_WIDTH: float = 4.0
@@ -45,6 +49,7 @@ var attack_held: bool = false
 var attack_aim: Vector2 = Vector2.ZERO
 var skill_held: bool = false
 var special_held: bool = false
+var special2_held: bool = false
 
 ## Called when a special comes off cooldown (Arena plays the sound).
 var ready_sfx: Callable
@@ -56,9 +61,10 @@ var _attack_finger: int = NO_FINGER
 var _attack_origin: Vector2 = Vector2.ZERO
 var _skill_finger: int = NO_FINGER
 var _special_finger: int = NO_FINGER
+var _special2_finger: int = NO_FINGER
 ## Per special button: was it on cooldown last frame, and how long the "ready" pulse has left.
-var _was_cooling: Array[bool] = [false, false]
-var _pulse: Array[float] = [0.0, 0.0]
+var _was_cooling: Array[bool] = [false, false, false]
+var _pulse: Array[float] = [0.0, 0.0, 0.0]
 
 
 func _ready() -> void:
@@ -76,11 +82,13 @@ func release_all() -> void:
 	_attack_finger = NO_FINGER
 	_skill_finger = NO_FINGER
 	_special_finger = NO_FINGER
+	_special2_finger = NO_FINGER
 	move_vec = Vector2.ZERO
 	attack_held = false
 	attack_aim = Vector2.ZERO
 	skill_held = false
 	special_held = false
+	special2_held = false
 	queue_redraw()
 
 
@@ -114,6 +122,15 @@ func _skill_center() -> Vector2:
 
 func _special_center() -> Vector2:
 	return _attack_center() + SPECIAL_OFFSET
+
+
+func _special2_center() -> Vector2:
+	return _attack_center() + SPECIAL2_OFFSET
+
+
+## Centre of the button for skill slot `i`.
+func _slot_center(i: int) -> Vector2:
+	return [_skill_center(), _special_center(), _special2_center()][i]
 
 
 func _input(event: InputEvent) -> void:
@@ -158,6 +175,9 @@ func _on_press(finger: int, p: Vector2) -> void:
 	elif _special_finger == NO_FINGER and _hits(p, _special_center(), SPECIAL_RADIUS):
 		_special_finger = finger
 		special_held = true
+	elif _special2_finger == NO_FINGER and _hits(p, _special2_center(), SPECIAL2_RADIUS):
+		_special2_finger = finger
+		special2_held = true
 	elif _joy_finger == NO_FINGER and p.x < size.x * JOYSTICK_ZONE_FRACTION:
 		_joy_finger = finger
 		_on_drag(finger, p)
@@ -189,6 +209,9 @@ func _on_release(finger: int) -> void:
 	elif finger == _special_finger:
 		_special_finger = NO_FINGER
 		special_held = false
+	elif finger == _special2_finger:
+		_special2_finger = NO_FINGER
+		special2_held = false
 	queue_redraw()
 
 
@@ -197,7 +220,7 @@ func _process(delta: float) -> void:
 	if not visible:
 		return
 	if player != null and is_instance_valid(player):
-		for i: int in 2:
+		for i: int in Constants.SKILL_SLOTS:
 			var sk: CharacterSkill = player.skills[i]
 			var cooling: bool = not sk.is_ready() and not sk.is_active()
 			if _was_cooling[i] and sk.is_ready() and not player.dead:
@@ -225,15 +248,16 @@ func _draw() -> void:
 	_round(ac, "round_fire", ATTACK_SCALE, attack_held)
 	UiStyle.draw_icon(self, UiStyle.tex("icon_fire"), ac + _drop(attack_held), ATTACK_SCALE)
 
-	# The two specials, with cooldown sweeps
+	# The three specials, with cooldown sweeps
 	if player != null and is_instance_valid(player):
 		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.skills[0], skill_held, player.skill_locked(0))
 		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.skills[1], special_held, player.skill_locked(1))
-		for i: int in 2:
+		_skill_button(_special2_center(), SPECIAL2_RADIUS, SPECIAL2_SCALE, player.skills[2], special2_held, player.skill_locked(2))
+		for i: int in Constants.SKILL_SLOTS:
 			if _pulse[i] > 0.0:
 				var k: float = 1.0 - _pulse[i] / READY_PULSE_TIME
-				var c: Vector2 = _skill_center() if i == 0 else _special_center()
-				var r: float = (SKILL_RADIUS if i == 0 else SPECIAL_RADIUS) + READY_PULSE_GROW * k
+				var c: Vector2 = _slot_center(i)
+				var r: float = SKILL_RADIUS + READY_PULSE_GROW * k
 				draw_arc(c, r, 0.0, TAU, SEGMENTS, Color(COLOR_READY, COLOR_READY.a * (1.0 - k)), 4.0)
 
 

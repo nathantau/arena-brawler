@@ -1,7 +1,7 @@
 class_name LobbyPanel
 extends PanelContainer
 ## The loading room, shown full screen during the lobby phase: pick a character, the one weapon it fights
-## with (its signature by default) and two specials (its own or generic ones like Dash), then Ready.
+## with (its signature by default) and three specials (its own or generic ones like Dash), then Ready.
 ## Header and footer stay put; the three steps scroll between them on short screens.
 ## Also shows mode + arena, the roster with ready state and why the match can't start yet.
 ## Cards are rebuilt when the local character changes; highlights follow the synced state.
@@ -38,16 +38,16 @@ var _weapons_for: StringName = &""
 var _special_row: BoxContainer
 var _special_scroller: HScroller
 var _special_cards: Dictionary[StringName, Button] = {}
-## The "1" / "2" slot badge on each special row.
+## The "1" / "2" / "3" slot badge on each special row.
 var _special_badges: Dictionary[StringName, Label] = {}
 ## The slot a newly tapped special replaces: the one set least recently.
 var _older_slot: int = 1
 var _rows: HFlowContainer
 var _blocker: Label
 var _ready_button: Button
-## Last highlighted (character, weapon, slot 0 special, slot 1 special), so _process only restyles on change.
+## Last highlighted (character, weapon, slots 0-2 specials), so _process only restyles on change.
 var _revealed: Array[StringName] = [&"", &""]
-var _shown_pick: Array[StringName] = [&"", &"", &"", &""]
+var _shown_pick: Array[StringName] = [&"", &"", &"", &"", &""]
 
 
 func _ready() -> void:
@@ -115,7 +115,7 @@ func _ready() -> void:
 	var specials := VBoxContainer.new()
 	specials.add_theme_constant_override("separation", SPACING)
 	top.add_child(specials)
-	_label(specials, &"HeaderLabel").text = "3 · Choose 2 specials"
+	_label(specials, &"HeaderLabel").text = "3 · Choose 3 specials"
 	_special_scroller = HScroller.new(true)
 	_special_scroller.fade_color = COLOR_BG
 	_special_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -247,7 +247,7 @@ func _on_special_pressed(id: StringName) -> void:
 	if _pick().slice(2).has(id):
 		return
 	arena.special_requested.emit(_older_slot, id)
-	_older_slot = 1 - _older_slot
+	_older_slot = (_older_slot + 1) % Constants.SKILL_SLOTS
 
 
 ## A compact special row: icon on the left, bold name over a dim blurb.
@@ -255,7 +255,7 @@ func _skill_row(sk: SkillData, blurb: String) -> Button:
 	var b := _button(_special_row, SKILL_ROW_SIZE)
 	var row := HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, SPACING)
-	row.offset_right = -(SPACING + 30.0)  # room for the 1 / 2 badge
+	row.offset_right = -(SPACING + 30.0)  # room for the 1 / 2 / 3 badge
 	row.add_theme_constant_override("separation", SPACING)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(row)
@@ -285,12 +285,12 @@ func _skill_row(sk: SkillData, blurb: String) -> Button:
 	return b
 
 
-## The local player's (character id, weapon id, slot 0 special id, slot 1 special id).
+## The local player's (character id, weapon id, then the special id of each slot).
 func _pick() -> Array[StringName]:
 	var me: Player = arena.local_player
 	if me == null:
-		return [&"", &"", &"", &""]
-	return [me.character.id, me.weapon.data.id, me.skills[0].data.id, me.skills[1].data.id]
+		return [&"", &"", &"", &"", &""]
+	return [me.character.id, me.weapon.data.id, me.skills[0].data.id, me.skills[1].data.id, me.skills[2].data.id]
 
 
 func _is_ready() -> bool:
