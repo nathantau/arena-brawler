@@ -54,9 +54,12 @@ const ARC_JITTER: float = 7.0
 const ARC_SPARKS: int = 5
 ## Embers shed by a burning fighter (Ember Palm).
 const EMBER_COLORS: Array[Color] = [UiStyle.C_YELLOW, UiStyle.C_ORANGE, UiStyle.C_RED]
-const EMBER_SPEED: float = 70.0
-const EMBER_SIZE: float = 4.0
-const EMBER_LIFE: float = 0.45
+const EMBER_COUNT: int = 2
+const EMBER_SPREAD_X: float = 14.0
+const EMBER_SPREAD_Y: float = 16.0
+const EMBER_SPEED: float = 90.0
+const EMBER_SIZE: float = 6.0
+const EMBER_LIFE: float = 0.6
 ## Flame wisps peeling off a held beam's edges per frame, rising and cooling (yellow, orange, red) as they shrink.
 const WISP_POOL: int = 128
 const WISPS_PER_FRAME: int = 3
@@ -344,7 +347,9 @@ func chain_arc(from: Vector2, to: Vector2, color: Color) -> void:
 
 ## A single ember rising off a burning fighter at `at`.
 func ember(at: Vector2) -> void:
-	burst(at, EMBER_COLORS.pick_random(), 1, EMBER_SPEED, EMBER_SIZE, EMBER_LIFE, Vector2.UP, 1.2)
+	for i: int in EMBER_COUNT:
+		var from: Vector2 = at + Vector2(_rng.randf_range(-EMBER_SPREAD_X, EMBER_SPREAD_X), _rng.randf_range(-EMBER_SPREAD_Y, EMBER_SPREAD_Y))
+		burst(from, EMBER_COLORS[_rng.randi() % EMBER_COLORS.size()], 1, EMBER_SPEED, EMBER_SIZE, EMBER_LIFE, Vector2.UP, 0.9)
 
 
 func beam(from: Vector2, to: Vector2, color: Color, width: float) -> void:
