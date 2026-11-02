@@ -91,6 +91,17 @@ func test_skill_needs_direction() -> void:
 	assert_false(skill.try_activate(Vector2.ZERO, Vector2.ZERO, PlayerStats.new()))
 
 
+func test_movement_abilities_follow_the_joystick_not_the_aim() -> void:
+	var p := Player.new()
+	var input := InputFrame.new()
+	input.move_vec = Vector2.LEFT
+	input.aim_vec = Vector2.RIGHT
+	for id: StringName in [&"dash", &"grapple_kunai", &"vine_swing", &"blaze_run", &"petal_drift", &"shadow_step"]:
+		assert_eq(p._skill_direction(skills.get_skill(id), input), Vector2.LEFT, id)
+	assert_eq(p._skill_direction(skills.get_skill(&"barrier"), input), Vector2.RIGHT, "barrier still aims")
+	p.free()
+
+
 func test_barrier_is_placed_in_front_and_expires() -> void:
 	var stats := PlayerStats.new()
 	var barrier: SkillData = skills.get_skill(&"barrier")

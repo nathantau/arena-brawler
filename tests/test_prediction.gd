@@ -125,7 +125,7 @@ func test_grapple_replay_from_captured_state_matches() -> void:
 		var f := InputFrame.new()
 		f.seq = i + 1
 		f.aim_vec = Vector2(1, 0.2).normalized()
-		f.move_vec = Vector2(0, 1)  # ignored while pulled
+		f.move_vec = Vector2.ZERO if i < 2 else Vector2(0, 1)  # neutral stick on the press (it would steer the throw), then ignored while pulled
 		f.special = i < 2
 		inputs.append(f)
 	var snapshot: Array = []
