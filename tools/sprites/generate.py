@@ -8141,7 +8141,20 @@ FX.update({
 
 QUAKE_R = 46  # the telegraph ring's radius in art px (quake_blast.tres splash 70 / SPRITE_SCALE 1.5): SpecialFx.QUAKE_ART_RADIUS
 QUAKE_MARK_FRAMES = 8
-QUAKE_FRAMES = 14  # quake_burst / quake_scar: thorns breach (impact on frame 2), hold, then sink away
+QUAKE_FRAMES = 28  # quake_burst / quake_scar: the ground cracks and thorn tips push up (frames 0-7), impact on frame 8, hold, then sink away
+QUAKE_IMPACT = 8  # SpecialFx.QUAKE_IMPACT_FRAME; the design time (the old 14-frame strip's k) is 2.0 here
+
+
+def quake_t(i: int) -> float:
+    """Design time of output frame i: the old strip's frame k (impact 2, end 13), eased slowly into the impact and at 1.7x its old density after."""
+    return i * 0.25 if i <= QUAKE_IMPACT else 2.0 + (i - QUAKE_IMPACT) * 11.0 / (QUAKE_FRAMES - 1 - QUAKE_IMPACT)
+
+
+def _clip_below(c: Canvas, before: Image.Image, y: int) -> None:
+    """Puts back what was under rows y and below (before the last thing was drawn): that thing is rising out of the floor at row y."""
+    for yy in range(max(0, int(y)), c.img.height):
+        for xx in range(c.img.width):
+            c.px[xx, yy] = before.getpixel((xx, yy))
 QUAKE_BASE = 112  # quake_burst: the row the thorns' roots sit on (SpecialFx.QUAKE_BASE_Y), in a 128 px frame
 
 
@@ -8248,83 +8261,118 @@ def _quake_layout() -> list:
     return sorted(out, key=lambda t: t[1])
 
 
-def quake_burst_frame(k: int) -> Image.Image:
-    """The thorns (128 px, roots on row QUAKE_BASE, centred across): the ground heaves and cracks (frame 0-1), then a thicket of bark
-    thorns bursts up, middle first (impact on frame 2), clods fly, dust rolls out; they hold, sway, and sink away with leaves
-    sprouting on them as they go."""
+def quake_burst_frame(i: int) -> Image.Image:
+    """The thorns (128 px, roots on row QUAKE_BASE, centred across), QUAKE_FRAMES frames, impact on frame QUAKE_IMPACT: soil hops and a
+    green seam glows in the floor, then thorn tips push up through the ground (each drawn whole and clipped at its own root row, so it
+    rises tip first), middle first, clods fly and dust rolls out; they overshoot, hold, sway, and sink back into the floor with leaves
+    sprouting on them as they go, a last puff of dust where they went."""
+    t = quake_t(i)
     n, m = 128, 64
     c = Canvas(n)
-    rng = random.Random(940 + k)
+    rng = random.Random(940 + i)
     base = QUAKE_BASE
+    if t < 2.6:  # a glow seam in the floor and soil hopping where the thorns will come
+        pre = min(1.0, t / 1.4)
+        for j in range(7):
+            a = math.tau * j / 7 + 0.4
+            ln = (6 + 8 * (j % 3)) * pre
+            if ln >= 2:
+                c.flat(L([(m, base), (round(m + math.cos(a) * ln * 1.4), round(base + math.sin(a) * ln * 0.55))], 1), GREEN_L if j % 2 else GREEN)
+        for _ in range(int(6 * pre) if t < 1.6 else 0):
+            a, r = rng.uniform(0, math.tau), rng.uniform(4, 30) * pre
+            sdot(c, round(m + math.cos(a) * r * 1.3), round(base + math.sin(a) * r * 0.5 - rng.uniform(0, 3)), rng.choice((BROWN, CHESTNUT, GREEN_L)))
     for dx, dy, hmax, w, lean, start in _quake_layout():
-        e = _quake_env(k, start - 1.0 if start < 2 else start - 0.7)
-        sway = 0.8 * math.sin(k * 0.8 + dx) * (1 if 4 <= k <= 9 else 0)
-        _quake_thorn(c, m + dx, base + dy, hmax * e, w, lean + sway, k * 0.6)
+        e = _quake_env(t, start - 1.0 if start < 2 else start - 0.7)
+        if e <= 0:
+            continue
+        sway = 0.8 * math.sin(t * 0.8 + dx) * (1 if 4 <= t <= 9 else 0)
+        root = base + dy
+        before = c.img.copy()
+        sunk = hmax * (1.0 - min(e, 1.0)) * 0.95
+        _quake_thorn(c, m + dx, root + sunk, hmax * max(e, 1.0), w, lean + sway, t * 0.6)
+        _clip_below(c, before, root + 1)
+        if 0.03 < e < 0.9 or (t > 8 and e < 0.6):  # a little heaped soil round the root while it breaks the surface
+            for sx in (-1, 1):
+                sdot(c, round(m + dx + sx * (w + 1.5)), root, BROWN)
+                sdot(c, round(m + dx + sx * (w + 3)), root, CHESTNUT)
+                sdot(c, round(m + dx + sx * (w + 2)), root - 1, BROWN)
     # dust ring and clods
-    if 1 <= k <= 7:
-        rr = 14 + (k - 1) * 8
-        for i in range(26):
-            a = math.tau * i / 26 + 0.1 * k
-            if rng.random() < 0.8 - 0.09 * k:
+    if 1.4 <= t <= 7.5:
+        rr = 14 + (t - 1.0) * 8
+        for j in range(26):
+            a = math.tau * j / 26 + 0.1 * t
+            if rng.random() < 0.8 - 0.09 * t:
                 x, y = m + math.cos(a) * rr, base + math.sin(a) * rr * 0.6
-                sdot(c, round(x), round(y - 1), CREAM if (i + k) % 3 == 0 else CREAM_D)
-                if rr > 24 and i % 2 == 0:
+                sdot(c, round(x), round(y - 1), CREAM if (j + i) % 3 == 0 else CREAM_D)
+                if rr > 24 and j % 2 == 0:
                     sdot(c, round(x), round(y), CREAM_D)
-    for j in range(16 if 1 <= k <= 9 else 0):  # clods thrown up and falling
-        a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
-        sp = rng.uniform(6, 12)
-        t = (k - 1) * 0.55
-        x = m + math.cos(a) * sp * t * 2.6
-        y = base - 4 + math.sin(a) * sp * t * 2.2 + 5.5 * t * t
-        if y < base + 6:
-            sdot(c, round(x), round(y), (BROWN, CHESTNUT, GREEN, WALNUT)[j % 4])
-            if j % 4 == 0:
-                sdot(c, round(x) + 1, round(y), BROWN)
-    if k >= 8:  # leaves and spores drifting up as the thorns sink
+    if t >= 1.0 and t <= 9.5:
+        for j in range(16):  # clods thrown up and falling
+            a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
+            sp = rng.uniform(6, 12)
+            tt = (t - 1.0) * 0.55
+            x = m + math.cos(a) * sp * tt * 2.6
+            y = base - 4 + math.sin(a) * sp * tt * 2.2 + 5.5 * tt * tt
+            if y < base + 6:
+                sdot(c, round(x), round(y), (BROWN, CHESTNUT, GREEN, WALNUT)[j % 4])
+                if j % 4 == 0:
+                    sdot(c, round(x) + 1, round(y), BROWN)
+    if t >= 8:  # leaves and spores drifting up as the thorns sink, and dust where they go back in
         for j in range(8):
             a = rng.uniform(0, math.tau)
             r = rng.uniform(6, 38)
-            t = (k - 8) / 5
-            if rng.random() < 1 - t:
-                x, y = m + math.cos(a) * r, base - 10 - t * 26 - rng.uniform(0, 14) + math.sin(a) * r * 0.3
+            tt = (t - 8) / 5
+            if tt < 1 and rng.random() < 1 - tt:
+                x, y = m + math.cos(a) * r, base - 10 - tt * 26 - rng.uniform(0, 14) + math.sin(a) * r * 0.3
                 sdot(c, round(x), round(y), GREEN_L if j % 2 else GREEN)
+        if 9.5 <= t <= 13.5:
+            for j in range(18):
+                a = math.tau * j / 18
+                r = rng.uniform(8, 40) * (0.7 + (t - 9.5) * 0.08)
+                if rng.random() < 0.8 - (t - 9.5) * 0.17:
+                    sdot(c, round(m + math.cos(a) * r * 1.2), round(base + math.sin(a) * r * 0.45 - (t - 9.5) * 1.2), CREAM_D if j % 2 else CREAM)
     return _clear_edge(c.img)
 
 
-def quake_scar_frame(k: int) -> Image.Image:
-    """The ground left behind (112 px, centred on the spot, same timing as quake_burst): upturned soil and cracks ringing the thorns
-    appear with the impact (frame 2), then the wound closes over, greens, and dithers away."""
+def quake_scar_frame(i: int) -> Image.Image:
+    """The ground left behind (112 px, centred on the spot, same timing as quake_burst): hairline cracks open in the floor before the
+    thorns break through (frames 1-7), upturned soil rings them at the impact (frame 8), then the wound closes over, greens, and dithers away."""
+    t = quake_t(i)
     n = 112
     m = n // 2
     c = Canvas(n)
-    if k < 1:
+    if i < 1:
         return c.img
     rng = random.Random(950)  # one mark, the same every frame, so it stays put
-    appear = min(1.0, k / 3.0)
-    r0 = 40 * appear
+    appear = min(1.0, max(0.0, (t - 0.1) / 2.3))
     pts = []
-    for i in range(16):
-        a = math.tau * i / 16
-        j = rng.uniform(0.75, 1.1)
-        pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.78))
-    c.flat(P(pts), WALNUT_D)
-    c.flat(P([(m + (x - m) * 0.7, m + (y - m) * 0.7) for x, y in pts]), OUTLINE)
-    for i in range(9):  # cracks
+    r0 = 40 * appear
+    for j in range(16):
+        a = math.tau * j / 16
+        jj = rng.uniform(0.75, 1.1)
+        pts.append((m + math.cos(a) * r0 * jj, m + math.sin(a) * r0 * jj * 0.78))
+    if t >= 1.4:  # the dark upturned earth only once things start to break
+        k2 = min(1.0, (t - 1.4) / 0.9)
+        c.flat(P([(m + (x - m) * k2, m + (y - m) * k2) for x, y in pts]), WALNUT_D)
+        c.flat(P([(m + (x - m) * 0.7 * k2, m + (y - m) * 0.7 * k2) for x, y in pts]), OUTLINE)
+    for j in range(9):  # cracks, running out from the middle as time passes
         a = rng.uniform(0, math.tau)
-        ln = rng.uniform(r0 * 0.8, r0 * 1.45)
+        ln = rng.uniform(40 * 0.8, 40 * 1.45) * appear
         mid = (m + math.cos(a + rng.uniform(-0.3, 0.3)) * ln * 0.55, m + math.sin(a) * ln * 0.45)
         end = (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.78)
-        c.flat(L([(m + math.cos(a) * 8, m + math.sin(a) * 6), mid, end], 1), GREEN_D if k > 6 else WALNUT)
-    for i in range(18):  # soil clumps round the edge, turning to grass
-        a = rng.uniform(0, math.tau)
-        r = r0 * rng.uniform(0.85, 1.2)
-        x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.78)
-        col = BROWN if k < 6 else GREEN if i % 2 else GREEN_L
-        sdot(c, x, y, col)
-        sdot(c, x + 1, y, col)
-        if k >= 6 and i % 3 == 0:
-            sdot(c, x, y - 1, GREEN_L)
-    fade = max(0.0, (k - 8) / (QUAKE_FRAMES - 8))
+        c.flat(L([(m + math.cos(a) * 8 * appear, m + math.sin(a) * 6 * appear), mid, end], 1),
+               GREEN_D if t > 6 else (GREEN if t < 1.4 and j % 2 else WALNUT))
+    if t >= 1.4:
+        for j in range(18):  # soil clumps round the edge, turning to grass
+            a = rng.uniform(0, math.tau)
+            r = r0 * rng.uniform(0.85, 1.2)
+            x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.78)
+            col = BROWN if t < 6 else GREEN if j % 2 else GREEN_L
+            sdot(c, x, y, col)
+            sdot(c, x + 1, y, col)
+            if t >= 6 and j % 3 == 0:
+                sdot(c, x, y - 1, GREEN_L)
+    fade = max(0.0, (t - 8) / 5.0)
     px = c.img.load()
     for y in range(n):
         for x in range(n):
@@ -8905,13 +8953,32 @@ def rift_lash_frame(k: int) -> Image.Image:
 # ---- Umbral Spikes (Shadow): dark crystal spikes burst up out of the floor where he marked --------------------------
 SPIKE_R = 48  # the ring radius in art px (SpecialFx.THUNDER_ART_RADIUS 72 world / 1.5): the blast radius scales it
 SPIKE_MARK_FRAMES = 8
-SPIKE_FRAMES = 10  # THUNDER_BOLT_FRAMES: the burst lands on frame 2
+SPIKE_FRAMES = 24  # spike_burst / spike_scorch: floor cracks and tips push up (frames 0-7), the burst lands on frame 8 (SpecialFx.SPIKE_IMPACT_FRAME), then retreat
+SPIKE_IMPACT = 8
+SPIKE_DESIGN_END = 9.0  # the old 10-frame strip's last frame
 SPIKE_BASE = 112  # the row the field is centred on (SpecialFx.THUNDER_BASE_Y), in a 128 px frame
 # (dx, dy, height, half width, lean, delay) of the spikes, in art px about the spot: one tall, a ring, an outer scatter
 SPIKES = [(0, 0, 76, 7, 0.0, 0), (-16, -4, 58, 6, -0.12, 0), (15, -5, 62, 6, 0.1, 0), (-8, 10, 48, 5, -0.08, 0), (10, 10, 54, 6, 0.12, 0),
           (-30, 2, 38, 5, -0.2, 1), (29, 3, 42, 5, 0.18, 1), (-22, -13, 32, 4, -0.1, 1), (22, -14, 34, 4, 0.12, 1),
           (0, -17, 36, 4, 0.0, 1), (-3, 17, 30, 4, -0.05, 1), (-38, -4, 22, 3, -0.25, 2), (37, -3, 24, 3, 0.25, 2)]
 SPIKE_GROW = (0.18, 0.7, 1.0, 1.0, 0.97, 0.9, 0.68, 0.42, 0.2, 0.0)
+
+
+def spike_t(i: int) -> float:
+    """Design time of output frame i: the old strip's frame k (impact 2, end 9), eased slowly into the impact, 2x denser after."""
+    return i * 0.25 if i <= SPIKE_IMPACT else 2.0 + (i - SPIKE_IMPACT) * (SPIKE_DESIGN_END - 2.0) / (SPIKE_FRAMES - 1 - SPIKE_IMPACT)
+
+
+def _spike_grow(t: float, delay: int) -> float:
+    """How much of a spike is up at design time t: it pushes up through the floor towards the impact (staggered by `delay`), then the
+    old hold / retreat curve, linearly in between its frames."""
+    if t <= 2.0:
+        x = (t - 0.2 - 0.6 * delay) / 1.8
+        return 0.0 if x <= 0 else math.sin(min(1.0, x) * math.pi / 2)
+    kk = min(max(t - delay, 0.0), SPIKE_DESIGN_END)
+    lo = int(kk)
+    hi = min(lo + 1, len(SPIKE_GROW) - 1)
+    return SPIKE_GROW[lo] + (SPIKE_GROW[hi] - SPIKE_GROW[lo]) * (kk - lo)
 
 
 def spike_mark_frame(k: int) -> Image.Image:
@@ -8967,78 +9034,105 @@ def _spike(c: Canvas, x: float, y: float, h: float, hw: float, lean: float, brig
         sdot(c, round(tip[0]), round(tip[1]) + 1, PINK_L)
 
 
-def spike_burst_frame(k: int) -> Image.Image:
-    """The strike (128 px, field centred on row SPIKE_BASE, impact on frame 2 like the thunder bolt): the floor splits and short black
-    tips push through (frame 0-1), a thicket of crystal spikes lunges up with a pale flash and a ring racing over the floor (2-4), holds
-    a beat, then cracks, shrinks and falls apart into shards (5-9). Spikes are drawn back to front."""
+def spike_burst_frame(i: int) -> Image.Image:
+    """The strike (128 px, field centred on row SPIKE_BASE, SPIKE_FRAMES frames, impact on frame SPIKE_IMPACT): the floor glows and cracks
+    and black tips push up through it (0-7); a thicket of crystal spikes lunges up, each drawn whole and clipped at its own foot row so
+    it rises out of the floor, with a pale flash and a ring racing over the floor (8-14); it holds a beat, then cracks and sinks back
+    into the floor in a drift of shards (15-23). Spikes are drawn back to front over a soft contact shadow."""
+    t = spike_t(i)
     n, m = 128, 64
     c = Canvas(n)
     ov = Canvas(n)
-    rng = random.Random(1500 + k * 7)
-    if k >= 2:  # flash and shock ring on the floor
-        r = (0, 0, 30, 24, 16, 8, 0, 0, 0, 0)[k]
-        if r:
-            c.flat(E((m - r, SPIKE_BASE - r * 0.5, m + r, SPIKE_BASE + r * 0.5)), PINK_L if k > 2 else WHITE)
-        rr = 16 + (k - 2) * 9
-        if k <= 6:
-            c.flat(lambda d, f: d.ellipse((m - rr, SPIKE_BASE - rr * 0.38, m + rr, SPIKE_BASE + rr * 0.38), outline=f, width=3 if k < 4 else 1),
-                   VIOLET_L if k < 5 else VIOLET)
-    for dx, dy, hh, hw, lean, delay in sorted(SPIKES, key=lambda s: s[1]):
-        kk = k - delay
-        if kk < 0:
+    rng = random.Random(1500 + i * 7)
+    if t >= 1.0:  # a soft contact shadow under the field while the spikes stand
+        sh = min(1.0, (t - 1.0) / 1.5) * (1.0 - max(0.0, (t - 6.0) / 3.0))
+        if sh > 0:
+            for y in range(SPIKE_BASE - 14, SPIKE_BASE + 15):
+                for x in range(m - 40, m + 41):
+                    d = ((x - m) / 40.0) ** 2 + ((y - SPIKE_BASE) / 13.0) ** 2
+                    if d < 1.0 and BAYER[y % 4][x % 4] / 16 < 0.5 * sh * (1 - d):
+                        c.dot(x, y, OUTLINE)
+    if t >= 2.0:  # flash and shock ring on the floor
+        r = max(0.0, 30.0 - (t - 2.0) * 7.5)
+        if r >= 1:
+            c.flat(E((m - r, SPIKE_BASE - r * 0.5, m + r, SPIKE_BASE + r * 0.5)), PINK_L if t > 2.3 else WHITE)
+        rr = 16 + (t - 2) * 9
+        if t <= 6:
+            c.flat(lambda d, f: d.ellipse((m - rr, SPIKE_BASE - rr * 0.38, m + rr, SPIKE_BASE + rr * 0.38), outline=f, width=3 if t < 4 else 1),
+                   VIOLET_L if t < 5 else VIOLET)
+    for dx, dy, hh, hw, lean, delay in sorted(SPIKES, key=lambda s_: s_[1]):
+        g = _spike_grow(t, delay)
+        if g <= 0.02:
             continue
-        g = SPIKE_GROW[min(kk, SPIKE_FRAMES - 1)]
-        if k < 2:  # the first frames: only the tall ones poke through
-            g = (0.12, 0.35)[k] if delay == 0 else 0.0
-        jitter = rng.uniform(-1, 1) if k >= 6 else 0
-        _spike(c, m + dx + jitter, SPIKE_BASE + dy * 0.8, hh * g, hw * (0.6 + 0.4 * min(1.0, g * 1.5)), lean, 1.0 if k <= 4 else 0.0)
+        jitter = rng.uniform(-1, 1) if t >= 6 else 0
+        root = SPIKE_BASE + dy * 0.8
+        before = c.img.copy()
+        _spike(c, m + dx + jitter, root + hh * (1.0 - g), hh, hw * (0.6 + 0.4 * min(1.0, g * 1.5)), lean, 1.0 if t <= 4 else 0.0)
+        _clip_below(c, before, round(root) + 1)
     img = outline(c.img)
-    for j in range(16 if k >= 2 else 0):  # shards thrown up and falling
-        a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
-        r = (k - 1) * rng.uniform(3.0, 7.5)
-        life = max(0.0, 1 - k / SPIKE_FRAMES)
-        if r > 0 and rng.random() < life + 0.3:
-            sdot(ov, round(m + math.cos(a) * r * 1.5), round(SPIKE_BASE - 12 + math.sin(a) * r * 1.1 + (k - 3) * 2.0),
-                 (WHITE, PINK_L, VIOLET_L, VIOLET)[j % 4])
-    if k < 2:
-        for j in range(8):  # cracks glowing in the floor before it splits
+    if t >= 2.0:
+        for j in range(16):  # shards thrown up and falling
+            a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
+            r = (t - 1) * rng.uniform(3.0, 7.5)
+            life = max(0.0, 1 - t / SPIKE_DESIGN_END)
+            if r > 0 and rng.random() < life + 0.3:
+                sdot(ov, round(m + math.cos(a) * r * 1.5), round(SPIKE_BASE - 12 + math.sin(a) * r * 1.1 + (t - 3) * 2.0),
+                     (WHITE, PINK_L, VIOLET_L, VIOLET)[j % 4])
+    if t < 2.0:  # cracks glowing in the floor before it splits, soil hopping
+        for j in range(8):
             a = rng.uniform(0, math.tau)
-            ln = rng.uniform(8, 26) * (0.6 + 0.5 * k)
-            ov.flat(L([(m, SPIKE_BASE), (round(m + math.cos(a) * ln * 1.3), round(SPIKE_BASE + math.sin(a) * ln * 0.5))], 1), VIOLET_L if j % 2 else PINK_L)
+            ln = rng.uniform(8, 26) * min(1.0, 0.1 + 0.5 * t)
+            if ln >= 2:
+                ov.flat(L([(m, SPIKE_BASE), (round(m + math.cos(a) * ln * 1.3), round(SPIKE_BASE + math.sin(a) * ln * 0.5))], 1), VIOLET_L if j % 2 else PINK_L)
+        for _ in range(int(5 * min(1.0, t))):
+            a, r = rng.uniform(0, math.tau), rng.uniform(4, 24)
+            sdot(ov, round(m + math.cos(a) * r * 1.3), round(SPIKE_BASE + math.sin(a) * r * 0.5 - rng.uniform(1, 4)), rng.choice((VIOLET, VIOLET_L, PINK_L)))
+    if 6.5 <= t <= 9.0:  # a puff of dust where the spikes go back in
+        for j in range(14):
+            a = math.tau * j / 14
+            r = rng.uniform(10, 38)
+            if rng.random() < 0.7:
+                sdot(ov, round(m + math.cos(a) * r * 1.2), round(SPIKE_BASE + math.sin(a) * r * 0.4 - (t - 6.5)), VIOLET if j % 2 else VIOLET_L)
     img.alpha_composite(ov.img)
-    if k >= 7:
-        img = dither_out(img, (k - 6) / 4.0 * 0.6)
+    if t >= 7:
+        img = dither_out(img, min(1.0, (t - 6) / 4.0 * 0.6))
     return _clear_edge(img, 2)
 
 
-def spike_scorch_frame(k: int) -> Image.Image:
-    """The floor after the burst (112 px, centred on the spot, nothing before frame 2): a flash that cools to violet over a cracked black
-    stain whose cracks glow pink, then violet, then go dark, and which dithers away."""
+def spike_scorch_frame(i: int) -> Image.Image:
+    """The floor under the burst (112 px, centred on the spot): hairline pink cracks open before the impact (frames 1-7), then a flash
+    that cools to violet over a cracked black stain whose cracks glow pink, then violet, then go dark, and which dithers away."""
+    t = spike_t(i)
     n = 112
     m = n // 2
     c = Canvas(n)
-    if k < 2:
+    if i < 1:
         return c.img
     rng = random.Random(1600)
     r0 = 30
     pts = []
-    for i in range(14):
-        a = math.tau * i / 14
-        j = rng.uniform(0.7, 1.15)
-        pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.8))
-    heat = k - 2
-    if heat < 2:
-        c.flat(E((m - 30, m - 22, m + 30, m + 22)), PINK_L if heat == 0 else VIOLET_L)
-    c.flat(P(pts), VIOLET_D)
-    c.flat(P([(m + (x - m) * 0.62, m + (y - m) * 0.62) for x, y in pts]), OUTLINE)
+    for j in range(14):
+        a = math.tau * j / 14
+        jj = rng.uniform(0.7, 1.15)
+        pts.append((m + math.cos(a) * r0 * jj, m + math.sin(a) * r0 * jj * 0.8))
+    heat = max(0.0, t - 2.0)
+    appear = min(1.0, t / 2.0)
+    if t >= 2.0:
+        if heat < 2:
+            c.flat(E((m - 30, m - 22, m + 30, m + 22)), PINK_L if heat < 0.7 else VIOLET_L)
+        c.flat(P(pts), VIOLET_D)
+        c.flat(P([(m + (x - m) * 0.62, m + (y - m) * 0.62) for x, y in pts]), OUTLINE)
+    elif t >= 1.2:  # the stain begins to darken the floor
+        k2 = (t - 1.2) / 0.8
+        c.flat(P([(m + (x - m) * 0.5 * k2, m + (y - m) * 0.5 * k2) for x, y in pts]), OUTLINE)
     for _ in range(8):
         a = rng.uniform(0, math.tau)
-        ln = rng.uniform(r0 * 0.7, r0 * 1.5)
+        ln = rng.uniform(r0 * 0.7, r0 * 1.5) * appear
         mid = (m + math.cos(a + rng.uniform(-0.3, 0.3)) * ln * 0.55, m + math.sin(a) * ln * 0.45)
         end = (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.8)
-        c.flat(L([(m + math.cos(a) * 6, m + math.sin(a) * 5), mid, end], 1),
-               (PINK_L, PINK_L, VIOLET_L, VIOLET_L, VIOLET, VIOLET, VIOLET_D, VIOLET_D)[min(heat, 7)])
-    return dither_out(c.img, max(0.0, (k - 5) / 5.0))
+        c.flat(L([(m + math.cos(a) * 6 * appear, m + math.sin(a) * 5 * appear), mid, end], 1),
+               (PINK_L, PINK_L, VIOLET_L, VIOLET_L, VIOLET, VIOLET, VIOLET_D, VIOLET_D)[min(int(heat), 7)])
+    return dither_out(c.img, max(0.0, (t - 5) / 5.0))
 
 
 # ---- Tesla Coil (Bolt): a steel and copper coil that rises out of the floor and zaps the nearest enemy -------------
