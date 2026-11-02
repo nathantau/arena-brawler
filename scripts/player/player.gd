@@ -58,7 +58,8 @@ const TRAP_FPS: float = 10.0
 const TRAP_IN: float = 0.12
 const TRAP_BODY_Y: float = -6.0
 ## Soak look: a cool tint and drips at this interval.
-const SOAK_GLOW: Color = Color(0.72, 0.88, 1.12)
+const SOAK_GLOW: Color = Color(0.5, 0.72, 1.0)
+const SOAK_GLOW_MAX: float = 0.2
 ## Burning look: a warm tint pulsing at BURN_PULSE_HZ and BURN_LICKS small flame licks at a time rising off the body at
 ## the BURN_ROOTS (px from the node origin: head, shoulders, torso, hips), each living BURN_LICK_LIFE s.
 const BURN_PULSE_HZ: float = 3.0
@@ -429,8 +430,10 @@ func _process(delta: float) -> void:
 		var glow: Color = Color.WHITE.lerp(BURN_GLOW, BURN_GLOW_MAX * heat)  # a light warm wash, never a muddy multiply
 		glow.a = _sprite.modulate.a
 		_sprite.modulate = glow
-	elif stats.soak_remaining > 0.0 and _sprite.modulate.a > 0.0:
-		_sprite.modulate = Color(SOAK_GLOW.r, SOAK_GLOW.g, SOAK_GLOW.b, _sprite.modulate.a)
+	elif (stats.soak_remaining > 0.0 or is_chilled()) and _sprite.modulate.a > 0.0:
+		var wet: Color = Color.WHITE.lerp(SOAK_GLOW, SOAK_GLOW_MAX)  # a light cool wash, like the burn's warm one
+		wet.a = _sprite.modulate.a
+		_sprite.modulate = wet
 	if stats.spawn_protect > 0.0 and _sprite.modulate.a > 0.0:
 		# Spawn protection: flickers (faster as it runs out) with a cool shimmer sweeping through the tint.
 		var phase: float = Time.get_ticks_msec() * 0.001
@@ -1418,6 +1421,11 @@ func _draw_overlay() -> void:
 		_draw_trap(_overlay)
 	if not is_local and not is_concealed():
 		_draw_bars(Constants.PLAYER_RADIUS)
+
+
+## Slowed by the Snowball Cannon's chill (shown as a light icy wash).
+func is_chilled() -> bool:
+	return stats.slow_remaining > 0.0 and is_equal_approx(stats.slow_factor, Constants.CHILL_SLOW)
 
 
 ## The bubble round a trapped fighter: swells in, then a shimmering loop.

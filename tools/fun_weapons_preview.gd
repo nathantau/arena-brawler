@@ -12,7 +12,7 @@ const LABEL_H: int = 40
 const PAD: int = 4
 const BG: Color = Color(0.08, 0.08, 0.1)
 ## Per row: label, zoom (1 = wide shot), the world focus offset from `home`, and the physics frames (from the row's start) photographed.
-const ROWS: Array = [
+const ROWS_WIDE: Array = [
 	{"label": "Splash Soaker: a stream of drooping droplets, the target is soaked (slow, drips); puddle splats fade",
 		"zoom": 1, "focus": Vector2(-90, 0), "at": [8, 16, 24, 34, 50, 80]},
 	{"label": "Bubble Wand: wobbly bubbles, a hit traps the target 0.7 s, then the bubble pops", "zoom": 1,
@@ -25,6 +25,22 @@ const ROWS: Array = [
 		"at": [6, 16, 28, 40, 52, 64]},
 ]
 
+## `-- close`: 2x crops (fun_weapons_close.png): each gun in a fighter's hand, the soaked target, the snowball impact, the
+## soaker splash and the bees.
+const ROWS_CLOSE: Array = [
+	{"label": "In hand (2x): Splash Soaker, Bubble Wand, Snowball Cannon, Firework Launcher, Hive Gun", "zoom": 2,
+		"focus": Vector2(-190, 0), "at": [5, 15, 25, 35, 45]},
+	{"label": "Soaked target (2x): light cool wash plus drips, colours stay recognisable", "zoom": 2, "focus": Vector2(0, 0),
+		"at": [20, 30, 40, 50, 60, 70]},
+	{"label": "Snowball impact (2x): a crisp burst of round puffs in white / ice / grey", "zoom": 2, "focus": Vector2(60, 0),
+		"at": [20, 22, 24, 26, 28, 32]},
+	{"label": "Soaker splash (2x): crown + ripple where droplets land", "zoom": 2, "focus": Vector2(10, 0),
+		"at": [22, 25, 28, 31, 34, 40]},
+	{"label": "Bees (2x): 4-frame wing flap, outlined, circling then stinging", "zoom": 2, "focus": Vector2(0, 0),
+		"at": [10, 20, 30, 40, 50, 60]},
+]
+var ROWS: Array = ROWS_WIDE
+var close: bool = false
 var arena: Arena
 var me: Player
 var a: Player
@@ -43,6 +59,10 @@ func _initialize() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("only="):
 			only = int(arg.substr(5))
+		elif arg == "close":
+			close = true
+			ROWS = ROWS_CLOSE
+			out_path = "res://fun_weapons_close.png"
 		elif arg.begins_with("out="):
 			out_path = arg.substr(4)
 	InputSetup.ensure_actions()
@@ -58,6 +78,7 @@ func _w(id: StringName) -> WeaponData:
 
 
 func _fire(who: Player, dir: Vector2, weapon: StringName) -> void:
+	who.set_weapon(_w(weapon))  # the fighter really holds it
 	who.facing = dir
 	arena.projectiles.fire_shot(who.player_id, seq, who.global_position, dir, _w(weapon), 11 + seq)
 	seq += 1
@@ -108,7 +129,41 @@ func _put(who: Player, offset: Vector2) -> void:
 	who.velocity = Vector2.ZERO
 
 
+func _scenario_close(row: int, n: int) -> void:
+	_put(b, Vector2(-700, -600))
+	a.stats.tick(1.0 / 60.0)
+	if n == 0:
+		a.stats.reset()
+		a.stats.invulnerable_time = 0.0
+		arena.effects.clear()
+	_put(me, Vector2(-200, 0))
+	_put(a, Vector2(0, 0))
+	me.facing = Vector2.RIGHT
+	var ids: Array[StringName] = [&"splash_soaker", &"bubble_wand", &"snowball_cannon", &"firework_launcher", &"hive_gun"]
+	match row:
+		0:
+			_put(a, Vector2(-700, 300))
+			me.set_weapon(_w(ids[mini(n / 10, ids.size() - 1)]))
+		1:
+			if n < 16 and n % 4 == 0:
+				_fire(me, Vector2.RIGHT, &"splash_soaker")
+		2:
+			_put(a, Vector2(60, 0))
+			if n == 0:
+				_fire(me, Vector2.RIGHT, &"snowball_cannon")
+		3:
+			_put(a, Vector2(300, 0))
+			if n < 16 and n % 4 == 0:
+				_fire(me, Vector2.RIGHT, &"splash_soaker")
+		4:
+			if n == 0:
+				_fire(me, Vector2.RIGHT, &"hive_gun")
+
+
 func _scenario(row: int, n: int) -> void:
+	if close:
+		_scenario_close(row, n)
+		return
 	var park: Vector2 = Vector2(-700, -600)  # off every photograph, near enough for the camera
 	_put(b, park)
 	a.stats.tick(1.0 / 60.0)  # (nobody simulates here: tick the timed effects by hand)

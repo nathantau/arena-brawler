@@ -10091,17 +10091,19 @@ def firework_spark(i: int) -> Image.Image:  # frame i: one colour of the star (a
     return outline(c.img)
 
 
-def bee_shot(c: Canvas, f: int) -> None:  # a plump bee, wings beating (4 frames)
+def bee_shot(c: Canvas, f: int) -> None:  # a plump bee (about 1.3x the first draft), wings beating (4 frames)
     m = PROJ // 2
-    reach = (7, 5, 3, 5)[f % 4]
+    reach = (7, 5, 4, 5)[f % 4]
     for sgn in (-1, 1):  # wings on both sides of the body
-        c.part(P([(m - 1, m + sgn * 2), (m - 5, m + sgn * reach), (m + 1, m + sgn * (reach - 1))]), WHITE)
-    c.part(E((m - 5, m - 2, m + 1, m + 2)), YELLOW)  # abdomen
+        c.part(P([(m - 2, m + sgn * 3), (m - 6, m + sgn * reach), (m + 1, m + sgn * (reach - 1)), (m + 1, m + sgn * 3)]), WHITE)
+        c.flat(L([(m - 3, m + sgn * 4), (m - 1, m + sgn * (reach - 1))], 1), TEAL_L)
+    c.part(E((m - 6, m - 3, m + 1, m + 3)), YELLOW)  # abdomen
     for x in (m - 4, m - 2):
-        c.flat(L([(x, m - 2), (x, m + 2)], 1), WALNUT_D)
-    c.part(E((m + 1, m - 2, m + 5, m + 2)), WALNUT)  # head
-    c.dot(m + 4, m - 1, WHITE)
-    c.dot(m - 6, m, WALNUT_D)  # stinger
+        c.flat(L([(x, m - 3), (x, m + 3)], 1), WALNUT_D)
+    c.part(E((m + 1, m - 3, m + 6, m + 3)), WALNUT)  # head
+    c.dot(m + 4, m - 2, WHITE)
+    c.dot(m + 4, m + 2, WHITE)
+    c.flat(L([(m - 8, m), (m - 6, m)], 1), WALNUT_D)  # stinger
 
 
 PROJECTILES.update({"splash_soaker": water_drop, "bubble_wand": bubble_shot, "snowball_cannon": snowball_shot,
@@ -10115,30 +10117,33 @@ def ease_out(t: float) -> float:
     return 1 - (1 - t) ** 2
 
 
-def water_splash_frame(k: int, n: int = 6) -> Image.Image:  # a crown of droplets thrown out of a squashed ripple
+def water_splash_frame(k: int, n: int = 6) -> Image.Image:  # a small crown of droplets over a clean ripple
     t = k / (n - 1)
     img = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
     m = 16
     e = ease_out(t)
-    if t < 0.85:  # ripple ring, squashed, two px thick while fresh
-        rr = 3 + 10 * ease_out(t / 0.85)
-        for a in range(0, 360, 6):
-            x, y = m + math.cos(math.radians(a)) * rr, m + 4 + math.sin(math.radians(a)) * rr * 0.45
-            if t < 0.6 or (a // 6 + k) % 2:
-                put(img, round(x), round(y), TEAL_L if a < 180 else BLUE)
-                if t < 0.4:
-                    put(img, round(x), round(y) + 1, BLUE)
-    for i in range(9):
-        a = math.tau * i / 9 + 0.3
-        lift = 11 * math.sin(math.pi * min(1.0, t * 1.15)) * (0.55 + 0.45 * (i % 3) / 2)
-        x = m + math.cos(a) * (2 + 11 * e)
-        y = m + 2 + math.sin(a) * (2 + 8 * e) * 0.6 - lift + 4 * t * t
-        r = 3 if t < 0.4 else 2 if t < 0.75 else 1
+    rr = 3 + 9 * e  # one clean squashed ring that grows and thins out (1 px, then dithered away)
+    for a in range(0, 360, 3):
+        x = m + math.cos(math.radians(a)) * rr
+        y = m + 5 + math.sin(math.radians(a)) * rr * 0.4
+        if t < 0.6 or (a // 3) % 2 == 0 and t < 0.85:
+            put(img, round(x), round(y), TEAL_L if a > 180 else BLUE)
+    if t < 0.75:  # the crown: a thin water wall that collapses
+        h = round(7 * math.sin(math.pi * min(1.0, t / 0.75)))
+        for dx in range(-4, 5):
+            top = h - abs(dx) // 2 - (1 if abs(dx) > 2 else 0)
+            for dy in range(max(0, top)):
+                put(img, m + dx, m + 5 - dy, WHITE if dy == top - 1 else TEAL_L if abs(dx) < 3 else BLUE)
+    for i in range(5):  # droplets on arcs
+        a = math.pi * (0.15 + 0.7 * i / 4)  # fanned over the top
+        reach = 4 + 9 * e
+        x = m - math.cos(a) * reach
+        y = m + 4 - math.sin(a) * reach * 1.1 + 9 * t * t
+        r = 2 if t < 0.7 else 1
         for dx in range(r):
             for dy in range(r):
-                put(img, round(x) + dx, round(y) + dy, BLUE if dy else TEAL_L)
-        if r >= 2:
-            put(img, round(x), round(y), WHITE)
+                put(img, round(x) + dx, round(y) + dy, BLUE)
+        put(img, round(x), round(y), WHITE if r == 2 else TEAL_L)
     return img
 
 
@@ -10168,32 +10173,28 @@ def snow_splat(v: int) -> Image.Image:
     return puddle(v, WHITE, WHITE, 60, 1.4)
 
 
-def snow_puff_frame(k: int, n: int = 8) -> Image.Image:
+def snow_puff_frame(k: int, n: int = 8) -> Image.Image:  # a crisp burst of a few round puffs, expanding then thinning out
     t = k / (n - 1)
-    rng = random.Random(7)
     c = Canvas(48)
     m = 24
-    e = ease_out(min(1.0, t * 1.3))
-    g = 1 - max(0.0, t - 0.5) / 0.5  # puffs shrink away at the end
+    e = ease_out(min(1.0, t * 1.2))
+    g = 1.0 - max(0.0, t - 0.45) / 0.55  # puffs shrink to nothing at the end
     puffs = []
-    for i in range(8):
-        a = math.tau * i / 8 + rng.uniform(-0.2, 0.2)
-        d = rng.uniform(0.6, 1.0)
-        puffs.append((m + math.cos(a) * 10 * e * d, m + math.sin(a) * 8 * e * d - 5 * t,
-                      max(1, round((6.5 - 2 * t) * g * rng.uniform(0.85, 1.15)))))
-    puffs.append((m, m - 2 * t, max(1, round((9 - 8 * t) * 1.0))))
-    c.part(blobs(puffs), WHITE)
+    for i in range(5):
+        a = math.tau * i / 5 + 0.5
+        puffs.append((m + math.cos(a) * 9 * e, m + math.sin(a) * 7 * e - 3 * t, round((5 - 2 * t) * g)))
+    if k < 3:
+        puffs.append((m, m, 7 - 2 * k))  # the impact flash of white
+    for x, y, r in puffs:
+        if r >= 1:
+            c.part(blobs([(x, y, r)]), WHITE)
     img = outline(c.img)
-    for i in range(14):  # flakes fly out and drift down
-        a = rng.uniform(0, math.tau)
-        d = 8 + 14 * ease_out(t) * rng.uniform(0.6, 1.1)
-        if (i + k) % 4 != 3 or t < 0.7:
-            x, y = round(m + math.cos(a) * d), min(44, round(m + math.sin(a) * d * 0.8 + 8 * t * t))
-            x = min(max(x, 3), 44)
-            put(img, x, y, WHITE if i % 3 else TEAL_L)
-            if i % 4 == 0:
-                put(img, x + 1, y, WHITE)
-                put(img, x, y + 1, WHITE)
+    for i in range(10):  # a few flakes in white, ice and soft grey
+        a = math.tau * i / 10 + 0.3
+        d = 9 + 10 * e
+        if t < 0.85 and (i + k) % 3:
+            x, y = round(m + math.cos(a) * d), min(44, round(m + math.sin(a) * d * 0.8 + 6 * t * t))
+            put(img, min(max(x, 3), 44), y, (WHITE, TEAL_L, STEEL)[i % 3])
     return img
 
 
