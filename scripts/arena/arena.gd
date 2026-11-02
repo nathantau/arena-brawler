@@ -38,6 +38,15 @@ const PROJECTILE_Z: int = 1
 ## Floor and walls sit under everything, below ground effects (Effects.GROUND_Z).
 const FLOOR_Z: int = -2
 const EFFECTS_Z: int = 2
+## Fighters, crates, wall blocks and upright ability art are y-sorted children of the Arena (z 0), each sorted by its
+## foot line (a fighter's node sits Player.FOOT_RING_Y above it: ArtBlock.SORT_LIFT). Flat marks (z -1) sit under all of
+## that; projectiles (z 1) and Effects (z 2) over it.
+## A fighter hidden behind a wall shows through as a ghost: his colour lightened by GHOST_WHITEN at GHOST_ALPHA.
+const GHOST_ALPHA: float = 0.65
+const GHOST_WHITEN: float = 0.45
+## Only the part of him above his feet can be hidden; his body box for the test (half width, height above the feet).
+const GHOST_BODY_HALF_W: float = 22.0
+const GHOST_BODY_H: float = 96.0
 ## Camera shake: offset = SHAKE_MAX_OFFSET * trauma², trauma decays per second.
 const SHAKE_MAX_OFFSET: float = 16.0
 const SHAKE_DECAY: float = 2.5
@@ -109,6 +118,8 @@ var _human_ids: Array[int] = []
 var _bot_ids: Array[int] = []
 var _walls: StaticBody2D
 var _floor := ArenaFloor.new()
+var _wall_blocks: Array[ArtBlock] = []
+var _ghosted: Array[ArtBlock] = []
 var _trauma: float = 0.0
 var _look: Vector2 = Vector2.ZERO
 var _heartbeat: float = 0.0
@@ -124,6 +135,7 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 	mode = p_mode
 	match_seed = p_match_seed
 	name = "Arena"
+	y_sort_enabled = true
 	catalog = WeaponCatalog.load_all()
 	characters = CharacterCatalog.load_all()
 	projectiles = ProjectilePool.new()
@@ -180,6 +192,10 @@ func _load_layout(index: int) -> void:
 		_walls.queue_free()
 	_build_walls()
 	_floor.setup(map, ArenaLayouts.THEMES[index])
+	for b: ArtBlock in _wall_blocks:
+		b.queue_free()
+	_ghosted.clear()
+	_wall_blocks = _floor.build_walls(self, map)
 	crates.setup(map, _floor.tiles)
 	pickups.setup(map)
 	projectiles.clear()
@@ -577,6 +593,58 @@ func _process(delta: float) -> void:
 			var tf: CharacterSkill = _input.auto_target.form()
 			effects.aim_scale = tf.data.form_scale if tf != null else 1.0
 	_tick_heartbeat(delta)
+	_update_ghosts()
+
+
+## A fighter standing behind a wall block or crate (its base line below his feet) while part of his body is under it:
+## draw him through it, tinted and half see-through, clipped to the block, so nobody vanishes behind cover.
+func _update_ghosts() -> void:
+	var blocks: Array[ArtBlock] = _wall_blocks.duplicate()
+	for c: Crate in crates.crates:
+		if c.is_intact():
+			blocks.append(c.art_block())
+	var lists: Dictionary = {}
+	for p: Player in players:
+		var info: Dictionary = p.ghost_info()
+		if info.is_empty():
+			continue
+		var foot: float = info["foot"]
+		var body := Rect2(Vector2(p.global_position.x - GHOST_BODY_HALF_W, foot - GHOST_BODY_H),
+			Vector2(GHOST_BODY_HALF_W * 2.0, GHOST_BODY_H))
+		var tint: Color = p.display_color.lerp(Color.WHITE, GHOST_WHITEN)
+		tint.a = GHOST_ALPHA
+		for b: ArtBlock in blocks:
+			if b == null or b.base_y <= foot or not b.rect.intersects(body):
+				continue
+			var entry: Array = _ghost_entry(info, b.rect, tint)
+			if not entry.is_empty():
+				if not lists.has(b):
+					lists[b] = []
+				lists[b].append(entry)
+	for b: ArtBlock in _ghosted:
+		if is_instance_valid(b) and not lists.has(b):
+			b.set_ghosts([])
+	_ghosted.clear()
+	for b: ArtBlock in lists:
+		b.set_ghosts(lists[b])
+		_ghosted.append(b)
+
+
+## [texture, dst, src, tint] for the part of the sprite (info from Player.ghost_info) inside `clip`, or [].
+static func _ghost_entry(info: Dictionary, clip: Rect2, tint: Color) -> Array:
+	var full: Rect2 = info["rect"]
+	var tex: Texture2D = info["texture"]
+	var part: Rect2 = full.intersection(clip)
+	if part.size.x <= 0.0 or part.size.y <= 0.0:
+		return []
+	var k: Vector2 = tex.get_size() / full.size
+	var src_y: float = (part.position.y - full.position.y) * k.y
+	var src_h: float = part.size.y * k.y
+	if info["flip"]:
+		var src_x: float = (full.end.x - part.end.x) * k.x
+		return [tex, Rect2(part.end.x, part.position.y, -part.size.x, part.size.y),
+			Rect2(src_x, src_y, part.size.x * k.x, src_h), tint]
+	return [tex, part, Rect2((part.position.x - full.position.x) * k.x, src_y, part.size.x * k.x, src_h), tint]
 
 
 func _tick_heartbeat(delta: float) -> void:
