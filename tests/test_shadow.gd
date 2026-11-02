@@ -580,14 +580,14 @@ func test_bots_rotate_through_his_whole_kit_and_leave_others_alone() -> void:
 		p.skills[1].cooldown_remaining = 5.0
 		brain._rotate_kit(p)  # on cooldown
 	assert_eq(seen.size(), 3, "all three specials get used")
-	var flicker: Player = _shadow(w[0], null, &"shadow_clones", 2, Vector2(300, 300), &"flicker")
+	var flicker: Player = _shadow(w[0], null, &"great_ape", 2, Vector2(300, 300), &"wukong")
 	var other := BotBrain.new(null, 3)
 	for i: int in 20:
 		flicker.skills[1].cooldown_remaining = 0.0
 		other._rotate_kit(flicker)
 		flicker.skills[1].cooldown_remaining = 5.0
 		other._rotate_kit(flicker)
-	assert_eq(flicker.skills[1].data.id, &"shadow_clones", "other fighters keep their pick")
+	assert_eq(flicker.skills[1].data.id, &"great_ape", "other fighters keep their pick")
 
 
 func test_step_actually_travels_with_move_input() -> void:

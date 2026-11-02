@@ -360,6 +360,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var swing: CharacterSkill = active_skill(SkillData.Kind.SWING)
 	var erupting: CharacterSkill = active_skill(SkillData.Kind.ERUPTION)
 	var thundering: CharacterSkill = active_skill(SkillData.Kind.THUNDER)
+	if thundering == null:
+		thundering = active_skill(SkillData.Kind.QUAKE)  # Eden's Thorn Quake shares the Thunder Strike path
 	var beam_was: CharacterSkill = active_skill(SkillData.Kind.LIGHTNING)
 	var beam_before: float = beam_was.elapsed() if beam_was != null else 0.0
 	var burning: CharacterSkill = active_skill(SkillData.Kind.TRAIL)
@@ -370,6 +372,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	var nova_before: float = nova.elapsed() if nova != null else 0.0
 	var sapling_before: Array[float] = []
 	var storm: CharacterSkill = active_skill(SkillData.Kind.STORM)
+	if storm == null:
+		storm = active_skill(SkillData.Kind.POOL)  # Shadow's Dark Pool shares the Storm Cloud path
 	var storm_before: float = storm.elapsed() if storm != null else 0.0
 	var bloom_before: Array[float] = []
 	var step_was: CharacterSkill = active_skill(SkillData.Kind.STEP)
@@ -571,9 +575,9 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			slot.anchor = global_position + Vector2(0.0, FOOT_RING_Y)
 		SkillData.Kind.ERUPTION:
 			slot.anchor = eruption_spot(slot.direction, slot.data)
-		SkillData.Kind.STORM:
+		SkillData.Kind.STORM, SkillData.Kind.POOL:
 			slot.anchor = storm_spot(slot.direction, slot.data)
-		SkillData.Kind.THUNDER:
+		SkillData.Kind.THUNDER, SkillData.Kind.QUAKE:
 			slot.anchor = spot_ahead(slot.direction, slot.data.thunder_distance, slot.data.thunder_wall_margin)
 		SkillData.Kind.HOUND:
 			slot.anchor = hound_spot(slot.direction, slot.data)

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_thorn_quake.png" id="2_icon"]
+[ext_resource type="Resource" path="res://data/weapons/quake_blast.tres" id="3_blast"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"thorn_quake"
+display_name = "Thorn Quake"
+kind = 23
+special = true
+blurb = "Thorns, slows"
+tags = Array[StringName]([&"eden"])
+cooldown = 9.0
+duration = 0.65
+thunder_distance = 230.0
+thunder_wall_margin = 8.0
+thunder_blast = ExtResource("3_blast")

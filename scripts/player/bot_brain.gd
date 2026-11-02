@@ -260,11 +260,11 @@ func slot_wanted(player: Player, slot: int, dist: float, in_sight: bool, pressur
 		SkillData.Kind.ERUPTION:
 			var r: float = sd.eruption_blast.splash_radius if sd.eruption_blast != null else 60.0
 			return in_sight and absf(dist - sd.eruption_distance) < r * ZONE_FIT
-		SkillData.Kind.STORM:
+		SkillData.Kind.STORM, SkillData.Kind.POOL:
 			return in_sight and absf(dist - sd.storm_distance) < sd.storm_radius * ZONE_FIT
 		SkillData.Kind.LIGHTNING:
 			return in_sight and dist < (sd.beam_weapon.projectile_range if sd.beam_weapon != null else NEAR_FIGHT) * ZONE_FIT
-		SkillData.Kind.THUNDER:
+		SkillData.Kind.THUNDER, SkillData.Kind.QUAKE:
 			var tr: float = sd.thunder_blast.splash_radius if sd.thunder_blast != null else 60.0
 			return in_sight and absf(dist - sd.thunder_distance) < tr * ZONE_FIT
 		SkillData.Kind.PILLAR:
@@ -656,11 +656,16 @@ func _remember_target(p: Player) -> void:
 func _rotate_kit(player: Player) -> void:
 	var slot: CharacterSkill = player.skills[1]
 	var ready: bool = slot.is_ready()
-	if ready and not _kit_ready and rotates_kit and slot.data.kind >= SkillData.Kind.STEP:
+	if ready and not _kit_ready and rotates_kit and _in_kit(slot.data, player):
 		var kit: Array[SkillData] = []
 		for sd: SkillData in SkillCatalog.shared().specials_for(player.character):
-			if sd.kind >= SkillData.Kind.STEP and sd.tags.has(player.character.id):
+			if _in_kit(sd, player):
 				kit.append(sd)
 		if kit.size() > 1:
 			player.set_skill(1, kit[rng.randi() % kit.size()])
 	_kit_ready = ready
+
+
+## A signature special of a fighter whose bots rotate through their whole kit (`KIT_ROTATORS`).
+static func _in_kit(sd: SkillData, player: Player) -> bool:
+	return sd.tags.has(player.character.id) and (sd.kind >= SkillData.Kind.STEP or Constants.KIT_ROTATORS.has(player.character.id))

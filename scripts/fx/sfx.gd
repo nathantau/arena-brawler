@@ -25,6 +25,7 @@ const SKILL_SOUNDS: Dictionary[int, StringName] = {
 	SkillData.Kind.LIGHTNING: &"lightning", SkillData.Kind.THUNDER: &"thunder",
 	SkillData.Kind.BARK_SKIN: &"bark", SkillData.Kind.BLOOM: &"bloom", SkillData.Kind.GUST: &"gust",
 	SkillData.Kind.STEP: &"shadow_step", SkillData.Kind.HOUND: &"hound", SkillData.Kind.BIND: &"bind",
+	SkillData.Kind.QUAKE: &"quake", SkillData.Kind.POOL: &"pool",
 }
 
 enum Wave { SINE, SQUARE, SAW, NOISE }
@@ -70,6 +71,9 @@ const RECIPES: Dictionary[StringName, Array] = {
 	# Shadow: a falling whoosh into the floor, a low growl that rises, a taut twang.
 	&"shadow_step": [0.4, 500.0, 70.0, Wave.SAW, 0.55, 0.8, 0.01, 7.0, 0.45],
 	&"hound": [0.5, 90.0, 220.0, Wave.SAW, 0.4, 0.7, 0.04, 5.0, 0.5],
+	# Eden's Thorn Quake: a deep earthy rumble; Shade's Dark Pool: a soft sinking swell.
+	&"quake": [0.5, 110.0, 55.0, Wave.SAW, 0.75, 0.85, 0.01, 6.0, 0.6],
+	&"pool": [0.55, 260.0, 90.0, Wave.SINE, 0.35, 0.8, 0.06, 5.0, 0.45],
 	&"bind": [0.3, 1200.0, 160.0, Wave.SQUARE, 0.25, 0.4, 0.002, 10.0, 0.4],
 	# Feedback: ready ping, hit confirm ticks, kill ding, streak sting, low-HP thump, empty-energy click, last-seconds tick.
 	&"ready": [0.14, 900.0, 1500.0, Wave.SINE, 0.0, 0.0, 0.003, 14.0, 0.3],

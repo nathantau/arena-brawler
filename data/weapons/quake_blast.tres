@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"quake_blast"
+display_name = "Thorn Quake"
+pickup = false
+damage = 32
+energy_cost = 0
+knockback = 160.0
+color = Color(0.55, 0.78, 0.3, 1)
+splash_radius = 70.0
+splash_edge_scale = 0.5
+snare_time = 2.0
+snare_factor = 0.5
+blast = true
+held_art = false
+tags = Array[StringName]([&"eden_quake"])

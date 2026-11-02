@@ -295,6 +295,35 @@ const THUNDER_IMPACT_FRAME: float = 2.0
 const THUNDER_LEAD: float = THUNDER_IMPACT_FRAME / THUNDER_BOLT_FPS
 const THUNDER_BASE_Y: float = 112.0
 const THUNDER_BOLT_TIME: float = 0.5
+## Eden's Thorn Quake (generate.py QUAKE_*), the same shape as Thunder Strike: a ring of roots with thorn tips marks the spot (floor layer),
+## then a thicket of bark thorns bursts up (impact on frame 2) over a scar in the ground that heals away.
+const QUAKE_MARK_ART: Texture2D = preload(FX_DIR + "quake_mark.png")
+const QUAKE_BURST_ART: Texture2D = preload(FX_DIR + "quake_burst.png")
+const QUAKE_SCAR_ART: Texture2D = preload(FX_DIR + "quake_scar.png")
+const QUAKE_ART_RADIUS: float = 69.0  # world px: QUAKE_R 46 art px x the sprite scale
+const QUAKE_MARK_FPS: float = 10.0
+const QUAKE_EASE_IN: float = 0.2
+const QUAKE_BURST_FPS: float = 18.0
+const QUAKE_IMPACT_FRAME: float = 2.0
+const QUAKE_LEAD: float = QUAKE_IMPACT_FRAME / QUAKE_BURST_FPS
+const QUAKE_BASE_Y: float = 112.0
+const QUAKE_BURST_TIME: float = 14.0 / QUAKE_BURST_FPS
+## Shade's Dark Pool (generate.py POOL_*), the same shape as Storm Cloud: the pool opens (POOL_FORM_COUNT frames over POOL_FORM_TIME),
+## swirls while it lasts and closes over POOL_END_TIME; a tendril lashes up (rooted on row POOL_LASH_BASE_Y of a 64 px frame) at everyone
+## it hits on each tick.
+const POOL_FORM_ART: Texture2D = preload(FX_DIR + "pool_form.png")
+const POOL_LOOP_ART: Texture2D = preload(FX_DIR + "pool_loop.png")
+const POOL_END_ART: Texture2D = preload(FX_DIR + "pool_end.png")
+const POOL_LASH_ART: Texture2D = preload(FX_DIR + "pool_lash.png")
+const POOL_ART_RADIUS: float = 84.0  # world px: POOL_R 56 art px x the sprite scale
+const POOL_SIZE: float = 128.0
+const POOL_FORM_COUNT: int = 10
+const POOL_LOOP_COUNT: int = 12
+const POOL_FORM_TIME: float = 0.45
+const POOL_END_TIME: float = 0.5
+const POOL_FPS: float = 14.0
+const POOL_LASH_TIME: float = 0.45
+const POOL_LASH_BASE_Y: float = 52.0
 ## Godspeed (Player.godspeed, every peer): a flash of light and rays when it switches on, a thinning shell of glow when it ends.
 const GOD_FLASH_ART: Texture2D = preload(FX_DIR + "bolt_flash.png")
 const GOD_DOWN_ART: Texture2D = preload(FX_DIR + "bolt_down.png")
@@ -408,6 +437,13 @@ var _god_was: bool = false
 var _thunder_started: bool = false
 ## The Thunder Strike slot while its ring shows (else null).
 var _thunder_mark: CharacterSkill
+## Thorn Quake: the burst has dropped / the slot while its ring shows (else null).
+var _quake_started: bool = false
+var _quake_mark: CharacterSkill
+## Dark Pool while it lasts (null = not): the slot, where it was, strikes seen.
+var _pool: CharacterSkill
+var _pool_spot: Vector2 = Vector2.ZERO
+var _pool_ticks: int = 0
 var _od_t: float = -1.0
 var _od_at: Vector2 = Vector2.ZERO
 var _od_ghosts: Array[Vector2] = []
@@ -514,6 +550,8 @@ func sync(p: Player) -> void:
 	_sync_overdrive(p)
 	_sync_godspeed(p)
 	_sync_thunder(p)
+	_sync_quake(p)
+	_sync_pool(p)
 	_sync_sapling(p)
 	_sync_storm(p)
 	_sync_eden(p)
@@ -711,6 +749,50 @@ func _sync_thunder(p: Player) -> void:
 		_poof(slot.anchor, THUNDER_SCORCH_ART, THUNDER_BOLT_TIME, slot.data.thunder_blast.splash_radius / THUNDER_ART_RADIUS, true)
 	_thunder_started = on and (_thunder_started or slot.active_remaining <= THUNDER_LEAD)
 	_thunder_mark = slot if on and slot.active_remaining > THUNDER_LEAD else null
+
+
+## Thorn Quake: the ring while the telegraph runs, the thicket (and the scar under it) when it is about to land.
+func _sync_quake(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.QUAKE)
+	var on: bool = slot != null and slot.is_active() and not p.dead
+	if on and not _quake_started and slot.active_remaining <= QUAKE_LEAD:
+		var lift: float = (QUAKE_BURST_ART.get_height() * 0.5 - QUAKE_BASE_Y) * Constants.SPRITE_SCALE
+		_poof(slot.anchor + Vector2(0.0, lift), QUAKE_BURST_ART, QUAKE_BURST_TIME)
+		_poof(slot.anchor, QUAKE_SCAR_ART, QUAKE_BURST_TIME, slot.data.thunder_blast.splash_radius / QUAKE_ART_RADIUS, true)
+	_quake_started = on and (_quake_started or slot.active_remaining <= QUAKE_LEAD)
+	_quake_mark = slot if on and slot.active_remaining > QUAKE_LEAD else null
+
+
+## Dark Pool: opens and closes from the synced active state, a tendril on every strike tick (every peer sees the same times; the
+## targets are whoever stands in it on this peer's view, else the pool's own middle).
+func _sync_pool(p: Player) -> void:
+	var slot: CharacterSkill = _slot(p, SkillData.Kind.POOL)
+	var open: CharacterSkill = slot if slot != null and slot.is_active() and not p.dead else null
+	if open != null:
+		var ticks: int = floori(open.elapsed() / open.data.storm_interval)
+		if _pool != null and ticks > _pool_ticks:
+			_lash(p, open)
+		_pool_ticks = ticks
+		_pool_spot = open.anchor
+	elif _pool != null and not p.dead:
+		_poof(_pool_spot, POOL_END_ART, POOL_END_TIME, _pool.data.storm_radius / POOL_ART_RADIUS, true)
+	_pool = open
+
+
+func _lash(p: Player, slot: CharacterSkill) -> void:
+	var lift := Vector2(0.0, (POOL_LASH_ART.get_height() * 0.5 - POOL_LASH_BASE_Y) * Constants.SPRITE_SCALE)
+	var hit: bool = false
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var query := PhysicsRayQueryParameters2D.new()
+	for node: Node in p.get_parent().get_children():
+		var target := node as Player
+		if target != null and target != p and not target.dead \
+				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius \
+				and AutoAim.has_line_of_sight(space, query, slot.anchor, target.global_position):
+			_poof(target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y) + lift, POOL_LASH_ART, POOL_LASH_TIME)
+			hit = true
+	if not hit:
+		_poof(slot.anchor + lift, POOL_LASH_ART, POOL_LASH_TIME)
 
 
 func _sync_godspeed(p: Player) -> void:
@@ -1068,6 +1150,21 @@ func _draw_floor() -> void:
 		_draw_frame(THUNDER_MARK_ART, int(tt * THUNDER_MARK_FPS) % (THUNDER_MARK_ART.get_width() / THUNDER_MARK_ART.get_height()),
 			THUNDER_MARK_ART.get_height(), _thunder_mark.anchor, px * tk * lerpf(1.15, 1.0, near) * lerpf(0.9, 1.0, ease_in),
 			ease_in, _floor)
+	if _quake_mark != null:  # the root ring, easing in and tightening as the thorns near
+		var qt: float = _quake_mark.elapsed()
+		var qk: float = _quake_mark.data.thunder_blast.splash_radius / QUAKE_ART_RADIUS
+		var q_in: float = clampf(qt / QUAKE_EASE_IN, 0.0, 1.0)
+		var q_near: float = clampf(qt / maxf(_quake_mark.data.duration, 0.01), 0.0, 1.0)
+		_draw_frame(QUAKE_MARK_ART, int(qt * QUAKE_MARK_FPS) % (QUAKE_MARK_ART.get_width() / QUAKE_MARK_ART.get_height()),
+			QUAKE_MARK_ART.get_height(), _quake_mark.anchor, px * qk * lerpf(1.12, 1.0, q_near) * lerpf(0.9, 1.0, q_in), q_in, _floor)
+	if _pool != null:  # the pool opens, swirls, (closes: a floor poof)
+		var pt: float = _pool.elapsed()
+		var pk: float = px * _pool.data.storm_radius / POOL_ART_RADIUS
+		if pt < POOL_FORM_TIME:
+			_draw_frame(POOL_FORM_ART, mini(int(pt / POOL_FORM_TIME * POOL_FORM_COUNT), POOL_FORM_COUNT - 1), POOL_SIZE,
+				_pool.anchor, pk, 1.0, _floor)
+		else:
+			_draw_frame(POOL_LOOP_ART, int(pt * POOL_FPS) % POOL_LOOP_COUNT, POOL_SIZE, _pool.anchor, pk, 1.0, _floor)
 	if _whirl_t >= 0.0:
 		_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
 			WHIRL_RING_ART.get_height(), _whirl_at, px * _whirl_radius / WHIRL_ART_RADIUS,

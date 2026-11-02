@@ -7999,6 +7999,336 @@ FX.update({
 })
 
 
+# --- Thorn Quake (Eden) and Dark Pool (Shade): the two specials added in the Shade/Eden buff pass --------------------
+
+QUAKE_R = 46  # the telegraph ring's radius in art px (quake_blast.tres splash 70 / SPRITE_SCALE 1.5): SpecialFx.QUAKE_ART_RADIUS
+QUAKE_MARK_FRAMES = 8
+QUAKE_FRAMES = 14  # quake_burst / quake_scar: thorns breach (impact on frame 2), hold, then sink away
+QUAKE_BASE = 112  # quake_burst: the row the thorns' roots sit on (SpecialFx.QUAKE_BASE_Y), in a 128 px frame
+
+
+def quake_mark_frame(k: int) -> Image.Image:
+    """The telegraph (112 px, centred on the spot, a loop of QUAKE_MARK_FRAMES): a ragged ring of roots with thorn tips pointing
+    in that pulse towards the middle, a faint dithered green glow, soil specks hopping and a sprout in the centre."""
+    n = 112
+    m = n // 2
+    c = Canvas(n)
+    rng = random.Random(910 + k)
+    ph = k / QUAKE_MARK_FRAMES
+    pulse = 0.5 + 0.5 * math.sin(math.tau * ph)
+    for y in range(n):  # a faint dithered glow filling the ring, breathing
+        for x in range(n):
+            d = math.hypot(x - m, y - m) / QUAKE_R
+            if d < 0.95 and BAYER[y % 4][x % 4] / 16 < 0.004 + 0.022 * (1 - d) * (0.6 + 0.4 * pulse):
+                c.dot(x, y, GREEN_L if d < 0.5 else GREEN)
+    segs = 20
+    for i in range(segs):  # root dashes round the rim, crawling slowly round
+        a0 = math.tau * (i + 0.1) / segs + ph * math.tau / segs
+        a1 = math.tau * (i + 0.7) / segs + ph * math.tau / segs
+        am = (a0 + a1) / 2
+        wob = 1.3 * math.sin(i * 2.1 + ph * math.tau)
+        pts = [(m + math.cos(a) * (QUAKE_R + wob * s), m + math.sin(a) * (QUAKE_R + wob * s)) for a, s in ((a0, 0), (am, 1), (a1, 0))]
+        c.flat(L(pts, 1), GREEN_L if i % 5 == 0 else GREEN)
+        pts2 = [(m + math.cos(a) * (QUAKE_R - 2), m + math.sin(a) * (QUAKE_R - 2)) for a in (a0, am, a1)]
+        c.flat(L(pts2, 1), BROWN)
+    for i in range(10):  # thorn tips pointing in, pulsing towards the middle
+        a = math.tau * i / 10 + 0.2
+        r0 = QUAKE_R - 3
+        r1 = r0 - 6 - 4 * pulse * (1 if i % 2 else 0.5)
+        half = 0.09
+        tip = (m + math.cos(a) * r1, m + math.sin(a) * r1)
+        b1 = (m + math.cos(a - half) * r0, m + math.sin(a - half) * r0)
+        b2 = (m + math.cos(a + half) * r0, m + math.sin(a + half) * r0)
+        c.flat(P([b1, tip, b2]), WALNUT_L if i % 2 else CHESTNUT)
+        c.dot(round(tip[0]), round(tip[1]), CREAM)
+    for _ in range(5):  # soil specks hopping at the rim
+        a, r = rng.uniform(0, math.tau), QUAKE_R + rng.uniform(-6, 2)
+        sdot(c, round(m + math.cos(a) * r), round(m + math.sin(a) * r - 1.5 * pulse), rng.choice((BROWN, CHESTNUT, GREEN_L)))
+    # a sprout in the centre, leaning with the pulse
+    lean = round(1.6 * math.sin(math.tau * ph))
+    c.flat(L([(m, m + 3), (m + lean, m - 3)], 1), GREEN_L)
+    c.flat(P([(m + lean, m - 2), (m + lean - 5, m - 6), (m + lean - 3, m - 1)]), GREEN)
+    c.flat(P([(m + lean, m - 3), (m + lean + 5, m - 7), (m + lean + 3, m - 2)]), GREEN_L)
+    return _clear_edge(outline(c.img), 1)
+
+
+def _quake_thorn(c: Canvas, x: float, y: float, h: float, w: float, lean: float, phase: float) -> None:
+    """One bark thorn rooted at (x, y), `h` tall: a curved spike with barbs, a vine wound round it and a leaf at the base."""
+    if h < 2:
+        if h > 0:
+            c.flat(E((x - w, y - 1, x + w, y + 1)), BROWN)
+        return
+    w = max(1.0, w * (0.6 + 0.4 * min(1.0, h / 28)))
+    tipx = x + lean * h / 24
+    mid = (x + lean * h / 60, y - h * 0.5)
+    left = [(x - w, y), (mid[0] - w * 0.7, mid[1]), (tipx, y - h)]
+    right = [(x + w, y), (mid[0] + w * 0.7, mid[1]), (tipx, y - h)]
+    c.part(P(left + right[::-1][1:]), BROWN)
+    # lit left face, dark right face, so the spike reads as round
+    c.flat(P([(x - w, y), (mid[0] - w * 0.7, mid[1]), (tipx, y - h), (tipx, y - h * 0.4), (x - w * 0.1, y)]), CHESTNUT)
+    c.flat(L([(x - w + 1, y - 1), (mid[0] - w * 0.4, mid[1]), (tipx, y - h + 1)], 1), WALNUT_L)
+    c.flat(P([(x + w, y), (mid[0] + w * 0.7, mid[1]), (tipx, y - h), (x + w * 0.2, y)]), WALNUT_D)
+    if h > 30:  # barbs, only on the big thorns
+        for f, s in ((0.4, -1), (0.62, 1)):
+            by = y - h * f
+            bx = x + lean * h * f / 24 + s * w * 0.5
+            c.flat(P([(bx, by + 2), (bx + s * (w + 3), by - 3), (bx + s * 0.5, by - 1)]), WALNUT_L if s < 0 else WALNUT)
+    sdot(c, round(tipx), round(y - h), CREAM)
+    if h > 10:  # vine winding up
+        pts = [(x + math.sin(phase + j * 0.9) * w * 0.9, y - j * h / 9 * 0.8) for j in range(1, 8)]
+        c.flat(L([(round(a), round(b)) for a, b in pts], 1), GREEN)
+    if h > 24 and phase % 2 < 1.2:  # leaf at the base
+        c.flat(P([(x + w, y - 1), (x + w + 6, y - 5), (x + w + 4, y)]), GREEN_L)
+        c.flat(P([(x - w, y - 1), (x - w - 5, y - 4), (x - w - 3, y)]), GREEN)
+
+
+def _quake_env(k: int, start: float, rise: float = 2.2, hold_until: float = 8.0, sink: float = 4.5) -> float:
+    """0..1.05 height envelope of a thorn: erupts from `start` (overshooting a touch), holds, sinks away by the strip's end."""
+    if k < start:
+        return 0.0
+    up = min(1.0, (k - start) / rise)
+    h = math.sin(up * math.pi / 2) * (1.0 + 0.06 * math.sin(up * math.pi))
+    if k > hold_until:
+        d = min(1.0, (k - hold_until) / sink)
+        h *= (1 - d * d)
+    return max(0.0, h)
+
+
+QUAKE_THORNS = None
+
+
+def _quake_layout() -> list:
+    """(dx, dy, max height, width, lean, start frame) for every thorn: a tall one in the middle, a ring of six, a ring of ten."""
+    rng = random.Random(930)
+    out = [(0, 0, 50, 7.0, 1.5, 1.2)]
+    for i in range(5):
+        a = math.tau * (i + 0.3) / 5
+        out.append((math.cos(a) * 20, math.sin(a) * 14, rng.uniform(32, 40), 5.4, math.cos(a) * 4, 1.8))
+    for i in range(8):
+        a = math.tau * (i + 0.6) / 8
+        out.append((math.cos(a) * 38, math.sin(a) * 27, rng.uniform(20, 28), 4.0, math.cos(a) * 6, 2.3))
+    return sorted(out, key=lambda t: t[1])
+
+
+def quake_burst_frame(k: int) -> Image.Image:
+    """The thorns (128 px, roots on row QUAKE_BASE, centred across): the ground heaves and cracks (frame 0-1), then a thicket of bark
+    thorns bursts up, middle first (impact on frame 2), clods fly, dust rolls out; they hold, sway, and sink away with leaves
+    sprouting on them as they go."""
+    n, m = 128, 64
+    c = Canvas(n)
+    rng = random.Random(940 + k)
+    base = QUAKE_BASE
+    for dx, dy, hmax, w, lean, start in _quake_layout():
+        e = _quake_env(k, start - 1.0 if start < 2 else start - 0.7)
+        sway = 0.8 * math.sin(k * 0.8 + dx) * (1 if 4 <= k <= 9 else 0)
+        _quake_thorn(c, m + dx, base + dy, hmax * e, w, lean + sway, k * 0.6)
+    # dust ring and clods
+    if 1 <= k <= 7:
+        rr = 14 + (k - 1) * 8
+        for i in range(26):
+            a = math.tau * i / 26 + 0.1 * k
+            if rng.random() < 0.8 - 0.09 * k:
+                x, y = m + math.cos(a) * rr, base + math.sin(a) * rr * 0.6
+                sdot(c, round(x), round(y - 1), CREAM if (i + k) % 3 == 0 else CREAM_D)
+                if rr > 24 and i % 2 == 0:
+                    sdot(c, round(x), round(y), CREAM_D)
+    for j in range(16 if 1 <= k <= 9 else 0):  # clods thrown up and falling
+        a = rng.uniform(-math.pi * 0.95, -math.pi * 0.05)
+        sp = rng.uniform(6, 12)
+        t = (k - 1) * 0.55
+        x = m + math.cos(a) * sp * t * 2.6
+        y = base - 4 + math.sin(a) * sp * t * 2.2 + 5.5 * t * t
+        if y < base + 6:
+            sdot(c, round(x), round(y), (BROWN, CHESTNUT, GREEN, WALNUT)[j % 4])
+            if j % 4 == 0:
+                sdot(c, round(x) + 1, round(y), BROWN)
+    if k >= 8:  # leaves and spores drifting up as the thorns sink
+        for j in range(8):
+            a = rng.uniform(0, math.tau)
+            r = rng.uniform(6, 38)
+            t = (k - 8) / 5
+            if rng.random() < 1 - t:
+                x, y = m + math.cos(a) * r, base - 10 - t * 26 - rng.uniform(0, 14) + math.sin(a) * r * 0.3
+                sdot(c, round(x), round(y), GREEN_L if j % 2 else GREEN)
+    return _clear_edge(c.img)
+
+
+def quake_scar_frame(k: int) -> Image.Image:
+    """The ground left behind (112 px, centred on the spot, same timing as quake_burst): upturned soil and cracks ringing the thorns
+    appear with the impact (frame 2), then the wound closes over, greens, and dithers away."""
+    n = 112
+    m = n // 2
+    c = Canvas(n)
+    if k < 1:
+        return c.img
+    rng = random.Random(950)  # one mark, the same every frame, so it stays put
+    appear = min(1.0, k / 3.0)
+    r0 = 40 * appear
+    pts = []
+    for i in range(16):
+        a = math.tau * i / 16
+        j = rng.uniform(0.75, 1.1)
+        pts.append((m + math.cos(a) * r0 * j, m + math.sin(a) * r0 * j * 0.78))
+    c.flat(P(pts), WALNUT_D)
+    c.flat(P([(m + (x - m) * 0.7, m + (y - m) * 0.7) for x, y in pts]), OUTLINE)
+    for i in range(9):  # cracks
+        a = rng.uniform(0, math.tau)
+        ln = rng.uniform(r0 * 0.8, r0 * 1.45)
+        mid = (m + math.cos(a + rng.uniform(-0.3, 0.3)) * ln * 0.55, m + math.sin(a) * ln * 0.45)
+        end = (m + math.cos(a) * ln, m + math.sin(a) * ln * 0.78)
+        c.flat(L([(m + math.cos(a) * 8, m + math.sin(a) * 6), mid, end], 1), GREEN_D if k > 6 else WALNUT)
+    for i in range(18):  # soil clumps round the edge, turning to grass
+        a = rng.uniform(0, math.tau)
+        r = r0 * rng.uniform(0.85, 1.2)
+        x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.78)
+        col = BROWN if k < 6 else GREEN if i % 2 else GREEN_L
+        sdot(c, x, y, col)
+        sdot(c, x + 1, y, col)
+        if k >= 6 and i % 3 == 0:
+            sdot(c, x, y - 1, GREEN_L)
+    fade = max(0.0, (k - 8) / (QUAKE_FRAMES - 8))
+    px = c.img.load()
+    for y in range(n):
+        for x in range(n):
+            if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < fade:
+                px[x, y] = (0, 0, 0, 0)
+    return _clear_edge(c.img, 2)
+
+
+# --- Dark Pool: a hungry pool of shadow on the floor, tendrils lashing up at whoever stands in it -------
+
+POOL_R = 56  # art px (storm_radius 84 / SPRITE_SCALE 1.5): SpecialFx.POOL_ART_RADIUS
+POOL_SIZE = 128
+POOL_FORM_FRAMES = 10
+POOL_LOOP_FRAMES = 12
+POOL_END_FRAMES = 10
+POOL_LASH_FRAMES = 10
+POOL_LASH_BASE = 52  # pool_lash: the row the tendrils are rooted on, in a 64 px frame
+
+
+def pool_frame(radius: float, k: float, fade: float = 0.0, eyes: int = 1) -> Image.Image:
+    """The pool (128 px, centred): a ragged disc of black-violet with a lilac rim light, a void that deepens towards the middle,
+    three dithered spiral arms turning with k (0..1; three arms, so a third of a turn loops), a ripple ring drifting out, and a pair of
+    grinning eyes looking up out of it. `fade` dithers it away."""
+    n = POOL_SIZE
+    m = n // 2
+    c = Canvas(n)
+    if radius < 2:
+        return c.img
+    rng = random.Random(960)
+    pts = []
+    segs = 28
+    for i in range(segs):
+        a = math.tau * i / segs
+        j = 1.0 + 0.02 * math.sin(a * 5 + math.tau * k * 2) + 0.012 * math.sin(a * 3 - math.tau * k)
+        pts.append((m + math.cos(a) * radius * j, m + math.sin(a) * radius * j))
+    c.flat(P(pts), VIOLET_D)
+    for y in range(n):  # the void: darker towards the middle (dithered bands)
+        for x in range(n):
+            d = math.hypot(x - m, y - m) / max(radius, 1)
+            if d < 0.86 and BAYER[y % 4][x % 4] / 16 < (0.86 - d) * 1.5 - 0.1:
+                c.dot(x, y, OUTLINE)
+    for arm in range(3):  # spiral arms
+        for s in range(46):
+            t = s / 45
+            a = math.tau * (arm / 3 + k / 3) + t * 3.2
+            r = radius * (0.15 + 0.78 * t)
+            x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r)
+            if t > 0.05:
+                c.dot(x, y, VIOLET_L if t > 0.78 else VIOLET)
+                if t > 0.4 and s % 2 == 0:
+                    c.dot(x + 1, y, VIOLET_D)
+    c.flat(lambda d, f: d.ellipse((m - radius * 0.93, m - radius * 0.93, m + radius * 0.93, m + radius * 0.93), outline=f, width=1), VIOLET)
+    top = [(m + math.cos(a) * radius * 0.97, m + math.sin(a) * radius * 0.97) for a in (math.pi + 0.35 + 0.1 * i for i in range(20))]
+    c.flat(L([(round(x), round(y)) for x, y in top], 1), VIOLET_L)  # lit rim, upper left
+    if radius > 20:  # a ripple ring drifting out, dashed
+        rr = radius * (0.35 + 0.55 * ((k * 2) % 1.0))
+        for i in range(36):
+            if (i + round(k * 12)) % 3 == 0:
+                a = math.tau * i / 36
+                sdot2(c, round(m + math.cos(a) * rr), round(m + math.sin(a) * rr), VIOLET_L if rr > radius * 0.7 else VIOLET)
+    if eyes and radius >= 18:
+        e = max(2, round(radius * 0.09))
+        for sx in (-1, 1):
+            ex, ey = round(m + sx * radius * 0.17), m - 1
+            c.flat(R((ex - e // 2 - 1, ey - 1, ex + e // 2, ey + 1)), PINK_L)
+            c.dot(ex, ey - 1, WHITE)
+        c.flat(L([(m - round(radius * 0.2), m + 7), (m - 3, m + 9), (m + 3, m + 9), (m + round(radius * 0.2), m + 7)], 1), PINK_L)
+    if fade > 0:
+        px = c.img.load()
+        for y in range(n):
+            for x in range(n):
+                if px[x, y][3] and BAYER[y % 4][x % 4] / 16 < fade:
+                    px[x, y] = (0, 0, 0, 0)
+    return _clear_edge(outline(c.img), 2)
+
+
+def pool_strip_frame(kind: str, j: int) -> Image.Image:
+    if kind == "form":
+        u = (j + 1) / POOL_FORM_FRAMES
+        e = math.sin(u * math.pi / 2)  # eases out; the last frame is the loop's full size
+        r = POOL_R * (0.12 + 0.88 * e) * (1.0 + 0.07 * math.sin(u * math.pi))
+        img = pool_frame(min(r, POOL_R * 1.02), 0.0, fade=max(0.0, 0.5 - u * 0.7), eyes=1 if u > 0.6 else 0)
+        return img
+    if kind == "end":
+        u = j / POOL_END_FRAMES
+        r = POOL_R * (1 - 0.7 * u * u)
+        return pool_frame(r, (j * 0.09) % 1.0, fade=min(0.95, u * u * 1.1), eyes=1 if u < 0.5 else 0)
+    return pool_frame(POOL_R, j / POOL_LOOP_FRAMES, eyes=0 if j == 7 else 1)
+
+
+def pool_lash_frame(k: int) -> Image.Image:
+    """Shadow tendrils lashing up from the floor (64 px, rooted on row POOL_LASH_BASE): three curling arms of black-violet rise,
+    their tips flaring into claws, hold a moment and sink back, shedding wisps."""
+    n = 64
+    c = Canvas(n)
+    rng = random.Random(970)
+    base = POOL_LASH_BASE
+    u = k / (POOL_LASH_FRAMES - 1)
+    h = math.sin(min(1.0, u / 0.45) * math.pi / 2) if u < 0.55 else math.cos((u - 0.55) / 0.45 * math.pi / 2) ** 1.5
+    for i, (dx, hm, curl) in enumerate(((-9, 30, -1), (0, 40, 1), (9, 26, -1))):
+        hh = hm * h
+        if hh < 2:
+            continue
+        pts = []
+        for j in range(9):
+            t = j / 8
+            pts.append((32 + dx + curl * 7 * math.sin(t * 3.0 + u * 2 + i) * t, base - hh * t))
+        pts = [(round(x), round(y)) for x, y in pts]
+        w0 = max(2, round(4 * (0.5 + 0.5 * h)))
+        c.flat(L(pts, w0), VIOLET_D)
+        c.flat(L(pts[2:], max(1, w0 - 2)), VIOLET)
+        c.flat(L([(x - 1, y) for x, y in pts[1:6]], 1), VIOLET_L)
+        tx, ty = pts[-1]
+        c.flat(P([(tx - 3, ty + 2), (tx + curl * 3, ty - 4), (tx + 3, ty + 2)]), VIOLET)  # claw tip
+        c.dot(tx + curl * 3, ty - 4, PINK_L)
+    c.flat(E((32 - 14 * (0.4 + 0.6 * h), base - 2, 32 + 14 * (0.4 + 0.6 * h), base + 3)), VIOLET_D)  # the opening it comes out of
+    for j in range(6):  # wisps
+        if rng.random() < 0.5 + 0.5 * h:
+            x = 32 + rng.randint(-16, 16)
+            y = base - rng.randint(4, 40) * (0.4 + 0.6 * u)
+            sdot(c, x, round(y), VIOLET_L if j % 2 else VIOLET)
+    return _clear_edge(outline(c.img), 2)
+
+
+ICONS["thorn_quake"] = lambda c: (c.flat(E((0, 8, 12, 12)), GREEN_D), c.flat(E((1, 9, 11, 11)), BROWN),
+                                  c.flat(P([(5, 9), (6, 0), (8, 9)]), BROWN), c.flat(L([(6, 1), (6, 8)], 1), WALNUT_L),
+                                  c.flat(P([(1, 9), (2, 3), (4, 9)]), CHESTNUT), c.flat(P([(8, 9), (10, 4), (11, 9)]), WALNUT),
+                                  c.dot(6, 0, CREAM), c.dot(2, 3, CREAM), c.dot(10, 4, CREAM), c.flat(L([(0, 10), (12, 10)], 1), GREEN_L))
+ICONS["dark_pool"] = lambda c: (c.flat(E((0, 2, 12, 11)), VIOLET_D), c.flat(E((2, 4, 10, 9)), OUTLINE),
+                                c.flat(L([(1, 5), (3, 3), (7, 2)], 1), VIOLET_L), c.flat(L([(3, 8), (6, 6), (8, 7)], 1), VIOLET),
+                                c.flat(R((3, 5, 4, 6)), PINK_L), c.flat(R((7, 5, 8, 6)), PINK_L), c.flat(L([(4, 8), (7, 8)], 1), PINK_L))
+FX.update({
+    "quake_mark": lambda: strip([quake_mark_frame(k) for k in range(QUAKE_MARK_FRAMES)]),
+    "quake_burst": lambda: strip([quake_burst_frame(k) for k in range(QUAKE_FRAMES)]),
+    "quake_scar": lambda: strip([quake_scar_frame(k) for k in range(QUAKE_FRAMES)]),
+    "pool_form": lambda: strip([pool_strip_frame("form", j) for j in range(POOL_FORM_FRAMES)]),
+    "pool_loop": lambda: strip([pool_strip_frame("loop", j) for j in range(POOL_LOOP_FRAMES)]),
+    "pool_end": lambda: strip([pool_strip_frame("end", j) for j in range(POOL_END_FRAMES)]),
+    "pool_lash": lambda: strip([pool_lash_frame(k) for k in range(POOL_LASH_FRAMES)]),
+})
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
