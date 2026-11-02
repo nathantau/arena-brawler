@@ -32,16 +32,21 @@ const HELD_BEAM_SEGMENT: float = 10.0
 const HELD_BEAM_LAYERS: Array = [[UiStyle.C_RED, 1.0], [UiStyle.C_ORANGE, 0.72], [UiStyle.C_YELLOW, 0.45],
 	[UiStyle.C_WHITE, 0.2]]
 const HELD_BEAM_FIRE: Array[Color] = [UiStyle.C_RED, UiStyle.C_ORANGE, UiStyle.C_YELLOW]
-## Lightning beams (WeaponData.lightning): a jagged bolt re-rolled LIGHTNING_HZ times a second, kinks every LIGHTNING_STEP px,
-## orange / yellow / white layers (art-pixel widths), forks off it, a flash at the hand, sparks where it lands.
-const LIGHTNING_STEP: float = 16.0
-const LIGHTNING_JITTER: float = 9.0
-const LIGHTNING_HZ: float = 28.0
-const LIGHTNING_FORKS: int = 2
-const LIGHTNING_SPARKS: int = 3
-const LIGHTNING_SPARK_SPEED: float = 170.0
+## Lightning beams (WeaponData.lightning), all drawn as art-pixel rects: a white-hot jagged core (yellow edge) that re-rolls
+## LIGHTNING_HZ times a second (seeded by the beam's age, so a frame is stable), two thinner arcs braiding round it, forks that
+## retract, a dithered cyan / blue glow band, a crackling orb at the hand and a splash + scorch ring where it lands. It grows out
+## of the hand over LIGHTNING_GROW and fizzles out over LIGHTNING_END (the hand's start-up flash lasts LIGHTNING_CHARGE).
+const LIGHTNING_STEP: float = 14.0
+const LIGHTNING_JITTER: float = 8.0
+const LIGHTNING_HZ: float = 24.0
+const LIGHTNING_GROW: float = 0.1
+const LIGHTNING_END: float = 0.22
+const LIGHTNING_CHARGE: float = 0.18
+const LIGHTNING_SPARK_SPEED: float = 190.0
 const LIGHTNING_SPARK_SIZE: float = 4.0
-const LIGHTNING_SPARK_LIFE: float = 0.22
+const LIGHTNING_SPARK_LIFE: float = 0.26
+const LIGHTNING_BLUE: Color = Color8(60, 111, 209)
+const LIGHTNING_CYAN: Color = UiStyle.C_TEAL_L
 ## Flame wisps peeling off a held beam's edges per frame, rising and cooling (yellow, orange, red) as they shrink.
 const WISP_POOL: int = 128
 const WISPS_PER_FRAME: int = 3
@@ -120,6 +125,9 @@ class HeldBeam:
 	var weapon: WeaponData
 	var length: float = 0.0
 	var life: float = 0.0
+	var age: float = 0.0  ## seconds since it lit (lightning: drives growth, jitter seeds)
+	var ending: bool = false  ## lightning only: no longer renewed, fizzling out
+	var end_t: float = 0.0
 
 
 class Beam:
@@ -306,9 +314,16 @@ func hold_beam(shooter: Player, w: WeaponData, length: float) -> void:
 	b.weapon = w
 	b.length = length
 	b.life = w.fire_interval * 2.0
-	if w.lightning:  # sparks where it lands
-		var at: Vector2 = _held_ends(b)[1]
-		burst(at, UiStyle.C_YELLOW, LIGHTNING_SPARKS, LIGHTNING_SPARK_SPEED, LIGHTNING_SPARK_SIZE, LIGHTNING_SPARK_LIFE)
+	if w.lightning:
+		if b.ending:  # renewed mid-fizzle: pick up where it is
+			b.ending = false
+			b.end_t = 0.0
+		elif b.age == 0.0:  # just lit: the screen feels the zap
+			var arena := get_parent() as Arena
+			if arena != null and arena.local_player == shooter:
+				arena.add_shake(0.08)
+		var at: Vector2 = _held_ends(b)[1]  # a pop of sparks at the end every tick
+		burst(at, LIGHTNING_CYAN, 2, LIGHTNING_SPARK_SPEED, LIGHTNING_SPARK_SIZE, LIGHTNING_SPARK_LIFE)
 		burst(at, UiStyle.C_WHITE, 1, LIGHTNING_SPARK_SPEED * 0.6, LIGHTNING_SPARK_SIZE, LIGHTNING_SPARK_LIFE)
 
 
@@ -366,10 +381,22 @@ func _process(delta: float) -> void:
 	for id: int in _held.keys():
 		var h: HeldBeam = _held[id]
 		h.life -= delta
-		if h.life <= 0.0 or not is_instance_valid(h.shooter) or h.shooter.dead:
+		h.age += delta
+		if not is_instance_valid(h.shooter) or h.shooter.dead:
 			_held.erase(id)
 			continue
-		if h.weapon.lightning:  # lightning has its own sparks (hold_beam) and no flames
+		if h.weapon.lightning:
+			_lightning_sparks(h, delta)
+			if h.life <= 0.0 and not h.ending:
+				h.ending = true
+				h.end_t = 0.0
+			if h.ending:
+				h.end_t += delta
+				if h.end_t >= LIGHTNING_END:
+					_held.erase(id)
+			continue
+		if h.life <= 0.0:
+			_held.erase(id)
 			continue
 		var ends: PackedVector2Array = _held_ends(h)
 		var dir: Vector2 = h.shooter.facing
@@ -497,38 +524,207 @@ func _draw_held_beams(px: float) -> void:
 			at + Vector2(0, r)]), UiStyle.C_YELLOW if f > 0.66 else UiStyle.C_ORANGE if f > 0.33 else UiStyle.C_RED)
 
 
-## One jagged bolt along the beam: the same kinks for a frame at LIGHTNING_HZ, so it crackles rather than shimmers.
+## Per-frame sparks off a lightning beam: scattering from where it lands, popping off the hand, and trailing along it as it fizzles.
+func _lightning_sparks(h: HeldBeam, delta: float) -> void:
+	var ends: PackedVector2Array = _held_ends(h)
+	var dir: Vector2 = h.shooter.facing
+	var cols: Array[Color] = [UiStyle.C_WHITE, UiStyle.C_YELLOW, LIGHTNING_CYAN]
+	if h.ending:
+		for i: int in 2:
+			burst(ends[0].lerp(ends[1], _rng.randf()), cols.pick_random(), 1, 150.0, 3.0, 0.3)
+		return
+	if _lightning_hit(h) and _rng.randf() < 60.0 * delta * 0.6:
+		burst(ends[1], cols.pick_random(), 1, LIGHTNING_SPARK_SPEED, LIGHTNING_SPARK_SIZE, LIGHTNING_SPARK_LIFE, -dir, 3.2)
+	if _rng.randf() < 60.0 * delta * 0.25:
+		burst(ends[0], cols.pick_random(), 1, 110.0, 3.0, 0.2)
+
+
+func _lightning_hit(h: HeldBeam) -> bool:
+	return h.length < h.weapon.projectile_range - 2.0
+
+
+## The enemy the beam is on, if its end is on one (the arcs crawl over them).
+func _lightning_target(h: HeldBeam, at: Vector2) -> Player:
+	var arena := get_parent() as Arena
+	if arena == null:
+		return null
+	for p: Player in arena.players:
+		if p != h.shooter and not p.dead and (p.global_position + p.visual_offset).distance_to(at) < Constants.PLAYER_RADIUS + 10.0:
+			return p
+	return null
+
+
+## Rects of `size` art px along a -> b (one per art px of length), snapped to the art-pixel grid.
+func _pline(a: Vector2, b: Vector2, color: Color, size: int, px: float) -> void:
+	var n: int = maxi(1, ceili(a.distance_to(b) / px))
+	var half: float = floorf(size * 0.5) * px
+	var sz := Vector2(size * px, size * px)
+	for i: int in n + 1:
+		var at: Vector2 = a.lerp(b, float(i) / n)
+		draw_rect(Rect2((at / px).floor() * px - Vector2(half, half), sz), color)
+
+
+func _ppoly(pts: PackedVector2Array, color: Color, size: int, px: float, from_i: int = 0) -> void:
+	for i: int in range(from_i, pts.size() - 1):
+		_pline(pts[i], pts[i + 1], color, size, px)
+
+
+## A filled pixel disc (r in art px); `dither` keeps only a checkerboard of it.
+func _pdisc(c: Vector2, r: float, color: Color, px: float, dither: bool = false) -> void:
+	var o: Vector2 = (c / px).floor()
+	var ri: int = ceili(r)
+	for dy: int in range(-ri, ri + 1):
+		for dx: int in range(-ri, ri + 1):
+			if dx * dx + dy * dy <= r * r and (not dither or (dx + dy) & 1 == 0):
+				draw_rect(Rect2((o + Vector2(dx, dy)) * px, Vector2(px, px)), color)
+
+
+## A one-art-pixel ring (a floor shockwave), flattened vertically like the top-down floor.
+func _pring(c: Vector2, r: float, color: Color, px: float, dither: bool) -> void:
+	var o: Vector2 = (c / px).floor()
+	var ri: int = ceili(r)
+	for dy: int in range(-ri, ri + 1):
+		for dx: int in range(-ri, ri + 1):
+			var d: float = Vector2(dx, dy * 1.5).length()
+			if absf(d - r) < 0.75 and (not dither or (dx + dy) & 1 == 0):
+				draw_rect(Rect2((o + Vector2(dx, dy)) * px, Vector2(px, px)), color)
+
+
+## Short crackling spikes round a point (re-rolled per `rng`), a white tip on a cyan stem.
+func _pspikes(c: Vector2, count: int, reach_min: float, reach_max: float, rng: RandomNumberGenerator, px: float,
+		base: float = 0.0, spread: float = TAU) -> void:
+	for i: int in count:
+		var a: float = base + rng.randf_range(-spread, spread) * 0.5
+		var len_px: float = rng.randf_range(reach_min, reach_max)
+		var mid: Vector2 = c + Vector2.RIGHT.rotated(a + rng.randf_range(-0.5, 0.5)) * len_px * 0.5
+		var tip: Vector2 = c + Vector2.RIGHT.rotated(a) * len_px
+		_pline(c, mid, LIGHTNING_CYAN, 1, px)
+		_pline(mid, tip, UiStyle.C_WHITE if rng.randf() < 0.6 else UiStyle.C_YELLOW, 1, px)
+
+
+## Lightning beam, drawn from the hand every frame along the shooter's current aim (so it follows aim, mirroring and
+## interpolation) out to the last tick's raycast length (so it stops exactly where the damage does).
 func _draw_lightning_beam(h: HeldBeam, ends: PackedVector2Array, px: float) -> void:
-	var tick: int = int(Time.get_ticks_msec() / 1000.0 * LIGHTNING_HZ)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([h.shooter.player_id, tick])
 	var dir: Vector2 = h.shooter.facing
 	var side: Vector2 = dir.orthogonal()
-	var snap := Vector2(px, px)
-	var n: int = maxi(2, ceili(h.length / LIGHTNING_STEP))
-	var pts := PackedVector2Array([ends[0]])
+	var grow: float = clampf(h.age / LIGHTNING_GROW, 0.0, 1.0)
+	var out_k: float = clampf(h.end_t / LIGHTNING_END, 0.0, 1.0) if h.ending else 0.0
+	var reach: float = h.length * (1.0 - pow(1.0 - grow, 3.0))
+	var hand: Vector2 = ends[0]
+	var tip: Vector2 = hand + dir * reach
+	var life_k: float = 1.0 - out_k  # thins to nothing while fizzling
+	var tick: int = int(h.age * LIGHTNING_HZ)
+	var frac: float = h.age * LIGHTNING_HZ - tick  # 0 -> 1 within a jitter tick
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([h.shooter.player_id, tick])
+	var n: int = maxi(2, ceili(reach / LIGHTNING_STEP))
+	var base: PackedVector2Array = PackedVector2Array()
+	var pts := PackedVector2Array([hand])
 	for i: int in range(1, n):
-		var taper: float = sin(PI * float(i) / n)
-		pts.append((ends[0] + dir * (h.length * i / n) + side * rng.randf_range(-1.0, 1.0) * LIGHTNING_JITTER * taper).snapped(snap))
-	pts.append(ends[1].snapped(snap))
-	var layers: Array = [[UiStyle.C_ORANGE, 3.0], [UiStyle.C_YELLOW, 2.0], [UiStyle.C_WHITE, 1.0]]
-	for layer: Array in layers:
-		draw_polyline(pts, layer[0], px * layer[1])
-	for f: int in LIGHTNING_FORKS:  # short branches leaping off it
-		var root: Vector2 = pts[rng.randi_range(1, maxi(1, pts.size() - 2))]
-		var a: float = dir.angle() + rng.randf_range(0.4, 0.9) * (1.0 if rng.randf() < 0.5 else -1.0)
-		var fork := PackedVector2Array([root])
+		var taper: float = pow(sin(PI * float(i) / n), 0.7)
+		var b: Vector2 = hand + dir * (reach * i / n)
+		base.append(b)
+		pts.append(b + side * rng.randf_range(-1.0, 1.0) * LIGHTNING_JITTER * taper)
+	pts.append(tip)
+	var start_i: int = int(out_k * (pts.size() - 1))  # the fizzle eats the beam from the hand outwards
+	if out_k > 0.0 and (int(h.end_t * 40.0) & 1) == 1 and out_k < 0.85:
+		start_i = mini(pts.size() - 2, start_i + 1)  # stutter
+	# 1. glow band: dithered blue, then cyan nearer the core, widening as it grows
+	var glow_r: int = int(round(6.0 * life_k * (1.0 + 0.12 * sin(h.age * 50.0))))
+	var samples: PackedVector2Array = PackedVector2Array()
+	for i: int in range(start_i, pts.size() - 1):
+		var a: Vector2 = pts[i]
+		var steps: int = maxi(1, ceili(a.distance_to(pts[i + 1]) / px))
+		for k: int in steps:
+			samples.append(a.lerp(pts[i + 1], float(k) / steps))
+	for sp: Vector2 in samples:
+		for k: int in range(-glow_r, glow_r + 1):
+			var cell: Vector2 = ((sp + side * k * px) / px).floor()
+			var checker: bool = (int(cell.x) + int(cell.y)) & 1 == 0
+			if absi(k) <= 2:
+				if checker or absi(k) <= 1:
+					draw_rect(Rect2(cell * px, Vector2(px, px)), LIGHTNING_CYAN if absi(k) <= 1 else LIGHTNING_BLUE)
+			elif checker and (absi(k) < glow_r or (int(cell.x) & 1) == 0):
+				draw_rect(Rect2(cell * px, Vector2(px, px)), LIGHTNING_BLUE)
+	# 2. two thinner arcs braiding round the core, a half tick out of step with it
+	var rng2 := RandomNumberGenerator.new()
+	rng2.seed = hash([h.shooter.player_id, int(h.age * LIGHTNING_HZ + 0.5), 7])
+	for arc: int in 2:
+		var ap := PackedVector2Array([hand])
+		var ph: float = h.age * 38.0 + arc * PI
+		for i: int in base.size():
+			var taper: float = pow(sin(PI * float(i + 1) / n), 0.7)
+			var off: float = (sin(ph + i * 1.15) * 8.0 + rng2.randf_range(-2.5, 2.5)) * taper * life_k
+			ap.append(base[i] + side * off)
+		ap.append(tip)
+		_ppoly(ap, LIGHTNING_CYAN if arc == 0 else UiStyle.C_WHITE, 2 if arc == 0 else 1, px, mini(start_i, ap.size() - 2))
+	# 3. forks that branch off and fade (retracting) over the tick
+	if out_k < 0.5 and pts.size() > 4:
+		var forks: int = rng.randi_range(0, 2)
+		for f: int in forks:
+			var ri: int = rng.randi_range(2, pts.size() - 2)
+			var a: float = dir.angle() + rng.randf_range(0.45, 1.0) * (1.0 if rng.randf() < 0.5 else -1.0)
+			var segs: int = rng.randi_range(3, 6)
+			var shown: int = maxi(1, ceili(segs * (1.0 - 0.7 * frac)))
+			var fk := PackedVector2Array([pts[ri]])
+			for k: int in shown:
+				a += rng.randf_range(-0.55, 0.55)
+				fk.append(fk[fk.size() - 1] + Vector2.RIGHT.rotated(a) * 9.0)
+			_ppoly(fk, UiStyle.C_YELLOW, 1, px)
+			_pline(fk[fk.size() - 2], fk[fk.size() - 1], UiStyle.C_WHITE, 1, px)
+	# 4. the core: a yellow edge round a white-hot line
+	var wide: int = 3 if life_k > 0.4 else 1
+	_ppoly(pts, UiStyle.C_YELLOW, wide, px, start_i)
+	_ppoly(pts, UiStyle.C_WHITE, 2 if (tick & 3) != 0 else 1, px, start_i)
+	# 5. the end of the beam
+	if reach >= h.length * 0.98 and out_k < 0.9:
+		_lightning_impact(h, ends[1], tip, dir, rng, frac, px, life_k)
+	elif grow < 1.0:  # still growing: a bright head
+		_pdisc(tip, 2.0, UiStyle.C_WHITE, px)
+		_pdisc(tip, 3.5, LIGHTNING_CYAN, px, true)
+	# 6. the hand: start-up flash, then a crackling orb
+	_lightning_orb(h, hand, rng, px, life_k)
+
+
+func _lightning_orb(h: HeldBeam, hand: Vector2, rng: RandomNumberGenerator, px: float, life_k: float) -> void:
+	var charge: float = clampf(1.0 - h.age / LIGHTNING_CHARGE, 0.0, 1.0)  # 1 -> 0 over the start-up
+	var r: float = (4.0 + rng.randf_range(0.0, 1.2) + charge * 4.0) * (0.4 + 0.6 * life_k)
+	_pdisc(hand, r + 1.5, LIGHTNING_BLUE, px, true)
+	_pdisc(hand, r + 0.5, LIGHTNING_CYAN, px)
+	_pdisc(hand, r - 0.8, UiStyle.C_WHITE if charge > 0.0 or rng.randf() < 0.7 else UiStyle.C_YELLOW, px)
+	_pspikes(hand, 4 + int(charge * 4.0), 7.0 + charge * 10.0, 12.0 + charge * 14.0, rng, px)
+	if charge > 0.0:  # crackling ring expanding off the flash
+		_pring(hand, 4.0 + (1.0 - charge) * 9.0, UiStyle.C_WHITE, px, false)
+
+
+## Splash where the beam lands (rays, bright core, scorch ring on the floor) and arcs crawling over an enemy it's on.
+func _lightning_impact(h: HeldBeam, at: Vector2, tip: Vector2, dir: Vector2, rng: RandomNumberGenerator,
+		frac: float, px: float, life_k: float) -> void:
+	if not _lightning_hit(h):
+		_pdisc(tip, 2.5 * life_k, LIGHTNING_CYAN, px, true)  # fires into open air: a fading tip
+		_pdisc(tip, 1.5 * life_k, UiStyle.C_WHITE, px)
+		return
+	var scorch: float = 6.0 + 2.0 * life_k
+	_pdisc(tip, scorch, UiStyle.C_OUTLINE, px, true)  # scorch mark, dithered dark
+	_pring(tip, 5.0 + frac * 8.0, LIGHTNING_CYAN if frac < 0.6 else LIGHTNING_BLUE, px, frac > 0.3)  # shockwave ring
+	_pspikes(tip, 9, 12.0, 28.0, rng, px, (-dir).angle(), 3.8)  # splash scattering back off the hit
+	_pdisc(tip, (4.0 + rng.randf_range(0.0, 1.5)) * life_k, UiStyle.C_YELLOW, px)
+	_pdisc(tip, (2.4 + rng.randf_range(0.0, 1.0)) * life_k, UiStyle.C_WHITE, px)
+	var target: Player = _lightning_target(h, at)
+	if target != null:  # arcs crawling over them
+		var c: Vector2 = target.global_position + target.visual_offset
 		for k: int in 3:
-			var last: Vector2 = fork[fork.size() - 1]
-			fork.append((last + Vector2.RIGHT.rotated(a + rng.randf_range(-0.5, 0.5)) * LIGHTNING_STEP * 0.9).snapped(snap))
-		draw_polyline(fork, UiStyle.C_YELLOW, px * 1.5)
-		draw_polyline(fork, UiStyle.C_WHITE, px)
-	var flare: float = 1.0 + 0.3 * sin(Time.get_ticks_msec() / 1000.0 * 40.0)  # a flash at the hand, and where it lands
-	draw_circle(ends[0], px * 5.0 * flare, UiStyle.C_ORANGE)
-	draw_circle(ends[0], px * 3.5 * flare, UiStyle.C_YELLOW)
-	draw_circle(ends[0], px * 1.8 * flare, UiStyle.C_WHITE)
-	draw_circle(ends[1], px * 3.0 * flare, UiStyle.C_YELLOW)
-	draw_circle(ends[1], px * 1.5 * flare, UiStyle.C_WHITE)
+			var a: float = rng.randf() * TAU
+			var q := PackedVector2Array([tip])
+			for s: int in 4:
+				a += rng.randf_range(-0.9, 0.9)
+				var nxt: Vector2 = q[q.size() - 1] + Vector2.RIGHT.rotated(a) * 8.0
+				var away: Vector2 = nxt - c
+				if away.length() > 22.0:  # kept on the body
+					nxt = c + away.normalized() * 22.0
+				q.append(nxt)
+			_ppoly(q, LIGHTNING_CYAN, 2, px)
+			_ppoly(q, UiStyle.C_WHITE, 1, px)
 
 
 func _draw_markers(px: float) -> void:
