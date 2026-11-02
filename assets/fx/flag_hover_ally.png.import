@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://udo81rfxlcw8"
-path="res://.godot/imported/flag_carry_ally.png-86ab9084cb802cfe1af06f943fce7c29.ctex"
+uid="uid://bdtdgaquedp42"
+path="res://.godot/imported/flag_hover_ally.png-d91fb2de40420065b9fb37591cbc10f4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/fx/flag_carry_ally.png"
-dest_files=["res://.godot/imported/flag_carry_ally.png-86ab9084cb802cfe1af06f943fce7c29.ctex"]
+source_file="res://assets/fx/flag_hover_ally.png"
+dest_files=["res://.godot/imported/flag_hover_ally.png-d91fb2de40420065b9fb37591cbc10f4.ctex"]
 
 [params]
 

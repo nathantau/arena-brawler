@@ -9652,7 +9652,7 @@ FLAG_PAD_FRAMES = 6
 FLAG_PAD_CELL = 64
 FLAG_BURST_FRAMES = 12
 FLAG_BURST_CELL = 64  # designed at this size, delivered x2 (see up2)
-FLAG_CARRY_CELL = 80
+FLAG_HOVER_CELL = 32
 FLAG_RETURN_CELL = 96
 
 
@@ -9766,37 +9766,51 @@ def flag_burst_frame(team: str, k: int) -> Image.Image:
     return up2(c.img, keep_outline=False)
 
 
-def flag_carry_frame(team: str, k: int) -> Image.Image:
-    """The flag as it rides a fighter's back (designed at 80 px, then x2): a thin pole rising far above the head with a
-    gold finial, the 6-frame cloth waving at the very top, streaming to the right (the game mirrors it away from where
-    he runs). 1 px dark outline all round so it reads on any floor."""
+def flag_hover_frame(team: str, k: int) -> Image.Image:
+    """The carried flag, hovering over the carrier's head (designed at 32 px, then x2): a compact banner hung from a short
+    steel rail with gold end caps, no pole. The cloth waves over the 6 frames like the planted flag. 1 px dark outline."""
     cloth, shade, light = FLAG_COLORS[team]
-    c = Canvas(FLAG_CARRY_CELL)
-    px = 20
-    c.part(E((px - 5, 72, px + 6, 77)), STEEL_D)  # a little foot where the pole meets his back
-    c.part(R((px - 1, 12, px, 74)), STEEL)  # pole, 2 px
-    c.part(E((px - 3, 7, px + 2, 12)), YELLOW)  # finial
+    c = Canvas(FLAG_HOVER_CELL)
+    c.part(R((6, 5, 26, 6)), STEEL)  # rail
+    c.part(E((4, 3, 8, 8)), YELLOW)  # end caps
+    c.part(E((24, 3, 28, 8)), YELLOW)
     phase0 = math.tau * k / FLAG_FRAMES
-    x0, x1, top0, height = px + 1, px + 25, 13, 15
+    x0, x1, top0, height = 8, 25, 7, 11
     for x in range(x0, x1 + 1):
         u = (x - x0) / (x1 - x0)
-        ph = phase0 - x * 0.45
-        dy = round(math.sin(ph) * (0.5 + 2.6 * u))
+        ph = phase0 - x * 0.5
+        dy = round(math.sin(ph) * (0.3 + 1.8 * u))
         slope = math.cos(ph)
         top, bottom = top0 + dy, top0 + height + dy - (1 if x > x1 - 3 else 0)
         mid = (top + bottom) / 2
         for y in range(top, bottom + 1):
-            if x > x1 - 7 and abs(y - mid) < (x - (x1 - 7)) * 0.55:
+            if x > x1 - 6 and abs(y - mid) < (x - (x1 - 6)) * 0.55:
                 continue  # swallow-tail
             col = light if y <= top else cloth
             if y >= bottom - 1 or slope < -0.35:
                 col = shade
             c.dot(x, y, col)
-        if x0 + 4 <= x <= x0 + 11:  # chevron emblem
-            ey = round(mid) - 2 + abs(x - (x0 + 8))
+        if x0 + 3 <= x <= x0 + 9:  # chevron emblem
+            ey = round(mid) - 2 + abs(x - (x0 + 6))
             c.dot(x, ey, WHITE)
             c.dot(x, ey + 1, WHITE)
     return up2(c.img)
+
+
+def flag_hover_glow() -> Image.Image:
+    """The soft glow under the hovering flag (opaque white; the game tints it by team and fades it): a Bayer-dithered ellipse, 2 steps."""
+    w, h = 48, 20
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    bayer = ((0, 2), (3, 1))
+    for y in range(h):
+        for x in range(w):
+            d = ((x - w / 2 + 0.5) / (w / 2 - 2)) ** 2 + ((y - h / 2 + 0.5) / (h / 2 - 2)) ** 2
+            if d >= 1:
+                continue
+            level = 3 if d < 0.35 else 2 if d < 0.7 else 1
+            if level > bayer[y % 2][x % 2]:
+                img.putpixel((x, y), (*WHITE, 255))
+    return img
 
 
 def flag_return_frame(k: int) -> Image.Image:
@@ -9804,6 +9818,7 @@ def flag_return_frame(k: int) -> Image.Image:
     return poof_frame(FLAG_RETURN_CELL, min(POOF_FRAMES - 1, k * 2), WHITE)
 
 
+FX_IMAGES["flag_hover_glow"] = flag_hover_glow
 FX.update({
     "flag_ally": lambda: strip([flag_frame("ally", k) for k in range(FLAG_FRAMES)]),
     "flag_enemy": lambda: strip([flag_frame("enemy", k) for k in range(FLAG_FRAMES)]),
@@ -9811,8 +9826,8 @@ FX.update({
     "flag_pad_enemy": lambda: strip([flag_pad_frame("enemy", k) for k in range(FLAG_PAD_FRAMES)]),
     "flag_capture_ally": lambda: strip([flag_burst_frame("ally", k) for k in range(FLAG_BURST_FRAMES)]),
     "flag_capture_enemy": lambda: strip([flag_burst_frame("enemy", k) for k in range(FLAG_BURST_FRAMES)]),
-    "flag_carry_ally": lambda: strip([flag_carry_frame("ally", k) for k in range(FLAG_FRAMES)]),
-    "flag_carry_enemy": lambda: strip([flag_carry_frame("enemy", k) for k in range(FLAG_FRAMES)]),
+    "flag_hover_ally": lambda: strip([flag_hover_frame("ally", k) for k in range(FLAG_FRAMES)]),
+    "flag_hover_enemy": lambda: strip([flag_hover_frame("enemy", k) for k in range(FLAG_FRAMES)]),
     "flag_return": lambda: strip([flag_return_frame(k) for k in range(POOF_FRAMES // 2)]),
 })
 

@@ -599,7 +599,13 @@ func test_carried_flag_rides_the_carrier_and_hides_when_he_dies() -> void:
 	st.flag_carrier[A] = 3
 	await wait_process_frames(2)
 	assert_true(field._holders[A].visible, "the flag shows on the carrier")
-	assert_true(field._carried[A].visible, "as the tall carried banner")
+	assert_true(field._carried[A].visible, "as the hovering banner")
+	var bar_top: float = thief.global_position.y - Constants.PLAYER_RADIUS - Player.BAR_OFFSET_Y \
+		- Player.BAR_HEIGHT * 2.0 - Player.BAR_GAP
+	var flag_bottom: float = field._carried[A].global_position.y
+	assert_lt(flag_bottom, bar_top - FlagField.HOVER_GAP + FlagField.HOVER_BOB + 0.5, "floats above the HP bar")
+	assert_eq(field._holders[A].z_index, FlagField.HOVER_Z, "drawn above walls and fighters")
+	assert_almost_eq(field._carried[A].global_position.x, thief.global_position.x, 0.5, "centred over his head")
 	assert_false(field._flags[A].visible, "not the planted one")
 	thief.respawn_timer = 99.0
 	thief._set_dead(true)  # dying: the referee drops the flag a frame later, the view must not draw it meanwhile
