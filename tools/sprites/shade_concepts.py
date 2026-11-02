@@ -459,10 +459,6 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     # ---- head: hair mass, face
     if hair in ("H5", "H7", "H8", "H9"):
         up.part(E((17, 7, 49, 36) if hair == "H7" else ((13, 3, 53, 37) if hair == "H9" else (16, 4, 50, 36))), HAIR_A)
-        if hair in ("H8", "H9"):  # rounded crown: a soft curved highlight following the head, from the top left (no horizontal band)
-            up.flat(lambda d, f: d.arc((14, 4, 52, 36), 190, 262, f), STEEL_D)
-            up.flat(lambda d, f: d.arc((17, 7, 49, 33), 200, 252, f), BLUE)
-            up.flat(lambda d, f: d.arc((20, 10, 46, 30), 208, 240, f), STEEL)
     up.part(RR(FACE, FACE_R), SKIN)
     up.flat(L([(26, 35), (42, 36)], 1), SKIN_D)
     # side locks + fringe, per style
@@ -482,6 +478,21 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         up.dot(23, 37, GOLD)
         up.dot(48, 38, GOLD)
         fringe = [(19, 10), (49, 10), (50, 18), (46, 18), (46, 17), (40, 17), (40, 18), (33, 18), (33, 17), (27, 17), (27, 18), (19, 18)]
+    elif hair == "H9":  # bangs grow out of the crown seamlessly: one fill in the hair colour, outline only along the pointed tips
+        zig = [(19, 13), (19, 19), (23.5, 24), (26, 16.5), (29.5, 18.5), (32, 15.5), (34.5, 17.5), (36.5, 15.5), (38, 20.5), (40, 15.5),
+               (42.5, 17.5), (45, 15.5), (47.5, 22.5), (49, 17), (48.5, 12)]
+        up.part(P(ipts([(19, 9)] + zig + [(47, 9)])), HAIR_A, shade=False, line=False)
+        up.flat(L(ipts(zig[2:-1]), 1), OUTLINE)
+        pw = (37.0, 3.0)  # the parting / whorl the strands fan out from: separators and highlights follow arcs towards it
+        for (vx, vy), f in (((26, 16.5), 0.5), ((32, 15.5), 0.68), ((36.5, 15.5), 0.42), ((40, 15.5), 0.6), ((45, 15.5), 0.36)):
+            at = lambda g_: (vx + (pw[0] - vx) * g_, vy + (pw[1] - vy) * g_)
+            up.flat(L(ipts([(vx, vy - 1), at(f)]), 1), OUTLINE)  # strand separation, starting at staggered heights
+            up.flat(L(ipts([(at(0.1)[0] - 1.5, at(0.1)[1]), (at(f * 0.75)[0] - 1.5, at(f * 0.75)[1])]), 1), BLUE)  # staggered lit streak
+        # rounded crown: soft curved highlights following the head from the top left (never a straight row)
+        up.flat(lambda d, f: d.arc((14, 4, 52, 36), 186, 246, f), STEEL_D)
+        up.flat(lambda d, f: d.arc((17, 7, 49, 33), 196, 240, f), BLUE)
+        up.flat(lambda d, f: d.arc((20, 10, 46, 30), 208, 232, f), STEEL)
+        fringe = None
     elif hair in ("H8", "H9"):  # (H8) two long straight side locks to the collar; bangs as tapered strands with gaps
         for p0, p1, p2, p3, lag in ( (((21, 13), (17, 21), (21, 30), (20, 41), 0.5), ((48, 13), (53, 21), (49, 30), (50, 41), 0.2))[:2 if hair == "H8" else 0]):
             hair_band(up, strand(p0, p1, p2, p3, t, 1.3, k=2.0, lag=lag, n=12), [6.5, 7, 7, 6.6, 6.2, 5.6, 4.8, 4, 3.2, 2.3, 1.5, 0.9, 0.6],
@@ -622,7 +633,26 @@ def scale_sheet(out_dir):
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v7_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v8_scale.png")
+
+
+def head_check(out_dir):
+    """x10 crop of the head, plus a row scan of the hair region: the longest horizontal run of each highlight colour."""
+    h = HAIRS[0][1]
+    f = frame(build_a, 0, hair=h, mouth_kind=DEFAULT_MOUTH)
+    oy = PAD + UPPER_DY
+    f.crop((PAD + 10, oy - 4, PAD + 62, oy + 42)).resize((520, 460), Image.NEAREST).convert("RGB").save(out_dir / "shade_A_v8_head.png")
+    worst = {}
+    for y in range(oy + 3, oy + 23):
+        run, last = 0, None
+        for x in range(PAD + 13, PAD + 46):
+            c = f.getpixel((x, y))[:3]
+            run = run + 1 if c == last else 1
+            last = c
+            if c in (STEEL_D, STEEL, BLUE, WHITE, OUTLINE):
+                worst[c] = max(worst.get(c, 0), run)
+    names = {STEEL_D: "STEEL_D", STEEL: "STEEL", BLUE: "BLUE", WHITE: "WHITE", OUTLINE: "OUTLINE"}
+    print("longest horizontal runs in the hair rows:", {names[c]: n for c, n in worst.items()})
 
 
 def main():
@@ -640,7 +670,8 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v7.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v8.png")
+    head_check(out_dir)
     scale_sheet(out_dir)
 
 
