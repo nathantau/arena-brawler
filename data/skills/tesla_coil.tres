@@ -16,6 +16,6 @@ tags = Array[StringName]([&"bolt"])
 cooldown = 10.0
 duration = 8.0
 sapling_range = 360.0
-sapling_interval = 0.45
+sapling_interval = 0.7
 sapling_muzzle_height = 40.0
 sapling_weapon = ExtResource("3_zap")

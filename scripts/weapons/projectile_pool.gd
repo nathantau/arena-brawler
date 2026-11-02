@@ -65,11 +65,6 @@ const LOB_SHADOW_SIZE: Vector2 = Vector2(0.9, 0.4)
 const HIT_MASK: int = Constants.LAYER_WALLS | Constants.LAYER_PLAYERS | Constants.LAYER_SHIELDS | Constants.LAYER_CRATES
 
 
-## Cast id applied to damage dealt synchronously by the call in progress (fire_shot, strike, ...); 0 outside them.
-var _cur_cast: int = 0
-var _cast_counter: int = 0
-
-
 class Slot:
 	var active: bool = false
 	var pos: Vector2 = Vector2.ZERO
@@ -78,8 +73,6 @@ class Slot:
 	var owner_id: int = 0
 	var shot_seq: int = 0
 	var pellet: int = 0
-	## Ability cast this shot belongs to (0 = ordinary weapon fire): see Player.take_hit.
-	var cast: int = 0
 	var attacker_id: int = 0
 	var damage: int = 0
 	var crit: bool = false
@@ -177,20 +170,7 @@ func _ready() -> void:
 
 ## Fires one shot. Fully determined by its arguments, so any peer that receives
 ## (owner_id, seq, origin, facing, weapon) reproduces the identical volley.
-func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int,
-		cast: int = 0) -> void:
-	_cur_cast = cast
-	_fire_shot(owner_id, seq, origin, facing, weapon, match_seed)
-	_cur_cast = 0
-
-
-## A fresh id for one ability activation (see Player.take_hit: damage of one cast to one victim is capped).
-func new_cast() -> int:
-	_cast_counter += 1
-	return _cast_counter
-
-
-func _fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int) -> void:
+func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int) -> void:
 	if weapon.blast:
 		_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
 		if weapon.destroys_shots:
@@ -271,7 +251,6 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.owner_id = owner_id
 	slot.shot_seq = seq
 	slot.pellet = pellet
-	slot.cast = _cur_cast
 	slot.attacker_id = owner_id
 	slot.damage = damage
 	slot.crit = crit
@@ -422,7 +401,7 @@ func _toward_shooter(s: Slot, origin: Vector2, facing: Vector2) -> Vector2:
 ## wall is in the way, so it never lands on the far side of a wall).
 ## Staff Whirl: enemy projectiles within `radius` of `origin` fly back outward and become `owner_id`'s (every
 ## peer). `damage` > 0 (authoritative only): players and crates in reach take it, pushed away from `origin`.
-func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float, cast: int = 0) -> void:
+func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
 	for s: Slot in _slots:
 		if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= radius + s.radius:
 			s.vel = (s.pos - origin).normalized() * s.vel.length()
@@ -430,12 +409,6 @@ func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int,
 			s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
 	if not authoritative or damage <= 0:
 		return
-	_cur_cast = cast
-	_whirl_hits(owner_id, seq, origin, radius, damage, knockback)
-	_cur_cast = 0
-
-
-func _whirl_hits(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	for result: Dictionary in _overlaps(space, origin, radius, Constants.LAYER_PLAYERS | Constants.LAYER_CRATES):
 		var target := result.collider as Player
@@ -464,13 +437,6 @@ func bloom(owner_id: int, at: Vector2, radius: float, amount: int) -> void:
 ## are destroyed on every peer; with `damage` > 0 (authoritative only) enemies in it with line of sight take it and are
 ## thrown `knockback` away from the apex (a crate in it takes the damage too).
 func gust(owner_id: int, seq: int, origin: Vector2, dir: Vector2, reach: float, half_angle: float, damage: int,
-		knockback: float, cast: int = 0) -> void:
-	_cur_cast = cast
-	_gust(owner_id, seq, origin, dir, reach, half_angle, damage, knockback)
-	_cur_cast = 0
-
-
-func _gust(owner_id: int, seq: int, origin: Vector2, dir: Vector2, reach: float, half_angle: float, damage: int,
 		knockback: float) -> void:
 	for s: Slot in _slots:
 		if s.active and _is_enemy_shot(s, owner_id) and _in_cone(s.pos, origin, dir, reach + s.radius, half_angle):
@@ -522,7 +488,6 @@ func _blast(owner_id: int, seq: int, at: Vector2, weapon: WeaponData, slam: bool
 	blast.owner_id = owner_id
 	blast.attacker_id = owner_id
 	blast.shot_seq = seq
-	blast.cast = _cur_cast
 	blast.crit = CombatRules.roll_crit(weapon, _shot_rng)
 	blast.damage = CombatRules.damage_for(weapon, blast.crit)
 	blast.knockback = weapon.knockback
@@ -731,7 +696,7 @@ func _direct_hit(s: Slot, target: Player, at: Vector2) -> void:
 		crit = true
 	if authoritative:
 		_damage_player(target, s.attacker_id, s.shot_seq, s.pellet, damage, crit, s.vel.normalized() * s.knockback, at,
-			s.owner_id, s.snare_time, s.snare_factor, s, s.cast)
+			s.owner_id, s.snare_time, s.snare_factor, s)
 	if s.chain_range > 0.0:
 		_chain(s, target, damage)
 
@@ -754,7 +719,7 @@ func _chain(s: Slot, from: Player, damage: int) -> void:
 	if authoritative:
 		var dir: Vector2 = (best.global_position - from.global_position).normalized()
 		_damage_player(best, s.attacker_id, s.shot_seq, s.pellet, maxi(1, roundi(damage * s.chain_scale)), false,
-			dir * s.knockback, best.global_position, s.owner_id, 0.0, 1.0, null, s.cast)
+			dir * s.knockback, best.global_position, s.owner_id)
 
 
 ## Turns toward the nearest enemy that can be hit and isn't hidden in smoke, at most `homing` rad/s.
@@ -888,7 +853,7 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 			var dmg: int = CombatRules.splash_damage(s.damage, dist, s.splash_radius, s.splash_edge)
 			var push: Vector2 = (offset.normalized() if offset != Vector2.ZERO else Vector2.UP) * s.knockback
 			_damage_player(target, s.attacker_id, s.shot_seq, s.pellet, dmg, s.crit, push, target.global_position,
-				s.owner_id, s.snare_time, s.snare_factor, null, s.cast)
+				s.owner_id, s.snare_time, s.snare_factor)
 		elif collider is Crate:
 			var crate: Crate = collider
 			var cdist: float = maxf(0.0, crate.global_position.distance_to(at) - crate.size * 0.5)
@@ -917,7 +882,6 @@ func _spawn_shards(s: Slot, at: Vector2) -> void:
 		shard.life = reach / speed
 		shard.owner_id = s.owner_id
 		shard.shot_seq = s.shot_seq
-		shard.cast = s.cast
 		shard.pellet = s.pellet + Constants.SPLIT_PELLET_BASE * (i + 1)
 		shard.attacker_id = s.attacker_id
 		shard.damage = maxi(1, roundi(s.damage * s.split_scale))
@@ -955,15 +919,9 @@ func _spawn_shards(s: Slot, at: Vector2) -> void:
 
 
 ## Storm Cloud: lightning strikes every other player within `radius` of `origin` that is in sight of it, pushed away from it.
-func strike(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float, cast: int = 0) -> void:
+func strike(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
 	if not authoritative:
 		return
-	_cur_cast = cast
-	_strike(owner_id, seq, origin, radius, damage, knockback)
-	_cur_cast = 0
-
-
-func _strike(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	for target: Player in targets:
 		if _ally(owner_id, target) or not target.can_be_hit() \
@@ -977,16 +935,9 @@ func _strike(owner_id: int, seq: int, origin: Vector2, radius: float, damage: in
 ## Fire on the floor along from -> to: everyone within `radius` of the line (not the owner) takes `damage`,
 ## pushed `knockback` away from the line (along it if they stand right on it, sideways).
 func burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: float, damage: int,
-		knockback: float = 0.0, cast: int = 0) -> void:
+		knockback: float = 0.0) -> void:
 	if not authoritative:
 		return
-	_cur_cast = cast
-	_burn_segment(owner_id, seq, from, to, radius, damage, knockback)
-	_cur_cast = 0
-
-
-func _burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: float, damage: int,
-		knockback: float) -> void:
 	for target: Player in targets:
 		if _ally(owner_id, target) or not target.can_be_hit():
 			continue
@@ -1001,10 +952,10 @@ func _burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: 
 ## A slam along from -> to: players as burn_segment, plus crates on the line (the line ends at the wall that stopped it,
 ## which may be a crate, so it reaches `LINE_END_REACH` past its end).
 func line_hit(owner_id: int, seq: int, from: Vector2, to: Vector2, half_width: float, damage: int,
-		knockback: float, cast: int = 0) -> void:
+		knockback: float) -> void:
 	if not authoritative:
 		return
-	burn_segment(owner_id, seq, from, to, half_width, damage, knockback, cast)
+	burn_segment(owner_id, seq, from, to, half_width, damage, knockback)
 	var line: Vector2 = to - from
 	if line == Vector2.ZERO:
 		return
@@ -1018,8 +969,8 @@ func line_hit(owner_id: int, seq: int, from: Vector2, to: Vector2, half_width: f
 ## `key_owner`: the pellet key's owner (differs from the attacker after a reflection).
 func _damage_player(target: Player, attacker_id: int, seq: int, pellet: int, damage: int, crit: bool,
 		knockback: Vector2, at: Vector2, key_owner: int = -1, snare_time: float = 0.0, snare_factor: float = 1.0,
-		shot: Slot = null, cast: int = -1) -> void:
-	var dealt: int = target.take_hit(damage, crit, knockback, attacker_id, _cur_cast if cast < 0 else cast)
+		shot: Slot = null) -> void:
+	var dealt: int = target.take_hit(damage, crit, knockback, attacker_id)
 	if dealt > 0:
 		if snare_time > 0.0:
 			target.stats.apply_slow(snare_time, snare_factor)

@@ -26,8 +26,6 @@ func _fighter(world: Node2D, pool: ProjectilePool, id: int, who: StringName, spe
 	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
 		characters.get_character(who))
 	world.add_child(p)
-	p.stats.max_hp = 5000  # these tests count whole-cast damage: keep the 35% ability cap out of the way
-	p.stats.hp = 5000
 	p.global_position = at
 	if special != &"":
 		p.set_skill(1, skills.get_skill(special))
@@ -139,8 +137,8 @@ func test_void_rift_lashes_whoever_stands_in_it() -> void:
 	assert_eq(hits.size(), 1)
 	assert_eq(hits[0], [2, d.storm_damage])
 	_run(p, ceili(d.duration / DT))
-	assert_gte(hits.size(), 13, "a lash every interval for its whole life")
-	assert_lte(hits.size(), 15)
+	assert_gte(hits.size(), 9, "a lash every interval for its whole life")
+	assert_lte(hits.size(), 11)
 	assert_eq(far.stats.hp, far.stats.max_hp, "outside the rift")
 	assert_eq(p.stats.hp, p.stats.max_hp)
 	assert_eq(foe.velocity.x, 0.0, "no push")

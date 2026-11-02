@@ -1,14 +1,12 @@
 extends SceneTree
 ## Max damage ONE use of each ability deals to ONE standing target (every pellet / tick / summon bite landing), measured
-## server-side in a bare world. Columns: uncapped (victim with 100000 hp, so the cap never bites), and with a normal
-## 100 hp victim (shows the Constants.ABILITY_DAMAGE_CAP_FRACTION clamp). The target stands still at 70 / 150 / 230 px
+## server-side in a bare world. The target stands still at 70 / 150 / 230 px
 ## along the aim, at body or hand height, and the best placement counts. Transforms: "form" = form weapon fired non-stop for the whole window (plain
 ## weapon fire, never capped). Run: godot --path . --headless --fixed-fps 60 -s tools/ability_damage.gd
 
 const DT: float = 1.0 / 60.0
 const RANGES: Array[float] = [70.0, 150.0, 230.0]
 const BIG_HP: int = 100000
-const NORMAL_HP: int = 100
 
 
 func _initialize() -> void:
@@ -24,7 +22,6 @@ func _run() -> void:
 			continue
 		var owner_id: StringName = sk.tags[0] if not sk.tags.is_empty() else &"shadow"
 		var raw: int = 0
-		var capped: int = 0
 		var form: int = 0
 		var ranges: Array[float] = RANGES.duplicate()
 		if sk.kind == SkillData.Kind.STEP:  # the strike lands where he surfaces
@@ -32,10 +29,9 @@ func _run() -> void:
 		for r: float in ranges:
 			for dy: float in [0.0, Player.hand_offset(Vector2.RIGHT).y]:  # body height, and the hand's (beams)
 				raw = maxi(raw, await _trial(chars, sk, owner_id, Vector2(r, dy), BIG_HP, false))
-				capped = maxi(capped, await _trial(chars, sk, owner_id, Vector2(r, dy), NORMAL_HP, false))
 				if sk.kind == SkillData.Kind.TRANSFORM:
 					form = maxi(form, await _trial(chars, sk, owner_id, Vector2(r, dy), BIG_HP, true))
-		rows.append("%-16s %-10s uncapped %4d | on 100hp %3d%s" % [sk.id, owner_id, raw, capped,
+		rows.append("%-16s %-10s max %4d%s" % [sk.id, owner_id, raw,
 			(" | form weapon %d (%s)" % [form, sk.form_weapon.id if sk.form_weapon else "-"]) if sk.kind == SkillData.Kind.TRANSFORM else ""])
 	for row: String in rows:
 		print(row)

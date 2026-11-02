@@ -26,8 +26,6 @@ func _shadow(world: Node2D, pool: ProjectilePool, special: StringName, id: int =
 	var p := Player.new()
 	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
 		characters.get_character(who))
-	p.stats.max_hp = 5000  # these tests count whole-cast damage: keep the 35% ability cap out of the way
-	p.stats.hp = 5000
 	world.add_child(p)
 	p.set_skill(1, skills.get_skill(special))
 	p.global_position = at
@@ -226,7 +224,7 @@ func test_step_strike_lands_where_he_surfaces_not_inside_the_wall() -> void:
 	var up: Vector2 = empty[0]
 	assert_gt(up.distance_to(open[0]), 90.0, "he surfaced well away from where the glide ended")
 	var d: SkillData = skills.get_skill(&"shadow_step")
-	var full: int = 5000 + characters.get_character(&"flicker").max_armor  # (_shadow gives everyone 5000 hp)
+	var full: int = characters.get_character(&"flicker").max_hp + characters.get_character(&"flicker").max_armor
 	var hit: Array = await _step_to_the_end(end_x, 200.0, up + Vector2(0, -30))
 	assert_eq(hit[1], full - d.step_damage, "the foe next to where he came up is struck")
 
