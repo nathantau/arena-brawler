@@ -316,6 +316,7 @@ func get_input(player: Player, delta: float) -> InputFrame:
 	_frame.fire = false
 	_frame.skill = false
 	_frame.special = false
+	_frame.special2 = false
 
 	var prev_target: Player = _target
 	_target = null
@@ -454,10 +455,10 @@ func _use_specials(player: Player, dist: float, has_target: bool, hp_frac: float
 			_frame.aim_vec = -dir
 			_frame.move_vec = -dir
 			_frame.fire = false
-		if slot == 0:
-			_frame.skill = true
-		else:
-			_frame.special = true
+		match slot:
+			0: _frame.skill = true
+			1: _frame.special = true
+			_: _frame.special2 = true
 		return
 
 

@@ -113,8 +113,8 @@ var weapon: WeaponState
 var chosen_weapon: WeaponData
 ## Used when the character has no signature weapon (setup's list, e.g. tests and bots).
 var fallback_weapon: WeaponData
-## The two specials picked in the loading room (the character's own or generic ones, Dash among them): the first
-## special button (InputFrame.skill) fires slot 0, the second (InputFrame.special) slot 1.
+## The three specials picked in the loading room (the character's own or generic ones, Dash among them): the first
+## special button (InputFrame.skill) fires slot 0, the second (InputFrame.special) slot 1, the third (special2) slot 2.
 var skills: Array[CharacterSkill] = []
 var facing: Vector2 = Vector2.RIGHT
 ## Null for client-side remote players (they are positioned by interpolation).
@@ -132,7 +132,7 @@ var arena_bounds: Rect2 = Rect2()
 var _shape: CollisionShape2D
 var _shield := ShieldWall.new()
 var _ward := ShieldWall.new(true)
-var _prev_skills: Array[bool] = [false, false]
+var _prev_skills: Array[bool] = [false, false, false]
 var _hit_flash: float = 0.0
 ## 0..1: how much of the held weapon shows (fades while a pose replaces him, see _gun_suppressed).
 var _gun_fade: float = 1.0
@@ -217,8 +217,12 @@ func set_character(data: CharacterData) -> void:
 	for i: int in Constants.SKILL_SLOTS:
 		var old: SkillData = skills[i].data if i < skills.size() else null
 		kept.append(old if old != null and data.can_use_skill(old) else defaults[i])
-	if kept[0] == kept[1]:
-		kept[1] = defaults[1] if defaults[1] != kept[0] else defaults[0]
+	for i: int in range(1, kept.size()):  # no duplicates: a repeat falls back to the first default not already taken
+		if kept.find(kept[i]) < i:
+			for d: SkillData in specials_pool(data):
+				if not kept.has(d):
+					kept[i] = d
+					break
 	skills.clear()
 	for sd: SkillData in kept:
 		skills.append(CharacterSkill.new(sd))
@@ -230,19 +234,34 @@ func set_character(data: CharacterData) -> void:
 	_reset_weapon()
 
 
-## A fresh pick: Dash on the skill button, the character's signature special (or its next one) on the special button.
+## Every special `data` may pick, Dash included.
+static func specials_pool(data: CharacterData) -> Array[SkillData]:
+	return SkillCatalog.shared().specials_for(data)
+
+
+## A fresh pick: Dash on the skill button, the character's signature special on the second, and on the third its next
+## own special (else the next generic one). A fighter with fewer than SKILL_SLOTS eligible specials (the benched Warden
+## and Gunnar: Dash + Barrier only) repeats from the start of its pool.
 static func default_skills(data: CharacterData) -> Array[SkillData]:
-	var pool: Array[SkillData] = SkillCatalog.shared().specials_for(data)
-	var dash: SkillData = SkillCatalog.shared().dash()
-	return [dash, pool[0] if pool[0] != dash else pool[1]]
+	var pool: Array[SkillData] = specials_pool(data)
+	var out: Array[SkillData] = [SkillCatalog.shared().dash()]
+	var own: Callable = func(sd: SkillData) -> bool: return sd == data.signature_skill or sd.tags.has(data.id)
+	var ordered: Array[SkillData] = pool.filter(own)
+	ordered.append_array(pool.filter(func(sd: SkillData) -> bool: return not own.call(sd)))
+	for sd: SkillData in ordered:
+		if out.size() < Constants.SKILL_SLOTS and not out.has(sd):
+			out.append(sd)
+	while out.size() < Constants.SKILL_SLOTS:
+		out.append(pool[out.size() % pool.size()])
+	return out
 
 
-## Put `data` in skill slot `slot`; if the other slot already has it, the two swap.
+## Put `data` in skill slot `slot`; if another slot already has it, the two swap.
 func set_skill(slot: int, data: SkillData) -> void:
-	var other: int = 1 - slot
 	var old: SkillData = skills[slot].data
-	if skills[other].data == data:
-		skills[other] = CharacterSkill.new(old)
+	for other: int in skills.size():
+		if other != slot and skills[other].data == data:
+			skills[other] = CharacterSkill.new(old)
 	skills[slot] = CharacterSkill.new(data)
 	_sync_shields()
 
@@ -351,7 +370,7 @@ func _process(delta: float) -> void:
 func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	last_input_seq = input.seq
 	if dead:
-		_prev_skills = [input.skill, input.special]  # a button held (or tapped) while dead must not fire on the respawn frame
+		_prev_skills = input.pressed_slots()  # a button held (or tapped) while dead must not fire on the respawn frame
 		return
 	stats.tick(delta)
 	if stats.is_stunned():
@@ -406,7 +425,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		shot_fired.emit(self, key, global_position, nova.direction, nova.data.nova_blast.id)
 	var charged: CharacterSkill = active_skill(SkillData.Kind.OVERDRIVE)
 	weapon.tick(delta * (charged.data.overdrive_fire_scale if charged != null else 1.0))
-	var pressed: Array[bool] = [input.skill, input.special]
+	var pressed: Array[bool] = input.pressed_slots()
 	if frozen:
 		# Keep edge state current so a button held through the countdown doesn't fire on release.
 		_prev_skills = pressed

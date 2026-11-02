@@ -23,6 +23,7 @@ class Presser extends LocalInput:
 		n += 1
 		f.special = n % FRAMES_PER_COMBO == 10
 		f.skill = n % FRAMES_PER_COMBO == 40
+		f.special2 = n % FRAMES_PER_COMBO == 70
 		return f
 
 

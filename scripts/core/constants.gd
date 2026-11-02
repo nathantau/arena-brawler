@@ -48,8 +48,8 @@ const PICKUP_RADIUS: float = 34.0
 ## Weapon shots spend energy; it refills at this rate.
 const ENERGY_REGEN_PER_SEC: float = 60.0
 ## A snare slows move speed to a fraction for a while (PlayerStats.slow_*): one at a time, a new one refreshes it.
-## Special slots each fighter equips (slot 0 = skill button, slot 1 = special button).
-const SKILL_SLOTS: int = 2
+## Special slots each fighter equips (slot 0 = skill button, slot 1 = special button, slot 2 = third special button).
+const SKILL_SLOTS: int = 3
 
 # --- Skills (per-character tunables are in data/characters/*.tres) ---
 const SHIELD_THICKNESS: float = 10.0

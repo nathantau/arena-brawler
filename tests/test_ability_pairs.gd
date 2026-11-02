@@ -42,7 +42,7 @@ func _tick(seq: int, press0: bool, press1: bool, move: Vector2) -> void:
 
 
 func _busy() -> bool:
-	return me.skills[0].is_active() or me.skills[1].is_active()
+	return me.skills.any(func(s: CharacterSkill) -> bool: return s.is_active())
 
 
 func _check_clean(label: String) -> void:

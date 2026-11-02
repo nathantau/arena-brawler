@@ -13,7 +13,7 @@ func before_all() -> void:
 	skills = SkillCatalog.shared()
 
 
-func _player(slot0: StringName, slot1: StringName, who: StringName = &"flicker") -> Player:
+func _player(slot0: StringName, slot1: StringName, who: StringName = &"flicker", slot2: StringName = &"barrier") -> Player:
 	var world := Node2D.new()
 	add_child_autofree(world)
 	var pool := ProjectilePool.new()
@@ -25,6 +25,7 @@ func _player(slot0: StringName, slot1: StringName, who: StringName = &"flicker")
 	p.global_position = Vector2(300, 300)
 	p.skills[0] = CharacterSkill.new(skills.get_skill(slot0))
 	p.skills[1] = CharacterSkill.new(skills.get_skill(slot1))
+	p.skills[2] = CharacterSkill.new(skills.get_skill(slot2))
 	return p
 
 
@@ -35,6 +36,7 @@ func _step(p: Player, press_slot: int = -1, seq: int = 1) -> void:
 	f.move_vec = Vector2.RIGHT
 	f.skill = press_slot == 0
 	f.special = press_slot == 1
+	f.special2 = press_slot == 2
 	p.simulate(f, DT)
 
 
@@ -132,3 +134,43 @@ func test_sitting_out_ends_abilities() -> void:
 	_step(p, 1, 2)
 	p.sit_out()
 	assert_false(p.skills[0].is_active() or p.skills[1].is_active())
+
+
+func test_third_slot_locks_and_is_locked() -> void:
+	var p: Player = _player(&"smoke_bomb", &"barrier", &"flicker", &"overdrive")
+	_step(p, 2)
+	assert_true(p.skills[2].is_active(), "third button fires slot 2")
+	assert_true(p.skill_locked(0) and p.skill_locked(1), "slot 2 locks both others")
+	assert_false(p.skill_locked(2), "a slot never locks itself")
+	_step(p, 0, 2)
+	_step(p, 1, 3)
+	assert_eq(p.skills[0].cooldown_remaining, 0.0, "slot 0 ignored")
+	assert_eq(p.skills[1].cooldown_remaining, 0.0, "slot 1 ignored")
+	_run(p, 3.1)
+	assert_false(p.skill_locked(0) or p.skill_locked(1), "free again")
+
+
+func test_slot_two_blocked_by_either_other_slot() -> void:
+	for first: int in 2:
+		var p: Player = _player(&"overdrive" if first == 0 else &"smoke_bomb", &"overdrive" if first == 1 else &"smoke_bomb",
+			&"flicker", &"dash")
+		_step(p, first)
+		assert_true(p.skill_locked(2), "slot %d locks slot 2" % first)
+		_step(p, 2, 2)
+		assert_false(p.skills[2].is_active(), "dash ignored")
+		assert_eq(p.skills[2].cooldown_remaining, 0.0)
+
+
+func test_all_three_pressed_together_fires_exactly_one_blocker() -> void:
+	var p: Player = _player(&"dash", &"overdrive", &"flicker", &"vine_swing")
+	var f := InputFrame.new()
+	f.seq = 1
+	f.aim_vec = Vector2.RIGHT
+	f.skill = true
+	f.special = true
+	f.special2 = true
+	p.simulate(f, DT)
+	var active: int = 0
+	for s: CharacterSkill in p.skills:
+		active += 1 if s.is_active() else 0
+	assert_lte(active, 1, "one ability at a time")

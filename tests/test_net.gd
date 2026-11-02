@@ -16,6 +16,7 @@ func test_input_roundtrip() -> void:
 	f.aim_vec = Vector2.UP
 	f.skill = true
 	f.special = true
+	f.special2 = true
 	var g: InputFrame = InputFrame.from_array(f.to_array())
 	assert_eq(g.seq, 42)
 	assert_eq(g.move_vec, Vector2(0.5, -0.5))
@@ -23,6 +24,17 @@ func test_input_roundtrip() -> void:
 	assert_true(g.fire)
 	assert_true(g.skill)
 	assert_true(g.special)
+	assert_true(g.special2)
+
+
+func test_input_flags_are_independent() -> void:
+	for mask: int in 8:
+		var f := _frame(1)
+		f.skill = mask & 1 != 0
+		f.special = mask & 2 != 0
+		f.special2 = mask & 4 != 0
+		var g: InputFrame = InputFrame.from_array(f.to_array())
+		assert_eq(g.pressed_slots(), f.pressed_slots(), "mask %d" % mask)
 
 
 func test_input_rejects_malformed() -> void:

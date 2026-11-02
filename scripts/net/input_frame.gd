@@ -1,12 +1,13 @@
 class_name InputFrame
 extends RefCounted
-## The only thing a client is allowed to send: {seq, move_vec, aim_vec, fire, skill (slot 0), special (slot 1)}.
+## The only thing a client is allowed to send: {seq, move_vec, aim_vec, fire, skill (slot 0), special (slot 1), special2 (slot 2)}.
 ## Buttons are held states; the simulation derives press edges itself so a dropped
 ## packet can't eat a dash. Wire format: [seq, move_vec, aim_vec, flags].
 
 const FLAG_FIRE: int = 1
 const FLAG_SKILL: int = 2
 const FLAG_SPECIAL: int = 8
+const FLAG_SPECIAL2: int = 16
 const WIRE_SIZE: int = 4
 
 var seq: int = 0
@@ -15,6 +16,12 @@ var aim_vec: Vector2 = Vector2.ZERO
 var fire: bool = false
 var skill: bool = false
 var special: bool = false
+var special2: bool = false
+
+
+## The three special buttons as one array, indexed by skill slot.
+func pressed_slots() -> Array[bool]:
+	return [skill, special, special2]
 
 
 ## Clamp untrusted values into legal ranges (server must call this on received input).
@@ -35,10 +42,12 @@ func copy_from(other: InputFrame) -> void:
 	fire = other.fire
 	skill = other.skill
 	special = other.special
+	special2 = other.special2
 
 
 func to_array() -> Array:
-	var flags: int = (FLAG_FIRE if fire else 0) | (FLAG_SKILL if skill else 0) | (FLAG_SPECIAL if special else 0)
+	var flags: int = (FLAG_FIRE if fire else 0) | (FLAG_SKILL if skill else 0) | (FLAG_SPECIAL if special else 0) \
+		| (FLAG_SPECIAL2 if special2 else 0)
 	return [seq, move_vec, aim_vec, flags]
 
 
@@ -58,5 +67,6 @@ static func from_array(data: Variant) -> InputFrame:
 	f.fire = flags & FLAG_FIRE != 0
 	f.skill = flags & FLAG_SKILL != 0
 	f.special = flags & FLAG_SPECIAL != 0
+	f.special2 = flags & FLAG_SPECIAL2 != 0
 	f.sanitize()
 	return f

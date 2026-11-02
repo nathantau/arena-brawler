@@ -46,6 +46,7 @@ func _inputs(n: int) -> Array[InputFrame]:
 		f.aim_vec = Vector2.UP.rotated(i * 0.05)
 		f.skill = i % 40 < 3
 		f.special = i % 50 > 45
+		f.special2 = i % 70 > 66
 		f.fire = i % 3 != 0
 		out.append(f)
 	return out

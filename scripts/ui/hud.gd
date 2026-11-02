@@ -264,7 +264,7 @@ func _draw_vitals() -> void:
 	UiStyle.draw_text(self, Vector2(2.0, name_y), active_w.display_name, UiStyle.SIZE_SMALL, UiStyle.C_YELLOW)
 	if show_skill:
 		var y: float = name_y
-		for pair: Array in [[player.skills[0], "Space", 0], [player.skills[1], "E", 1]]:
+		for pair: Array in [[player.skills[0], "Space", 0], [player.skills[1], "E", 1], [player.skills[2], "Q", 2]]:
 			var sk: CharacterSkill = pair[0]
 			var text: String = "%s [%s]" % [sk.data.display_name, pair[1]]
 			if player.skill_locked(pair[2] as int):
