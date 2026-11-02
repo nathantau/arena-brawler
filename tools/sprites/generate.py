@@ -817,6 +817,11 @@ def flint(step=None, t=0, heat=0.0):
     mid_y = (HEAD[1] + HEAD[3]) // 2
     up.part(lambda d, f: (d.rounded_rectangle((HEAD[0], HEAD[1], HEAD[2], mid_y + 2), 4, f), d.ellipse(HEAD, f),
                           d.rounded_rectangle(FACE, FACE_R, f)), ORANGE)
+    # the hair's roots lick down over his brow in uneven teeth, so the seam with the head is a flame line, not a straight edge
+    for k, (tx, depth) in enumerate(((HEAD[0] + 4, 2), (HEAD[0] + 8, 3), (HEAD[0] + 12, 2), (HEAD[0] + 16, 4),
+                                     (HEAD[0] + 20, 2), (HEAD[0] + 24, 3))):
+        dd = depth + ((t + k) % 4 in (1, 2))  # each tooth flickers on its own beat
+        up.flat(P([(tx - 2, HEAD[1]), (tx + SWAY[(t + k) % 4] * 0.5, HEAD[1] + dd), (tx + 2, HEAD[1])]), YELLOW)
     if hot and not KO:  # blazing eyes: white-hot with flame trailing back off them
         for x in EYES_X:
             up.flat(R((x, EYES_Y, x + 3, EYES_Y + 5)), YELLOW)  # same eye shape, lit from inside
@@ -891,13 +896,15 @@ def flint_crown(t: int, dy: int, heat: float = 0.0) -> Canvas:
     d.rectangle((mid - 15, ref, mid + 15, ref + 10), 255)  # the root, wide as the head
     for i, h0 in enumerate(hs):
         x = mid - 15 + i * (30 / (n - 1))
+        w = 9.0 - 0.3 * i
         h = h0 * (1 + 0.08 * heat) + (2 if (i * 7 + t) % 4 in (1, 2) else 0)  # tongues take turns to leap
         tip = x - 0.28 * h + sway * h  # streaming back, swaying as it flickers
-        w = 9.0 - 0.3 * i
         d.polygon([(x - w / 2, ref + 4), (x - w * 0.46 + (tip - x) * 0.4, ref - h * 0.5), (tip, ref - h),
                    (x + w * 0.4 + (tip - x) * 0.55, ref - h * 0.45), (x + w / 2, ref + 4)], 255)
-    d.rectangle((0, ref - 5, mid - 16, CELL), 0)  # the flame grows from the head, it doesn't hang off its sides
-    d.rectangle((mid + 16, ref - 5, CELL, CELL), 0)
+    # the flame grows from the head, it doesn't hang off its sides: trimmed along a slanted line (a flat cut left a
+    # horizontal ledge under the leaning tongues), so what leans out only ever ends on a diagonal
+    d.polygon([(mid - 16, CELL), (mid - 16, ref + 1), (mid - 16 - ref - 1, 0), (0, 0), (0, CELL)], 0)
+    d.polygon([(mid + 16, CELL), (mid + 16, ref + 1), (mid + 16 + ref + 1, 0), (CELL, 0), (CELL, CELL)], 0)
     m = mask.load()
     col_top = {}
     for x in range(CELL):
