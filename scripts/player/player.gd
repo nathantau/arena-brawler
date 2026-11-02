@@ -531,6 +531,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 ## A stun cuts channelled self-abilities short (Staff Whirl, Petal Drift, Shadow Step): they end cleanly, cooldown stays, and a
 ## stepping Shadow surfaces on free floor without his strike. Runs in the shared sim, so prediction and replay agree.
 func _interrupt_channels() -> void:
+	_windup_left = -1.0  # a wind-up in progress is cancelled: no damage, the weapon cooldown stays spent
 	for slot: CharacterSkill in skills:
 		if not slot.is_active():
 			continue
@@ -549,6 +550,7 @@ func _interrupt_channels() -> void:
 ## Countdown / results freeze the player: whatever he was doing ends here. A swing lands where it was going (not mid-air,
 ## possibly over a wall) and a burning-trail dash finishes at the end of its line.
 func _end_abilities(swing: CharacterSkill) -> void:
+	_windup_left = -1.0  # a pending weapon wind-up must not land after the freeze
 	if swing != null:
 		global_position = swing.anchor + swing.direction
 	var stepping: bool = false
