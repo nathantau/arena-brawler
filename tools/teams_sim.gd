@@ -10,8 +10,8 @@ var _carrier: Player
 var win: bool = false  ## screenshot: the local player captures the flag, shot taken during the round-end banner
 var lobby: bool = false
 var shared: int = 0  ## screenshot with lobby=1: 1 = P2 + P3 hover one card, 2 = P3 locked and P2 hovers that card  ## screenshot: the loading room (nobody readies up)
-var step: int = 0  ## screenshot with lobby=1: which character select step is showing (0 fighter, 1 abilities, 2 weapon)
-var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the zoom-in when another fighter is picked
+var step: int = 0  ## screenshot with lobby=1: which character select step is showing (0 the fighter grid, 1 the detail overlay open)
+var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the overlay sliding in
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
 
 var arena: Arena
@@ -160,34 +160,34 @@ func _find_lobby(n: Node) -> LobbyPanel:
 	return null
 
 
-## Loading room: the character select at `step`, or (strip=1) 6 frames of the preview zooming in on a new pick.
-## The window size comes from `--resolution WxH` (before the `--`).
+## Loading room: the fighter grid (step=0), the overlay open on Eden (step=1), or (strip=1) 6 frames of the overlay
+## sliding in after tapping Bolt. The window size comes from `--resolution WxH` (before the `--`).
 func _shoot_lobby() -> void:
 	var lp: LobbyPanel = _find_lobby(root)
 	physics_frame.disconnect(_tick)
 	for i: int in 8:
 		await process_frame
-	var ratio: float = float(root.size.x) / root.get_visible_rect().size.x
 	if strip:
 		lp._on_fighter_pressed(&"bolt")
 		var crops: Array[Image] = []
-		var rect := Rect2i((lp._stage.get_global_rect().position * ratio), (lp._stage.size * ratio))
-		for i: int in 14:
+		for i: int in 16:
 			await process_frame
-			if i in [0, 2, 4, 6, 8, 12]:
-				var frame: Image = root.get_texture().get_image().get_region(rect)
+			if i in [0, 2, 4, 6, 9, 14]:
+				var frame: Image = root.get_texture().get_image()
 				frame.convert(Image.FORMAT_RGBA8)
+				frame.resize(frame.get_width() / 2, frame.get_height() / 2, Image.INTERPOLATE_BILINEAR)
 				crops.append(frame)
-		var out := Image.create(rect.size.x * 3, rect.size.y * 2, false, Image.FORMAT_RGBA8)
+		var cell: Vector2i = crops[0].get_size()
+		var out := Image.create(cell.x * 3, cell.y * 2, false, Image.FORMAT_RGBA8)
 		for k: int in crops.size():
-			out.blit_rect(crops[k], Rect2i(Vector2i.ZERO, rect.size), Vector2i((k % 3) * rect.size.x, (k / 3) * rect.size.y))
+			out.blit_rect(crops[k], Rect2i(Vector2i.ZERO, cell), Vector2i((k % 3) * cell.x, (k / 3) * cell.y))
 		print("[teams_sim] strip ", shot_path, " ", out.save_png(shot_path))
 		quit(0)
 		return
 	if step > 0:
-		lp._go(step as LobbySteps.Step)
-		lp._apply_step(false)
-	for i: int in 8:
+		lp._on_fighter_pressed(&"eden")
+		lp._slide_overlay(false)
+	for i: int in 10:
 		await process_frame
 	var img: Image = root.get_texture().get_image()
 	print("[teams_sim] lobby screenshot ", shot_path, " ", img.get_size(), " ", img.save_png(shot_path))

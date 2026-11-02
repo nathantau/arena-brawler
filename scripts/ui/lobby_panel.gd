@@ -14,12 +14,11 @@ const BAR_H: float = 52.0
 const BUTTON_MIN_SIZE: Vector2 = Vector2(150, BAR_H)
 const READY_MIN_SIZE: Vector2 = Vector2(240, 68)
 const LEAVE_MIN_SIZE: Vector2 = Vector2(120, 68)
-const TAB_MIN_SIZE: Vector2 = Vector2(170, 48)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(128, 128)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(172, 176)
 ## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
 ## the cell's body box, so they all stand in the same spot.
-const FIGHTER_ART_SCALE: float = 1.25
-const FIGHTER_ART_SIZE: Vector2 = Vector2(108, 82)
+const FIGHTER_ART_SCALE: float = 1.75
+const FIGHTER_ART_SIZE: Vector2 = Vector2(150, 112)
 ## Specials are rows (icon, name + cooldown, one-line description) in a column; 7 (5 own + Dash + Barrier) fit.
 const SKILL_ROW_H: float = 64.0
 const SKILL_ICON_SIZE: Vector2 = Vector2(38, 38)
@@ -32,19 +31,22 @@ const TOAST_TIME: float = 2.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 const COLOR_STAGE: Color = Color(0.105, 0.105, 0.19)
 ## The big preview: pixel scale is a whole number (the sheet cell times this), it zooms in over ZOOM_TIME.
-const PREVIEW_INFO_W: float = 176.0
+## Height the name + HP / Armor block takes at the top of the showcase.
+const PREVIEW_TOP: float = 118.0
 const PREVIEW_MAX_SCALE: int = 6
 const ZOOM_FROM: float = 0.72
 const ZOOM_TIME: float = 0.25
 const SLIDE_TIME: float = 0.25
-const PANEL_GAP: float = 24.0
+## The detail overlay: how much of the width its sheet takes, and how dark the scrim over the grid gets.
+const SHEET_FRACTION: float = 0.78
+const SCRIM_ALPHA: float = 0.6
 ## Seconds between the preview's idle and a short walk / attack loop.
 const FLAIR_GAP: Vector2 = Vector2(2.5, 4.5)
 const FLAIR_WALK_LOOPS: int = 2
 
 var arena: Arena
 
-var _steps := LobbySteps.new()
+var _overlay_state := LobbyOverlay.new()
 var _title: Label
 var _rules: Label
 var _join_hint: Label
@@ -53,12 +55,13 @@ var _team_button: Button
 var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
 var _fighter_scroller: HScroller
+## The abilities scroll in a column; the weapons sit under them in a sideways row that is always on screen.
+var _detail_scroller: HScroller
 var _weapon_scroller: HScroller
-var _weapon_grid: HFlowContainer
+var _weapon_row: BoxContainer
 var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
 var _special_row: BoxContainer
-var _special_scroller: HScroller
 var _special_cards: Dictionary[StringName, Button] = {}
 ## The "1" / "2" / "3" slot badge on each special row.
 var _special_badges: Dictionary[StringName, Label] = {}
@@ -66,7 +69,8 @@ var _special_badges: Dictionary[StringName, Label] = {}
 var _older_slot: int = 1
 var _rows: VBoxContainer
 var _blocker: Label
-var _ready_button: Button
+## READY / LOCK IN: one in the footer, one at the foot of the overlay.
+var _ready_buttons: Array[Button] = []
 ## Per fighter card: teammates' hover tags (top) and the lock badge (middle).
 var _fighter_tags: Dictionary[StringName, HBoxContainer] = {}
 var _fighter_badges: Dictionary[StringName, Label] = {}
@@ -78,14 +82,14 @@ var _toast_left: float = 0.0
 ## Last highlighted (character, weapon, slots 0-2 specials), so _process only restyles on change.
 var _shown_pick: Array[StringName] = [&"", &"", &"", &"", &""]
 var _was_visible: bool = false
-## Step panels (fighter, abilities, weapon) side by side inside _host; the carousel slides them.
-var _host: Control
-var _panels: Array[Control] = []
-var _tabs: Array[Button] = []
+## The overlay: a scrim over the grid and a sheet sliding in from the right.
+var _margin: MarginContainer
+var _overlay: Control
+var _scrim: ColorRect
+var _sheet: PanelContainer
 var _slide_tween: Tween
 var _slot_chips: Array[Panel] = []
 var _slot_icons: Array[TextureRect] = []
-var _next_button: Button
 ## The big preview.
 var _stage: Panel
 var _pivot: Node2D
@@ -98,36 +102,29 @@ var _armor_label: Label
 var _hp_fill: ColorRect
 var _armor_fill: ColorRect
 var _stage_badge: Label
-var _stage_hint: Label
 var _flair_left: float = FLAIR_GAP.x
 var _in_flair: bool = false
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Backdrop + a stack: the page (padded clear of notches) and the overlay (edge to edge) share it.
+	var stack := Control.new()
+	add_child(stack)
+	_margin = MarginContainer.new()
+	_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	stack.add_child(_margin)
 	_apply_background()
 	get_viewport().size_changed.connect(_apply_background)
 
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", SPACING)
-	add_child(box)
+	_margin.add_child(box)
 	_build_top_bar(box)
-	_build_tabs(box)
-	var mid := HBoxContainer.new()
-	mid.add_theme_constant_override("separation", SPACING * 2)
-	mid.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(mid)
-	_build_stage(mid)
-	_host = Control.new()
-	_host.clip_contents = true
-	_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_host.size_flags_stretch_ratio = 1.15
-	_host.resized.connect(func() -> void: _apply_step(false))
-	mid.add_child(_host)
-	_panels = [_build_fighter_panel(), _build_abilities_panel(), _build_weapon_panel()]
-	for p: Control in _panels:
-		_host.add_child(p)
+	_build_fighter_grid(box)
 	_build_footer(box)
+	_build_overlay(stack)
+	_apply_background()
 
 	arena.match_updated.connect(_refresh)
 	arena.lock_refused.connect(func(holder: int) -> void:
@@ -135,7 +132,7 @@ func _ready() -> void:
 		_toast_left = TOAST_TIME
 		_refresh())
 	_refresh()
-	_apply_step(false)
+	_slide_overlay(false)
 
 
 func _build_top_bar(box: BoxContainer) -> void:
@@ -152,7 +149,11 @@ func _build_top_bar(box: BoxContainer) -> void:
 	_rules = _label(titles, &"DimLabel")
 	_rules.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 	_rules.add_theme_font_override("font", UiStyle.body_font())
-	for l: Label in [_title, _rules]:
+	_join_hint = _label(titles, &"Label")
+	_join_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	_join_hint.add_theme_font_override("font", UiStyle.body_font(true))
+	_join_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+	for l: Label in [_title, _rules, _join_hint]:
 		l.clip_text = true
 		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_mode_button = _button(header, BUTTON_MIN_SIZE)
@@ -168,35 +169,128 @@ func _build_top_bar(box: BoxContainer) -> void:
 		arena.arena_requested.emit((arena.match_state.arena_index + 1) % ArenaLayouts.count()))
 
 
-## "1 Fighter · 2 Abilities · 3 Weapon": the current step is lit, any can be tapped to go there.
-func _build_tabs(box: BoxContainer) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", SPACING)
-	box.add_child(row)
-	var names: Array[String] = ["1 · Fighter", "2 · Abilities", "3 · Weapon"]
-	for i: int in names.size():
-		var tab: Button = _button(row, TAB_MIN_SIZE)
-		tab.text = names[i]
-		var to: LobbySteps.Step = i as LobbySteps.Step
-		tab.pressed.connect(func() -> void: _go(to))
-		_tabs.append(tab)
+## The main screen: big portraits, centred. Tapping one opens its overlay.
+func _build_fighter_grid(box: BoxContainer) -> void:
+	var p := VBoxContainer.new()
+	p.add_theme_constant_override("separation", SPACING)
+	p.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(p)
+	var head := _label(p, &"HeaderLabel")
+	head.text = "Choose your fighter"
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_fighter_scroller = HScroller.new(true)
+	_fighter_scroller.fade_color = COLOR_BG
+	_fighter_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	p.add_child(_fighter_scroller)
+	var grid := HFlowContainer.new()
+	grid.alignment = FlowContainer.ALIGNMENT_CENTER
+	grid.add_theme_constant_override("h_separation", SPACING * 2)
+	grid.add_theme_constant_override("v_separation", SPACING * 2)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_fighter_scroller.content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_fighter_scroller.content.alignment = BoxContainer.ALIGNMENT_CENTER
+	_fighter_scroller.content.add_child(grid)
+	var count: int = arena.characters.ordered.size()
+	_fighter_scroller.resized.connect(func() -> void:
+		grid.custom_minimum_size.x = grid_width(_fighter_scroller.size.x, count))
+	for c: CharacterData in arena.characters.ordered:
+		var card: Button = _card(grid, CHARACTER_CARD_SIZE, _fighter_art(c), [c.display_name])
+		var id: StringName = c.id
+		_fighter_scroller.on_tap(card, func() -> void: _on_fighter_pressed(id))
+		_character_cards[id] = card
+		var frame := Panel.new()  # outline + tint over the card: your hover, a teammate's hover, a teammate's lock
+		frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		frame.visible = false
+		card.add_child(frame)
+		_fighter_frames[id] = frame
+		var tags := HBoxContainer.new()
+		tags.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 6)
+		tags.add_theme_constant_override("separation", 4)
+		tags.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(tags)
+		_fighter_tags[id] = tags
+		var badge: Label = _label(card, &"Label")
+		badge.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		badge.add_theme_font_override("font", UiStyle.body_font(true))
+		# A strip across the foot of the portrait.
+		badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, SPACING)
+		badge.offset_top = SPACING + FIGHTER_ART_SIZE.y - BADGE_H
+		badge.offset_bottom = SPACING + FIGHTER_ART_SIZE.y
+		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		badge.visible = false
+		_fighter_badges[id] = badge
+
+
+## Width of a grid of `count` fighter cards that wraps into evenly filled rows (4 + 3, not 6 + 1) in `avail` px.
+static func grid_width(avail: float, count: int) -> float:
+	var gap: float = SPACING * 2.0
+	var per_row: int = maxi(1, floori((avail + gap) / (CHARACTER_CARD_SIZE.x + gap)))
+	var rows: int = ceili(float(count) / per_row)
+	var cols: int = ceili(float(count) / rows)
+	return cols * (CHARACTER_CARD_SIZE.x + gap) - gap
+
+
+## Scrim + the right-hand sheet: showcase on the left, abilities and weapons on the right, READY / back below.
+func _build_overlay(stack: Control) -> void:
+	_overlay = Control.new()
+	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_overlay.clip_contents = true
+	_overlay.visible = false
+	_overlay.resized.connect(func() -> void: _slide_overlay(false))
+	stack.add_child(_overlay)
+	_scrim = ColorRect.new()
+	_scrim.color = Color(0.0, 0.0, 0.0, SCRIM_ALPHA)
+	_scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.add_child(_scrim)
+	var tap := Button.new()  # the whole scrim is a close button
+	tap.flat = true
+	tap.focus_mode = Control.FOCUS_NONE
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.pressed.connect(_close_overlay)
+	_overlay.add_child(tap)
+
+	_sheet = PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = COLOR_BG
+	style.border_color = UiStyle.C_SHADOW
+	style.border_width_left = 2
+	style.shadow_color = Color(0.0, 0.0, 0.0, 0.5)
+	style.shadow_size = 16
+	_sheet.add_theme_stylebox_override("panel", style)
+	_overlay.add_child(_sheet)
+	var sheet_box := VBoxContainer.new()
+	sheet_box.add_theme_constant_override("separation", SPACING)
+	_sheet.add_child(sheet_box)
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", SPACING * 2)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sheet_box.add_child(body)
+	_build_stage(body)
+	_build_details(body)
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", SPACING)
+	sheet_box.add_child(bar)
+	var back: Button = _button(bar, Vector2(190, READY_MIN_SIZE.y))
+	back.text = "‹  Fighters"
+	back.clip_text = false
+	back.pressed.connect(_close_overlay)
 	var gap := Control.new()
 	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(gap)
-	_join_hint = _label(row, &"Label")
-	_join_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
-	_join_hint.add_theme_font_override("font", UiStyle.body_font(true))
-	_join_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW)
-	_join_hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bar.add_child(gap)
+	_add_ready_button(bar)
 
 
-## The preview stage: a framed panel, the fighter at an integer scale, name + stat bars down the left, the lock
-## state along the foot. Tapping it goes back to the fighter step.
-func _build_stage(mid: BoxContainer) -> void:
+## The showcase: a framed panel, the fighter at an integer scale under its name and stat bars, the lock state along
+## the foot.
+func _build_stage(body: BoxContainer) -> void:
 	_stage = Panel.new()
 	_stage.clip_contents = true
 	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_stage.size_flags_stretch_ratio = 1.0
+	_stage.size_flags_stretch_ratio = 0.9
 	var style := StyleBoxFlat.new()
 	style.bg_color = COLOR_STAGE
 	style.border_color = UiStyle.C_SHADOW
@@ -205,23 +299,15 @@ func _build_stage(mid: BoxContainer) -> void:
 	_stage.add_theme_stylebox_override("panel", style)
 	_stage.resized.connect(_layout_stage)
 	_stage.draw.connect(_draw_stage)
-	mid.add_child(_stage)
+	body.add_child(_stage)
 	_pivot = Node2D.new()
 	_stage.add_child(_pivot)
 	_sprite = AnimatedSprite2D.new()
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_pivot.add_child(_sprite)
-	var tap := Button.new()  # the whole stage is a back button
-	tap.flat = true
-	tap.focus_mode = Control.FOCUS_NONE
-	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	tap.pressed.connect(func() -> void: _go(LobbySteps.Step.FIGHTER))
-	_stage.add_child(tap)
 
 	var info := VBoxContainer.new()
-	info.position = Vector2(18, 16)
-	info.custom_minimum_size.x = PREVIEW_INFO_W - 16.0
-	info.size = Vector2(PREVIEW_INFO_W - 16.0, 10)
+	info.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 18)
 	info.add_theme_constant_override("separation", 4)
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(info)
@@ -242,14 +328,6 @@ func _build_stage(mid: BoxContainer) -> void:
 	_stage_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_stage_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage_badge.visible = false
-	_stage_hint = _label(_stage, &"DimLabel")
-	_stage_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-	_stage_hint.text = "TAP TO CHANGE FIGHTER"
-	_stage_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE, Control.PRESET_MODE_MINSIZE, 0)
-	_stage_hint.offset_top = -28.0
-	_stage_hint.offset_bottom = -6.0
-	_stage_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stage_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 ## A caption over a thin bar; returns [caption label, fill rect].
@@ -276,60 +354,19 @@ func _stat_bar(parent: Node, color: Color) -> Array:
 	return [cap, fill]
 
 
-func _build_fighter_panel() -> Control:
+## Right column: the abilities header (title + the three slot chips) stays put; the ability list and, under it,
+## the weapons scroll together.
+func _build_details(body: BoxContainer) -> void:
 	var p := VBoxContainer.new()
 	p.add_theme_constant_override("separation", SPACING)
-	_label(p, &"HeaderLabel").text = "Choose your fighter"
-	_fighter_scroller = HScroller.new(true)
-	_fighter_scroller.fade_color = COLOR_BG
-	_fighter_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	p.add_child(_fighter_scroller)
-	var grid := HFlowContainer.new()
-	grid.add_theme_constant_override("h_separation", SPACING)
-	grid.add_theme_constant_override("v_separation", SPACING)
-	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_fighter_scroller.content.add_child(grid)
-	for c: CharacterData in arena.characters.ordered:
-		var card: Button = _card(grid, CHARACTER_CARD_SIZE, _fighter_art(c), [c.display_name])
-		var id: StringName = c.id
-		_fighter_scroller.on_tap(card, func() -> void: _on_fighter_pressed(id))
-		_character_cards[id] = card
-		var frame := Panel.new()  # outline + tint over the card: your hover, a teammate's hover, a teammate's lock
-		frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		frame.visible = false
-		card.add_child(frame)
-		_fighter_frames[id] = frame
-		var tags := HBoxContainer.new()
-		tags.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 6)
-		tags.add_theme_constant_override("separation", 4)
-		tags.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(tags)
-		_fighter_tags[id] = tags
-		var badge: Label = _label(card, &"Label")
-		badge.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-		badge.add_theme_font_override("font", UiStyle.body_font(true))
-		# A strip across the foot of the portrait.
-		badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, SPACING)
-		badge.offset_top = SPACING + FIGHTER_ART_SIZE.y - BADGE_H
-		badge.offset_bottom = SPACING + FIGHTER_ART_SIZE.y
-		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		badge.visible = false
-		_fighter_badges[id] = badge
-	return p
-
-
-## Header (title, the three slot chips, a Next button) over the list of specials.
-func _build_abilities_panel() -> Control:
-	var p := VBoxContainer.new()
-	p.add_theme_constant_override("separation", SPACING)
+	p.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	p.size_flags_stretch_ratio = 1.2
+	body.add_child(p)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", SPACING)
 	p.add_child(head)
 	var title := _label(head, &"HeaderLabel")
-	title.text = "Pick 3 abilities"
+	title.text = "Abilities · pick 3"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	title.clip_text = true
@@ -354,33 +391,18 @@ func _build_abilities_panel() -> Control:
 		num.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_slot_chips.append(chip)
 		_slot_icons.append(pic)
-	_next_button = _button(head, Vector2(140, BAR_H))
-	_next_button.text = "Weapon  ›"
-	_next_button.clip_text = false
-	_next_button.pressed.connect(func() -> void: _go(LobbySteps.Step.WEAPON))
-	_special_scroller = HScroller.new(true)
-	_special_scroller.fade_color = COLOR_BG
-	_special_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	p.add_child(_special_scroller)
-	_special_row = _special_scroller.content
+	_detail_scroller = HScroller.new(true)
+	_detail_scroller.fade_color = COLOR_BG
+	_detail_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	p.add_child(_detail_scroller)
+	_special_row = _detail_scroller.content
 	_special_row.add_theme_constant_override("separation", 4)
-	return p
-
-
-func _build_weapon_panel() -> Control:
-	var p := VBoxContainer.new()
-	p.add_theme_constant_override("separation", SPACING)
-	_label(p, &"HeaderLabel").text = "Choose your weapon"
-	_weapon_scroller = HScroller.new(true)
+	_label(p, &"HeaderLabel").text = "Weapon"
+	_weapon_scroller = HScroller.new()
 	_weapon_scroller.fade_color = COLOR_BG
-	_weapon_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	p.add_child(_weapon_scroller)
-	_weapon_grid = HFlowContainer.new()
-	_weapon_grid.add_theme_constant_override("h_separation", SPACING)
-	_weapon_grid.add_theme_constant_override("v_separation", SPACING)
-	_weapon_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_weapon_scroller.content.add_child(_weapon_grid)
-	return p
+	_weapon_row = _weapon_scroller.content
+	_weapon_row.add_theme_constant_override("separation", SPACING)
 
 
 ## Roster + blocker on the left, Leave and the always-visible READY on the right.
@@ -406,85 +428,82 @@ func _build_footer(box: BoxContainer) -> void:
 	leave.text = "Leave"
 	leave.size_flags_vertical = Control.SIZE_SHRINK_END
 	leave.pressed.connect(func() -> void: arena.leave_requested.emit(false))
-	_ready_button = _button(footer, READY_MIN_SIZE)
-	_ready_button.theme_type_variation = &"PrimaryButton"
-	_ready_button.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
-	_ready_button.size_flags_vertical = Control.SIZE_SHRINK_END
-	_ready_button.pressed.connect(_on_ready_pressed)
+	_add_ready_button(footer)
 
 
-## A fighter card was tapped: request it (a hover in Teams, the lock comes with READY) and move on to its abilities.
+func _add_ready_button(parent: Node) -> void:
+	var b: Button = _button(parent, READY_MIN_SIZE)
+	b.theme_type_variation = &"PrimaryButton"
+	b.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
+	b.size_flags_vertical = Control.SIZE_SHRINK_END
+	b.pressed.connect(_on_ready_pressed)
+	_ready_buttons.append(b)
+
+
+## A fighter card was tapped: request it (a hover in Teams, the lock comes with READY) and open its overlay.
 func _on_fighter_pressed(id: StringName) -> void:
-	var changed: bool = id != _pick()[0]
 	arena.character_requested.emit(id)
-	_steps.pick_fighter(changed)
-	_apply_step(true)
+	var slides_in: bool = _overlay_state.open_for(id)
+	if arena.local_player != null and arena.local_player.character.id == id:
+		_show_preview(arena.local_player.character)  # already your fighter: replay the zoom (else _refresh does it)
+	if slides_in:
+		_slide_overlay(true)
 
 
-## Jump to a step (tab, preview tap, Next button).
-func _go(to: LobbySteps.Step) -> void:
-	if to == _steps.step:
-		return
-	_steps.go(to)
-	_apply_step(true)
+func _close_overlay() -> void:
+	if _overlay_state.close():
+		_slide_overlay(true)
 
 
-## Lays the three panels out as a carousel around the current step; animated, they slide (any slide in flight is
-## replaced, so tapping through the tabs quickly never queues up).
-func _apply_step(animate: bool) -> void:
+## Puts the sheet where the overlay state says: open (docked to the right) or closed (off the right edge), with the
+## scrim fading to match. Animated, any slide in flight is replaced, so a tap on a card while it closes just reverses.
+func _slide_overlay(animate: bool) -> void:
 	if _slide_tween != null:
 		_slide_tween.kill()
 		_slide_tween = null
-	var step: int = _steps.step
-	for i: int in _tabs.size():
-		_tabs[i].theme_type_variation = &"PrimaryButton" if i == step else &"Button"
-	_stage_hint.visible = step != LobbySteps.Step.FIGHTER and not _stage_badge.visible
-	var w: float = _host.size.x
-	if w <= 0.0:
-		return
-	var tween: Tween = null
-	if animate and is_inside_tree():
-		tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	var w: float = _overlay.size.x
+	var h: float = _overlay.size.y
+	var sheet_w: float = roundf(w * SHEET_FRACTION)
+	var open: bool = _overlay_state.is_open
+	var x: float = w - sheet_w if open else w
+	var alpha: float = SCRIM_ALPHA if open else 0.0
+	_sheet.size = Vector2(sheet_w, h)
+	_sheet.position.y = 0.0
+	if animate and is_inside_tree() and w > 0.0:
+		_overlay.visible = true
+		var tween: Tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		_slide_tween = tween
-	for i: int in _panels.size():
-		var p: Control = _panels[i]
-		var on: bool = i == step
-		var x: float = (i - step) * (w + PANEL_GAP)
-		p.size = _host.size
-		if tween != null:
-			p.visible = true
-			tween.tween_property(p, "position:x", x, SLIDE_TIME)
-			tween.tween_property(p, "modulate:a", 1.0 if on else 0.0, SLIDE_TIME)
-		else:
-			p.position = Vector2(x, 0.0)
-			p.modulate.a = 1.0 if on else 0.0
-			p.visible = on
-	if tween != null:
+		tween.tween_property(_sheet, "position:x", x, SLIDE_TIME)
+		tween.tween_property(_scrim, "color:a", alpha, SLIDE_TIME)
 		tween.finished.connect(func() -> void:
-			for i: int in _panels.size():
-				_panels[i].visible = i == _steps.step)
+			_slide_tween = null
+			_overlay.visible = _overlay_state.is_open)
+	else:
+		_sheet.position.x = x
+		_scrim.color.a = alpha
+		_overlay.visible = open
 
 
-## Integer pixel scale that fits the sprite cell in what the info column leaves of the stage.
+## Integer pixel scale that fits the sprite cell under the name block of a stage this big.
 static func preview_scale(stage: Vector2) -> int:
 	var cell: float = float(Constants.SPRITE_CELL_SIZE) * 0.9
-	var fit: float = minf((stage.x - 60.0) / cell, (stage.y - 40.0) / cell)
+	var fit: float = minf((stage.x - 40.0) / cell, (stage.y - PREVIEW_TOP - 40.0) / cell)
 	return clampi(floori(fit), 2, PREVIEW_MAX_SCALE)
 
 
 func _layout_stage() -> void:
 	var s: int = preview_scale(_stage.size)
 	_sprite.scale = Vector2.ONE * s
-	_pivot.position = Vector2(_stage.size.x * 0.5, _stage.size.y * 0.5 + 6.0 * s)
+	var room: float = _stage.size.y - PREVIEW_TOP - 30.0
+	_pivot.position = Vector2(_stage.size.x * 0.5, PREVIEW_TOP + room * 0.5 + 4.0 * s)
 	_stage.queue_redraw()
 
 
-## A soft floor shadow under the fighter.
+## A soft spotlight behind the fighter and a floor shadow under it.
 func _draw_stage() -> void:
 	var s: float = _sprite.scale.x
-	# Spotlight: stacked translucent discs fading outward behind the fighter.
 	var glow_at: Vector2 = _pivot.position - Vector2(0.0, 4.0 * s)
-	var reach: float = minf(_stage.size.x, _stage.size.y) * 0.62
+	var reach: float = minf(_stage.size.x, _stage.size.y - PREVIEW_TOP) * 0.7
 	for i: int in 28:
 		_stage.draw_circle(glow_at, reach * (1.0 - i * 0.035), Color(0.32, 0.42, 0.78, 0.014))
 	var feet: Vector2 = _pivot.position + Vector2(0.0, 22.0 * s)
@@ -495,7 +514,7 @@ func _draw_stage() -> void:
 	_stage.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## Shows `c` in the big preview: a smooth zoom + fade in. A fast change replaces the tween in flight.
+## Shows `c` in the showcase: a smooth zoom + fade in. A fast change replaces the tween in flight.
 func _show_preview(c: CharacterData) -> void:
 	_preview_id = c.id
 	if _preview_tween != null:
@@ -506,8 +525,7 @@ func _show_preview(c: CharacterData) -> void:
 	_in_flair = false
 	_flair_left = FLAIR_GAP.x
 	_layout_stage()
-	_name_label.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING + 6)
-	UiStyle.fit_label(_name_label, c.display_name, PREVIEW_INFO_W - 16.0, UiStyle.SIZE_HEADING + 6, UiStyle.SIZE_BODY, true)
+	UiStyle.fit_label(_name_label, c.display_name, maxf(_stage.size.x - 36.0, 120.0), UiStyle.SIZE_HEADING + 6, UiStyle.SIZE_BODY, true)
 	var top_hp := 1
 	var top_armor := 1
 	for o: CharacterData in arena.characters.ordered:
@@ -528,7 +546,7 @@ func _show_preview(c: CharacterData) -> void:
 
 ## Now and then the preview runs or swings before settling back to idle.
 func _tick_flair(delta: float) -> void:
-	if _sprite.sprite_frames == null:
+	if _sprite.sprite_frames == null or not _overlay.visible:
 		return
 	_flair_left -= delta
 	if _flair_left > 0.0:
@@ -599,9 +617,8 @@ func _refresh() -> void:
 		return
 	if not _was_visible:  # a fresh loading room starts back on the fighter step
 		_was_visible = true
-		_steps.go(LobbySteps.Step.FIGHTER)
-		_steps.specials_picked = 0
-		_apply_step(false)
+		_overlay_state.close()
+		_slide_overlay(false)
 	var me: Player = arena.local_player
 	_title.text = "LOADING ROOM · %s" % MatchRules.MODE_NAMES[st.mode]
 	if st.mode == MatchRules.Mode.TEAMS:
@@ -618,14 +635,11 @@ func _refresh() -> void:
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
 	if _weapons_for != me.character.id:
 		_build_weapon_cards(me.character)
-	var previous: Array[StringName] = _shown_pick
 	_shown_pick = _pick()
 	if _shown_pick[0] != _preview_id:
 		_show_preview(me.character)
 		if _character_cards.has(_shown_pick[0]):
 			_fighter_scroller.reveal(_character_cards[_shown_pick[0]])
-	if _shown_pick[1] != previous[1] and _weapon_cards.has(_shown_pick[1]):
-		_weapon_scroller.reveal(_weapon_cards[_shown_pick[1]])
 	for id: StringName in _character_cards:
 		_character_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[0] else &"Card"
 	for id: StringName in _weapon_cards:
@@ -698,9 +712,10 @@ func _refresh() -> void:
 	_mark_fighters(st, me, shown_teams, taker)
 	_blocker.text = _toast if _toast_left > 0.0 else "Taken by %s" % _team_name(arena.get_player(taker)) if taker != 0 \
 		else st.blocker
-	_ready_button.text = ("UNLOCK" if teams_mode else "UNREADY") if _is_ready() else "LOCK IN" if teams_mode else "READY!"
-	_ready_button.disabled = taker != 0
-	_ready_button.theme_type_variation = &"Button" if _is_ready() else &"PrimaryButton"
+	for b: Button in _ready_buttons:
+		b.text = ("UNLOCK" if teams_mode else "UNREADY") if _is_ready() else "LOCK IN" if teams_mode else "READY!"
+		b.disabled = taker != 0
+		b.theme_type_variation = &"Button" if _is_ready() else &"PrimaryButton"
 	_mark_preview(taker)
 
 
@@ -803,11 +818,10 @@ func _badge(fighter: StringName, text: String, color: Color) -> void:
 func _build_weapon_cards(c: CharacterData) -> void:
 	_weapons_for = c.id
 	_weapon_cards.clear()
-	_steps.specials_picked = 0
-	for child: Node in _weapon_grid.get_children():
+	for child: Node in _weapon_row.get_children():
 		child.queue_free()
 	for w: WeaponData in arena.weapons_for(c):
-		var card: Button = _card(_weapon_grid, WEAPON_CARD_SIZE, _art(w.sprite, WEAPON_ART_SCALE),
+		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, _art(w.sprite, WEAPON_ART_SCALE),
 			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
 				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost], w.hook])
 		var id: StringName = w.id
@@ -822,7 +836,7 @@ func _build_weapon_cards(c: CharacterData) -> void:
 	for sk: SkillData in SkillCatalog.shared().specials_for(c):
 		var card: Button = _skill_row(sk)
 		var sid: StringName = sk.id
-		_special_scroller.on_tap(card, func() -> void: _on_special_pressed(sid))
+		_detail_scroller.on_tap(card, func() -> void: _on_special_pressed(sid))
 		_special_cards[sid] = card
 		var badge: Label = _label(card, &"HeaderLabel")
 		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING * 3)
@@ -837,8 +851,6 @@ func _on_special_pressed(id: StringName) -> void:
 		return
 	arena.special_requested.emit(_older_slot, id)
 	_older_slot = (_older_slot + 1) % Constants.SKILL_SLOTS
-	_steps.pick_special(Constants.SKILL_SLOTS)
-	_apply_step(true)
 
 
 ## A special row: icon, bold name with its cooldown on the right, one-line description below.
@@ -933,7 +945,6 @@ func _mark_preview(taker: int) -> void:
 	_stage_badge.text = text
 	_stage_badge.add_theme_color_override("font_color", color)
 	_sprite.modulate = Color(0.45, 0.45, 0.5) if taker != 0 else Color.WHITE
-	_stage_hint.visible = _steps.step != LobbySteps.Step.FIGHTER and text == ""
 
 
 ## The local player's (character id, weapon id, then the special id of each slot).
@@ -964,7 +975,11 @@ func _on_team_pressed() -> void:
 
 
 func _on_ready_pressed() -> void:
-	arena.ready_requested.emit(not _is_ready())
+	var will_be_ready: bool = not _is_ready()
+	arena.ready_requested.emit(will_be_ready)
+	if will_be_ready and _overlay_state.is_open:  # locked in: back to the grid, your card turns gold
+		_overlay_state.ready_pressed(true)
+		_slide_overlay(true)
 
 
 func _row(parent: Node) -> HBoxContainer:
@@ -1037,12 +1052,18 @@ func _fighter_art(c: CharacterData) -> Control:
 func _apply_background() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = COLOR_BG
-	var i: Vector4 = UiStyle.safe_insets(get_viewport())
-	style.content_margin_left = i.x + SPACING
-	style.content_margin_top = i.y + SPACING
-	style.content_margin_right = i.z + SPACING
-	style.content_margin_bottom = i.w
 	add_theme_stylebox_override("panel", style)
+	var i: Vector4 = UiStyle.safe_insets(get_viewport())
+	_margin.add_theme_constant_override("margin_left", int(i.x) + SPACING)
+	_margin.add_theme_constant_override("margin_top", int(i.y) + SPACING)
+	_margin.add_theme_constant_override("margin_right", int(i.z) + SPACING)
+	_margin.add_theme_constant_override("margin_bottom", int(i.w))
+	if _sheet != null:
+		var sheet: StyleBoxFlat = _sheet.get_theme_stylebox("panel") as StyleBoxFlat
+		sheet.content_margin_left = SPACING * 2
+		sheet.content_margin_top = i.y + SPACING
+		sheet.content_margin_right = i.z + SPACING
+		sheet.content_margin_bottom = i.w
 
 
 func _new_row_flow() -> HFlowContainer:
