@@ -144,7 +144,7 @@ const TEAMS_INTERMISSION: float = 3.0
 const TEAMS_HP_SCALE: float = 1.5
 ## Capture the flag: touch range of a flag / base pad, how long a dropped flag lies before it flies home, and the
 ## carrier's move speed multiplier.
-const FLAG_TOUCH_RADIUS: float = 44.0
+const FLAG_TOUCH_RADIUS: float = 56.0
 const FLAG_RETURN_TIME: float = 8.0
 const FLAG_CARRIER_SPEED_SCALE: float = 0.85
 ## Bots: how near a lying flag must be for them to fetch it, how near the carrier's pursuers stop closing in, how much

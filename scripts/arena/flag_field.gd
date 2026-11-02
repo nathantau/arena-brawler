@@ -6,18 +6,25 @@ extends Node2D
 
 const FPS: float = 8.0
 const FRAMES: int = 6
-## The pole's foot in a flag frame, and the pad's centre in a pad frame (art px).
-const FLAG_FOOT: Vector2 = Vector2(15.0, 43.0)
-const PAD_CENTER: Vector2 = Vector2(32.0, 38.0)
-## A carried flag stands behind the carrier's back, a little above his feet.
-const CARRY_BACK: float = 24.0
-const CARRY_LIFT: float = 20.0
+## The strips are delivered at x2 (generate.py `up2`), so they play 1:1: no sprite scaling, every art px is a screen px.
+const ART_SCALE: float = 1.0
+## The pole's foot in a flag / carried-flag frame, and the pad's centre in a pad frame (art px).
+const FLAG_FOOT: Vector2 = Vector2(30.0, 86.0)
+const CARRY_FOOT: Vector2 = Vector2(40.0, 150.0)
+const PAD_CENTER: Vector2 = Vector2(64.0, 76.0)
+## A carried flag stands behind the carrier's back (away from where he runs), its foot a little above his feet, so the
+## pole climbs well past his head and the cloth waves above it.
+const CARRY_BACK: float = 22.0
+const CARRY_LIFT: float = 14.0
+const CARRY_FLIP_SPEED: float = 30.0
 ## A dropped flag blinks over its last seconds before it flies home.
 const BLINK_SECONDS: float = 2.0
 const BLINK_HZ: float = 6.0
 const PAD_AWAY_ALPHA: float = 0.55
-const CAPTURE_ART_RADIUS: float = 44.0
-const RETURN_ART_RADIUS: float = 32.0
+## The ring in the capture strip reaches 58 art px from a centre 16 px below the frame's middle; the poof frame is 96 px.
+const CAPTURE_ART_RADIUS: float = 58.0
+const CAPTURE_CENTER_DROP: float = 16.0
+const RETURN_ART_RADIUS: float = 48.0
 const TEAMS: Array[int] = [MatchRules.TEAM_A, MatchRules.TEAM_B]
 
 var arena: Arena
@@ -26,6 +33,8 @@ var _tex: Dictionary[String, Texture2D] = {}
 var _pads: Dictionary[int, Sprite2D] = {}
 var _holders: Dictionary[int, Node2D] = {}
 var _flags: Dictionary[int, Sprite2D] = {}
+var _carried: Dictionary[int, Sprite2D] = {}
+var _side: Dictionary[int, float] = {1: -1.0, 2: -1.0}
 var _time: float = 0.0
 var _prev_state: Array[int] = [0, 0, 0]
 var _prev_carrier: Array[int] = [0, 0, 0]
@@ -35,7 +44,8 @@ var _prev_break: bool = false
 
 func _ready() -> void:
 	y_sort_enabled = true  # the flags sort with fighters and crates
-	for name: String in ["flag_ally", "flag_enemy", "flag_pad_ally", "flag_pad_enemy", "flag_capture", "flag_return"]:
+	for name: String in ["flag_ally", "flag_enemy", "flag_pad_ally", "flag_pad_enemy", "flag_carry_ally", "flag_carry_enemy",
+			"flag_capture_ally", "flag_capture_enemy", "flag_return"]:
 		_tex[name] = load("res://assets/fx/%s.png" % name)
 	for t: int in TEAMS:
 		var pad := Sprite2D.new()
@@ -51,6 +61,11 @@ func _ready() -> void:
 		flag.position = Vector2(0.0, Player.FOOT_RING_Y)  # the holder sits a foot-ring above the foot line, like a fighter
 		holder.add_child(flag)
 		_flags[t] = flag
+		var carried := Sprite2D.new()
+		_setup(carried, CARRY_FOOT, _tex["flag_carry_ally"])
+		carried.position = Vector2(0.0, Player.FOOT_RING_Y)
+		holder.add_child(carried)
+		_carried[t] = carried
 
 
 func _setup(s: Sprite2D, pivot: Vector2, tex: Texture2D) -> void:
@@ -58,7 +73,7 @@ func _setup(s: Sprite2D, pivot: Vector2, tex: Texture2D) -> void:
 	s.hframes = FRAMES
 	s.centered = false
 	s.offset = -pivot
-	s.scale = Vector2.ONE * Constants.SPRITE_SCALE
+	s.scale = Vector2.ONE * ART_SCALE
 	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 
@@ -85,7 +100,9 @@ func _process(delta: float) -> void:
 		flag.texture = _tex["flag_" + suffix]
 		flag.frame = (frame + t) % FRAMES
 		flag.modulate.a = 1.0
-		flag.scale.x = Constants.SPRITE_SCALE  # a planted flag's cloth streams right; a carried one streams away from him
+		var carried: Sprite2D = _carried[t]
+		flag.visible = true
+		carried.visible = false
 		var foot: Vector2
 		match st.flag_state[t]:
 			MatchState.Flag.HOME:
@@ -96,10 +113,16 @@ func _process(delta: float) -> void:
 					flag.modulate.a = 0.35
 			_:
 				var carrier: Player = arena.get_player(st.flag_carrier[t])
-				if carrier == null or carrier.dead:
+				if carrier == null or carrier.dead or not carrier.visible:  # a dying carrier's flag has dropped already
 					continue
-				var side: float = -1.0 if carrier.facing.x >= 0.0 else 1.0
-				flag.scale.x = side * Constants.SPRITE_SCALE
+				if absf(carrier.velocity.x) > CARRY_FLIP_SPEED:  # the cloth streams away from where he runs
+					_side[t] = -signf(carrier.velocity.x)
+				var side: float = _side[t]
+				flag.visible = false
+				carried.visible = true
+				carried.texture = _tex["flag_carry_" + suffix]
+				carried.frame = (frame + t) % FRAMES
+				carried.scale.x = side * ART_SCALE
 				foot = carrier.global_position + carrier.visual_offset \
 					+ Vector2(side * CARRY_BACK, Player.FOOT_RING_Y - CARRY_LIFT)
 				foot.y -= 2.0  # sorts just behind him
@@ -116,13 +139,15 @@ func _play_events(st: MatchState) -> void:
 	if fx != null and st.mode == MatchRules.Mode.TEAMS:
 		if on_break and not _prev_break and st.round_reason == MatchRules.Reason.CAPTURE and st.round_winner != 0:
 			var at: Vector2 = arena.flag_base(st.round_winner)
-			fx.burst_strip(at, CAPTURE_ART_RADIUS * Constants.SPRITE_SCALE, _tex["flag_capture"], CAPTURE_ART_RADIUS)
+			var viewer: int = Player.viewer_team if Player.viewer_team != 0 else MatchRules.TEAM_A
+			var art: Texture2D = _tex["flag_capture_ally" if st.round_winner == viewer else "flag_capture_enemy"]
+			fx.burst_strip(at - Vector2(0.0, CAPTURE_CENTER_DROP), CAPTURE_ART_RADIUS * ART_SCALE, art, CAPTURE_ART_RADIUS)
 			arena.sfx.play(&"results", at)
 		for t: int in TEAMS:
 			if _prev_state[t] == MatchState.Flag.DROPPED and st.flag_state[t] == MatchState.Flag.HOME and same_round \
 					and not on_break:
 				var base: Vector2 = arena.flag_base(t)
-				fx.burst_strip(base, RETURN_ART_RADIUS * Constants.SPRITE_SCALE, _tex["flag_return"], RETURN_ART_RADIUS)
+				fx.burst_strip(base, RETURN_ART_RADIUS * ART_SCALE, _tex["flag_return"], RETURN_ART_RADIUS)
 				arena.sfx.play(&"pickup_ready", base)
 			elif _prev_state[t] != MatchState.Flag.CARRIED and st.flag_state[t] == MatchState.Flag.CARRIED and same_round:
 				arena.sfx.play(&"pickup", arena.flag_base(t))

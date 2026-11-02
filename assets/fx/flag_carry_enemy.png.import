@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cddappku3yjty"
-path="res://.godot/imported/flag_capture.png-8a1abdf146e7c4a1eb6d0a89f7115100.ctex"
+uid="uid://cdmld5gqnqp8a"
+path="res://.godot/imported/flag_carry_enemy.png-07a5db07a368606bc8c9ec82489fbeb2.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/fx/flag_capture.png"
-dest_files=["res://.godot/imported/flag_capture.png-8a1abdf146e7c4a1eb6d0a89f7115100.ctex"]
+source_file="res://assets/fx/flag_carry_enemy.png"
+dest_files=["res://.godot/imported/flag_carry_enemy.png-07a5db07a368606bc8c9ec82489fbeb2.ctex"]
 
 [params]
 

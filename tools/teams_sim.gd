@@ -59,6 +59,13 @@ func _tick() -> void:
 					arena.referee.flag_pickup(p.player_id, MatchRules.TEAM_A)
 					p.global_position = arena.map.size * 0.5 + Vector2(-330.0, 30.0)
 					break
+			for p: Player in arena.players:  # everyone else holds still far away, so the carrier is alone in the open
+				if p != _carrier and not p.is_local:
+					p.frozen = true
+					p.global_position = arena.flag_base(p.team) + Vector2(0.0, 380.0 if p.player_id % 2 == 0 else -380.0)
+				elif p.is_local:
+					p.frozen = true
+					p.global_position = arena.flag_base(p.team) + Vector2(0.0, 300.0)
 		if shot_path != "" and _play_frames == shot_frames:
 			_shoot()
 			return
@@ -93,7 +100,7 @@ func _shoot() -> void:
 	var view: Vector2 = root.get_visible_rect().size
 	arena.camera.position_smoothing_enabled = false
 	if _carrier != null:  # close up on the carrier
-		arena.camera.zoom = Vector2.ONE * arena._zoom() * 1.6
+		arena.camera.zoom = Vector2.ONE * arena._zoom() * 1.3
 		arena.camera.global_position = _carrier.global_position
 	else:
 		arena.camera.zoom = Vector2.ONE * minf(view.x / arena.map.size.x, view.y / arena.map.size.y)

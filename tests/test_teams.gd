@@ -586,3 +586,27 @@ func test_one_and_a_half_times_hp_only_in_teams() -> void:
 	teams.match_state.mode = MatchRules.Mode.FFA
 	teams._apply_teams()
 	assert_eq(a.stats.max_hp, a.character.max_hp, "switching the mode back restores it")
+
+
+func test_carried_flag_rides_the_carrier_and_hides_when_he_dies() -> void:
+	var arena: Arena = _flag_arena()
+	var field := FlagField.new()
+	field.arena = arena
+	arena.add_child(field)
+	var st: MatchState = arena.match_state
+	var thief: Player = arena.get_player(3)
+	st.flag_state[A] = MatchState.Flag.CARRIED
+	st.flag_carrier[A] = 3
+	await wait_process_frames(2)
+	assert_true(field._holders[A].visible, "the flag shows on the carrier")
+	assert_true(field._carried[A].visible, "as the tall carried banner")
+	assert_false(field._flags[A].visible, "not the planted one")
+	thief.respawn_timer = 99.0
+	thief._set_dead(true)  # dying: the referee drops the flag a frame later, the view must not draw it meanwhile
+	await wait_process_frames(2)
+	assert_false(field._holders[A].visible, "no flag on a dead carrier: it has dropped")
+	st.flag_state[A] = MatchState.Flag.DROPPED
+	st.flag_pos[A] = Vector2(500, 72)
+	await wait_process_frames(2)
+	assert_true(field._flags[A].visible, "the dropped flag stands where it fell")
+	assert_false(field._carried[A].visible)
