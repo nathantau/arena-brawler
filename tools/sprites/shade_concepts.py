@@ -328,17 +328,23 @@ def mouth(c, kind):
 
 def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     mv = 1.0 if step is not None else 0.0  # walking: tails and hair stream further back
-    # ---- legs: navy trousers, light grey shin wraps with wrap lines, a thigh strap, dark split-toe tabi
-    for x, dy in legs(low, NAVY, SHADOW, step):
-        low.flat(L([(x + 1, 46 + dy), (x + 1, 49 + dy)], 1), BLUE)
-        low.flat(R((x, 50 + dy, x + 5, 50 + dy)), BROWN)
-        low.dot(x + 2, 50 + dy, GOLD)
-        low.flat(R((x, 51 + dy, x + 5, 53 + dy)), STEEL)
+    # ---- legs: dark leggings with a dithered fishnet strip, light grey bandage wraps with diagonal lines, dark split-toe tabi
+    for x, dy in legs(low, SHADOW, SHADOW, step):
+        for yy in (50 + dy, 51 + dy):
+            for xx in range(x, x + 6):
+                if (xx + yy) % 2 == 0:
+                    low.dot(xx, yy, STEEL_D)
+        low.flat(R((x, 52 + dy, x + 5, 53 + dy)), STEEL)
         low.flat(R((x, 53 + dy, x + 5, 53 + dy)), STEEL_D)
-        low.flat(L([(x, 52 + dy), (x + 5, 51 + dy)], 1), WHITE)
-        low.flat(L([(x, 53 + dy), (x + 5, 52 + dy)], 1), STEEL_D)
-        low.flat(L([(x + 6, 55 + dy), (x + 6, 56 + dy)], 1), OUTLINE)
+        low.flat(L([(x, 53 + dy), (x + 5, 52 + dy)], 1), WHITE)  # wrap line
+        low.dot(x, 52 + dy, WHITE)
+        low.flat(L([(x + 6, 55 + dy), (x + 6, 56 + dy)], 1), OUTLINE)  # tabi split toe
         low.dot(x, 54 + dy, STEEL_D)
+    # thigh kunai holster on the outer leg: a leather pouch and a red-wrapped handle with a tiny gold bead sticking out
+    low.part(P([(39, 50), (43, 51), (43, 55), (40, 56), (39, 54)]), BROWN)
+    low.flat(L([(39, 51), (43, 52)], 1), OCHRE_D)
+    low.flat(L([(43, 52), (46, 51)], 2), RED)
+    low.dot(47, 51, YELLOW)
     # ---- back hair
     if hair == "H1":  # high ponytail with volume
         pt = strand((29, 5), (13 - 3 * mv, -13), (-3 - 4 * mv, 8), (3 - 5 * mv, 36 - 3 * mv), t, 5.0, k=2.0, lag=0.8, n=18)
@@ -413,49 +419,46 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         ribbon(up, t1, 5.6, 4.4, RED)
         across(up, t1, 7, 2.4, GOLD)
         across(up, t2, 7, 2.2, GOLD)
-    bw = sw_(t, 1.0, 1)  # small obi bow behind her hip
-    up.part(P([(21, 43), (17, 41 + bw), (16, 45 + bw), (19, 46), (21, 45)]), RED)
-    up.part(P([(21, 44), (17, 48 + bw), (19, 50 + bw), (22, 47)]), RED)
-    # ---- back arm: gold bracer
+    bw = sw_(t, 1.0, 1)
+    def tekko(x):  # a dark arm wrap and a steel plate on the back of the hand
+        up.flat(L([(x, 40), (x + 5, 42)], 1), STEEL)
+        up.flat(L([(x, 41), (x + 5, 43)], 1), SHADOW)
+        up.flat(R((x + 1, 43, x + 4, 44)), STEEL)
+        up.dot(x + 1, 43, WHITE)
+        up.flat(R((x + 1, 45, x + 4, 45)), STEEL_D)
+    up.part(E((17, 34, 24, 40)), RED)  # knot of the scarf, behind her neck
+    up.flat(L([(18, 36), (22, 36)], 1), ORANGE)
+    up.flat(L([(19, 38), (23, 39)], 1), MAROON)
     ax = g.ARM_X[0]
     arm(up, ax, NAVY, SKIN)
-    up.flat(R((ax, 39, ax + 5, 41)), GOLD)
-    up.flat(R((ax, 39, ax + 5, 39)), YELLOW)
-    up.flat(R((ax, 41, ax + 5, 41)), OCHRE_D)
-    # ---- fitted navy top over a short, split hem
-    flare = [(20, 44), (44, 44), (45, 49), (42, 50 + sw_(t, 1.0, 1)), (37, 48), (32, 50), (27, 48), (22, 50 - sw_(t, 0.5, 1)), (19, 48)]
-    up.part(lambda d, f: (d.rounded_rectangle(BODY, 3, f), d.polygon(flare, f)), NAVY)
-    up.flat(L([(21, 39), (21, 47)], 1), BLUE)
-    up.flat(L([(23, 38), (27, 38)], 1), BLUE)
-    up.dither(R((36, 39, 44, 48)), SHADOW, "check", only_on=NAVY)
-    up.flat(L([(25, 38), (32, 43)], 1), SHADOW)  # kimono crossover V
-    up.flat(L([(41, 38), (33, 43)], 1), SHADOW)
-    up.flat(L([(26, 38), (32, 42)], 1), BLUE)
-    up.flat(L([(33, 39), (33, 43)], 1), SHADOW)
-    up.part(R((19, 43, 45, 46)), RED, line=False)  # red obi, gold buckle
-    up.flat(R((19, 43, 45, 43)), ORANGE)
-    up.flat(R((19, 46, 45, 46)), MAROON)
-    up.part(RR((29, 42, 36, 47), 2), GOLD)
-    up.flat(R((30, 43, 32, 43)), YELLOW)
-    up.flat(R((32, 45, 34, 46)), OCHRE_D)
-    up.part(RR((19, 34, 46, 38), 2), RED)  # neck scarf
-    up.flat(L([(22, 35), (36, 35)], 1), ORANGE)
-    up.flat(L([(22, 37), (44, 37)], 1), MAROON)
-    up.part(E((17, 34, 25, 41)), RED)  # the knot the tails come from
-    up.flat(L([(19, 36), (23, 36)], 1), ORANGE)
-    up.flat(L([(20, 39), (24, 40)], 1), MAROON)
-    # ---- front arm: gold bracer
+    tekko(ax)
+    # ---- kimono-style wrap top over a short, flared skirt with split flaps
+    flare = [(20, 43), (44, 43), (46, 46.5), (42, 48 + sw_(t, 1.0, 1)), (37, 47), (33, 44.5), (29, 47), (24, 48 - sw_(t, 0.5, 1)), (19, 46.5)]
+    up.part(lambda d, f: (d.rounded_rectangle((20, 33, 44, 44), 3, f), d.polygon(flare, f)), NAVY)
+    up.flat(L([(21, 38), (21, 42)], 1), BLUE)
+    up.flat(L([(21, 44), (19.5, 46)], 1), BLUE)
+    up.dither(R((38, 40, 44, 47)), SHADOW, "check", only_on=NAVY)
+    up.flat(L([(33, 45), (33, 46)], 1), SHADOW)  # skirt split
+    # slim neck scarf under her chin (the knot at the back of her neck and the short stubs are drawn behind)
+    up.part(RR((22, 37, 43, 38), 1), RED)
+    up.flat(L([(24, 37), (36, 37)], 1), ORANGE)
+    # crossover collar, left over right: a cream inner edge on the top lapel, a dark edge under it
+    up.flat(L([(26, 39), (34, 43)], 1), CREAM)
+    up.flat(L([(26, 40), (33, 43)], 1), SHADOW)
+    up.flat(L([(43, 39), (36, 42)], 1), SHADOW)
+    up.flat(L([(42, 39), (36, 41)], 1), BLUE)
+    # red obi: a plain sash with a small knot in front of her right hip, two short hanging ends, a tiny gold bead
+    up.part(R((20, 42, 44, 44)), RED, line=False)
+    up.flat(R((20, 42, 44, 42)), ORANGE)
+    up.flat(R((20, 44, 44, 44)), MAROON)
+    up.part(P([(35, 45), (33, 49.5 + bw), (36, 48.5 + bw)]), RED)
+    up.part(P([(37, 45), (40, 49.5 + bw), (38, 47.5 + bw)]), RED)
+    up.part(E((34, 41, 39, 46)), RED)
+    up.dot(35, 42, ORANGE)
+    up.dot(36, 44, YELLOW)
     fx = g.ARM_X[1]
     arm(up, fx, NAVY, SKIN)
-    up.flat(R((fx, 39, fx + 5, 41)), GOLD)
-    up.flat(R((fx, 39, fx + 5, 39)), YELLOW)
-    up.flat(R((fx, 41, fx + 5, 41)), OCHRE_D)
-    up.part(P([(39, 48), (44, 49), (44, 54), (41, 55), (39, 52)]), BROWN)  # thigh kunai holster
-    up.flat(L([(39, 49), (44, 50)], 1), OCHRE_D)
-    up.dot(41, 50, GOLD)
-    up.flat(L([(42, 49), (45, 46)], 1), RED)
-    disc(up, 46, 45, 2, GOLD)
-    up.dot(46, 45, OUTLINE)
+    tekko(fx)
     # ---- head: hair mass, face
     if hair in ("H5", "H7", "H8", "H9"):
         up.part(E((17, 7, 49, 36) if hair == "H7" else ((13, 3, 53, 37) if hair == "H9" else (16, 4, 50, 36))), HAIR_A)
