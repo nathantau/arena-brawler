@@ -285,18 +285,6 @@ func test_flicker_can_pick_all_ninja_specials() -> void:
 		assert_false(c.can_use_skill(skills.get_skill(&"smoke_bomb")), String(c.id))
 
 
-func test_smoke_hides_only_inside_the_cloud() -> void:
-	var world := Node2D.new()
-	add_child_autofree(world)
-	var p: Player = _flicker_in(world, &"smoke_bomb")
-	p.global_position = Vector2(200, 200)
-	assert_false(p.is_hidden())
-	_press_special(p, Vector2.RIGHT)
-	assert_true(p.is_hidden())
-	p.global_position += Vector2(skills.get_skill(&"smoke_bomb").smoke_radius + 5.0, 0)
-	assert_false(p.is_hidden(), "stepped out of the smoke")
-
-
 func test_shadow_clones_run_out_and_stop_at_walls() -> void:
 	var world := Node2D.new()
 	add_child_autofree(world)
@@ -1926,7 +1914,7 @@ func test_overdrive_ticks_the_weapon_faster_only_while_active() -> void:
 	assert_gt(d.overdrive_fire_scale, 1.0)
 
 
-func test_smoke_speeds_you_up_only_inside_the_cloud() -> void:
+func test_smoke_speeds_you_up_only_while_invisible() -> void:
 	var world := Node2D.new()
 	add_child_autofree(world)
 	var p: Player = _flicker_in(world, &"smoke_bomb")
@@ -1944,7 +1932,7 @@ func test_smoke_speeds_you_up_only_inside_the_cloud() -> void:
 	for i: int in 10:
 		p.simulate(go, DT)
 	assert_true(p.is_hidden())
-	assert_almost_eq(p.velocity.x, normal * d.smoke_speed_scale, 1.0, "hurried inside the cloud")
+	assert_almost_eq(p.velocity.x, normal * d.smoke_speed_scale, 1.0, "hurried while invisible")
 	assert_gt(d.smoke_speed_scale, 1.0)
 
 

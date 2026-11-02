@@ -81,3 +81,20 @@ func test_fighter_behind_a_wall_is_ghosted_and_one_in_front_is_not() -> void:
 	var block: ArtBlock = a._wall_blocks[0]
 	assert_gt(block.ghosts.size(), 0, "the one standing behind its base line shows through")
 	assert_eq(block.ghosts.size(), 1, "the one in front draws over it and needs no ghost")
+
+
+func test_vanished_fighter_behind_a_wall_gets_no_ghost() -> void:
+	var a: Arena = _arena()
+	var wall: Rect2 = a.map.walls[0]
+	var behind: Player = a.add_player(1, 0, PlayerController.new())
+	behind.global_position = Vector2(wall.get_center().x, wall.end.y - 20.0) - Vector2(0.0, Player.FOOT_RING_Y)
+	var smoke := CharacterSkill.new(SkillCatalog.shared().get_skill(&"smoke_bomb"))
+	smoke.active_remaining = 2.0  # Smoke Bomb running: invisible to everyone but the player himself
+	behind.skills[1] = smoke
+	behind.is_local = false
+	a._update_ghosts()
+	assert_true(behind.is_concealed())
+	assert_eq(a._wall_blocks[0].ghosts.size(), 0, "a concealed fighter leaves no see-through silhouette")
+	behind.is_local = true
+	a._update_ghosts()
+	assert_gt(a._wall_blocks[0].ghosts.size(), 0, "he still sees himself through the wall")

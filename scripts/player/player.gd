@@ -352,7 +352,7 @@ func _process(delta: float) -> void:
 	_special_fx.sync(self)
 	_gun_fade = move_toward(_gun_fade, 0.0 if _gun_suppressed() else 1.0, delta / GUN_FADE_TIME)
 	# Going ghostly (i-frames, hidden in smoke) and back eases over GHOST_FADE_TIME instead of popping between 1 and INVULN_ALPHA.
-	_ghost_a = move_toward(_ghost_a, INVULN_ALPHA if stats.invulnerable_time > 0.0 or is_hidden() else 1.0,
+	_ghost_a = move_toward(_ghost_a, 0.0 if is_concealed() else INVULN_ALPHA if stats.invulnerable_time > 0.0 or is_hidden() else 1.0,
 		(1.0 - INVULN_ALPHA) * delta / GHOST_FADE_TIME)
 	_gun_alpha = _ghost_a  # (the weapon fades on its own, not with the body)
 	_sprite.modulate.a = 0.0 if _special_fx.is_swinging() else _special_fx.owner_alpha() * _gun_alpha
@@ -488,7 +488,7 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		if stepping != null:  # a puddle gliding on its own way until the stick says otherwise
 			speed *= stepping.data.step_speed_scale
 		var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
-		if smoke != null and is_hidden():
+		if smoke != null:
 			speed *= smoke.data.smoke_speed_scale
 		var steer: Vector2 = input.move_vec
 		if drift != null:  # glides on its own way until the stick says otherwise
@@ -582,6 +582,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			return  # nowhere to land: no swing, no cooldown
 	if not slot.try_activate(dir, global_position, stats):
 		return
+	if slot.data.kind != SkillData.Kind.SMOKE:
+		_break_vanish()  # using another special gives her away
 	match slot.data.kind:
 		SkillData.Kind.SWING:
 			slot.direction = landing - global_position
@@ -879,12 +881,26 @@ func ward() -> ShieldWall:
 	return _ward if _ward.is_up() else null
 
 
-## Inside your own smoke or drifting as petals: enemy auto-aim and bots can't lock on.
+## Invisible (Smoke Bomb running), drifting as petals or a puddle: enemy auto-aim and bots can't lock on.
 func is_hidden() -> bool:
-	if active_skill(SkillData.Kind.DRIFT) != null or active_skill(SkillData.Kind.STEP) != null:
-		return true
+	return is_vanished() or active_skill(SkillData.Kind.DRIFT) != null or active_skill(SkillData.Kind.STEP) != null
+
+
+## Smoke Bomb is running: she is invisible to everyone but herself (no teams exist, so that is only the local player).
+func is_vanished() -> bool:
+	return active_skill(SkillData.Kind.SMOKE) != null
+
+
+## Not drawn at all on this peer: vanished and not the one playing her.
+func is_concealed() -> bool:
+	return is_vanished() and not is_local
+
+
+## Smoke Bomb ends early (she attacked): the cooldown keeps running. SpecialFx sees it end and pops the closing poof.
+func _break_vanish() -> void:
 	var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
-	return smoke != null and global_position.distance_to(smoke.anchor) <= smoke.data.smoke_radius
+	if smoke != null:
+		smoke.active_remaining = 0.0
 
 
 ## Where this player's shadow clones are right now (empty unless cloning). A pure function of the
@@ -998,6 +1014,7 @@ func _try_fire(seq: int, replay: bool) -> void:
 	if _windup_left >= 0.0 or not weapon.try_fire(stats):
 		return
 	stats.spawn_protect = 0.0  # shooting ends spawn protection (replay too: prediction must match the server)
+	_break_vanish()  # (so does it end Smoke Bomb)
 	if replay:
 		return
 	play_recoil()
@@ -1261,7 +1278,7 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 ## For the see-through ghost drawn when a wall hides him (Arena._update_ghosts): the sprite's current frame, the
 ## world rect it covers, whether it is mirrored and the foot line; empty while there is nothing to show.
 func ghost_info() -> Dictionary:
-	if dead or not _sprite.visible or _sprite.sprite_frames == null or _sprite.modulate.a < 0.05:
+	if dead or is_concealed() or not _sprite.visible or _sprite.sprite_frames == null or _sprite.modulate.a < 0.05:
 		return {}
 	var tex: Texture2D = _sprite.sprite_frames.get_frame_texture(_sprite.animation, _sprite.frame)
 	if tex == null:
@@ -1274,6 +1291,8 @@ func ghost_info() -> Dictionary:
 
 ## Ground layer (under the sprite child): the shadow under the feet.
 func _draw() -> void:
+	if is_concealed():  # invisible to this viewer: no shadow either
+		return
 	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
 	draw_circle(Vector2.ZERO, Constants.PLAYER_RADIUS, SHADOW_COLOR)
 	if stats.spawn_protect > 0.0:  # a pulsing ring on the floor round the protected player
@@ -1288,7 +1307,7 @@ func _draw_overlay() -> void:
 		_draw_guns(_overlay)
 		_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)
-	if not is_local:
+	if not is_local and not is_concealed():
 		_draw_bars(Constants.PLAYER_RADIUS)
 
 

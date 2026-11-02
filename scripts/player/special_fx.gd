@@ -21,7 +21,6 @@ extends Node2D
 const FX_DIR: String = "res://assets/fx/"
 const POOF_BIG: Texture2D = preload(FX_DIR + "poof.png")
 const POOF_SMALL: Texture2D = preload(FX_DIR + "poof_small.png")
-const SMOKE_ART: Texture2D = preload(FX_DIR + "smoke.png")
 const WARD_ART: Texture2D = preload(FX_DIR + "blossom_ward.png")
 const WARD_OPEN_ART: Texture2D = preload(FX_DIR + "blossom_ward_open.png")
 const WARD_CLOSE_ART: Texture2D = preload(FX_DIR + "blossom_ward_close.png")
@@ -69,7 +68,6 @@ const ERUPTION_ART: Texture2D = preload(FX_DIR + "eruption.png")
 ## Ease-in times (s) so floor marks and loops don't pop on, and the ward's floor glow colour.
 const CRACK_EASE_IN: float = 0.15
 const RING_EASE_IN: float = 0.1
-const SMOKE_EASE_IN: float = 0.12
 const OD_DOUBLE_ALPHA: float = 0.6  # a second, out-of-step crackle frame: the 1 px arcs were too faint alone
 const WARD_GLOW: Color = Color(1.0, 0.72, 0.86)
 const WARD_GLOW_ALPHA: float = 0.14
@@ -88,13 +86,10 @@ const ERUPTION_TIME: float = ERUPTION_FRAMES / ERUPTION_FPS
 ## The strip starts this long before the blast lands, so its first frames (the floor bulging) lead into the burst.
 const ERUPTION_LEAD: float = ERUPTION_BLAST_FRAME / ERUPTION_FPS
 const POOF_TIME: float = 0.5
-const SMOKE_FPS: float = 10.0
-## The cloud swells in when thrown and fades out at the end instead of popping.
-const SMOKE_SWELL_TIME: float = 0.25
-const SMOKE_SWELL_FROM: float = 0.4
-## smoke.png is drawn for this radius; other radii scale it.
-const SMOKE_ART_RADIUS: float = 90.0
-const SMOKE_ALPHA: float = 0.9
+## Smoke Bomb: the clone poof, a bit bigger, bursts where she vanishes and where she reappears.
+const VANISH_POOF_SCALE: float = 1.1
+## Multiplied over the clone poof's white so it reads as Shade's navy-grey smoke.
+const VANISH_POOF_TINT: Color = Color(0.5, 0.55, 0.72)
 const FADE_TIME: float = 0.4
 ## Clones fade in inside their cloud while it's at its fullest (it plays slower than other poofs).
 const APPEAR_DELAY: float = 0.08
@@ -400,6 +395,7 @@ class Poof:
 	var duration: float = POOF_TIME
 	var scale: float = 1.0
 	var on_floor: bool = false  # drawn on the floor layer, under the players
+	var tint: Color = Color.WHITE
 	## World y of the floor line an upright poof stands on (NAN = an overlay drawn over everything). Upright poofs are
 	## depth-sorted with the fighters (see _rebuild_upright).
 	var base: float = NAN
@@ -413,8 +409,7 @@ var _clone_blocks: Array[ArtBlock] = []
 var _cur: CanvasItem = self
 var _points := PackedVector2Array()
 var _owner: Player
-var _smoke_t: float = -1.0
-var _smoke: CharacterSkill
+var _was_vanished: bool = false
 var _poofs: Array[Poof] = []
 var _was_cloning: bool = false
 var _was_transformed: bool = false
@@ -561,7 +556,11 @@ func sync(p: Player) -> void:
 	_points = p.clone_points()
 	var clones: CharacterSkill = _slot(p, SkillData.Kind.CLONES)
 	var smoke: CharacterSkill = _slot(p, SkillData.Kind.SMOKE)
-	_smoke = smoke
+	var vanished: bool = smoke != null and smoke.is_active() and not p.dead
+	if vanished != _was_vanished and (vanished or not p.dead):  # the poof that hides her, and the one she comes back in
+		_poof(p.global_position + p.visual_offset, POOF_BIG, CLONE_POOF_TIME, VANISH_POOF_SCALE)
+		_poofs[-1].tint = VANISH_POOF_TINT
+	_was_vanished = vanished
 	var cloning: bool = clones != null and clones.is_cloning()
 	if cloning and not _was_cloning:
 		for at: Vector2 in _points:
@@ -681,7 +680,6 @@ func sync(p: Player) -> void:
 		c.position = _points[i] - _clone_blocks[i].global_position
 		c.flip_h = _points[i].x < clones.anchor.x
 		c.modulate.a = alpha
-	_smoke_t = smoke.elapsed() if smoke != null and smoke.is_smoking() else -1.0
 	_sync_grapple(p)
 	_sync_blaze(p)
 	var eruption: CharacterSkill = _slot(p, SkillData.Kind.ERUPTION)
@@ -1303,13 +1301,13 @@ func _free_blocks() -> void:
 
 ## Frame `frame` of a horizontal strip of square frames, centred on `at`, at the sprite scale.
 func _draw_frame(art: Texture2D, frame: int, frame_w: float, at: Vector2, scale_px: float, alpha: float = 1.0,
-		on: CanvasItem = null) -> void:
+		on: CanvasItem = null, tint: Color = Color.WHITE) -> void:
 	if on == null:
 		on = _cur
 	var h: float = art.get_height()
 	var size := Vector2(frame_w, h) * scale_px
 	on.draw_texture_rect_region(art, Rect2(at - size * 0.5, size), Rect2(frame * frame_w, 0, frame_w, h),
-		Color(1, 1, 1, alpha))
+		Color(tint, alpha))
 
 
 func _draw() -> void:
@@ -1334,13 +1332,6 @@ func _draw() -> void:
 	_draw_flourishes()
 	if _owner == null:
 		return
-	if _smoke_t >= 0.0:
-		var frame: int = int(_smoke_t * SMOKE_FPS) % (SMOKE_ART.get_width() / SMOKE_ART.get_height())
-		var swell: float = lerpf(SMOKE_SWELL_FROM, 1.0, clampf(_smoke_t / SMOKE_SWELL_TIME, 0.0, 1.0))
-		var k: float = _smoke.data.smoke_radius / SMOKE_ART_RADIUS * swell
-		var fade: float = clampf(_smoke.active_remaining / FADE_TIME, 0.0, 1.0)
-		_draw_frame(SMOKE_ART, frame, SMOKE_ART.get_height(), _smoke.anchor, Constants.SPRITE_SCALE * k,
-			SMOKE_ALPHA * fade * clampf(_smoke_t / SMOKE_EASE_IN, 0.0, 1.0))
 
 
 func _draw_floor() -> void:
@@ -1536,10 +1527,10 @@ func _draw_poof(pf: Poof) -> void:
 	var frame: int = mini(int(pf.t / pf.duration * n), n - 1)
 	if pf.scale < 0.0:  # a negative scale mirrors the strip (faces left)
 		_cur.draw_set_transform(pf.pos, 0.0, Vector2(-1.0, 1.0))
-		_draw_frame(pf.art, frame, pf.art.get_height(), Vector2.ZERO, px * -pf.scale)
+		_draw_frame(pf.art, frame, pf.art.get_height(), Vector2.ZERO, px * -pf.scale, 1.0, null, pf.tint)
 		_cur.draw_set_transform(Vector2.ZERO)
 	else:
-		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale)
+		_draw_frame(pf.art, frame, pf.art.get_height(), pf.pos, px * pf.scale, 1.0, null, pf.tint)
 
 
 ## Where the kunai bit: the stop point is a player radius short of the feet-level wall; the wall itself is drawn

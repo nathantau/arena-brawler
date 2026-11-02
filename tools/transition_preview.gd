@@ -6,7 +6,7 @@ extends SceneTree
 ## Args: char, special (slot 1), move (stick while it runs), aim, press (extra presses at these seconds after the first
 ## after the run starts, comma separated, e.g. press=0,1.5 to start / end), fire (hold the weapon the whole time),
 ## target=x,y (the passive bot stands there, relative to the fighter), edge=1 (fighter starts near the right wall) /
-## edge=-1 (near the left wall), flip_at=S (the stick and aim mirror in x after S seconds: a turn-round).
+## edge=-1 (near the left wall), enemy=1 (the fighter is drawn as an enemy would see it: Smoke Bomb hides her completely), flip_at=S (the stick and aim mirror in x after S seconds: a turn-round).
 
 const START_FRAME: int = 420  # the match countdown is over
 const PRESS_AT: int = 30  # frames after START_FRAME
@@ -91,6 +91,7 @@ func _tick() -> void:
 		runner.move.x = -runner.move.x
 		runner.aim.x = -runner.aim.x
 	if n == PRESS_AT - 5:
+		me.is_local = me.is_local and args.get("enemy", "0") != "1"
 		me.global_position = home
 		for s: CharacterSkill in me.skills:
 			s.cooldown_remaining = 0.0

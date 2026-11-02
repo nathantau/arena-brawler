@@ -605,6 +605,8 @@ func _update_ghosts() -> void:
 			blocks.append(c.art_block())
 	var lists: Dictionary = {}
 	for p: Player in players:
+		if p.is_concealed():  # vanished (Smoke Bomb): no see-through silhouette either
+			continue
 		var info: Dictionary = p.ghost_info()
 		if info.is_empty():
 			continue
