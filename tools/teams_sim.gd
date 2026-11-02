@@ -59,8 +59,8 @@ func _tick() -> void:
 			for id: int in [2, 3]:
 				arena.add_player(id, id, BotBrain.new(arena, id))
 				arena.referee.set_team(id, MatchRules.TEAM_A)
-			arena.select_character(arena.get_player(2), &"wukong")
-			arena.select_character(arena.get_player(3), &"flint")
+			arena.select_character(arena.get_player(2), &"bolt")
+			arena.select_character(arena.get_player(3), &"sakura")
 			arena.select_character(me, &"eden")
 			arena.try_ready(3, true)
 		arena.referee.round_ended.connect(_on_round_ended)

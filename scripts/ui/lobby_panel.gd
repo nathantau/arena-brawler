@@ -22,8 +22,8 @@ const SKILL_ROW_SIZE: Vector2 = Vector2(320, 64)  # 7 rows (5 own + Dash + Barri
 const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
 const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 140)
 const WEAPON_ART_SCALE: float = 1.5
-## Teams hero select: a teammate's locked card is dimmed to this, and shows "LOCKED · name".
-const LOCKED_DIM: Color = Color(0.5, 0.5, 0.55)
+## Teams hero select: the lock / bot strip across the foot of a fighter's portrait.
+const BADGE_H: float = 24.0
 const TOAST_TIME: float = 2.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 
@@ -54,6 +54,7 @@ var _ready_button: Button
 ## Per fighter card: teammates' hover tags (top) and the lock badge (middle).
 var _fighter_tags: Dictionary[StringName, HBoxContainer] = {}
 var _fighter_badges: Dictionary[StringName, Label] = {}
+var _fighter_frames: Dictionary[StringName, Panel] = {}
 ## Everyone's (fighter, locked) as last drawn, so _process restyles when a teammate browses.
 var _shown_crowd: Array = []
 var _toast: String = ""
@@ -118,6 +119,12 @@ func _ready() -> void:
 		var id: StringName = c.id
 		_fighter_scroller.on_tap(card, func() -> void: arena.character_requested.emit(id))
 		_character_cards[id] = card
+		var frame := Panel.new()  # outline + tint over the card: your hover, a teammate's hover, a teammate's lock
+		frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		frame.visible = false
+		card.add_child(frame)
+		_fighter_frames[id] = frame
 		var tags := HBoxContainer.new()
 		tags.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 6)
 		tags.add_theme_constant_override("separation", 4)
@@ -127,11 +134,12 @@ func _ready() -> void:
 		var badge: Label = _label(card, &"Label")
 		badge.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
 		badge.add_theme_font_override("font", UiStyle.bold())
-		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
-		badge.grow_horizontal = Control.GROW_DIRECTION_BOTH
-		badge.grow_vertical = Control.GROW_DIRECTION_BOTH
-		badge.offset_top -= 24.0
-		badge.offset_bottom -= 24.0
+		# A strip across the foot of the portrait.
+		badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, SPACING)
+		badge.offset_top = SPACING + FIGHTER_ART_SIZE.y - BADGE_H
+		badge.offset_bottom = SPACING + FIGHTER_ART_SIZE.y
+		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.visible = false
 		_fighter_badges[id] = badge
@@ -332,37 +340,70 @@ func _human_locks(st: MatchState) -> Dictionary:
 	return out
 
 
-## Teams hero select on the fighter cards: teammates' hover tags, their locks (dimmed + badge), your own lock (gold).
-## Enemy picks are never drawn (MatchRules.teammate_picks only returns teammates).
+## Teams hero select on the fighter cards: your hover (blue outline), teammates' hovers (a pill + outline in their
+## colour), their locks (dimmed + "LOCKED" strip), your own lock (gold). Enemy picks are never drawn
+## (MatchRules.teammate_picks only returns teammates).
 func _mark_fighters(st: MatchState, me: Player, shown_teams: Dictionary, taker: int) -> void:
 	for id: StringName in _character_cards:
-		_character_cards[id].modulate = Color.WHITE
 		_fighter_badges[id].visible = false
+		_fighter_frames[id].visible = false
 		for t: Node in _fighter_tags[id].get_children():
 			t.queue_free()
 	if st.mode != MatchRules.Mode.TEAMS:
 		return
-	if _is_ready() and _character_cards.has(me.character.id):
-		_character_cards[me.character.id].theme_type_variation = &"CardGold"
-		_badge(me.character.id, "LOCKED IN", UiStyle.C_YELLOW)
 	var picks: Dictionary = MatchRules.teammate_picks(me.player_id, shown_teams, _hovers(), st.locked)
 	for pid: int in picks:
 		var who: Player = arena.get_player(pid)
 		var fid: StringName = picks[pid][0]
 		if who == null or not _character_cards.has(fid):
 			continue
-		if not picks[pid][1]:  # hovering: a coloured dot + short name
-			var tag: Label = _label(_fighter_tags[fid], &"Label")
-			tag.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY - 2)
-			tag.add_theme_font_override("font", UiStyle.bold())
-			tag.add_theme_color_override("font_color", who.display_color)
-			tag.text = "● P%d" % pid
-			tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if not picks[pid][1]:  # hovering: a pill in their colour and an outline
+			_pill(fid, "P%d" % pid, who.display_color)
+			_frame(fid, who.display_color, Color(who.display_color, 0.1), 1)
 		elif who.is_bot:  # a bot yields to a human, so its card stays pickable
 			_badge(fid, "BOT", UiStyle.C_STEEL)
 		else:
-			_character_cards[fid].modulate = LOCKED_DIM
+			_frame(fid, UiStyle.C_STEEL_D, Color(COLOR_BG, 0.6), 1)
 			_badge(fid, "LOCKED · P%d" % pid, UiStyle.C_ORANGE)
+	if not _character_cards.has(me.character.id):
+		return
+	if _is_ready():
+		_character_cards[me.character.id].theme_type_variation = &"CardGold"
+		_badge(me.character.id, "LOCKED IN", UiStyle.C_YELLOW)
+	else:  # your pick: a bright outline and a lighter card
+		_frame(me.character.id, TEAM_ALLY_COLOR, Color(TEAM_ALLY_COLOR, 0.14), 2)
+
+
+func _frame(fighter: StringName, border: Color, fill: Color, width: int) -> void:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.border_color = border
+	box.set_border_width_all(width)
+	box.set_corner_radius_all(3)
+	var f: Panel = _fighter_frames[fighter]
+	f.add_theme_stylebox_override("panel", box)
+	f.visible = true
+
+
+## A small rounded tag at the top of a card, readable on any teammate colour.
+func _pill(fighter: StringName, text: String, color: Color) -> void:
+	var pill := PanelContainer.new()
+	var box := StyleBoxFlat.new()
+	box.bg_color = color
+	box.set_corner_radius_all(8)
+	box.content_margin_left = 6.0
+	box.content_margin_right = 6.0
+	box.content_margin_top = 1.0
+	box.content_margin_bottom = 1.0
+	pill.add_theme_stylebox_override("panel", box)
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fighter_tags[fighter].add_child(pill)
+	var l: Label = _label(pill, &"Label")
+	l.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	l.add_theme_font_override("font", UiStyle.bold())
+	l.add_theme_color_override("font_color", UiStyle.C_OUTLINE if color.get_luminance() > 0.4 else UiStyle.C_WHITE)
+	l.text = text
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 func _badge(fighter: StringName, text: String, color: Color) -> void:
@@ -370,9 +411,9 @@ func _badge(fighter: StringName, text: String, color: Color) -> void:
 	badge.text = text
 	badge.add_theme_color_override("font_color", color)
 	var box := StyleBoxFlat.new()
-	box.bg_color = Color(COLOR_BG, 0.85)
-	box.set_content_margin_all(3.0)
-	box.set_corner_radius_all(2)
+	box.bg_color = Color(0.03, 0.03, 0.07, 0.85)
+	box.content_margin_top = 0.0
+	box.content_margin_bottom = 0.0
 	badge.add_theme_stylebox_override("normal", box)
 	badge.visible = true
 
