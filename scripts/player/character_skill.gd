@@ -47,6 +47,8 @@ var anchor: Vector2 = Vector2.ZERO
 ## SHIELD: enemy shots the bubble has absorbed since it went up (synced; the authoritative pool counts them).
 var hits: int = 0
 ## The transformed form's weapon (null for other kinds).
+## Id of the current activation (ProjectilePool.new_cast), carried by everything it damages with; 0 = none yet.
+var cast_id: int = 0
 var form_weapon: WeaponState
 
 

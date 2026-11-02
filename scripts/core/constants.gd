@@ -142,6 +142,10 @@ const TEAMS_ROUND_TIME: float = 90.0
 const TEAMS_INTERMISSION: float = 3.0
 ## Teams: everyone's max HP is multiplied by this (Duel / FFA stay as they are).
 const TEAMS_HP_SCALE: float = 1.5
+## One ability use (all its shots, ticks, summon bites) can't deal more than this fraction of the victim's max HP
+## (Player.take_hit). Plain weapon fire isn't capped. Budgets are dropped CAST_BUDGET_TTL s after their last hit.
+const ABILITY_DAMAGE_CAP_FRACTION: float = 0.35
+const CAST_BUDGET_TTL: float = 10.0
 ## Capture the flag: touch range of a flag / base pad, how long a dropped flag lies before it flies home, and the
 ## carrier's move speed multiplier.
 const FLAG_TOUCH_RADIUS: float = 56.0

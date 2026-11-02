@@ -501,16 +501,16 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 	if storm != null and not replay and storm.storm_tick_due(storm_before):
 		var sd: SkillData = storm.data
 		projectiles.strike(player_id, input.seq + STORM_SEQ_OFFSET, storm.anchor, sd.storm_radius, sd.storm_damage,
-			sd.storm_knockback)
+			sd.storm_knockback, storm.cast_id)
 	if burning != null and not replay:
 		_burn_trail(burning, burn_before, input.seq)
 	if pillar != null and not replay and pillar.pillar_slammed(pillar_before):
 		var d: SkillData = pillar.data
 		projectiles.line_hit(player_id, input.seq + PILLAR_SEQ_OFFSET, pillar.anchor, pillar.anchor + pillar.direction,
-			d.pillar_width * 0.5, d.pillar_damage, d.pillar_knockback)
+			d.pillar_width * 0.5, d.pillar_damage, d.pillar_knockback, pillar.cast_id)
 	if nova != null and not replay and nova.nova_burst(nova_before):
 		var key: int = input.seq + NOVA_SEQ_OFFSET
-		projectiles.fire_shot(player_id, key, global_position, nova.direction, nova.data.nova_blast, match_seed)
+		projectiles.fire_shot(player_id, key, global_position, nova.direction, nova.data.nova_blast, match_seed, nova.cast_id)
 		shot_fired.emit(self, key, global_position, nova.direction, nova.data.nova_blast.id)
 	var charged: CharacterSkill = active_skill(SkillData.Kind.OVERDRIVE)
 	weapon.tick(delta * (charged.data.overdrive_fire_scale if charged != null else 1.0))
@@ -667,6 +667,7 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 			return  # nowhere to land: no swing, no cooldown
 	if not slot.try_activate(dir, global_position, stats):
 		return
+	slot.cast_id = projectiles.new_cast() if projectiles != null else 0
 	if slot.data.kind != SkillData.Kind.SMOKE:
 		_break_vanish()  # using another special gives her away
 	match slot.data.kind:
@@ -700,7 +701,7 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE:
 			if not replay:
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
-				projectiles.fire_shot(player_id, seq, global_position, slot.direction, slot.data.volley_weapon, match_seed)
+				projectiles.fire_shot(player_id, seq, global_position, slot.direction, slot.data.volley_weapon, match_seed, slot.cast_id)
 				shot_fired.emit(self, seq, global_position, slot.direction, slot.data.volley_weapon.id)
 	if not replay:
 		skill_used.emit(self, slot.data)
@@ -712,7 +713,7 @@ func _whirl(slot: CharacterSkill, seq: int, delta: float, replay: bool) -> void:
 		return
 	var d: SkillData = slot.data
 	projectiles.whirl(player_id, seq + WHIRL_SEQ_OFFSET, global_position, d.whirl_radius,
-		d.whirl_damage if slot.whirl_tick_due(delta) else 0, d.whirl_knockback)
+		d.whirl_damage if slot.whirl_tick_due(delta) else 0, d.whirl_knockback, slot.cast_id)
 
 
 ## The leaf gust: enemy shots in the cone are destroyed on every step it lasts (so ones flying into it die too); the hit
@@ -723,7 +724,7 @@ func _gust(slot: CharacterSkill, seq: int, replay: bool) -> void:
 		return
 	var d: SkillData = slot.data
 	projectiles.gust(player_id, seq + GUST_SEQ_OFFSET, global_position, slot.direction, d.gust_range,
-		deg_to_rad(d.gust_half_angle_deg), d.gust_damage if slot.gust_just_pressed() else 0, d.gust_knockback)
+		deg_to_rad(d.gust_half_angle_deg), d.gust_damage if slot.gust_just_pressed() else 0, d.gust_knockback, slot.cast_id)
 
 
 ## The tree shoots one petal at the nearest visible enemy in range (shadow clones count, smoked ones don't). Ties go
@@ -753,7 +754,7 @@ func _sapling_shoot(slot: CharacterSkill, seq: int) -> void:
 		return
 	var dir: Vector2 = (aim - muzzle).normalized()
 	var key: int = seq + SAPLING_SEQ_OFFSET
-	projectiles.fire_shot(player_id, key, muzzle, dir, d.sapling_weapon, match_seed)
+	projectiles.fire_shot(player_id, key, muzzle, dir, d.sapling_weapon, match_seed, slot.cast_id)
 	shot_fired.emit(self, key, muzzle, dir, d.sapling_weapon.id)
 
 
@@ -768,7 +769,7 @@ func _shadow_tick(step_was: CharacterSkill, hound_was: CharacterSkill, hound_bef
 	if step_was != null and not step_was.is_active():
 		var d: SkillData = step_was.data
 		projectiles.strike(player_id, seq + STEP_SEQ_OFFSET, global_position, d.step_radius, d.step_damage,
-			d.step_knockback)
+			d.step_knockback, step_was.cast_id)
 	if hound_was != null and hound_was.is_active():
 		_hound_step(hound_was, hound_before, seq, delta)
 	var binding: CharacterSkill = active_skill(SkillData.Kind.BIND)
@@ -822,7 +823,7 @@ func _hound_step(slot: CharacterSkill, before: float, seq: int, delta: float) ->
 	var bites_before: int = floori((before - d.hound_rise_time + CharacterSkill.WHIRL_EPSILON) / interval)
 	if (before >= d.hound_rise_time and bites > bites_before) or before < d.hound_rise_time:  # the first bite is on rising
 		projectiles.strike(player_id, seq + HOUND_SEQ_OFFSET, slot.anchor, d.hound_bite_radius, d.hound_damage,
-			d.hound_knockback)
+			d.hound_knockback, slot.cast_id)
 
 
 ## How long the bind's line is, in units of the aim vector (the aim is a unit vector): up to `bind_range`, short of a wall.
@@ -869,7 +870,7 @@ func _burn_trail(slot: CharacterSkill, before: float, seq: int) -> void:
 	var tick_now: int = floori(slot.elapsed() / d.trail_tick + 0.0001)
 	if tick_now > floori(before / d.trail_tick + 0.0001):
 		projectiles.burn_segment(player_id, seq + TRAIL_SEQ_OFFSET, slot.anchor, slot.anchor + slot.direction,
-			d.trail_radius, d.trail_damage)
+			d.trail_radius, d.trail_damage, 0.0, slot.cast_id)
 
 
 func _trail_dash(delta: float) -> CharacterSkill:
@@ -882,7 +883,7 @@ func _trail_dash(delta: float) -> CharacterSkill:
 ## The telegraph ran out: the pillar of fire goes off at the marked spot.
 func _erupt(slot: CharacterSkill, seq: int) -> void:
 	var key: int = seq + ERUPTION_SEQ_OFFSET
-	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.eruption_blast, match_seed)
+	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.eruption_blast, match_seed, slot.cast_id)
 	shot_fired.emit(self, key, slot.anchor, slot.direction, slot.data.eruption_blast.id)
 
 
@@ -892,14 +893,14 @@ func _beam_tick(slot: CharacterSkill, seq: int) -> void:
 	var w: WeaponData = slot.data.beam_weapon
 	var key: int = seq + BEAM_SEQ_OFFSET
 	var origin: Vector2 = shot_origin(w)
-	projectiles.fire_shot(player_id, key, origin, facing, w, match_seed)
+	projectiles.fire_shot(player_id, key, origin, facing, w, match_seed, slot.cast_id)
 	shot_fired.emit(self, key, origin, facing, w.id)
 
 
 ## The telegraph ran out: the bolt drops on the marked spot.
 func _thunder(slot: CharacterSkill, seq: int) -> void:
 	var key: int = seq + THUNDER_SEQ_OFFSET
-	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.thunder_blast, match_seed)
+	projectiles.fire_shot(player_id, key, slot.anchor, slot.direction, slot.data.thunder_blast, match_seed, slot.cast_id)
 	shot_fired.emit(self, key, slot.anchor, slot.direction, slot.data.thunder_blast.id)
 
 
@@ -1192,14 +1193,22 @@ func can_be_hit() -> bool:
 	return not dead and not stats.is_invulnerable()
 
 
+## Damage already taken per ability cast id: cast -> Vector2i(total, expiry in msec). See _cast_budget.
+var _cast_dealt: Dictionary = {}
+
+
 ## Authoritative damage entry point (offline / server only). Returns damage dealt.
-func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int) -> int:
+func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int, cast: int = 0) -> int:
 	var tf: CharacterSkill = form()
 	if tf != null:
 		damage = maxi(1, roundi(damage * tf.data.form_damage_scale))
 	var bark: CharacterSkill = active_skill(SkillData.Kind.BARK_SKIN)
 	if bark != null:
 		damage = maxi(1, roundi(damage * bark.data.bark_damage_scale))
+	if cast != 0:  # one ability use can't take more than ABILITY_DAMAGE_CAP_FRACTION of the victim's max HP
+		damage = _cast_budget(cast, damage)
+		if damage <= 0:
+			return 0
 	var dealt: int = stats.apply_damage(damage)
 	if dealt <= 0:
 		return 0
@@ -1208,6 +1217,21 @@ func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int) ->
 	if stats.is_dead():
 		_die(attacker_id)
 	return dealt
+
+
+## Clamps `damage` to what is left of this victim's budget for ability cast `cast` and books it. Entries are dropped
+## `Constants.CAST_BUDGET_TTL` after their last hit and on respawn. Server / offline only (take_hit is).
+func _cast_budget(cast: int, damage: int) -> int:
+	var now: int = Time.get_ticks_msec()
+	for k: int in _cast_dealt.keys():
+		if now > (_cast_dealt[k] as Vector2i).y:
+			_cast_dealt.erase(k)
+	var cap: int = maxi(1, roundi(stats.max_hp * Constants.ABILITY_DAMAGE_CAP_FRACTION))
+	var used: int = (_cast_dealt.get(cast, Vector2i.ZERO) as Vector2i).x
+	damage = mini(damage, cap - used)
+	if damage > 0:
+		_cast_dealt[cast] = Vector2i(used + damage, now + roundi(Constants.CAST_BUDGET_TTL * 1000.0))
+	return damage
 
 
 func _die(killer_id: int) -> void:
@@ -1220,6 +1244,7 @@ func _die(killer_id: int) -> void:
 func respawn(at: Vector2) -> void:
 	global_position = at
 	velocity = Vector2.ZERO
+	_cast_dealt.clear()
 	stats.reset()
 	stats.spawn_protect = Constants.RESPAWN_IFRAME_TIME
 	for slot: CharacterSkill in skills:

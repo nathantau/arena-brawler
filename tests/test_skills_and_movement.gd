@@ -692,6 +692,8 @@ func _flint_erupter(world: Node2D, pool: ProjectilePool, id: int = 1) -> Player:
 	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
 		characters.get_character(&"flint"))
 	world.add_child(p)
+	p.stats.max_hp = 5000  # these tests count whole-cast damage: keep the 35% ability cap out of the way
+	p.stats.hp = 5000
 	p.set_skill(1, skills.get_skill(&"eruption"))
 	return p
 
@@ -1139,7 +1141,8 @@ func test_blaze_run_trail_expires() -> void:
 	var p: Player = s[2]
 	var foe: Player = s[3]
 	var d: SkillData = skills.get_skill(&"blaze_run")
-	foe.stats.hp = 5000  # must outlast the whole trail
+	foe.stats.max_hp = 5000  # must outlast the whole trail (and the 35% ability cap)
+	foe.stats.hp = 5000
 	foe.global_position = Vector2(200, 300)
 	await wait_physics_frames(2)
 	var hits: Array = _hits(s[1])
@@ -1326,6 +1329,8 @@ func test_petal_drift_replay_matches() -> void:
 func _pillar_player(world: Node2D, pool: ProjectilePool, id: int, at: Vector2) -> Player:
 	var p: Player = _whirler(world, pool, id, at)
 	p.set_skill(1, skills.get_skill(&"sky_pillar"))
+	p.stats.max_hp = 5000  # these tests count whole-cast damage: keep the 35% ability cap out of the way
+	p.stats.hp = 5000
 	pool.targets.append(p)
 	return p
 
@@ -1692,6 +1697,8 @@ func test_cherry_sapling_replay_fires_nothing_and_matches() -> void:
 func _storm_player(world: Node2D, pool: ProjectilePool, id: int, at: Vector2) -> Player:
 	var p: Player = _whirler(world, pool, id, at)
 	p.set_skill(1, skills.get_skill(&"storm_cloud"))
+	p.stats.max_hp = 5000  # these tests count whole-cast damage: keep the 35% ability cap out of the way
+	p.stats.hp = 5000
 	pool.targets.append(p)
 	return p
 

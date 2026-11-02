@@ -25,6 +25,8 @@ func _fighter(world: Node2D, pool: ProjectilePool, id: int, who: StringName, spe
 	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
 		characters.get_character(who))
 	world.add_child(p)
+	p.stats.max_hp = 5000  # these tests count whole-cast damage: keep the 35% ability cap out of the way
+	p.stats.hp = 5000
 	p.global_position = at
 	if special != &"":
 		p.set_skill(1, skills.get_skill(special))
