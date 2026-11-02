@@ -5,7 +5,7 @@ extends Resource
 ## pick a special is decided by tags (CharacterData.weapon_tags); a character's own id as the
 ## only tag makes it that character's signature.
 
-## DASH: burst of speed with i-frames. SHIELD: a barrier in front that blocks enemy shots (with `shield_reflect`, it sends them back as the owner's).
+## DASH: burst of speed with i-frames. SHIELD: a force-field bubble round the player that blocks enemy shots (with `shield_reflect`, it sends them back as the owner's).
 ## TRANSFORM: a stronger form for a while
 ## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
 ## SMOKE: a cloud where you stand; inside it
@@ -75,9 +75,10 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var dash_iframes: float = 0.22
 
 @export_group("Shield")
-## Length of the deployed barrier and how far in front of the player it appears.
-@export var shield_width: float = 110.0
-@export var shield_distance: float = 44.0
+## Radius of the force-field bubble round the player (it follows them), and how many enemy shots it takes before it
+## breaks (0 = until it times out).
+@export var shield_radius: float = 60.0
+@export var shield_hits: int = 4
 ## Enemy shots that hit the barrier bounce back off it and become the owner's (like the Arc Blade).
 @export var shield_reflect: bool = false
 

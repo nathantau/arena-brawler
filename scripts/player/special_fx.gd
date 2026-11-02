@@ -32,6 +32,21 @@ const WARD_FPS: float = 20.0
 const WARD_OPEN_TIME: float = 0.3
 const WARD_CLOSE_TIME: float = 0.5
 const PETAL_POP_TIME: float = 0.3
+## Barrier bubble (generate.py bubble_*): pop-in, a shimmer loop per damage stage (BUBBLE_STAGES x BUBBLE_LOOP frames, stage =
+## hits taken), a fade when it times out, a shatter when it is shot down, a ripple where a shot lands. Drawn for the
+## radius BUBBLE_ART_RADIUS art px x SPRITE_SCALE; other shield_radius values scale it.
+const BUBBLE_OPEN_ART: Texture2D = preload(FX_DIR + "bubble_open.png")
+const BUBBLE_LOOP_ART: Texture2D = preload(FX_DIR + "bubble_loop.png")
+const BUBBLE_FADE_ART: Texture2D = preload(FX_DIR + "bubble_fade.png")
+const BUBBLE_BREAK_ART: Texture2D = preload(FX_DIR + "bubble_break.png")
+const BUBBLE_RIPPLE_ART: Texture2D = preload(FX_DIR + "bubble_ripple.png")
+const BUBBLE_ART_RADIUS: float = 40.0
+const BUBBLE_LOOP_FRAMES: int = 8
+const BUBBLE_OPEN_TIME: float = 0.2
+const BUBBLE_FADE_TIME: float = 0.3
+const BUBBLE_BREAK_TIME: float = 0.5
+const BUBBLE_RIPPLE_TIME: float = 0.28
+const BUBBLE_FPS: float = 14.0
 const SNARE_ART: Texture2D = preload(FX_DIR + "snare_vines.png")
 const SNARE_BURST_ART: Texture2D = preload(FX_DIR + "snare_burst.png")
 ## A jump in the synced snare time bigger than this is a new hit (the time only ticks down between snapshots).
@@ -383,6 +398,11 @@ var _ward_radius: float = 0.0
 var _ward_at: Vector2 = Vector2.ZERO
 ## Seconds left of the floor glow fading after the ward ends (-1 = none).
 var _ward_out: float = -1.0
+## The barrier bubble: seconds it has been up (-1 = down), hits taken, drawn scale and where it's drawn (the owner).
+var _bub_t: float = -1.0
+var _bub_hits: int = 0
+var _bub_scale: float = 1.0
+var _bub_at: Vector2 = Vector2.ZERO
 ## Staff Whirl: seconds spinning (-1 = not), its radius, where he's drawn, which way he faces, damage ticks seen.
 var _whirl_t: float = -1.0
 var _whirl_radius: float = 0.0
@@ -520,6 +540,19 @@ func sync(p: Player) -> void:
 		_poof(_ward_at, WARD_CLOSE_ART, WARD_CLOSE_TIME, _ward_scale())
 		_ward_out = WARD_GLOW_FADE
 	_ward_t = ward.elapsed() if warding else -1.0
+	var shield: CharacterSkill = _slot(p, SkillData.Kind.SHIELD)
+	var shielding: bool = shield != null and shield.is_shielding() and not p.dead
+	if shielding:
+		_bub_at = p.global_position + p.visual_offset
+		_bub_hits = shield.hits
+		_bub_scale = shield.data.shield_radius / (BUBBLE_ART_RADIUS * Constants.SPRITE_SCALE)
+		_bub_t = shield.elapsed()
+	else:
+		if _bub_t >= 0.0 and not p.dead:  # it ended: shot down (shatters) or timed out (fades)
+			var broke: bool = shield != null and shield.is_broken()
+			_poof(_bub_at, BUBBLE_BREAK_ART if broke else BUBBLE_FADE_ART,
+				BUBBLE_BREAK_TIME if broke else BUBBLE_FADE_TIME, _bub_scale)
+		_bub_t = -1.0
 	if p.dead:
 		_morph_t = -1.0
 	_morph_at = p.global_position + p.visual_offset
@@ -1089,6 +1122,11 @@ func petal_pop(at: Vector2) -> void:
 	_poof(at, PETAL_POP_ART, PETAL_POP_TIME)
 
 
+## A shot hit the barrier bubble (ShieldWall.struck, on every peer).
+func bubble_ripple(at: Vector2) -> void:
+	_poof(at, BUBBLE_RIPPLE_ART, BUBBLE_RIPPLE_TIME)
+
+
 func _ward_scale() -> float:
 	return _ward_radius / WARD_ART_RADIUS
 
@@ -1106,6 +1144,7 @@ func _draw() -> void:
 	_draw_grapple()
 	_draw_morph()
 	_draw_ward()
+	_draw_bubble()
 	_draw_whirl()
 	_draw_pillar()
 	_draw_flare()
@@ -1237,6 +1276,21 @@ func _draw_ward() -> void:
 		return
 	var frame: int = int((_ward_t - WARD_OPEN_TIME) * WARD_FPS) % (WARD_ART.get_width() / WARD_ART.get_height())
 	_draw_frame(WARD_ART, frame, WARD_ART.get_height(), _ward_at, px)
+
+
+## The bubble pops in (expanding, with a small overshoot), then shimmers; its cracks follow the hits taken.
+func _draw_bubble() -> void:
+	if _bub_t < 0.0:
+		return
+	var px: float = Constants.SPRITE_SCALE * _bub_scale
+	if _bub_t < BUBBLE_OPEN_TIME:
+		var n: int = BUBBLE_OPEN_ART.get_width() / BUBBLE_OPEN_ART.get_height()
+		_draw_frame(BUBBLE_OPEN_ART, mini(int(_bub_t / BUBBLE_OPEN_TIME * n), n - 1), BUBBLE_OPEN_ART.get_height(),
+			_bub_at, px)
+		return
+	var stages: int = BUBBLE_LOOP_ART.get_width() / BUBBLE_LOOP_ART.get_height() / BUBBLE_LOOP_FRAMES
+	var frame: int = mini(_bub_hits, stages - 1) * BUBBLE_LOOP_FRAMES + int(_bub_t * BUBBLE_FPS) % BUBBLE_LOOP_FRAMES
+	_draw_frame(BUBBLE_LOOP_ART, frame, BUBBLE_LOOP_ART.get_height(), _bub_at, px)
 
 
 func _draw_sapling() -> void:

@@ -422,6 +422,10 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 			if target.ward() != null:
 				_catch(s, hit.position, target.ward())
 				return
+			var bubble: ShieldWall = target.bubble()
+			if bubble != null:  # a shot that got inside the bubble (fired from within, or it grew onto the shot)
+				_hit_bubble(s, hit.position, (s.pos - target.global_position).normalized(), bubble)
+				return
 			if s.splash_radius > 0.0:
 				_stop(s, hit.position)
 			else:
@@ -442,7 +446,7 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 			_catch(s, hit.position, collider)
 			return
 		if collider is ShieldWall and (collider as ShieldWall).reflects:
-			_reflect(s, hit.position, hit.normal, (collider as ShieldWall).owner_id)
+			_hit_bubble(s, hit.position, hit.normal, collider as ShieldWall)
 			return
 		if s.bounces_left > 0 and not collider is ShieldWall:
 			if collider is Crate and authoritative and s.splash_radius <= 0.0:
@@ -519,6 +523,15 @@ func _reflect(s: Slot, at: Vector2, normal: Vector2, new_owner: int) -> void:
 	s.vel = s.vel.bounce(normal)
 	s.attacker_id = new_owner
 	s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
+
+
+## Hit the barrier bubble: reflected back as the owner's, and the authoritative pool spends one of its hits.
+func _hit_bubble(s: Slot, at: Vector2, normal: Vector2, bubble: ShieldWall) -> void:
+	if bubble.reflects:
+		_reflect(s, at, normal, bubble.owner_id)
+	else:
+		_finish(s, at)
+	bubble.absorb(at, authoritative)
 
 
 ## Caught by a Blossom Ward: gone in a petal pop, without its blast.

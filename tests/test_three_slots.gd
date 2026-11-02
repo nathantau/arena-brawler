@@ -31,7 +31,9 @@ func test_every_rotation_fighter_has_three_distinct_specials_by_default() -> voi
 		var d: Array[SkillData] = Player.default_skills(c)
 		assert_eq(d.size(), 3, c.id)
 		assert_eq(d[0], SkillCatalog.shared().dash(), "%s: Dash first" % c.id)
-		assert_eq(d[1], pool[0], "%s: signature second" % c.id)
+		var second: SkillData = c.signature_skill if c.signature_skill != null else SkillCatalog.shared().get_skill(&"barrier")
+		assert_eq(d[1], second, "%s: signature second (the list leads with Dash and Barrier, defaults are unchanged)" % c.id)
+		assert_true(pool.has(second))
 		if c.in_rotation:
 			assert_eq(d.find(d[2]), 2, "%s: third is distinct" % c.id)
 
