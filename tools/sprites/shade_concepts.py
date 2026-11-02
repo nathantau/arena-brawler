@@ -438,7 +438,12 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     up.part(RR((22, 37, 43, 38), 1), RED)
     up.flat(L([(24, 37), (36, 37)], 1), ORANGE)
     # collar V: a dark inner layer between two bold 2 px cream lapels that meet at the sternum
-    up.part(P([(28, 39), (40, 39), (34, 43)]), SHADOW, shade=False, line=False)
+    # the fishnet undershirt shows in the V: a dark mesh (dark cords with skin showing through), up to a mesh collar under the scarf
+    up.part(P([(27, 39), (41, 39), (34, 43.5)]), SHADOW, shade=False, line=False)
+    for yy in range(38, 45):
+        for xx in range(26, 43):
+            if up.at(xx, yy)[:3] == SHADOW and (xx + yy) % 2 == 0 and not ((xx - yy) % 4 == 0):
+                up.dot(xx, yy, SKIN_D)
     up.flat(L([(26, 39), (34, 43)], 2), CREAM)
     up.flat(L([(42, 39), (34, 43)], 2), CREAM)
     up.flat(L([(26, 41), (33, 44)], 1), SHADOW)  # shadow under the lapels
@@ -637,7 +642,7 @@ def scale_sheet(out_dir):
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v12_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v13_scale.png")
 
 
 def head_check(out_dir):
@@ -645,13 +650,13 @@ def head_check(out_dir):
     h = HAIRS[0][1]
     f = frame(build_a, 0, hair=h, mouth_kind=DEFAULT_MOUTH)
     oy = PAD + UPPER_DY
-    box = (PAD + 10, oy - 4, PAD + 62, oy + 42)
+    box = (PAD + 10, oy - 4, PAD + 62, oy + 55)
     ref = lambda n: Image.open(ROOT / "assets" / "sprites" / f"{n}.png").convert("RGBA").crop((0, 0, CELL, CELL))
     heads = [f, ref("sakura"), ref("eden")]
-    strip = Image.new("RGBA", (3 * 520 + 16, 460), (24, 24, 32, 255))
+    strip = Image.new("RGBA", (3 * 520 + 16, 590), (24, 24, 32, 255))
     for i, im in enumerate(heads):
-        strip.alpha_composite(im.crop(box).resize((520, 460), Image.NEAREST), (i * 528, 0))
-    strip.convert("RGB").save(out_dir / "shade_A_v12_head.png")
+        strip.alpha_composite(im.crop(box).resize((520, 590), Image.NEAREST), (i * 528, 0))
+    strip.convert("RGB").save(out_dir / "shade_A_v13_head.png")
     worst = {}
     for y in range(oy + 3, oy + 23):
         run, last = 0, None
@@ -680,7 +685,7 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v12.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v13.png")
     head_check(out_dir)
     scale_sheet(out_dir)
 
