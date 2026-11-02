@@ -1298,6 +1298,9 @@ func _draw_clone(ci: CanvasItem, i: int) -> void:
 	if _owner == null or i >= _clones.size():
 		return
 	_cur = ci
+	var ring: Color = _owner.team_ring_color()  # decoys wear the owner's ground marker
+	if ring.a > 0.0:
+		_owner.draw_team_ring(ci, ring, _points[i] + Vector2(0.0, Player.FOOT_RING_Y), _clones[i].modulate.a)
 	_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
 	_cur = self
 
