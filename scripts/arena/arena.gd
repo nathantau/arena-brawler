@@ -918,6 +918,7 @@ func _team_for(id: int) -> int:
 ## Every player's team (and the viewer's, for ally/enemy colours) follows the match state.
 func _apply_teams() -> void:
 	var hp_scale: float = Constants.TEAMS_HP_SCALE if match_state.mode == MatchRules.Mode.TEAMS else 1.0
+	_floor.set_midline(match_state.mode == MatchRules.Mode.TEAMS)
 	for p: Player in players:
 		p.team = _team_for(p.player_id)
 		p.flag_carrier = p.team != 0 and match_state.carried_flag_of(p.player_id) != 0
