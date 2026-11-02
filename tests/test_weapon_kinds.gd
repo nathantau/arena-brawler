@@ -78,7 +78,8 @@ func test_catalog_has_the_mvp_eight() -> void:
 	var pickups: Array[StringName] = catalog.pickup_ids()
 	assert_false(pickups.has(&"pistol"), "sidearm isn't a pickup")
 	assert_false(pickups.has(&"bot_blaster"))
-	assert_eq(pickups.size(), 7, "signature weapons are not pickups")
+	assert_false(pickups.has(&"rocket"), "Boomtube retired (Hopper covers explosive)")
+	assert_eq(pickups.size(), 6, "signature weapons are not pickups")
 	for w: WeaponData in catalog._by_id.values():
 		if w.kind == WeaponData.Kind.PROJECTILE and not w.blast:
 			assert_not_null(w.projectile_sprite, "%s has bullet art" % w.id)
