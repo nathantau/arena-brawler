@@ -1013,12 +1013,15 @@ func clone_points() -> PackedVector2Array:
 		var run: Vector2 = Vector2.RIGHT.rotated(angle)
 		var target: Vector2 = clones.anchor + run * minf(CLONE_START_DISTANCE + t * d.clone_speed, d.clone_reach) \
 			+ run.orthogonal() * sin(t * CLONE_WOBBLE_SPEED) * CLONE_WOBBLE_PX
-		_feet_ray.from = clones.anchor
-		_feet_ray.to = target
-		var hit: Dictionary = space.intersect_ray(_feet_ray)
-		if not hit.is_empty():
-			target = hit.position + hit.normal * Constants.PLAYER_RADIUS  # as close as a player can stand
-		out.append(target)
+		# Sweep a player-sized circle (a clone is a body, not a point: a ray let its edge sink into corners and
+		# crates, and a spawn spot inside a wall was reached). It stops where a player would; a blocked start
+		# stays at the caster's own spot, which is free.
+		_swing_query.transform = Transform2D(0.0, clones.anchor)
+		_swing_query.motion = target - clones.anchor
+		var fractions: PackedFloat32Array = space.cast_motion(_swing_query)
+		_swing_query.motion = Vector2.ZERO
+		var safe: float = fractions[0] if fractions.size() > 0 else 1.0
+		out.append(clones.anchor.lerp(target, safe))
 	return out
 
 
