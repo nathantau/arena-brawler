@@ -882,7 +882,7 @@ def flint(step=None, t=0, heat=0.0, form=False):
     def fist(cx, k):  # a ball of fire for a hand, its flame licking up and flickering every tick
         hh = 7 + round(heat * 6) + (t + k) % 2
         if form:  # a small soft flame, not a spiky one
-            fire_tongues(up, cx, 46, [(0, hh * 1.5, 4.0, 0.12 * (1 - 2 * (k % 2)), 0.3 * k, 1)],
+            fire_tongues(up, cx, 46, [(0, hh * 1.9, 5.0, 0.12 * (1 - 2 * (k % 2)), 0.3 * k, 1)],
                          ((t + k * 3) % FIRE_PERIOD) / FIRE_PERIOD, sway=1.0, sheds=False)
         else:
             flame(up, cx - 4, cx + 4, 46, hh, t + k, tongues=2)
@@ -1010,7 +1010,7 @@ def fire_tongues(c: Canvas, cx: int, base: int, tongues, u: float, shift: float 
     heat: dict[tuple[int, int], float] = {}
     tips = []
     for dx, hgt, w0, lean, ph, beats in tongues:
-        hcur = hgt * (0.86 + 0.14 * math.sin(tau * (beats * u + ph)))
+        hcur = hgt * (0.9 + 0.1 * math.sin(tau * (beats * u + ph)))
         if hcur < 3:
             continue
         y_top = int(base - hcur) - 1
@@ -1049,7 +1049,7 @@ def fire_tongues(c: Canvas, cx: int, base: int, tongues, u: float, shift: float 
         c.px[x, y] = col + (255,)
     if sheds:
         for tx, ty, hgt, w0, ph in tips:
-            if hgt < 30:
+            if hgt < 25:
                 continue
             f = (u + ph) % 1.0  # 0 just pinched off the tip, 1 gone
             size = 1.0 - f
@@ -1063,14 +1063,14 @@ def fire_tongues(c: Canvas, cx: int, base: int, tongues, u: float, shift: float 
 
 
 INFERNO_BACK = (  # (dx from his centre, height, width, lean, phase, beats): the blaze rising off the ground round his body, hugging his shoulders and the sides of his head
-    (0, 26, 16, 0.0, 0.0, 1),  # the mass of fire round his body (its edges are what shows)
-    (-18, 50, 5.5, -0.08, 0.65, 1), (18, 46, 5.5, 0.08, 0.2, 1),
-    (-23, 34, 5.0, -0.12, 0.45, 1), (23, 30, 5.0, 0.12, 0.8, 1), (-27, 20, 4.5, -0.14, 0.9, 1), (27, 18, 4.5, 0.14, 0.3, 1),
+    (0, 31, 19, 0.0, 0.0, 1),  # the mass of fire round his body (its edges are what shows)
+    (-20, 62, 6.5, -0.08, 0.65, 1), (20, 57, 6.5, 0.08, 0.2, 1),
+    (-26, 42, 6.0, -0.12, 0.45, 1), (26, 37, 6.0, 0.12, 0.8, 1), (-31, 25, 5.2, -0.14, 0.9, 1), (31, 22, 5.2, 0.14, 0.3, 1),
 )
 INFERNO_CROWN = (  # the flame crown, rooted on his head: tongues of varied height, tallest in the middle / back, leaning together
-    (0, 9, 16, 0.0, 0.0, 1),
-    (-13, 27, 5.2, 0.16, 0.6, 1), (-6.5, 33, 5.5, 0.09, 0.1, 1), (0, 35, 5.6, 0.0, 0.45, 1), (6.5, 30, 5.5, -0.09, 0.8, 1),
-    (13, 25, 5.0, -0.16, 0.3, 1),
+    (0, 11, 18, 0.0, 0.0, 1),
+    (-14, 30, 6.0, 0.16, 0.6, 1), (-7, 35, 6.2, 0.09, 0.1, 1), (0, 37, 6.4, 0.0, 0.45, 1), (7, 33, 6.2, -0.09, 0.8, 1),
+    (14, 27, 5.8, -0.16, 0.3, 1),
 )
 
 
@@ -1086,7 +1086,7 @@ def inferno_fire(t: int, dy: int, heat: float = 1.0) -> Canvas:
     base = PAD + 59
     fire_tongues(c, CELL // 2, base, [(dx * h ** 0.5, hg * h ** 0.6, w * h ** 0.5, ln, ph, bt) for dx, hg, w, ln, ph, bt in INFERNO_BACK],
                  u, shift=-0.12, sheds=h > 0.7, ragged=6)
-    root = PAD + UPPER_DY + dy + HEAD[1] + 9  # the crown grows out of the head's top edge
+    root = PAD + UPPER_DY + dy + HEAD[1] + 10  # the crown grows out of the head's top edge
     fire_tongues(c, CELL // 2, root, [(dx * h ** 0.5, hg * h ** 0.6, w * h ** 0.5, ln, ph, bt) for dx, hg, w, ln, ph, bt in INFERNO_CROWN],
                  u + 0.15, shift=-0.02, sheds=h > 0.7, sway=1.8)
     return fill_notches(c)
