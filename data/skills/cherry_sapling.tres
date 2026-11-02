@@ -16,6 +16,6 @@ tags = Array[StringName]([&"sakura"])
 cooldown = 9.0
 duration = 8.0
 sapling_range = 400.0
-sapling_interval = 0.8
+sapling_interval = 0.4
 sapling_muzzle_height = 38.0
 sapling_weapon = ExtResource("3_petal")

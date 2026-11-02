@@ -16,5 +16,5 @@ cooldown = 7.0
 duration = 0.5
 gust_range = 170.0
 gust_half_angle_deg = 36.0
-gust_damage = 14
+gust_damage = 19
 gust_knockback = 560.0

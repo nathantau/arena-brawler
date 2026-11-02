@@ -17,5 +17,5 @@ duration = 0.75
 pillar_length = 320.0
 pillar_width = 44.0
 pillar_windup = 0.25
-pillar_damage = 32
+pillar_damage = 42
 pillar_knockback = 260.0
