@@ -329,6 +329,8 @@ func select_character(p: Player, id: StringName) -> void:
 	if c == null or c == p.character or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p):
 		return
 	p.set_character(c)
+	if referee != null:
+		referee.set_gap_mask(p.player_id, 0)  # a new fighter comes with all three default slots
 	match_updated.emit()
 
 
@@ -341,14 +343,49 @@ func select_weapon(p: Player, id: StringName) -> void:
 	match_updated.emit()
 
 
-## Lobby only (authoritative): the special in skill slot `slot`. Must be a special their character can use.
+## Lobby only (authoritative): the special in skill slot `slot`. Must be a special their character can use; an empty
+## `id` empties the slot (READY is refused until it is filled again).
 func select_special(p: Player, slot: int, id: StringName) -> void:
-	var s: SkillData = SkillCatalog.shared().get_skill(id)
-	if s == null or not s.special or not p.character.can_use_skill(s) or slot < 0 or slot >= Constants.SKILL_SLOTS \
-			or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p):
+	if slot < 0 or slot >= Constants.SKILL_SLOTS or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p) \
+			or referee == null:
 		return
+	var mask: int = match_state.gaps.get(p.player_id, 0)
+	if id == &"":
+		referee.set_gap_mask(p.player_id, mask | (1 << slot))
+		match_updated.emit()
+		return
+	var s: SkillData = SkillCatalog.shared().get_skill(id)
+	if s == null or not s.special or not p.character.can_use_skill(s):
+		return
+	for other: int in p.skills.size():  # set_skill swaps with a slot already holding it: the gaps travel too
+		if other != slot and p.skills[other].data == s:
+			var a: int = (mask >> slot) & 1
+			var b: int = (mask >> other) & 1
+			mask = (mask & ~((1 << slot) | (1 << other))) | (b << slot) | (a << other)
 	p.set_skill(slot, s)
+	referee.set_gap_mask(p.player_id, mask & ~(1 << slot))
 	match_updated.emit()
+
+
+## Authoritative safety net: any emptied slot gets the first of the fighter's default specials not already equipped.
+## READY is refused while a slot is empty, so this only matters if a match starts some other way.
+func fill_gaps(p: Player) -> void:
+	var mask: int = match_state.gaps.get(p.player_id, 0)
+	if mask == 0:
+		return
+	var taken: Array[SkillData] = []
+	for i: int in p.skills.size():
+		if (mask >> i) & 1 == 0:
+			taken.append(p.skills[i].data)
+	for i: int in p.skills.size():
+		if (mask >> i) & 1 == 0:
+			continue
+		for d: SkillData in Player.default_skills(p.character) + Player.specials_pool(p.character):
+			if not taken.has(d):
+				p.set_skill(i, d)
+				taken.append(d)
+				break
+	match_state.gaps.erase(p.player_id)
 
 
 ## Weapons `c` may fight with: its signature, then the shared weapons it can use in catalog order.
@@ -905,6 +942,8 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 			scores.reset()
 			projectiles.clear()
 			if mode != Mode.CLIENT:
+				for p: Player in players:
+					fill_gaps(p)
 				crates.reset()
 				pickups.reset()
 				_place_participants()

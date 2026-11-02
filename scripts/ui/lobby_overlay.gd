@@ -2,16 +2,13 @@ class_name LobbyOverlay
 extends RefCounted
 ## The character select's detail overlay: closed on the fighter grid, opened by tapping a fighter (it then shows that
 ## fighter's abilities and weapons), closed by the scrim, the back button or by locking in.
+## Abilities are plain toggles: tapping an unequipped one fills the first empty slot, tapping an equipped one empties
+## its slot, and nothing is ever replaced behind the player's back.
 ## Pure logic (no nodes) so the flow is unit-testable.
 
 var is_open: bool = false
 ## The fighter the overlay was last opened for.
 var fighter: StringName = &""
-## The ability slot (0-based) the next tapped ability goes into: the gold-outlined card. Starts on the second slot
-## (the first holds Dash by default) and moves on to the next slot after each placement.
-var target_slot: int = DEFAULT_TARGET
-
-const DEFAULT_TARGET: int = 1
 
 
 ## A fighter card was tapped. Returns true when the overlay has to slide in (it was closed or closing); tapping
@@ -37,18 +34,14 @@ func ready_pressed(will_be_ready: bool) -> void:
 		is_open = false
 
 
-## A slot card was tapped: the next ability goes there.
-func set_target(slot: int, slots: int = Constants.SKILL_SLOTS) -> void:
-	target_slot = clampi(slot, 0, slots - 1)
-
-
-## An ability is being placed: returns the slot it goes into and moves the target on to the next slot.
-func take_slot(slots: int = Constants.SKILL_SLOTS) -> int:
-	var slot: int = target_slot
-	target_slot = (slot + 1) % slots
-	return slot
-
-
-## The fighter changed: the slots are theirs again, so the target starts over.
-func reset_target() -> void:
-	target_slot = DEFAULT_TARGET
+## What a tap on ability `id` does, given the slots (each an ability id, or &"" when empty):
+## {"kind": "add", "slot": first empty slot}, {"kind": "remove", "slot": its slot} or {"kind": "full"} when every
+## slot is taken by other abilities.
+static func toggle(slots: Array, id: StringName) -> Dictionary:
+	var held: int = slots.find(id)
+	if held >= 0:
+		return {"kind": "remove", "slot": held}
+	var empty: int = slots.find(&"")
+	if empty >= 0:
+		return {"kind": "add", "slot": empty}
+	return {"kind": "full"}

@@ -101,6 +101,11 @@ var _special_icons: Dictionary[StringName, TextureRect] = {}
 var _weapon_icons: Dictionary[StringName, TextureRect] = {}
 ## Icons in flight into a slot (slot index -> [icon node, tween]); one per slot, a new pick replaces it.
 var _flyers: Dictionary[int, Array] = {}
+## Dashed "+" drawn over an emptied slot card.
+var _empty_marks: Array[Control] = []
+var _ability_hint: Label
+var _full_hint_left: float = 0.0
+var _flash_tween: Tween
 ## The big preview.
 var _stage: Panel
 var _pivot: Node2D
@@ -378,12 +383,11 @@ func _build_details(body: BoxContainer) -> void:
 	p.add_child(pane)
 	for i: int in Constants.SKILL_SLOTS + 1:
 		_build_slot_card(pane, i)
-	var hint := _label(p, &"DimLabel")
-	hint.text = "Tap an ability to put it in the gold slot, or tap a slot first."
-	hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
-	hint.add_theme_font_override("font", UiStyle.body_font())
-	hint.clip_text = true
-	hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_ability_hint = _label(p, &"DimLabel")
+	_ability_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	_ability_hint.add_theme_font_override("font", UiStyle.body_font())
+	_ability_hint.clip_text = true
+	_ability_hint.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_detail_scroller = HScroller.new(true)
 	_detail_scroller.fade_color = COLOR_BG
 	_detail_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -445,14 +449,77 @@ func _build_slot_card(parent: Node, i: int) -> void:
 	tag.add_theme_color_override("font_color", UiStyle.C_STEEL if weapon else UiStyle.C_YELLOW)
 	tag.position = Vector2(10, 4)
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mark := Control.new()  # an emptied slot: a dashed outline with a "+"
+	mark.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mark.visible = false
+	mark.draw.connect(func() -> void: _draw_empty_mark(mark))
+	card.add_child(mark)
+	_empty_marks.append(mark)
 	_slot_cards.append(card)
 	_slot_icons.append(pic)
 	_slot_names.append(name_label)
 
 
+## Tapping a filled ability slot empties it.
 func _on_slot_pressed(i: int) -> void:
-	_overlay_state.set_target(i)
+	var slots: Array = _slots()
+	if slots[i] == &"":
+		return
+	_remove_slot(i)
+
+
+## Dashed outline and a plus on an empty slot card.
+func _draw_empty_mark(mark: Control) -> void:
+	var r := Rect2(Vector2.ZERO, mark.size)
+	var c: Color = UiStyle.C_STEEL_D
+	for pair: Array in [[r.position, Vector2(r.end.x, r.position.y)], [Vector2(r.end.x, r.position.y), r.end],
+			[r.end, Vector2(r.position.x, r.end.y)], [Vector2(r.position.x, r.end.y), r.position]]:
+		mark.draw_dashed_line(pair[0], pair[1], c, 2.0, 8.0)
+	var font: Font = UiStyle.body_font(true)
+	var size: int = UiStyle.SIZE_TITLE
+	var text_size: Vector2 = font.get_string_size("+", HORIZONTAL_ALIGNMENT_CENTER, -1, size)
+	mark.draw_string(font, Vector2((r.size.x - text_size.x) * 0.5, (r.size.y + font.get_ascent(size) - font.get_descent(size)) * 0.5),
+		"+", HORIZONTAL_ALIGNMENT_LEFT, -1, size, c)
+
+
+func _remove_slot(slot: int) -> void:
+	arena.special_requested.emit(slot, &"")
+	_clear_flyer(slot)
+	_pop_slot(slot)
 	_refresh_loadout()
+
+
+## The three ability slots as ids, &"" for an emptied one.
+func _slots() -> Array:
+	return _pick().slice(2)
+
+
+func _tilt_slots(angle: float) -> void:
+	for i: int in Constants.SKILL_SLOTS:
+		_slot_cards[i].rotation = angle
+
+
+## All three slots are taken: a short shake + red flash on the slot cards and a hint to remove one first.
+func _flash_full() -> void:
+	_full_hint_left = TOAST_TIME
+	_refresh_loadout()
+	if _flash_tween != null:
+		_flash_tween.kill()
+	var tween: Tween = create_tween().set_parallel(false)
+	_flash_tween = tween
+	for i: int in Constants.SKILL_SLOTS:
+		_slot_cards[i].pivot_offset = _slot_cards[i].size * 0.5
+		_outline_selected(_slot_cards[i], true, UiStyle.C_RED)
+	var prev: float = 0.0
+	for angle: float in [0.03, -0.03, 0.02, -0.01, 0.0]:
+		tween.tween_method(_tilt_slots, prev, angle, 0.05)
+		prev = angle
+	tween.finished.connect(func() -> void:
+		for i: int in Constants.SKILL_SLOTS:
+			_slot_cards[i].rotation = 0.0
+		_flash_tween = null
+		_refresh_loadout())
 
 
 ## Shrinks `label`'s text in the clean sans until it fits `max_w` (never below the old 12), ellipsis as last resort.
@@ -643,6 +710,10 @@ func _process(delta: float) -> void:
 		_toast_left -= delta
 		if _toast_left <= 0.0:
 			_refresh()
+	if _full_hint_left > 0.0:
+		_full_hint_left -= delta
+		if _full_hint_left <= 0.0:
+			_refresh_loadout()
 	if _pick() != _shown_pick or _crowd() != _shown_crowd:
 		_refresh()
 	_tick_flair(delta)
@@ -773,12 +844,13 @@ func _refresh() -> void:
 	var teams_mode: bool = st.mode == MatchRules.Mode.TEAMS
 	var taker: int = MatchRules.lock_holder(shown_teams, _human_locks(st), me.player_id, me.character.id) \
 		if teams_mode and not _is_ready() else 0
+	var gap: bool = st.has_gap(me.player_id)
 	_mark_fighters(st, me, shown_teams, taker)
 	_blocker.text = _toast if _toast_left > 0.0 else "Taken by %s" % _team_name(arena.get_player(taker)) if taker != 0 \
-		else st.blocker
+		else "Pick 3 abilities" if gap else st.blocker
 	for b: Button in _ready_buttons:
 		b.text = ("UNLOCK" if teams_mode else "UNREADY") if _is_ready() else "LOCK IN" if teams_mode else "READY!"
-		b.disabled = taker != 0
+		b.disabled = taker != 0 or gap
 		b.theme_type_variation = &"Button" if _is_ready() else &"PrimaryButton"
 	_mark_preview(taker)
 
@@ -899,7 +971,6 @@ func _build_weapon_cards(c: CharacterData) -> void:
 	_special_cards.clear()
 	_special_badges.clear()
 	_special_icons.clear()
-	_overlay_state.reset_target()
 	for child: Node in _special_row.get_children():
 		child.queue_free()
 	for sk: SkillData in SkillCatalog.shared().specials_for(c):
@@ -916,15 +987,21 @@ func _build_weapon_cards(c: CharacterData) -> void:
 		_special_badges[sid] = badge
 
 
-## An equipped special stays put; any other one goes into the target slot (gold card), which then moves on.
+## A plain toggle: an unequipped ability fills the first empty slot (its icon flies in), an equipped one is removed,
+## and with all three slots full nothing is replaced.
 func _on_special_pressed(id: StringName) -> void:
-	if _pick().slice(2).has(id):
-		return
-	var slot: int = _overlay_state.take_slot()
-	arena.special_requested.emit(slot, id)
-	if _special_icons.has(id):
-		_fly_icon(_special_icons[id], slot)
-	_refresh_loadout()
+	var r: Dictionary = LobbyOverlay.toggle(_slots(), id)
+	match r["kind"]:
+		"add":
+			var slot: int = r["slot"]
+			arena.special_requested.emit(slot, id)
+			if _special_icons.has(id):
+				_fly_icon(_special_icons[id], slot)
+			_refresh_loadout()
+		"remove":
+			_remove_slot(r["slot"])
+		_:
+			_flash_full()
 
 
 func _on_weapon_pressed(id: StringName) -> void:
@@ -1062,9 +1139,20 @@ func _refresh_loadout() -> void:
 	if me == null or _slot_cards.is_empty():
 		return
 	for i: int in Constants.SKILL_SLOTS:
-		_slot_icons[i].texture = me.skills[i].data.icon
-		_fit_body(_slot_names[i], me.skills[i].data.display_name, 140.0, UiStyle.SIZE_SMALL, true)
-		_outline_selected(_slot_cards[i], i == _overlay_state.target_slot, UiStyle.C_YELLOW)
+		var empty: bool = arena.match_state.slot_empty(me.player_id, i)
+		_slot_icons[i].visible = not empty
+		_slot_names[i].visible = not empty
+		_empty_marks[i].visible = empty
+		_empty_marks[i].queue_redraw()
+		if _flash_tween == null:
+			_outline_selected(_slot_cards[i], false)
+		if not empty:
+			_slot_icons[i].texture = me.skills[i].data.icon
+			_fit_body(_slot_names[i], me.skills[i].data.display_name, 140.0, UiStyle.SIZE_SMALL, true)
+	var gap: bool = arena.match_state.has_gap(me.player_id)
+	_ability_hint.text = "Pick 3 abilities" if gap else "Tap an ability to remove it first" if _full_hint_left > 0.0 \
+		else "Tap an ability to equip or remove it"
+	_ability_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW if gap or _full_hint_left > 0.0 else UiStyle.C_DIM)
 	var w: int = Constants.SKILL_SLOTS
 	_slot_icons[w].texture = me.weapon.data.sprite
 	_fit_body(_slot_names[w], me.weapon.data.display_name, 140.0, UiStyle.SIZE_SMALL, true)
@@ -1091,7 +1179,10 @@ func _pick() -> Array[StringName]:
 	var me: Player = arena.local_player
 	if me == null:
 		return [&"", &"", &"", &"", &""]
-	return [me.character.id, me.weapon.data.id, me.skills[0].data.id, me.skills[1].data.id, me.skills[2].data.id]
+	var out: Array[StringName] = [me.character.id, me.weapon.data.id]
+	for i: int in Constants.SKILL_SLOTS:  # an emptied slot reads as &""
+		out.append(&"" if arena.match_state.slot_empty(me.player_id, i) else me.skills[i].data.id)
+	return out
 
 
 func _is_ready() -> bool:

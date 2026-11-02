@@ -11,6 +11,7 @@ var win: bool = false  ## screenshot: the local player captures the flag, shot t
 var lobby: bool = false
 var shared: int = 0  ## screenshot with lobby=1: 1 = P2 + P3 hover one card, 2 = P3 locked and P2 hovers that card  ## screenshot: the loading room (nobody readies up)
 var step: int = 0  ## screenshot with lobby=1: which character select step is showing (0 the fighter grid, 1 the detail overlay open)
+var toggle: bool = false  ## screenshot with lobby=1 strip=1 fly=1: first remove an equipped ability, then add one
 var fly: bool = false  ## screenshot with lobby=1 strip=1: capture an ability flying into a slot instead of the slide-in
 var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the overlay sliding in
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
@@ -42,6 +43,7 @@ func _initialize() -> void:
 				"step": step = int(kv[1])
 				"strip": strip = kv[1] == "1"
 				"fly": fly = kv[1] == "1"
+				"toggle": toggle = kv[1] == "1"
 	InputSetup.ensure_actions()
 	if lobby and shot_path != "":
 		UiStyle.install()  # Main does this in the real game
@@ -171,17 +173,24 @@ func _shoot_lobby() -> void:
 		await process_frame
 	if strip:
 		lp._on_fighter_pressed(&"bolt")
-		if fly:  # let the slide finish, then tap an unequipped ability row and watch it fly into the gold slot
+		if fly:  # let the slide finish
 			for i: int in 24:
 				await process_frame
-			for id: StringName in lp._special_cards.keys().slice(3):
-				if not lp._pick().slice(2).has(id):
-					lp._on_special_pressed(id)
-					break
+		var removed: StringName = lp._pick()[3]
 		var crops: Array[Image] = []
-		for i: int in 16:
+		var picks: Array = [1, 4, 7, 9, 11, 14] if toggle else [0, 1, 2, 3, 4, 6] if fly else [0, 2, 4, 6, 9, 14]
+		for i: int in 18:
+			if toggle and i == 0:
+				lp._on_special_pressed(removed)  # tapping an equipped ability empties its slot
+			if toggle and i == 8:
+				lp._on_special_pressed(removed)  # and tapping it again puts it back in the first empty slot
+			elif fly and not toggle and i == 0:
+				for id: StringName in lp._special_cards.keys().slice(3):
+					if not lp._pick().slice(2).has(id):
+						lp._on_special_pressed(id)
+						break
 			await process_frame
-			if i in ([0, 1, 2, 3, 4, 6] if fly else [0, 2, 4, 6, 9, 14]):
+			if i in picks:
 				var frame: Image = root.get_texture().get_image()
 				frame.convert(Image.FORMAT_RGBA8)
 				frame.resize(frame.get_width() / 2, frame.get_height() / 2, Image.INTERPOLATE_BILINEAR)
@@ -196,6 +205,8 @@ func _shoot_lobby() -> void:
 	if step > 0:
 		lp._on_fighter_pressed(&"eden")
 		lp._slide_overlay(false)
+		if step == 2:  # one ability slot emptied
+			lp._on_special_pressed(lp._pick()[3])
 	for i: int in 10:
 		await process_frame
 	var img: Image = root.get_texture().get_image()

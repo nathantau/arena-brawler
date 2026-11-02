@@ -45,25 +45,27 @@ func test_locking_in_closes_unlocking_does_not() -> void:
 	assert_false(o.is_open)
 
 
-func test_target_slot_starts_on_the_second_and_advances() -> void:
-	var o := LobbyOverlay.new()
-	assert_eq(o.take_slot(), 1)
-	assert_eq(o.take_slot(), 2)
-	assert_eq(o.take_slot(), 0, "wraps round")
-	assert_eq(o.target_slot, 1)
+func test_tapping_an_unequipped_ability_takes_the_first_empty_slot() -> void:
+	var r: Dictionary = LobbyOverlay.toggle([&"dash", &"", &"leaf_gust"], &"barrier")
+	assert_eq(r["kind"], "add")
+	assert_eq(r["slot"], 1)
+	assert_eq(LobbyOverlay.toggle([&"", &"", &"leaf_gust"], &"barrier")["slot"], 0)
 
 
-func test_tapping_a_slot_makes_it_the_target() -> void:
-	var o := LobbyOverlay.new()
-	o.set_target(0)
-	assert_eq(o.take_slot(), 0)
-	assert_eq(o.target_slot, 1, "continues from there")
-	o.set_target(99)
-	assert_eq(o.target_slot, Constants.SKILL_SLOTS - 1, "clamped")
+func test_tapping_an_equipped_ability_removes_it() -> void:
+	var r: Dictionary = LobbyOverlay.toggle([&"dash", &"bark_skin", &"leaf_gust"], &"bark_skin")
+	assert_eq(r["kind"], "remove")
+	assert_eq(r["slot"], 1)
 
 
-func test_new_fighter_resets_the_target() -> void:
-	var o := LobbyOverlay.new()
-	o.set_target(2)
-	o.reset_target()
-	assert_eq(o.target_slot, LobbyOverlay.DEFAULT_TARGET)
+func test_full_slots_refuse_a_new_ability() -> void:
+	assert_eq(LobbyOverlay.toggle([&"dash", &"bark_skin", &"leaf_gust"], &"barrier")["kind"], "full")
+
+
+func test_remove_then_add_round_trip() -> void:
+	var slots: Array = [&"dash", &"bark_skin", &"leaf_gust"]
+	var r: Dictionary = LobbyOverlay.toggle(slots, &"bark_skin")
+	slots[r["slot"]] = &""
+	r = LobbyOverlay.toggle(slots, &"barrier")
+	assert_eq(r["kind"], "add")
+	assert_eq(r["slot"], 1, "the freed slot")

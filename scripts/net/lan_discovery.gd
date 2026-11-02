@@ -10,7 +10,7 @@ enum Mode { OFF, HOST, BROWSE }
 
 const MAGIC: String = "BRWL"
 ## Bump when the net protocol changes: other versions are listed greyed-out ("different version").
-const VERSION: int = 10  # 10: Teams hero select (match state carries locked fighters, rpc_lock_refused); 9: weapon spin-up + burn time in snapshots (StateField.WEAPON_RAMP, BURN_REMAINING), weapon hooks; 8: Teams capture the flag (flag state in the match state) + 1.5x HP; 7: Teams 3v3 mode (match state carries teams / round score, rpc_request_team, 6 seats); 6: Smoke Bomb makes the user invisible (no more cloud zone); 5: five more specials (new skill ids on the wire); 4: barrier hits in snapshots (StateField.SKILL_HITS); 3: three special slots (InputFrame special2, 3 skills per snapshot); 2: snapshots arrive as several packets per tick
+const VERSION: int = 11  # 11: lobby ability slots can be emptied (match state carries gaps, select_special with an empty id); 10: Teams hero select (match state carries locked fighters, rpc_lock_refused); 9: weapon spin-up + burn time in snapshots (StateField.WEAPON_RAMP, BURN_REMAINING), weapon hooks; 8: Teams capture the flag (flag state in the match state) + 1.5x HP; 7: Teams 3v3 mode (match state carries teams / round score, rpc_request_team, 6 seats); 6: Smoke Bomb makes the user invisible (no more cloud zone); 5: five more specials (new skill ids on the wire); 4: barrier hits in snapshots (StateField.SKILL_HITS); 3: three special slots (InputFrame special2, 3 skills per snapshot); 2: snapshots arrive as several packets per tick
 const DISCOVERY_PORT: int = 7778
 const ANNOUNCE_INTERVAL_S: float = 1.0
 const EXPIRY_S: float = 3.0

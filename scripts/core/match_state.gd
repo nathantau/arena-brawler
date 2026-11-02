@@ -4,7 +4,7 @@ extends RefCounted
 ## sends it whole, reliably, on every change; clients only count time_left down for display.
 
 enum Phase { LOBBY, COUNTDOWN, PLAYING, RESULTS }
-enum Field { PHASE, MODE, ARENA, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, TEAMS, ROUND_SCORES, ROUND, ROUND_WINNER, INTERMISSION, FLAGS, ROUND_REASON, LOCKS, COUNT }
+enum Field { PHASE, MODE, ARENA, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, TEAMS, ROUND_SCORES, ROUND, ROUND_WINNER, INTERMISSION, FLAGS, ROUND_REASON, LOCKS, GAPS, COUNT }
 ## One results row: [id, kills, deaths].
 enum ResultField { ID, KILLS, DEATHS, COUNT }
 
@@ -21,6 +21,9 @@ var ready: Array[int] = []
 ## Teams lobby: player id -> the fighter they locked in (humans: set with READY; bots: held from the moment they pick).
 ## Teammates see these; humans are unique per team, a bot yields to a human (see Arena._resolve_bot_fighters).
 var locked: Dictionary[int, StringName] = {}
+## Lobby: player id -> bitmask of the ability slots they emptied (tap an equipped ability to remove it); absent = all
+## three filled. A player with a gap cannot ready up, and the server fills any gap left at match start.
+var gaps: Dictionary[int, int] = {}
 ## Final standings (best first), set on entering RESULTS.
 var results: Array = []
 ## 0 = draw.
@@ -99,6 +102,15 @@ func team_of(id: int) -> int:
 	return teams.get(id, 0)
 
 
+## True when ability slot `slot` of player `id` has been emptied.
+func slot_empty(id: int, slot: int) -> bool:
+	return (gaps.get(id, 0) >> slot) & 1 == 1
+
+
+func has_gap(id: int) -> bool:
+	return gaps.get(id, 0) != 0
+
+
 func lives_of(id: int) -> int:
 	return lives.get(id, 0)
 
@@ -133,6 +145,10 @@ func to_array() -> Array:
 	for id: int in locked:
 		lk.append_array([id, String(locked[id])])
 	a[Field.LOCKS] = lk
+	var gp: Array = []
+	for id: int in gaps:
+		gp.append_array([id, gaps[id]])
+	a[Field.GAPS] = gp
 	return a
 
 
@@ -150,7 +166,8 @@ func apply_array(a: Array) -> bool:
 			or typeof(a[Field.ROUND]) != TYPE_INT or typeof(a[Field.ROUND_WINNER]) != TYPE_INT \
 			or typeof(a[Field.INTERMISSION]) != TYPE_FLOAT or typeof(a[Field.ROUND_REASON]) != TYPE_INT \
 			or typeof(a[Field.FLAGS]) != TYPE_PACKED_FLOAT32_ARRAY or (a[Field.FLAGS] as PackedFloat32Array).size() != 10 \
-			or typeof(a[Field.LOCKS]) != TYPE_ARRAY or (a[Field.LOCKS] as Array).size() % 2 != 0:
+			or typeof(a[Field.LOCKS]) != TYPE_ARRAY or (a[Field.LOCKS] as Array).size() % 2 != 0 \
+			or typeof(a[Field.GAPS]) != TYPE_ARRAY or (a[Field.GAPS] as Array).size() % 2 != 0:
 		return false
 	var tl: PackedInt32Array = a[Field.TEAMS]
 	var rs: PackedInt32Array = a[Field.ROUND_SCORES]
@@ -186,6 +203,11 @@ func apply_array(a: Array) -> bool:
 	for i: int in range(0, lk.size() - 1, 2):
 		if typeof(lk[i]) == TYPE_INT and typeof(lk[i + 1]) == TYPE_STRING:
 			locked[lk[i]] = StringName(lk[i + 1])
+	gaps = {}
+	var gp: Array = a[Field.GAPS]
+	for i: int in range(0, gp.size() - 1, 2):
+		if typeof(gp[i]) == TYPE_INT and typeof(gp[i + 1]) == TYPE_INT and gp[i + 1] != 0:
+			gaps[gp[i]] = gp[i + 1] & ((1 << Constants.SKILL_SLOTS) - 1)
 	var fl: PackedFloat32Array = a[Field.FLAGS]
 	for i: int in 2:
 		var t: int = i + 1
