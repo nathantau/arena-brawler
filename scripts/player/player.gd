@@ -51,7 +51,8 @@ const EMBER_INTERVAL: float = 0.25
 ## Burning look: a warm tint pulsing at BURN_PULSE_HZ and BURN_LICKS small flame licks at a time rising off the body at
 ## the BURN_ROOTS (px from the node origin: head, shoulders, torso, hips), each living BURN_LICK_LIFE s.
 const BURN_PULSE_HZ: float = 3.0
-const BURN_TINT: Vector3 = Vector3(0.35, 0.0, -0.4)
+const BURN_GLOW: Color = Color(1.0, 0.7, 0.35)
+const BURN_GLOW_MAX: float = 0.22
 const BURN_LICKS: int = 4
 const BURN_LICK_LIFE: float = 0.6
 const BURN_LICK_HEIGHT: float = 28.0
@@ -380,8 +381,9 @@ func _process(delta: float) -> void:
 	_sprite.modulate = Color(1, 1, 1, _sprite.modulate.a)
 	if stats.burn_remaining > 0.0 and _sprite.modulate.a > 0.0:
 		var heat: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * BURN_PULSE_HZ)
-		_sprite.modulate = Color(1.0 + BURN_TINT.x * heat, 1.0 + BURN_TINT.y * heat, 1.0 + BURN_TINT.z * heat,
-			_sprite.modulate.a)
+		var glow: Color = Color.WHITE.lerp(BURN_GLOW, BURN_GLOW_MAX * heat)  # a light warm wash, never a muddy multiply
+		glow.a = _sprite.modulate.a
+		_sprite.modulate = glow
 	if stats.spawn_protect > 0.0 and _sprite.modulate.a > 0.0:
 		# Spawn protection: flickers (faster as it runs out) with a cool shimmer sweeping through the tint.
 		var phase: float = Time.get_ticks_msec() * 0.001

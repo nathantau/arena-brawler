@@ -34,9 +34,17 @@ var home: Vector2
 var shots: Array = []  # per row: Array[Image], each CELL big
 var seq: int = 1
 var sheet_done: bool = false
+## `-- only=N` renders just row N, to burn_preview.png style single-row output (<name>_preview.png via `out=`).
+var only: int = -1
+var out_path: String = "res://weapon_hooks_preview.png"
 
 
 func _initialize() -> void:
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("only="):
+			only = int(arg.substr(5))
+		elif arg.begins_with("out="):
+			out_path = arg.substr(4)
 	InputSetup.ensure_actions()
 	arena = Arena.new(Arena.Mode.OFFLINE)
 	root.add_child(arena)
@@ -83,9 +91,9 @@ func _tick() -> void:
 		p.controller = null
 		p.stats.invulnerable_time = 0.0
 		p.stats.hp = p.stats.max_hp
-	var row: int = (frames - START_FRAME) / ROW_LEN
+	var row: int = (frames - START_FRAME) / ROW_LEN if only < 0 else only
 	var n: int = (frames - START_FRAME) % ROW_LEN
-	if row >= ROWS.size():
+	if (only < 0 and row >= ROWS.size()) or (only >= 0 and frames - START_FRAME >= ROW_LEN):
 		if not sheet_done:
 			sheet_done = true
 			_finish()
@@ -153,13 +161,19 @@ func _grab(row: int) -> void:
 
 ## Blits the cells onto the sheet, then the row labels (rendered in a transparent SubViewport) over it.
 func _finish() -> void:
-	var size := Vector2i(COLS * (CELL.x + PAD) + PAD, ROWS.size() * (CELL.y + LABEL_H + PAD) + PAD)
+	var rows: Array[int] = []
+	if only >= 0:
+		rows.append(only)
+	else:
+		for r: int in ROWS.size():
+			rows.append(r)
+	var size := Vector2i(COLS * (CELL.x + PAD) + PAD, rows.size() * (CELL.y + LABEL_H + PAD) + PAD)
 	var sheet := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
 	sheet.fill(BG)
-	for r: int in ROWS.size():
-		for c: int in shots[r].size():
-			var im: Image = shots[r][c]
-			sheet.blit_rect(im, Rect2i(Vector2i.ZERO, CELL), Vector2i(PAD + c * (CELL.x + PAD), _row_y(r) + LABEL_H))
+	for i: int in rows.size():
+		for c: int in shots[rows[i]].size():
+			var im: Image = shots[rows[i]][c]
+			sheet.blit_rect(im, Rect2i(Vector2i.ZERO, CELL), Vector2i(PAD + c * (CELL.x + PAD), _row_y(i) + LABEL_H))
 	var vp := SubViewport.new()
 	vp.size = size
 	vp.transparent_bg = true
@@ -169,8 +183,8 @@ func _finish() -> void:
 	vp.add_child(board)
 	board.draw.connect(func() -> void:
 		var font: Font = ThemeDB.fallback_font
-		for r: int in ROWS.size():
-			board.draw_string(font, Vector2(PAD + 6, _row_y(r) + LABEL_H - 12), ROWS[r].label, HORIZONTAL_ALIGNMENT_LEFT, -1.0,
+		for i: int in rows.size():
+			board.draw_string(font, Vector2(PAD + 6, _row_y(i) + LABEL_H - 12), ROWS[rows[i]].label, HORIZONTAL_ALIGNMENT_LEFT, -1.0,
 				24, Color(0.95, 0.93, 0.85)))
 	board.queue_redraw()
 	await process_frame
@@ -183,7 +197,7 @@ func _finish() -> void:
 		for r: int in ROWS.size():
 			for c: int in shots[r].size():
 				(shots[r][c] as Image).save_png("/tmp/cell_%d_%d.png" % [r, c])
-	sheet.save_png("res://weapon_hooks_preview.png")
+	sheet.save_png(out_path)
 	quit()
 
 
