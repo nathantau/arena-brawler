@@ -1,34 +1,50 @@
 class_name LobbyPanel
 extends PanelContainer
-## The loading room, shown full screen during the lobby phase: pick a character, the one weapon it fights
-## with (its signature by default) and three specials (its own or generic ones like Dash), then Ready.
-## Header and footer stay put; the three steps scroll between them on short screens.
-## Also shows mode + arena, the roster with ready state and why the match can't start yet.
+## The loading room, shown full screen during the lobby phase: a character select in three steps.
+## Fighter (a grid of portraits; the pick zooms in as a big animated preview), then Abilities (three specials, slides
+## in from the right), then Weapon (cards slide in). Defaults are pre-filled, so READY is always one tap away at the
+## bottom right, and the step tabs (or tapping the preview) go back to any earlier step.
+## A top bar carries mode + arena, a bottom strip the roster with ready state and why the match can't start yet.
 ## Cards are rebuilt when the local character changes; highlights follow the synced state.
 
 const SPACING: int = 10
 ## Roster text for your side: a lighter blue than the HUD's so it reads on the dark panel (enemies use UiStyle.C_RED).
 const TEAM_ALLY_COLOR: Color = Color8(110, 160, 255)
-const BUTTON_MIN_SIZE: Vector2 = Vector2(190, UiStyle.TOUCH_MIN_H)
-const READY_MIN_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
-const LEAVE_MIN_SIZE: Vector2 = Vector2(140, UiStyle.TOUCH_MIN_H)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(150, 174)
+const BAR_H: float = 52.0
+const BUTTON_MIN_SIZE: Vector2 = Vector2(150, BAR_H)
+const READY_MIN_SIZE: Vector2 = Vector2(240, 68)
+const LEAVE_MIN_SIZE: Vector2 = Vector2(120, 68)
+const TAB_MIN_SIZE: Vector2 = Vector2(170, 48)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(128, 128)
 ## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
 ## the cell's body box, so they all stand in the same spot.
-const FIGHTER_ART_SCALE: float = 1.5
-const FIGHTER_ART_SIZE: Vector2 = Vector2(120, 96)
-## Specials are compact rows (icon, name, blurb) in a column beside the fighters.
-const SKILL_ROW_SIZE: Vector2 = Vector2(320, 64)  # 7 rows (5 own + Dash + Barrier) fit above READY on a phone
-const SKILL_ICON_SIZE: Vector2 = Vector2(40, 40)
+const FIGHTER_ART_SCALE: float = 1.25
+const FIGHTER_ART_SIZE: Vector2 = Vector2(108, 82)
+## Specials are rows (icon, name + cooldown, one-line description) in a column; 7 (5 own + Dash + Barrier) fit.
+const SKILL_ROW_H: float = 64.0
+const SKILL_ICON_SIZE: Vector2 = Vector2(38, 38)
+const SLOT_CHIP_SIZE: Vector2 = Vector2(52, 52)
 const WEAPON_CARD_SIZE: Vector2 = Vector2(168, 140)
 const WEAPON_ART_SCALE: float = 1.5
 ## Teams hero select: the lock / bot strip across the foot of a fighter's portrait.
 const BADGE_H: float = 24.0
 const TOAST_TIME: float = 2.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
+const COLOR_STAGE: Color = Color(0.105, 0.105, 0.19)
+## The big preview: pixel scale is a whole number (the sheet cell times this), it zooms in over ZOOM_TIME.
+const PREVIEW_INFO_W: float = 176.0
+const PREVIEW_MAX_SCALE: int = 6
+const ZOOM_FROM: float = 0.72
+const ZOOM_TIME: float = 0.25
+const SLIDE_TIME: float = 0.25
+const PANEL_GAP: float = 24.0
+## Seconds between the preview's idle and a short walk / attack loop.
+const FLAIR_GAP: Vector2 = Vector2(2.5, 4.5)
+const FLAIR_WALK_LOOPS: int = 2
 
 var arena: Arena
 
+var _steps := LobbySteps.new()
 var _title: Label
 var _rules: Label
 var _join_hint: Label
@@ -36,9 +52,9 @@ var _mode_button: Button
 var _team_button: Button
 var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
-var _weapon_row: BoxContainer
 var _fighter_scroller: HScroller
 var _weapon_scroller: HScroller
+var _weapon_grid: HFlowContainer
 var _weapon_cards: Dictionary[StringName, Button] = {}
 var _weapons_for: StringName = &""
 var _special_row: BoxContainer
@@ -60,8 +76,31 @@ var _shown_crowd: Array = []
 var _toast: String = ""
 var _toast_left: float = 0.0
 ## Last highlighted (character, weapon, slots 0-2 specials), so _process only restyles on change.
-var _revealed: Array[StringName] = [&"", &""]
 var _shown_pick: Array[StringName] = [&"", &"", &"", &"", &""]
+var _was_visible: bool = false
+## Step panels (fighter, abilities, weapon) side by side inside _host; the carousel slides them.
+var _host: Control
+var _panels: Array[Control] = []
+var _tabs: Array[Button] = []
+var _slide_tween: Tween
+var _slot_chips: Array[Panel] = []
+var _slot_icons: Array[TextureRect] = []
+var _next_button: Button
+## The big preview.
+var _stage: Panel
+var _pivot: Node2D
+var _sprite: AnimatedSprite2D
+var _preview_id: StringName = &""
+var _preview_tween: Tween
+var _name_label: Label
+var _hp_label: Label
+var _armor_label: Label
+var _hp_fill: ColorRect
+var _armor_fill: ColorRect
+var _stage_badge: Label
+var _stage_hint: Label
+var _flair_left: float = FLAIR_GAP.x
+var _in_flair: bool = false
 
 
 func _ready() -> void:
@@ -72,19 +111,47 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", SPACING)
 	add_child(box)
+	_build_top_bar(box)
+	_build_tabs(box)
+	var mid := HBoxContainer.new()
+	mid.add_theme_constant_override("separation", SPACING * 2)
+	mid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(mid)
+	_build_stage(mid)
+	_host = Control.new()
+	_host.clip_contents = true
+	_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_host.size_flags_stretch_ratio = 1.15
+	_host.resized.connect(func() -> void: _apply_step(false))
+	mid.add_child(_host)
+	_panels = [_build_fighter_panel(), _build_abilities_panel(), _build_weapon_panel()]
+	for p: Control in _panels:
+		_host.add_child(p)
+	_build_footer(box)
 
+	arena.match_updated.connect(_refresh)
+	arena.lock_refused.connect(func(holder: int) -> void:
+		_toast = "Taken by %s" % _team_name(arena.get_player(holder))
+		_toast_left = TOAST_TIME
+		_refresh())
+	_refresh()
+	_apply_step(false)
+
+
+func _build_top_bar(box: BoxContainer) -> void:
 	var header := HBoxContainer.new()
 	header.add_theme_constant_override("separation", SPACING)
 	box.add_child(header)
 	var titles := VBoxContainer.new()
 	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(titles)
+	titles.add_theme_constant_override("separation", 0)
 	titles.custom_minimum_size.x = 0.0
+	header.add_child(titles)
 	_title = _label(titles, &"HeaderLabel")
+	_title.add_theme_font_size_override("font_size", UiStyle.SIZE_BODY + 2)
 	_rules = _label(titles, &"DimLabel")
-	_join_hint = _label(titles, &"HeaderLabel")
-	_join_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW)
-	for l: Label in [_title, _rules, _join_hint]:
+	_rules.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	for l: Label in [_title, _rules]:
 		l.clip_text = true
 		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_mode_button = _button(header, BUTTON_MIN_SIZE)
@@ -99,25 +166,130 @@ func _ready() -> void:
 	_arena_button.pressed.connect(func() -> void:
 		arena.arena_requested.emit((arena.match_state.arena_index + 1) % ArenaLayouts.count()))
 
-	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", SPACING * 2)
-	top.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(top)
-	# Each column scrolls vertically on its own when it doesn't fit (drag it; tap selects).
-	var left := HScroller.new(true)
-	left.fade_color = COLOR_BG
-	left.content.add_theme_constant_override("separation", SPACING)
-	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # pushes the specials column to the right edge
-	top.add_child(left)
-	var fighters: BoxContainer = left.content
-	_label(fighters, &"HeaderLabel").text = "1 · Choose your fighter"
-	# Scrolls sideways once there are more fighters than fit (drag the row; tap selects).
-	_fighter_scroller = _scroller(fighters)
+
+## "1 Fighter · 2 Abilities · 3 Weapon": the current step is lit, any can be tapped to go there.
+func _build_tabs(box: BoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", SPACING)
+	box.add_child(row)
+	var names: Array[String] = ["1 · Fighter", "2 · Abilities", "3 · Weapon"]
+	for i: int in names.size():
+		var tab: Button = _button(row, TAB_MIN_SIZE)
+		tab.text = names[i]
+		var to: LobbySteps.Step = i as LobbySteps.Step
+		tab.pressed.connect(func() -> void: _go(to))
+		_tabs.append(tab)
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(gap)
+	_join_hint = _label(row, &"Label")
+	_join_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	_join_hint.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+	_join_hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+
+
+## The preview stage: a framed panel, the fighter at an integer scale, name + stat bars down the left, the lock
+## state along the foot. Tapping it goes back to the fighter step.
+func _build_stage(mid: BoxContainer) -> void:
+	_stage = Panel.new()
+	_stage.clip_contents = true
+	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_stage.size_flags_stretch_ratio = 1.0
+	var style := StyleBoxFlat.new()
+	style.bg_color = COLOR_STAGE
+	style.border_color = UiStyle.C_SHADOW
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	_stage.add_theme_stylebox_override("panel", style)
+	_stage.resized.connect(_layout_stage)
+	_stage.draw.connect(_draw_stage)
+	mid.add_child(_stage)
+	_pivot = Node2D.new()
+	_stage.add_child(_pivot)
+	_sprite = AnimatedSprite2D.new()
+	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_pivot.add_child(_sprite)
+	var tap := Button.new()  # the whole stage is a back button
+	tap.flat = true
+	tap.focus_mode = Control.FOCUS_NONE
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.pressed.connect(func() -> void: _go(LobbySteps.Step.FIGHTER))
+	_stage.add_child(tap)
+
+	var info := VBoxContainer.new()
+	info.position = Vector2(18, 16)
+	info.custom_minimum_size.x = PREVIEW_INFO_W - 16.0
+	info.size = Vector2(PREVIEW_INFO_W - 16.0, 10)
+	info.add_theme_constant_override("separation", 4)
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stage.add_child(info)
+	_name_label = _label(info, &"HeaderLabel")
+	_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hp: Array = _stat_bar(info, UiStyle.C_RED)
+	_hp_label = hp[0]
+	_hp_fill = hp[1]
+	var armor: Array = _stat_bar(info, UiStyle.C_STEEL)
+	_armor_label = armor[0]
+	_armor_fill = armor[1]
+
+	_stage_badge = _label(_stage, &"HeaderLabel")
+	_stage_badge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE, Control.PRESET_MODE_MINSIZE, 0)
+	_stage_badge.offset_top = -44.0
+	_stage_badge.offset_bottom = 0.0
+	_stage_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stage_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_stage_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stage_badge.visible = false
+	_stage_hint = _label(_stage, &"DimLabel")
+	_stage_hint.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	_stage_hint.text = "TAP TO CHANGE FIGHTER"
+	_stage_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE, Control.PRESET_MODE_MINSIZE, 0)
+	_stage_hint.offset_top = -28.0
+	_stage_hint.offset_bottom = -6.0
+	_stage_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stage_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## A caption over a thin bar; returns [caption label, fill rect].
+func _stat_bar(parent: Node, color: Color) -> Array:
+	var cap := _label(parent, &"Label")
+	cap.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bar := Control.new()
+	bar.custom_minimum_size = Vector2(0, 8)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(bar)
+	var back := ColorRect.new()
+	back.color = Color(0.0, 0.0, 0.0, 0.45)
+	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(back)
+	var fill := ColorRect.new()
+	fill.color = color
+	fill.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fill.anchor_right = 0.0
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(fill)
+	return [cap, fill]
+
+
+func _build_fighter_panel() -> Control:
+	var p := VBoxContainer.new()
+	p.add_theme_constant_override("separation", SPACING)
+	_label(p, &"HeaderLabel").text = "Choose your fighter"
+	_fighter_scroller = HScroller.new(true)
+	_fighter_scroller.fade_color = COLOR_BG
+	_fighter_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	p.add_child(_fighter_scroller)
+	var grid := HFlowContainer.new()
+	grid.add_theme_constant_override("h_separation", SPACING)
+	grid.add_theme_constant_override("v_separation", SPACING)
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_fighter_scroller.content.add_child(grid)
 	for c: CharacterData in arena.characters.ordered:
-		var card: Button = _card(_fighter_scroller.content, CHARACTER_CARD_SIZE, _fighter_art(c),
-			[c.display_name, "HP %d · Armor %d" % [c.max_hp, c.max_armor]])
+		var card: Button = _card(grid, CHARACTER_CARD_SIZE, _fighter_art(c), [c.display_name])
 		var id: StringName = c.id
-		_fighter_scroller.on_tap(card, func() -> void: arena.character_requested.emit(id))
+		_fighter_scroller.on_tap(card, func() -> void: _on_fighter_pressed(id))
 		_character_cards[id] = card
 		var frame := Panel.new()  # outline + tint over the card: your hover, a teammate's hover, a teammate's lock
 		frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -143,36 +315,86 @@ func _ready() -> void:
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.visible = false
 		_fighter_badges[id] = badge
+	return p
 
-	# Weapons under the fighters, so a character with many specials can't push them below the fold.
-	var gap := Control.new()
-	gap.custom_minimum_size.y = SPACING
-	fighters.add_child(gap)
-	_label(fighters, &"HeaderLabel").text = "2 · Choose your weapon"
-	_weapon_scroller = _scroller(fighters)
-	_weapon_row = _weapon_scroller.content
 
-	var specials := VBoxContainer.new()
-	specials.add_theme_constant_override("separation", SPACING)
-	top.add_child(specials)
-	_label(specials, &"HeaderLabel").text = "3 · Choose 3 specials"
+## Header (title, the three slot chips, a Next button) over the list of specials.
+func _build_abilities_panel() -> Control:
+	var p := VBoxContainer.new()
+	p.add_theme_constant_override("separation", SPACING)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", SPACING)
+	p.add_child(head)
+	var title := _label(head, &"HeaderLabel")
+	title.text = "Pick 3 abilities"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	title.clip_text = true
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	for i: int in Constants.SKILL_SLOTS:
+		var chip := Panel.new()
+		chip.custom_minimum_size = SLOT_CHIP_SIZE
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		head.add_child(chip)
+		var pic := TextureRect.new()
+		pic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip.add_child(pic)
+		var num := _label(chip, &"Label")
+		num.text = str(i + 1)
+		num.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+		num.add_theme_font_override("font", UiStyle.bold())
+		num.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+		num.position = Vector2(5, 0)
+		num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_slot_chips.append(chip)
+		_slot_icons.append(pic)
+	_next_button = _button(head, Vector2(140, BAR_H))
+	_next_button.text = "Weapon  ›"
+	_next_button.clip_text = false
+	_next_button.pressed.connect(func() -> void: _go(LobbySteps.Step.WEAPON))
 	_special_scroller = HScroller.new(true)
 	_special_scroller.fade_color = COLOR_BG
 	_special_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	specials.add_child(_special_scroller)
+	p.add_child(_special_scroller)
 	_special_row = _special_scroller.content
-	_special_row.add_theme_constant_override("separation", SPACING / 2)
+	_special_row.add_theme_constant_override("separation", 4)
+	return p
 
+
+func _build_weapon_panel() -> Control:
+	var p := VBoxContainer.new()
+	p.add_theme_constant_override("separation", SPACING)
+	_label(p, &"HeaderLabel").text = "Choose your weapon"
+	_weapon_scroller = HScroller.new(true)
+	_weapon_scroller.fade_color = COLOR_BG
+	_weapon_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	p.add_child(_weapon_scroller)
+	_weapon_grid = HFlowContainer.new()
+	_weapon_grid.add_theme_constant_override("h_separation", SPACING)
+	_weapon_grid.add_theme_constant_override("v_separation", SPACING)
+	_weapon_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_weapon_scroller.content.add_child(_weapon_grid)
+	return p
+
+
+## Roster + blocker on the left, Leave and the always-visible READY on the right.
+func _build_footer(box: BoxContainer) -> void:
 	var footer := HBoxContainer.new()
 	footer.add_theme_constant_override("separation", SPACING)
 	box.add_child(footer)
 	var info := VBoxContainer.new()
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	info.alignment = BoxContainer.ALIGNMENT_END
+	info.add_theme_constant_override("separation", 0)
 	footer.add_child(info)
 	_rows = VBoxContainer.new()
+	_rows.add_theme_constant_override("separation", 0)
 	info.add_child(_rows)
 	_blocker = _label(info, &"Label")
+	_blocker.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 	_blocker.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 	_blocker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -186,12 +408,141 @@ func _ready() -> void:
 	_ready_button.size_flags_vertical = Control.SIZE_SHRINK_END
 	_ready_button.pressed.connect(_on_ready_pressed)
 
-	arena.match_updated.connect(_refresh)
-	arena.lock_refused.connect(func(holder: int) -> void:
-		_toast = "Taken by %s" % _team_name(arena.get_player(holder))
-		_toast_left = TOAST_TIME
-		_refresh())
-	_refresh()
+
+## A fighter card was tapped: request it (a hover in Teams, the lock comes with READY) and move on to its abilities.
+func _on_fighter_pressed(id: StringName) -> void:
+	var changed: bool = id != _pick()[0]
+	arena.character_requested.emit(id)
+	_steps.pick_fighter(changed)
+	_apply_step(true)
+
+
+## Jump to a step (tab, preview tap, Next button).
+func _go(to: LobbySteps.Step) -> void:
+	if to == _steps.step:
+		return
+	_steps.go(to)
+	_apply_step(true)
+
+
+## Lays the three panels out as a carousel around the current step; animated, they slide (any slide in flight is
+## replaced, so tapping through the tabs quickly never queues up).
+func _apply_step(animate: bool) -> void:
+	if _slide_tween != null:
+		_slide_tween.kill()
+		_slide_tween = null
+	var step: int = _steps.step
+	for i: int in _tabs.size():
+		_tabs[i].theme_type_variation = &"PrimaryButton" if i == step else &"Button"
+	_stage_hint.visible = step != LobbySteps.Step.FIGHTER and not _stage_badge.visible
+	var w: float = _host.size.x
+	if w <= 0.0:
+		return
+	var tween: Tween = null
+	if animate and is_inside_tree():
+		tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_slide_tween = tween
+	for i: int in _panels.size():
+		var p: Control = _panels[i]
+		var on: bool = i == step
+		var x: float = (i - step) * (w + PANEL_GAP)
+		p.size = _host.size
+		if tween != null:
+			p.visible = true
+			tween.tween_property(p, "position:x", x, SLIDE_TIME)
+			tween.tween_property(p, "modulate:a", 1.0 if on else 0.0, SLIDE_TIME)
+		else:
+			p.position = Vector2(x, 0.0)
+			p.modulate.a = 1.0 if on else 0.0
+			p.visible = on
+	if tween != null:
+		tween.finished.connect(func() -> void:
+			for i: int in _panels.size():
+				_panels[i].visible = i == _steps.step)
+
+
+## Integer pixel scale that fits the sprite cell in what the info column leaves of the stage.
+static func preview_scale(stage: Vector2) -> int:
+	var cell: float = float(Constants.SPRITE_CELL_SIZE) * 0.8
+	var fit: float = minf((stage.x - PREVIEW_INFO_W) / cell, (stage.y - 20.0) / cell)
+	return clampi(floori(fit), 2, PREVIEW_MAX_SCALE)
+
+
+func _layout_stage() -> void:
+	var s: int = preview_scale(_stage.size)
+	_sprite.scale = Vector2.ONE * s
+	var room: float = _stage.size.x - PREVIEW_INFO_W
+	_pivot.position = Vector2(PREVIEW_INFO_W + room * 0.5, _stage.size.y * 0.56)
+	_stage.queue_redraw()
+
+
+## A soft floor shadow under the fighter.
+func _draw_stage() -> void:
+	var s: float = _sprite.scale.x
+	var feet: Vector2 = _pivot.position + Vector2(0.0, 22.0 * s)
+	_stage.draw_set_transform(feet, 0.0, Vector2(1.0, 0.28))
+	var r: float = 16.0 * s
+	for i: int in 4:
+		_stage.draw_circle(Vector2.ZERO, r * (1.0 - i * 0.18), Color(0.0, 0.0, 0.0, 0.14))
+	_stage.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Shows `c` in the big preview: a smooth zoom + fade in. A fast change replaces the tween in flight.
+func _show_preview(c: CharacterData) -> void:
+	_preview_id = c.id
+	if _preview_tween != null:
+		_preview_tween.kill()
+		_preview_tween = null
+	_sprite.sprite_frames = c.sprite_frames()
+	_sprite.play(&"idle")
+	_in_flair = false
+	_flair_left = FLAIR_GAP.x
+	_layout_stage()
+	_name_label.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING + 6)
+	UiStyle.fit_label(_name_label, c.display_name, PREVIEW_INFO_W - 16.0, UiStyle.SIZE_HEADING + 6, UiStyle.SIZE_BODY, true)
+	var top_hp := 1
+	var top_armor := 1
+	for o: CharacterData in arena.characters.ordered:
+		top_hp = maxi(top_hp, o.max_hp)
+		top_armor = maxi(top_armor, o.max_armor)
+	_hp_label.text = "HP  %d" % c.max_hp
+	_armor_label.text = "Armor  %d" % c.max_armor
+	_hp_fill.anchor_right = float(c.max_hp) / top_hp
+	_armor_fill.anchor_right = float(c.max_armor) / top_armor
+	if not is_inside_tree():
+		return
+	_pivot.scale = Vector2.ONE * ZOOM_FROM
+	_pivot.modulate.a = 0.0
+	_preview_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_preview_tween.tween_property(_pivot, "scale", Vector2.ONE, ZOOM_TIME)
+	_preview_tween.tween_property(_pivot, "modulate:a", 1.0, ZOOM_TIME * 0.8)
+
+
+## Now and then the preview runs or swings before settling back to idle.
+func _tick_flair(delta: float) -> void:
+	if _sprite.sprite_frames == null:
+		return
+	_flair_left -= delta
+	if _flair_left > 0.0:
+		return
+	var frames: SpriteFrames = _sprite.sprite_frames
+	if _in_flair:
+		_in_flair = false
+		_sprite.play(&"idle")
+		_flair_left = randf_range(FLAIR_GAP.x, FLAIR_GAP.y)
+		return
+	var options: Array[StringName] = []
+	for a: StringName in [&"walk", &"attack"]:
+		if frames.has_animation(a):
+			options.append(a)
+	if options.is_empty():
+		_flair_left = FLAIR_GAP.y
+		return
+	var anim: StringName = options[randi() % options.size()]
+	_sprite.play(anim)
+	_in_flair = true
+	var loops: int = FLAIR_WALK_LOOPS if frames.get_animation_loop(anim) else 1
+	_flair_left = loops * frames.get_frame_count(anim) / maxf(frames.get_animation_speed(anim), 1.0) + 0.1
 
 
 ## Loadouts reach clients in snapshots, not match updates: restyle when the pick (or a teammate's hover) changes.
@@ -204,6 +555,7 @@ func _process(delta: float) -> void:
 			_refresh()
 	if _pick() != _shown_pick or _crowd() != _shown_crowd:
 		_refresh()
+	_tick_flair(delta)
 
 
 ## Every player's current fighter + whether it is locked, for change detection.
@@ -235,9 +587,15 @@ func _refresh() -> void:
 	var st: MatchState = arena.match_state
 	visible = st.phase == MatchState.Phase.LOBBY
 	if not visible or arena.local_player == null:
+		_was_visible = false
 		return
+	if not _was_visible:  # a fresh loading room starts back on the fighter step
+		_was_visible = true
+		_steps.go(LobbySteps.Step.FIGHTER)
+		_steps.specials_picked = 0
+		_apply_step(false)
 	var me: Player = arena.local_player
-	_title.text = "LOADING ROOM · %s · %s" % [MatchRules.MODE_NAMES[st.mode], ArenaLayouts.NAMES[st.arena_index]]
+	_title.text = "LOADING ROOM · %s" % MatchRules.MODE_NAMES[st.mode]
 	if st.mode == MatchRules.Mode.TEAMS:
 		_rules.text = "First team to %d rounds · %ds rounds · %d lives each" % [MatchRules.kill_target(st.mode),
 			int(minf(st.time_limit, Constants.TEAMS_ROUND_TIME)), Constants.TEAMS_LIVES]
@@ -252,22 +610,26 @@ func _refresh() -> void:
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
 	if _weapons_for != me.character.id:
 		_build_weapon_cards(me.character)
+	var previous: Array[StringName] = _shown_pick
 	_shown_pick = _pick()
-	if _shown_pick[0] != _revealed[0] or _shown_pick[1] != _revealed[1]:
-		_revealed = [_shown_pick[0], _shown_pick[1]]
+	if _shown_pick[0] != _preview_id:
+		_show_preview(me.character)
 		if _character_cards.has(_shown_pick[0]):
 			_fighter_scroller.reveal(_character_cards[_shown_pick[0]])
-		if _weapon_cards.has(_shown_pick[1]):
-			_weapon_scroller.reveal(_weapon_cards[_shown_pick[1]])
+	if _shown_pick[1] != previous[1] and _weapon_cards.has(_shown_pick[1]):
+		_weapon_scroller.reveal(_weapon_cards[_shown_pick[1]])
 	for id: StringName in _character_cards:
 		_character_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[0] else &"Card"
 	for id: StringName in _weapon_cards:
 		_weapon_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[1] else &"Card"
+		_outline_selected(_weapon_cards[id], id == _shown_pick[1])
 	for id: StringName in _special_cards:
 		var slot: int = _shown_pick.slice(2).find(id)
 		_special_cards[id].theme_type_variation = &"CardSelected" if slot >= 0 else &"Card"
+		_outline_selected(_special_cards[id], slot >= 0)
 		_special_badges[id].visible = slot >= 0
 		_special_badges[id].text = str(slot + 1)
+	_refresh_slot_chips()
 
 	for child: Node in _rows.get_children():
 		child.queue_free()
@@ -329,6 +691,7 @@ func _refresh() -> void:
 	_ready_button.text = ("UNLOCK" if teams_mode else "UNREADY") if _is_ready() else "LOCK IN" if teams_mode else "READY!"
 	_ready_button.disabled = taker != 0
 	_ready_button.theme_type_variation = &"Button" if _is_ready() else &"PrimaryButton"
+	_mark_preview(taker)
 
 
 ## Locks held by humans (bots yield to them, so they never block a lock-in).
@@ -430,10 +793,11 @@ func _badge(fighter: StringName, text: String, color: Color) -> void:
 func _build_weapon_cards(c: CharacterData) -> void:
 	_weapons_for = c.id
 	_weapon_cards.clear()
-	for child: Node in _weapon_row.get_children():
+	_steps.specials_picked = 0
+	for child: Node in _weapon_grid.get_children():
 		child.queue_free()
 	for w: WeaponData in arena.weapons_for(c):
-		var card: Button = _card(_weapon_row, WEAPON_CARD_SIZE, _art(w.sprite, WEAPON_ART_SCALE),
+		var card: Button = _card(_weapon_grid, WEAPON_CARD_SIZE, _art(w.sprite, WEAPON_ART_SCALE),
 			[w.display_name, "%d dmg · %s" % [w.damage * maxi(1, w.pellets),
 				"free" if w.energy_cost == 0 else "%d energy" % w.energy_cost], w.hook])
 		var id: StringName = w.id
@@ -446,12 +810,12 @@ func _build_weapon_cards(c: CharacterData) -> void:
 	for child: Node in _special_row.get_children():
 		child.queue_free()
 	for sk: SkillData in SkillCatalog.shared().specials_for(c):
-		var card: Button = _skill_row(sk, "%s · %ds" % [sk.blurb, roundi(sk.cooldown)])
+		var card: Button = _skill_row(sk)
 		var sid: StringName = sk.id
 		_special_scroller.on_tap(card, func() -> void: _on_special_pressed(sid))
 		_special_cards[sid] = card
 		var badge: Label = _label(card, &"HeaderLabel")
-		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING * 2)
+		badge.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING * 3)
 		badge.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_special_badges[sid] = badge
@@ -463,22 +827,28 @@ func _on_special_pressed(id: StringName) -> void:
 		return
 	arena.special_requested.emit(_older_slot, id)
 	_older_slot = (_older_slot + 1) % Constants.SKILL_SLOTS
+	_steps.pick_special(Constants.SKILL_SLOTS)
+	_apply_step(true)
 
 
-## A compact special row: icon on the left, bold name over a dim blurb.
-func _skill_row(sk: SkillData, blurb: String) -> Button:
-	var b := _button(_special_row, SKILL_ROW_SIZE)
+## A special row: icon, bold name with its cooldown on the right, one-line description below.
+func _skill_row(sk: SkillData) -> Button:
+	var b := _button(_special_row, Vector2(0.0, SKILL_ROW_H))
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.theme_type_variation = &"Card"
 	var row := HBoxContainer.new()
-	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, SPACING)
-	row.offset_right = -(SPACING + 30.0)  # room for the 1 / 2 / 3 badge
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, SPACING - 2)
+	row.offset_right = -(SPACING + 34.0)  # room for the 1 / 2 / 3 badge
 	row.add_theme_constant_override("separation", SPACING)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(row)
 	var pic := TextureRect.new()
 	pic.texture = sk.icon
+	pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	pic.custom_minimum_size = SKILL_ICON_SIZE
+	pic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(pic)
 	var text := VBoxContainer.new()
@@ -487,17 +857,71 @@ func _skill_row(sk: SkillData, blurb: String) -> Button:
 	text.add_theme_constant_override("separation", 0)
 	text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(text)
-	var name_label: Label = _label(text, &"Label")
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", SPACING)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text.add_child(top)
+	var name_label: Label = _label(top, &"Label")
 	name_label.add_theme_font_override("font", UiStyle.bold())
+	name_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL + 2)
 	name_label.text = sk.display_name
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var cd_label: Label = _label(top, &"Label")
+	cd_label.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	cd_label.add_theme_color_override("font_color", UiStyle.C_TEAL_L)
+	cd_label.text = "%ds cooldown" % roundi(sk.cooldown)
 	var blurb_label: Label = _label(text, &"DimLabel")
 	blurb_label.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-	blurb_label.text = blurb
+	blurb_label.text = sk.blurb
 	for l: Label in [name_label, blurb_label]:
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		l.clip_text = true  # never spill past the row; a too-long blurb ends in "…"
 		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	cd_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return b
+
+
+## A picked special / weapon card: a blue outline and tint on top of the card style (removed again when unpicked).
+func _outline_selected(card: Button, on: bool) -> void:
+	for state: StringName in [&"normal", &"hover", &"pressed"]:
+		if not on:
+			card.remove_theme_stylebox_override(state)
+			continue
+		var box := StyleBoxFlat.new()
+		box.bg_color = Color(TEAM_ALLY_COLOR, 0.16)
+		box.border_color = TEAM_ALLY_COLOR
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(3)
+		card.add_theme_stylebox_override(state, box)
+
+
+## The three slot chips above the list: what each slot holds now, the next one to be replaced outlined in gold.
+func _refresh_slot_chips() -> void:
+	for i: int in _slot_chips.size():
+		_slot_icons[i].texture = arena.local_player.skills[i].data.icon
+		var box := StyleBoxFlat.new()
+		box.bg_color = Color(0.0, 0.0, 0.0, 0.35)
+		box.set_corner_radius_all(4)
+		box.set_border_width_all(2)
+		box.border_color = UiStyle.C_YELLOW if i == _older_slot else UiStyle.C_STEEL_D
+		_slot_chips[i].add_theme_stylebox_override("panel", box)
+
+
+## The preview's lock state: dimmed with "LOCKED · Px" when a teammate holds this fighter, gold when you locked in.
+func _mark_preview(taker: int) -> void:
+	var text: String = ""
+	var color: Color = UiStyle.C_ORANGE
+	if arena.match_state.mode == MatchRules.Mode.TEAMS:
+		if taker != 0:
+			text = "LOCKED · P%d" % taker
+		elif _is_ready():
+			text = "LOCKED IN"
+			color = UiStyle.C_YELLOW
+	_stage_badge.visible = text != ""
+	_stage_badge.text = text
+	_stage_badge.add_theme_color_override("font_color", color)
+	_sprite.modulate = Color(0.45, 0.45, 0.5) if taker != 0 else Color.WHITE
+	_stage_hint.visible = _steps.step != LobbySteps.Step.FIGHTER and text == ""
 
 
 ## The local player's (character id, weapon id, then the special id of each slot).
@@ -529,14 +953,6 @@ func _on_team_pressed() -> void:
 
 func _on_ready_pressed() -> void:
 	arena.ready_requested.emit(not _is_ready())
-
-
-func _scroller(parent: Node) -> HScroller:
-	var h := HScroller.new()
-	h.fade_color = COLOR_BG
-	h.content.add_theme_constant_override("separation", SPACING)
-	parent.add_child(h)
-	return h
 
 
 func _row(parent: Node) -> HBoxContainer:
