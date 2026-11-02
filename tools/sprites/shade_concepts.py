@@ -367,8 +367,8 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
                       clusters=((0.3, BLUE),), color=(NAVY if ci % 2 else HAIR_A), rim=(ci == 0))
     elif hair == "H9":  # long straight hair seen from the front: two vertical panels falling behind the shoulders on both sides
         b = sw_(t, 1.2, 1) - 2.0 * mv
-        off = lambda y: b * max(0.0, (y - 30) / 24)
-        left = [(22, 16), (14, 20), (11, 26), (10, 34), (10, 44), (11, 50), (13, 54), (16, 57.5), (19, 54), (21, 52), (22, 46)]
+        off = lambda y: b * max(0.0, (y - 28) / 20)
+        left = [(22, 16), (14, 20), (11, 26), (10, 33), (10, 40), (11, 44), (14, 48), (17, 49.5), (20, 47), (22, 40)]
         for side in (0, 1):
             pts_ = [((x if side == 0 else 66 - x) + off(y), y) for x, y in left]
             up.part(P(ipts(pts_)), NAVY)
@@ -378,13 +378,13 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
                     if near > 5.5 + 1.4 * math.sin(yy / 7.0) and up.at(xx, yy)[:3] == NAVY:
                         up.dot(xx, yy, SHADOW)
             hx = 12 if side == 0 else 54  # one soft vertical highlight, nearer the outer edge
-            for yy in range(28, 46):
+            for yy in range(26, 43):
                 if not (yy % 6 == 0):
-                    up.dot(round(hx + off(yy)) , yy, BLUE if 30 < yy < 43 else STEEL_D)
-            for yy in range(34, 39):
+                    up.dot(round(hx + off(yy)) , yy, BLUE if 28 < yy < 40 else STEEL_D)
+            for yy in range(31, 36):
                 up.dot(round(hx + off(yy)), yy, STEEL)
             sx = 15 if side == 0 else 51  # one subtle strand line
-            for yy in range(33, 52):
+            for yy in range(30, 45):
                 if yy % 7:
                     up.dot(round(sx + off(yy)), yy, SHADOW if side == 0 else OUTLINE)
     elif hair == "H6":  # side ponytail on her far side, swinging out behind her head
@@ -478,7 +478,12 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         up.dot(23, 37, GOLD)
         up.dot(48, 38, GOLD)
         fringe = [(19, 10), (49, 10), (50, 18), (46, 18), (46, 17), (40, 17), (40, 18), (33, 18), (33, 17), (27, 17), (27, 18), (19, 18)]
-    elif hair == "H9":  # bangs grow out of the crown seamlessly: one fill in the hair colour, outline only along the pointed tips
+    elif hair == "H9":  # long side locks in front of her ears, joined to the back hair; then bangs grow out of the crown seamlessly
+        for p0, p1, p2, p3, lag in (((21, 13), (18, 22), (21, 33), (22, 46), 0.5), ((47, 13), (52, 22), (48, 33), (47, 46), 0.2)):
+            sh = -1.5 * mv
+            hair_band(up, strand(p0, (p1[0] + sh, p1[1]), (p2[0] + sh, p2[1]), (p3[0] + sh * 1.5, p3[1]), t, 1.0, k=2.0, lag=lag, n=12),
+                      [7, 7.5, 7.5, 7, 6.5, 6, 5.2, 4.2, 3, 1.8, 1.2, 0.8, 0.6], clusters=((0.35, BLUE),))
+        # bangs grow out of the crown seamlessly: one fill in the hair colour, outline only along the pointed tips
         zig = [(19, 13), (19, 19), (23.5, 24), (26, 16.5), (29.5, 18.5), (32, 15.5), (34.5, 17.5), (36.5, 15.5), (38, 20.5), (40, 15.5),
                (42.5, 17.5), (45, 15.5), (47.5, 22.5), (49, 17), (48.5, 12)]
         up.part(P(ipts([(19, 9)] + zig + [(47, 9)])), HAIR_A, shade=False, line=False)
@@ -529,7 +534,7 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         up.part(RR((41, 3, 48, 9), 2), RED)
         up.dot(43, 5, ORANGE)
     # the mask rides the far side of her face, diagonal; then the pins
-    fox_mask(up, 51, 18, 30)
+    fox_mask(up, 52, 17, -30)
     if hair == "H1":
         kunai_pin(up, (39, 0), (34, 3), (24, 8))
     elif hair == "H4":  # two crossed kunai through the bun like kanzashi
@@ -633,7 +638,7 @@ def scale_sheet(out_dir):
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v8_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v9_scale.png")
 
 
 def head_check(out_dir):
@@ -641,7 +646,7 @@ def head_check(out_dir):
     h = HAIRS[0][1]
     f = frame(build_a, 0, hair=h, mouth_kind=DEFAULT_MOUTH)
     oy = PAD + UPPER_DY
-    f.crop((PAD + 10, oy - 4, PAD + 62, oy + 42)).resize((520, 460), Image.NEAREST).convert("RGB").save(out_dir / "shade_A_v8_head.png")
+    f.crop((PAD + 10, oy - 4, PAD + 62, oy + 42)).resize((520, 460), Image.NEAREST).convert("RGB").save(out_dir / "shade_A_v9_head.png")
     worst = {}
     for y in range(oy + 3, oy + 23):
         run, last = 0, None
@@ -670,7 +675,7 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v8.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v9.png")
     head_check(out_dir)
     scale_sheet(out_dir)
 
