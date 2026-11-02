@@ -30,4 +30,4 @@ sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"bolt"])
 chain_range = 140.0
 chain_scale = 0.7
-hook = "Chain lightning jumps to a 2nd foe"
+hook = "Chains to a 2nd foe"

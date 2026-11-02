@@ -621,12 +621,12 @@ func _round_banners() -> void:
 		hud.banner("Round %d" % st.round_number, UiStyle.C_WHITE)
 	var on_break: bool = st.intermission > 0.0
 	if on_break and not _fx_break:
+		var text: String = MatchRules.round_banner_text(st.round_winner, st.round_reason, Player.viewer_team)
 		if st.round_winner == 0:
-			hud.banner("Round drawn", UiStyle.C_STEEL)
+			hud.banner(text, UiStyle.C_STEEL)
 		else:
-			hud.banner(("%s captured the flag!" if st.round_reason == MatchRules.Reason.CAPTURE else "%s wins the round")
-				% MatchRules.TEAM_NAMES[st.round_winner],
-				UiStyle.C_YELLOW if st.round_winner == Player.viewer_team else UiStyle.C_WHITE)
+			hud.banner(text, UiStyle.C_YELLOW if st.round_winner == MatchRules.viewer_of(Player.viewer_team) \
+				else UiStyle.C_WHITE)
 	_fx_break = on_break
 
 

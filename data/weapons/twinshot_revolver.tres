@@ -28,4 +28,4 @@ bounce_damping = 0.9
 sprite = ExtResource("2_sprite")
 tags = Array[StringName]([&"twinshot"])
 bounce_damage_gain = 0.4
-hook = "+40% damage per wall bounce"
+hook = "+40% dmg per bounce"

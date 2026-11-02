@@ -1,7 +1,7 @@
 class_name FlagField
 extends Node2D
 ## Capture the flag (Teams), view only: the base pads on the floor, each team's flag planted at its base, lying where
-## it was dropped or riding on its carrier's back, plus the capture burst and the return poof. All state lives in
+## it was dropped or hovering over its carrier's head, plus the capture burst and the return poof. All state lives in
 ## MatchState (server-owned); this only draws it. Ally blue / enemy red are the VIEWER's side (Player.viewer_team).
 
 const FPS: float = 8.0
@@ -10,13 +10,18 @@ const FRAMES: int = 6
 const ART_SCALE: float = 1.0
 ## The pole's foot in a flag / carried-flag frame, and the pad's centre in a pad frame (art px).
 const FLAG_FOOT: Vector2 = Vector2(30.0, 86.0)
-const CARRY_FOOT: Vector2 = Vector2(40.0, 150.0)
+const HOVER_FOOT: Vector2 = Vector2(32.0, 42.0)
 const PAD_CENTER: Vector2 = Vector2(64.0, 76.0)
-## A carried flag stands behind the carrier's back (away from where he runs), its foot a little above his feet, so the
-## pole climbs well past his head and the cloth waves above it.
-const CARRY_BACK: float = 22.0
-const CARRY_LIFT: float = 14.0
-const CARRY_FLIP_SPEED: float = 30.0
+## A carried flag hovers HOVER_GAP above the carrier's HP bar (so it never covers it), bobbing HOVER_BOB px every
+## HOVER_PERIOD s over a soft team-coloured glow HOVER_GLOW_DROP below it; drawn above walls and fighters (HOVER_Z).
+const HOVER_GAP: float = 20.0
+const HOVER_BOB: float = 2.5
+const HOVER_PERIOD: float = 1.2
+const HOVER_GLOW_DROP: float = 8.0
+const HOVER_GLOW_ALPHA: float = 0.45
+const HOVER_Z: int = 1
+const GLOW_ALLY: Color = Color(0.35, 0.6, 1.0)
+const GLOW_ENEMY: Color = Color(1.0, 0.35, 0.3)
 ## A dropped flag blinks over its last seconds before it flies home.
 const BLINK_SECONDS: float = 2.0
 const BLINK_HZ: float = 6.0
@@ -34,7 +39,7 @@ var _pads: Dictionary[int, Sprite2D] = {}
 var _holders: Dictionary[int, Node2D] = {}
 var _flags: Dictionary[int, Sprite2D] = {}
 var _carried: Dictionary[int, Sprite2D] = {}
-var _side: Dictionary[int, float] = {1: -1.0, 2: -1.0}
+var _glows: Dictionary[int, Sprite2D] = {}
 var _time: float = 0.0
 var _prev_state: Array[int] = [0, 0, 0]
 var _prev_carrier: Array[int] = [0, 0, 0]
@@ -44,7 +49,7 @@ var _prev_break: bool = false
 
 func _ready() -> void:
 	y_sort_enabled = true  # the flags sort with fighters and crates
-	for name: String in ["flag_ally", "flag_enemy", "flag_pad_ally", "flag_pad_enemy", "flag_carry_ally", "flag_carry_enemy",
+	for name: String in ["flag_ally", "flag_enemy", "flag_pad_ally", "flag_pad_enemy", "flag_hover_ally", "flag_hover_enemy", "flag_hover_glow",
 			"flag_capture_ally", "flag_capture_enemy", "flag_return"]:
 		_tex[name] = load("res://assets/fx/%s.png" % name)
 	for t: int in TEAMS:
@@ -62,8 +67,12 @@ func _ready() -> void:
 		holder.add_child(flag)
 		_flags[t] = flag
 		var carried := Sprite2D.new()
-		_setup(carried, CARRY_FOOT, _tex["flag_carry_ally"])
-		carried.position = Vector2(0.0, Player.FOOT_RING_Y)
+		_setup(carried, HOVER_FOOT, _tex["flag_hover_ally"])
+		var glow := Sprite2D.new()  # under the banner, added first so the banner draws over it
+		glow.texture = _tex["flag_hover_glow"]
+		glow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		holder.add_child(glow)
+		_glows[t] = glow
 		holder.add_child(carried)
 		_carried[t] = carried
 
@@ -91,6 +100,7 @@ func _process(delta: float) -> void:
 		var holder: Node2D = _holders[t]
 		pad.visible = on
 		holder.visible = false
+		holder.z_index = 0
 		if not on:
 			continue
 		pad.texture = _tex["flag_pad_" + suffix]
@@ -103,6 +113,7 @@ func _process(delta: float) -> void:
 		var carried: Sprite2D = _carried[t]
 		flag.visible = true
 		carried.visible = false
+		_glows[t].visible = false
 		var foot: Vector2
 		match st.flag_state[t]:
 			MatchState.Flag.HOME:
@@ -115,17 +126,22 @@ func _process(delta: float) -> void:
 				var carrier: Player = arena.get_player(st.flag_carrier[t])
 				if carrier == null or carrier.dead or not carrier.visible:  # a dying carrier's flag has dropped already
 					continue
-				if absf(carrier.velocity.x) > CARRY_FLIP_SPEED:  # the cloth streams away from where he runs
-					_side[t] = -signf(carrier.velocity.x)
-				var side: float = _side[t]
 				flag.visible = false
 				carried.visible = true
-				carried.texture = _tex["flag_carry_" + suffix]
+				carried.texture = _tex["flag_hover_" + suffix]
 				carried.frame = (frame + t) % FRAMES
-				carried.scale.x = side * ART_SCALE
-				foot = carrier.global_position + carrier.visual_offset \
-					+ Vector2(side * CARRY_BACK, Player.FOOT_RING_Y - CARRY_LIFT)
-				foot.y -= 2.0  # sorts just behind him
+				var up: float = Constants.PLAYER_RADIUS + Player.BAR_OFFSET_Y + Player.BAR_HEIGHT * 2.0 + Player.BAR_GAP \
+					+ HOVER_GAP
+				var bob: float = roundf(sin(_time * TAU / HOVER_PERIOD) * HOVER_BOB)
+				carried.position = Vector2(0.0, -up + bob)
+				var glow: Sprite2D = _glows[t]
+				glow.visible = true
+				glow.position = Vector2(0.0, -up + HOVER_GLOW_DROP)
+				glow.modulate = Color(GLOW_ALLY if ally else GLOW_ENEMY, HOVER_GLOW_ALPHA)
+				holder.z_index = HOVER_Z
+				holder.global_position = carrier.global_position + carrier.visual_offset
+				holder.visible = true
+				continue
 		holder.global_position = foot - Vector2(0.0, Player.FOOT_RING_Y)
 		holder.visible = true
 	_play_events(st)

@@ -599,7 +599,13 @@ func test_carried_flag_rides_the_carrier_and_hides_when_he_dies() -> void:
 	st.flag_carrier[A] = 3
 	await wait_process_frames(2)
 	assert_true(field._holders[A].visible, "the flag shows on the carrier")
-	assert_true(field._carried[A].visible, "as the tall carried banner")
+	assert_true(field._carried[A].visible, "as the hovering banner")
+	var bar_top: float = thief.global_position.y - Constants.PLAYER_RADIUS - Player.BAR_OFFSET_Y \
+		- Player.BAR_HEIGHT * 2.0 - Player.BAR_GAP
+	var flag_bottom: float = field._carried[A].global_position.y
+	assert_lt(flag_bottom, bar_top - FlagField.HOVER_GAP + FlagField.HOVER_BOB + 0.5, "floats above the HP bar")
+	assert_eq(field._holders[A].z_index, FlagField.HOVER_Z, "drawn above walls and fighters")
+	assert_almost_eq(field._carried[A].global_position.x, thief.global_position.x, 0.5, "centred over his head")
 	assert_false(field._flags[A].visible, "not the planted one")
 	thief.respawn_timer = 99.0
 	thief._set_dead(true)  # dying: the referee drops the flag a frame later, the view must not draw it meanwhile
@@ -610,3 +616,38 @@ func test_carried_flag_rides_the_carrier_and_hides_when_he_dies() -> void:
 	await wait_process_frames(2)
 	assert_true(field._flags[A].visible, "the dropped flag stands where it fell")
 	assert_false(field._carried[A].visible)
+
+
+func test_team_picker_is_hidden_offline_and_shown_on_lan() -> void:
+	assert_false(LobbyPanel.shows_team_picker(MatchRules.Mode.TEAMS, Arena.Mode.OFFLINE), "offline: auto-placed")
+	assert_true(LobbyPanel.shows_team_picker(MatchRules.Mode.TEAMS, Arena.Mode.SERVER), "friends group up on a LAN")
+	assert_true(LobbyPanel.shows_team_picker(MatchRules.Mode.TEAMS, Arena.Mode.CLIENT))
+	assert_false(LobbyPanel.shows_team_picker(MatchRules.Mode.FFA, Arena.Mode.SERVER), "no teams in FFA")
+
+
+func test_round_banner_and_result_text_are_viewer_relative() -> void:
+	var cap: int = MatchRules.Reason.CAPTURE
+	var wipe: int = MatchRules.Reason.WIPE
+	for viewer: int in [A, B]:
+		var other: int = MatchRules.other_team(viewer)
+		assert_eq(MatchRules.round_banner_text(viewer, cap, viewer), "Your team captured the flag!")
+		assert_eq(MatchRules.round_banner_text(other, cap, viewer), "Enemies captured your flag!")
+		assert_eq(MatchRules.round_banner_text(viewer, wipe, viewer), "Your team wins the round!")
+		assert_eq(MatchRules.round_banner_text(other, wipe, viewer), "Enemy team wins the round")
+		assert_eq(MatchRules.result_title(viewer, viewer), "VICTORY!")
+		assert_eq(MatchRules.result_title(other, viewer), "DEFEAT")
+	assert_eq(MatchRules.round_banner_text(0, wipe, A), "Round drawn")
+	assert_eq(MatchRules.result_title(0, B), "DRAW")
+	for t: String in [MatchRules.round_banner_text(A, cap, B), MatchRules.result_title(B, A)]:
+		assert_false(t.contains("Team A") or t.contains("Team B"), "no letters shown to the player")
+
+
+func test_every_weapon_hook_fits_its_lobby_card() -> void:
+	var avail: float = LobbyPanel.WEAPON_CARD_SIZE.x - LobbyPanel.SPACING * 2.0 - 8.0
+	for file: String in DirAccess.get_files_at("res://data/weapons"):
+		if not file.ends_with(".tres"):
+			continue
+		var w: WeaponData = load("res://data/weapons/" + file)
+		if w == null or w.hook == "":
+			continue
+		assert_lte(UiStyle.text_width(w.hook, UiStyle.SIZE_TINY - 4), avail, "%s hook fits the card: %s" % [file, w.hook])

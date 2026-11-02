@@ -7,6 +7,8 @@ extends SceneTree
 
 var shot_frames: int = 330  ## physics frames after the countdown ends (the bots are mid fight by then)
 var _carrier: Player
+var win: bool = false  ## screenshot: the local player captures the flag, shot taken during the round-end banner
+var lobby: bool = false  ## screenshot: the loading room (nobody readies up)
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
 
 var arena: Arena
@@ -30,6 +32,8 @@ func _initialize() -> void:
 				"shot": shot_path = kv[1]
 				"at": shot_frames = int(kv[1])
 				"carry": carry = kv[1] == "1"
+				"win": win = kv[1] == "1"
+				"lobby": lobby = kv[1] == "1"
 	InputSetup.ensure_actions()
 	arena = Arena.new(Arena.Mode.OFFLINE, base_seed, MatchRules.Mode.TEAMS, round_secs)
 	arena.match_state.arena_index = 0
@@ -48,10 +52,18 @@ func _tick() -> void:
 			me.controller = input
 			arena.attach_local_view(me, input)
 			arena.camera.process_callback = Camera2D.CAMERA2D_PROCESS_IDLE
-		arena.referee.set_ready(1, true)
+		if not lobby:
+			arena.referee.set_ready(1, true)
 		arena.referee.round_ended.connect(_on_round_ended)
+	if lobby and shot_path != "" and frames == 60:
+		_shoot()
+		return
 	if arena.match_state.phase == MatchState.Phase.PLAYING:
 		_play_frames += 1
+		if win and _play_frames == 20:
+			var me: Player = arena.get_player(1)
+			arena.referee.flag_pickup(1, MatchRules.other_team(me.team))
+			arena.referee.flag_capture(1, arena.scores)
 		if shot_path != "" and carry and _play_frames == 20:
 			for p: Player in arena.players:
 				if p.team == MatchRules.TEAM_B and not p.is_local and not p.dead:

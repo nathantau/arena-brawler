@@ -66,10 +66,9 @@ func _refresh() -> void:
 	var me: int = arena.local_player.player_id if arena.local_player != null else 0
 	if st.mode == MatchRules.Mode.TEAMS:
 		var mine: int = arena.local_player.team if arena.local_player != null else 0
-		_title.text = "DRAW" if st.round_winner == 0 else "VICTORY!" if st.round_winner == mine \
-			else "%s WINS" % MatchRules.TEAM_NAMES[st.round_winner].to_upper()
+		_title.text = MatchRules.result_title(st.round_winner, mine)
 		_title.add_theme_color_override("font_color", UiStyle.C_STEEL if st.round_winner == 0 else UiStyle.C_YELLOW \
-			if st.round_winner == mine else UiStyle.C_WHITE)
+			if st.round_winner == MatchRules.viewer_of(mine) else UiStyle.C_WHITE)
 	elif st.winner_id == 0:
 		_title.text = "DRAW"
 		_title.add_theme_color_override("font_color", UiStyle.C_STEEL)
