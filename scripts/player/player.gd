@@ -116,7 +116,7 @@ const CLONE_WOBBLE_SPEED: float = 4.0
 const CLONE_START_DISTANCE: float = 48.0
 const CLONE_EMERGE_TIME: float = 0.3
 const BAR_WIDTH: float = 40.0
-const BAR_HEIGHT: float = 4.0
+const BAR_HEIGHT: float = 5.0
 const BAR_GAP: float = 2.0
 const BAR_OFFSET_Y: float = 28.0
 ## Shadow ellipse under the feet, squashed for a top-down look.
@@ -127,8 +127,13 @@ const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
 const COLOR_ARMOR: Color = Color(0.7, 0.75, 0.85)
 const COLOR_ALLY: Color = Color(0.3, 0.6, 1.0, 0.9)
 const COLOR_ENEMY: Color = Color(1.0, 0.3, 0.3, 0.9)
-const TEAM_RING_SCALE: float = 1.15
-const TEAM_RING_WIDTH: float = 2.5
+const COLOR_ME: Color = Color(1.0, 0.85, 0.35, 0.9)  ## the local player's own (gold) ring
+const COLOR_BAR_ALLY: Color = Color(0.3, 0.62, 1.0)
+const COLOR_BAR_ENEMY: Color = Color(0.95, 0.22, 0.22)
+const TEAM_RING_SCALE: float = 1.4
+const TEAM_RING_WIDTH: float = 4.0
+const TEAM_RING_FILL: float = 0.4  ## alpha of the translucent disc inside the ring
+const COLOR_BAR_OUTLINE: Color = Color(0.05, 0.04, 0.1, 0.9)
 const COLOR_BAR_BG: Color = Color(0, 0, 0, 0.5)
 
 var player_id: int = 0
@@ -1403,14 +1408,46 @@ func _draw() -> void:
 		return
 	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
 	draw_circle(Vector2.ZERO, Constants.PLAYER_RADIUS, SHADOW_COLOR)
-	if team != 0:  # Teams: ally blue / enemy red, from the viewer's side
-		draw_arc(Vector2.ZERO, Constants.PLAYER_RADIUS * TEAM_RING_SCALE, 0.0, TAU, 32,
-			COLOR_ALLY if is_friendly_to_viewer() else COLOR_ENEMY, TEAM_RING_WIDTH)
+	var ring: Color = team_ring_color()
+	if ring.a > 0.0:
+		draw_team_ring(self, ring, visual_offset + Vector2(0.0, FOOT_RING_Y))
+		draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
 	if stats.spawn_protect > 0.0:  # a pulsing ring on the floor round the protected player
 		var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * SPAWN_SHIMMER_HZ)
 		var ring_color: Color = SPAWN_RING_COLOR
 		ring_color.a = 0.5 + 0.4 * pulse
 		draw_arc(Vector2.ZERO, Constants.PLAYER_RADIUS * (1.35 + 0.15 * pulse), 0.0, TAU, 32, ring_color, 3.0)
+
+
+## Teams ground marker colour from the viewer's side: gold for me, blue ally, red enemy. Alpha 0 = no ring (no teams,
+## or an enemy that is hiding, so it can't give itself away).
+func team_ring_color() -> Color:
+	if team == 0 or is_concealed():
+		return Color(0, 0, 0, 0)
+	if is_local:
+		return COLOR_ME
+	if is_friendly_to_viewer():
+		return COLOR_ALLY
+	return Color(0, 0, 0, 0) if is_hidden() else COLOR_ENEMY
+
+
+## Health bar fill by relation: blue ally, red enemy (also FFA / duel rivals).
+func bar_color() -> Color:
+	return COLOR_BAR_ALLY if team != 0 and is_friendly_to_viewer() else COLOR_BAR_ENEMY
+
+
+## Filled translucent ground ellipse + outline. `at` is the foot-ring centre in `ci`'s space (pixel-snapped); same
+## ground squash as the shadow. Leaves `ci` with a reset transform.
+func draw_team_ring(ci: CanvasItem, color: Color, at: Vector2, alpha: float = 1.0) -> void:
+	var c: Color = color
+	c.a *= alpha
+	var fill: Color = c
+	fill.a = TEAM_RING_FILL * alpha
+	ci.draw_set_transform(at.round(), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
+	var r: float = Constants.PLAYER_RADIUS * TEAM_RING_SCALE
+	ci.draw_circle(Vector2.ZERO, r, fill)
+	ci.draw_arc(Vector2.ZERO, r, 0.0, TAU, 40, c, TEAM_RING_WIDTH)
+	ci.draw_set_transform(Vector2.ZERO)
 
 
 func _draw_overlay() -> void:
@@ -1422,7 +1459,7 @@ func _draw_overlay() -> void:
 		_draw_burn(_overlay)
 	if stats.trap_remaining > 0.0 and not dead and not is_concealed():
 		_draw_trap(_overlay)
-	if not is_local and not is_concealed():
+	if not is_local and not is_concealed() and (team != 0 and is_friendly_to_viewer() or not is_hidden()):
 		_draw_bars(Constants.PLAYER_RADIUS)
 
 
@@ -1529,8 +1566,9 @@ func _draw_bars(r: float) -> void:
 	var top_left := Vector2(-BAR_WIDTH * 0.5, -r - BAR_OFFSET_Y - BAR_HEIGHT * 2.0 - BAR_GAP)
 	var armor_frac: float = float(stats.armor) / float(maxi(1, stats.max_armor))
 	var hp_frac: float = float(stats.hp) / float(maxi(1, stats.max_hp))
+	_overlay.draw_rect(Rect2(top_left - Vector2.ONE, Vector2(BAR_WIDTH + 2.0, BAR_HEIGHT * 2.0 + BAR_GAP + 2.0)), COLOR_BAR_OUTLINE)
 	_overlay.draw_rect(Rect2(top_left, Vector2(BAR_WIDTH, BAR_HEIGHT)), COLOR_BAR_BG)
 	_overlay.draw_rect(Rect2(top_left, Vector2(BAR_WIDTH * armor_frac, BAR_HEIGHT)), COLOR_ARMOR)
 	var hp_pos: Vector2 = top_left + Vector2(0.0, BAR_HEIGHT + BAR_GAP)
 	_overlay.draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH, BAR_HEIGHT)), COLOR_BAR_BG)
-	_overlay.draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH * hp_frac, BAR_HEIGHT)), COLOR_HP)
+	_overlay.draw_rect(Rect2(hp_pos, Vector2(BAR_WIDTH * hp_frac, BAR_HEIGHT)), bar_color())

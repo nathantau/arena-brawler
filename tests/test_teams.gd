@@ -654,3 +654,51 @@ func test_duel_respawn_is_still_2_s() -> void:
 	me.take_hit(9999, false, Vector2.ZERO, 11)
 	assert_true(me.dead)
 	assert_eq(me.respawn_timer, 2.0)
+
+
+# --- Team readability (ring + bar colour by relation) -------------------------
+
+func _reader(id: int, team_id: int) -> Player:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	var pool := ProjectilePool.new()
+	world.add_child(pool)
+	var p := Player.new()
+	p.setup(id, 0, Color.WHITE, WeaponCatalog.load_all().resolve([&"pistol"] as Array[StringName]), null, pool, 3,
+		CharacterCatalog.load_all().get_character(&"flicker"))
+	world.add_child(p)
+	p.team = team_id
+	return p
+
+
+func test_ring_and_bar_colour_follow_the_viewer_relation() -> void:
+	Player.viewer_team = A
+	var ally: Player = _reader(2, A)
+	var enemy: Player = _reader(3, B)
+	var me: Player = _reader(4, A)
+	me.is_local = true
+	assert_eq(ally.team_ring_color(), Player.COLOR_ALLY)
+	assert_eq(enemy.team_ring_color(), Player.COLOR_ENEMY)
+	assert_eq(me.team_ring_color(), Player.COLOR_ME)
+	assert_eq(ally.bar_color(), Player.COLOR_BAR_ALLY)
+	assert_eq(enemy.bar_color(), Player.COLOR_BAR_ENEMY)
+	enemy.team = 0  # no teams: no ring, rivals have red bars
+	assert_eq(enemy.team_ring_color().a, 0.0)
+	assert_eq(enemy.bar_color(), Player.COLOR_BAR_ENEMY)
+	Player.viewer_team = 0
+
+
+func test_hidden_enemy_has_no_ring_but_hidden_ally_does() -> void:
+	Player.viewer_team = A
+	var enemy: Player = _reader(3, B)
+	enemy.set_skill(1, SkillCatalog.shared().get_skill(&"smoke_bomb"))
+	var f := InputFrame.new()
+	f.seq = 5
+	f.aim_vec = Vector2.RIGHT
+	f.special = true
+	enemy.simulate(f, DT)
+	assert_true(enemy.is_hidden())
+	assert_eq(enemy.team_ring_color().a, 0.0, "a hiding enemy must not reveal itself")
+	enemy.team = A
+	assert_gt(enemy.team_ring_color().a, 0.0)
+	Player.viewer_team = 0

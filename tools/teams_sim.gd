@@ -18,6 +18,8 @@ var pick: StringName = &"eden"  ## screenshot with lobby=1 step=1: the fighter t
 var fly: bool = false  ## screenshot with lobby=1 strip=1: capture an ability flying into a slot instead of the slide-in
 var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the overlay sliding in
 var dead: bool = false  ## screenshot: the local player dies at once, so the respawn countdown shows (use at=200)
+var arena_idx: int = 0
+var fight: bool = false  ## screenshot: everyone frozen in a cluster round the local player (2 allies, 3 enemies), game zoom
 var carry: bool = false  ## screenshot: an enemy bot is made to carry our flag across the middle
 
 var arena: Arena
@@ -40,6 +42,8 @@ func _initialize() -> void:
 				"max": max_secs = float(kv[1])
 				"shot": shot_path = kv[1]
 				"at": shot_frames = int(kv[1])
+				"arena": arena_idx = int(kv[1])
+				"fight": fight = kv[1] == "1"
 				"carry": carry = kv[1] == "1"
 				"dead": dead = kv[1] == "1"
 				"win": win = kv[1] == "1"
@@ -56,7 +60,7 @@ func _initialize() -> void:
 	if lobby and shot_path != "":
 		UiStyle.install()  # Main does this in the real game
 	arena = Arena.new(Arena.Mode.OFFLINE, base_seed, MatchRules.Mode.TEAMS, round_secs)
-	arena.match_state.arena_index = 0
+	arena.match_state.arena_index = arena_idx
 	root.add_child(arena)
 	physics_frame.connect(_tick)
 
@@ -103,6 +107,21 @@ func _tick() -> void:
 		if dead and _play_frames == 20:
 			arena.get_player(1).stats.spawn_protect = 0.0
 			arena.get_player(1).take_hit(9999, false, Vector2.ZERO, Constants.BOT_ID_BASE)
+		if shot_path != "" and fight and _play_frames == 20:
+			var me: Player = arena.get_player(1)
+			var c: Vector2 = arena.map.size * 0.5
+			var ai: int = 0
+			var ei: int = 0
+			for p: Player in arena.players:
+				p.frozen = true
+				if p == me:
+					p.global_position = c
+				elif p.team == me.team:
+					p.global_position = c + [Vector2(-95, 70), Vector2(85, 95)][ai % 2]
+					ai += 1
+				else:
+					p.global_position = c + [Vector2(-60, -90), Vector2(110, -40), Vector2(30, -170)][ei % 3]
+					ei += 1
 		if shot_path != "" and carry and _play_frames == 20:
 			for p: Player in arena.players:
 				if p.team == MatchRules.TEAM_B and not p.is_local and not p.dead:
@@ -152,6 +171,9 @@ func _shoot() -> void:
 	arena.camera.position_smoothing_enabled = false
 	if dead:
 		pass
+	elif fight:
+		arena.camera.zoom = Vector2.ONE * arena._zoom()
+		arena.camera.global_position = arena.get_player(1).global_position
 	elif _carrier != null:  # close up on the carrier
 		arena.camera.zoom = Vector2.ONE * arena._zoom() * 1.3
 		arena.camera.global_position = _carrier.global_position
