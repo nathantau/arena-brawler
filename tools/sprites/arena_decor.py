@@ -21,7 +21,7 @@ from palette import (BROWN, DARKER, LIGHTER, MAROON, NAVY, ORANGE, OUTLINE, RED,
                      VIOLET_D, WHITE, YELLOW)
 
 TILE = 32
-SHADOW_ROWS = 6
+SHADOW_ROWS = 8
 BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 LAYOUTS_GD = Path(__file__).resolve().parents[2] / "scripts" / "arena" / "arena_layouts.gd"
 

@@ -9,6 +9,10 @@ signal destroyed(at: Vector2)
 var crates: Array[Crate] = []
 
 
+func _init() -> void:
+	y_sort_enabled = true  # flattens into the Arena's sort with the fighters
+
+
 func setup(map: ArenaMap, art: Texture2D = null) -> void:
 	for c: Crate in crates:
 		remove_child(c)
