@@ -365,6 +365,21 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
             pt = strand(p0, (p1[0] - sh, p1[1]), (p2[0] - sh, p2[1]), (p3[0] - sh * 1.4, p3[1] - sh * 0.5), t, 2.4, k=2.0, lag=lag, n=16)
             hair_band(up, pt, [3, 6, 8, 9, 9.5, 9.5, 9.5, 9, 9, 8.5, 8, 7, 6, 4.5, 3, 1.5, 1],
                       clusters=((0.3, BLUE),), color=(NAVY if ci % 2 else HAIR_A), rim=(ci == 0))
+    elif hair == "H9":  # one smooth straight sheet of hair falling straight down behind her; only its bottom edge sways
+        b = sw_(t, 1.2, 1) - 2.0 * mv
+        off = lambda y: b * max(0.0, (y - 28) / 26)
+        sheet = [(18, 14), (11, 20), (7, 28), (6, 38), (6, 45), (8, 50), (12, 53), (18, 54), (22, 51), (24, 46), (26, 36), (30, 24), (30, 16)]
+        up.part(P([(x + off(y), y) for x, y in sheet]), NAVY)
+        for yy in range(16, 60):  # a second, darker navy on the inner half of the sheet (gently curved boundary)
+            split = 13.5 + 1.5 * math.sin(yy / 7.0) + off(yy)
+            for xx in range(8, 30):
+                if xx >= split and up.at(xx, yy)[:3] == NAVY:
+                    up.dot(xx, yy, SHADOW)
+        for yy in range(26, 47):  # one soft vertical highlight
+            if yy % 5 or yy in (30, 31, 41, 42):
+                up.dot(round(10 + off(yy)), yy, BLUE if 29 < yy < 44 else STEEL_D)
+        for yy in range(33, 40):
+            up.dot(round(10 + off(yy)), yy, STEEL)
     elif hair == "H6":  # side ponytail on her far side, swinging out behind her head
         pt = strand((44, 6), (62 - 6 * mv, -6), (70 - 9 * mv, 22), (60 - 12 * mv, 42), t, 4.0, k=2.0, lag=0.8, n=18)
         hair_band(up, pt, [4, 8, 10, 11, 11, 10, 10, 9, 9, 8, 7, 6, 5, 4, 3, 2, 1.5, 1.2, 1])
@@ -427,9 +442,9 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
     disc(up, 46, 45, 2, GOLD)
     up.dot(46, 45, OUTLINE)
     # ---- head: hair mass, face
-    if hair in ("H5", "H7", "H8"):
+    if hair in ("H5", "H7", "H8", "H9"):
         up.part(E((17, 7, 49, 36) if hair == "H7" else (16, 4, 50, 36)), HAIR_A)
-        if hair == "H8":  # rounded crown: lit rim top-left and a blue sheen band across it
+        if hair in ("H8", "H9"):  # rounded crown: lit rim top-left and a blue sheen band across it
             up.flat(lambda d, f: d.arc((17, 5, 49, 35), 195, 290, f), STEEL_D)
             up.flat(lambda d, f: d.arc((19, 8, 47, 30), 205, 335, f), BLUE)
             up.flat(lambda d, f: d.arc((19, 9, 47, 31), 215, 325, f), BLUE)
@@ -460,8 +475,8 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         up.dot(23, 37, GOLD)
         up.dot(48, 38, GOLD)
         fringe = [(19, 10), (49, 10), (50, 18), (46, 18), (46, 17), (40, 17), (40, 18), (33, 18), (33, 17), (27, 17), (27, 18), (19, 18)]
-    elif hair == "H8":  # two long straight side locks to the collar, bangs as tapered strands with gaps
-        for p0, p1, p2, p3, lag in (((21, 13), (17, 21), (21, 30), (20, 41), 0.5), ((48, 13), (53, 21), (49, 30), (50, 41), 0.2)):
+    elif hair in ("H8", "H9"):  # (H8) two long straight side locks to the collar; bangs as tapered strands with gaps
+        for p0, p1, p2, p3, lag in ( (((21, 13), (17, 21), (21, 30), (20, 41), 0.5), ((48, 13), (53, 21), (49, 30), (50, 41), 0.2))[:2 if hair == "H8" else 0]):
             hair_band(up, strand(p0, p1, p2, p3, t, 1.3, k=2.0, lag=lag, n=12), [6.5, 7, 7, 6.6, 6.2, 5.6, 4.8, 4, 3.2, 2.3, 1.5, 0.9, 0.6],
                       clusters=((0.3, BLUE),))
         for cx, ty, lean in ((24.5, 24, -1.5), (30, 19, 0.5), (35.5, 21.5, 0), (41, 19, 1), (46.5, 23, 1.5)):
@@ -484,7 +499,7 @@ def build_a(low, up, t, step=None, hair="H1", mouth_kind="M2"):
         fringe = [(19, 11), (49, 11), (50, 17), (45, 14), (42, 18), (37, 14), (33, 18), (29, 14), (25, 17), (22, 16), (19, 18)]
     if fringe:
         up.part(P(fringe), HAIR_A, shade=False)
-    if hair not in ("H4", "H8"):
+    if hair not in ("H4", "H8", "H9"):
         up.flat(L([(30, 9), (41, 8)], 1), STEEL_D)
     if hair == "H5":
         up.flat(L([(22, 8), (27, 6), (34, 5)], 1), STEEL_D)
@@ -540,7 +555,7 @@ def floor_bg(w, h):
     return out
 
 
-HAIRS = [("H8  long straight Hinata-style hair: strand bangs, side locks, curtain back hair", "H8"), ("H1  high ponytail (reference)", "H1")]
+HAIRS = [("H8b  smooth long hair: strand bangs in front, one straight sheet down the back", "H9")]
 MOUTHS = [("M1  clean crimson smirk line", "M1"), ("M2  small closed lips", "M2"), ("M3  cat smile :3", "M3")]
 SHOTS = ((0, None), (2, None), (1, 1), (3, 5))  # two idle + two walking frames
 DEFAULT_MOUTH = "M2"
@@ -600,7 +615,7 @@ def scale_sheet(out_dir):
     out = Image.new("RGBA", (w, CELL + 8 + 4 + big.height), (24, 24, 32, 255))
     out.alpha_composite(row, (0, 0))
     out.alpha_composite(big, (0, CELL + 12))
-    out.convert("RGB").save(out_dir / "shade_A_v5_scale.png")
+    out.convert("RGB").save(out_dir / "shade_A_v6_scale.png")
 
 
 def main():
@@ -618,7 +633,7 @@ def main():
             tile = Image.new("RGBA", (tw, th), bg)
             tile.alpha_composite(nn(f.crop(crop), k))
             sheet.alpha_composite(tile, (8 + i * (tw + 8), y + 22))
-    sheet.convert("RGB").save(out_dir / "shade_A_v5.png")
+    sheet.convert("RGB").save(out_dir / "shade_A_v6.png")
     scale_sheet(out_dir)
 
 
