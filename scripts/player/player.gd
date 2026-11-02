@@ -97,6 +97,10 @@ const FOOT_RING_Y: float = 40.0
 const SHADOW_COLOR: Color = Color(0, 0, 0, 0.3)
 const COLOR_HP: Color = Color(0.9, 0.25, 0.25)
 const COLOR_ARMOR: Color = Color(0.7, 0.75, 0.85)
+const COLOR_ALLY: Color = Color(0.3, 0.6, 1.0, 0.9)
+const COLOR_ENEMY: Color = Color(1.0, 0.3, 0.3, 0.9)
+const TEAM_RING_SCALE: float = 1.15
+const TEAM_RING_WIDTH: float = 2.5
 const COLOR_BAR_BG: Color = Color(0, 0, 0, 0.5)
 
 var player_id: int = 0
@@ -104,6 +108,10 @@ var color_index: int = 0
 var display_color: Color = Color.WHITE
 var is_local: bool = false
 var is_bot: bool = false
+## Teams mode: 0 = no team (Duel / FFA), else MatchRules.TEAM_A / TEAM_B. Allies never hurt or target each other.
+var team: int = 0
+## The team of the player this device watches (0 = none): its Smoke Bomb users stay visible to it.
+static var viewer_team: int = 0
 ## Countdown / results screen: inputs are ignored (timers still run).
 var frozen: bool = false
 var character: CharacterData
@@ -650,7 +658,7 @@ func _sapling_shoot(slot: CharacterSkill, seq: int) -> void:
 	var best: float = d.sapling_range * d.sapling_range
 	var aim := Vector2.INF
 	for p: Player in projectiles.targets:
-		if p == self or p.dead:
+		if is_ally(p) or p.dead:
 			continue
 		var spots: PackedVector2Array = p.clone_points()
 		if not p.is_hidden():
@@ -708,7 +716,7 @@ func hound_target(from: Vector2, sight: float) -> Player:
 	var best_sq: float = sight * sight
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	for p: Player in projectiles.targets:
-		if p == self or p.dead or p.is_hidden():
+		if is_ally(p) or p.dead or p.is_hidden():
 			continue
 		var d_sq: float = from.distance_squared_to(p.global_position)
 		if d_sq < best_sq and AutoAim.has_line_of_sight(space, _sight_query, from, p.global_position):
@@ -760,7 +768,7 @@ func _bind_step(slot: CharacterSkill) -> void:
 	var best: Player = null
 	var best_at: float = INF
 	for p: Player in projectiles.targets:
-		if p == self or p.dead or not p.can_be_hit():
+		if is_ally(p) or p.dead or not p.can_be_hit():
 			continue
 		var rel: Vector2 = p.global_position - slot.anchor
 		var at: float = rel.dot(along)
@@ -886,14 +894,24 @@ func is_hidden() -> bool:
 	return is_vanished() or active_skill(SkillData.Kind.DRIFT) != null or active_skill(SkillData.Kind.STEP) != null
 
 
-## Smoke Bomb is running: she is invisible to everyone but herself (no teams exist, so that is only the local player).
+## Me or a teammate (team 0 = no teams: only me). Allies are never targeted or hurt.
+func is_ally(other: Player) -> bool:
+	return other == self or (team != 0 and team == other.team)
+
+
+## On the viewer's team (a viewer without a team sees team A as friendly).
+func is_friendly_to_viewer() -> bool:
+	return team == (viewer_team if viewer_team != 0 else MatchRules.TEAM_A)
+
+
+## Smoke Bomb is running: she is invisible to everyone but herself (and her team).
 func is_vanished() -> bool:
 	return active_skill(SkillData.Kind.SMOKE) != null
 
 
 ## Not drawn at all on this peer: vanished and not the one playing her.
 func is_concealed() -> bool:
-	return is_vanished() and not is_local
+	return is_vanished() and not is_local and (team == 0 or team != viewer_team)
 
 
 ## Smoke Bomb ends early (she attacked): the cooldown keeps running. SpecialFx sees it end and pops the closing poof.
@@ -1295,6 +1313,9 @@ func _draw() -> void:
 		return
 	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
 	draw_circle(Vector2.ZERO, Constants.PLAYER_RADIUS, SHADOW_COLOR)
+	if team != 0:  # Teams: ally blue / enemy red, from the viewer's side
+		draw_arc(Vector2.ZERO, Constants.PLAYER_RADIUS * TEAM_RING_SCALE, 0.0, TAU, 32,
+			COLOR_ALLY if is_friendly_to_viewer() else COLOR_ENEMY, TEAM_RING_WIDTH)
 	if stats.spawn_protect > 0.0:  # a pulsing ring on the floor round the protected player
 		var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * SPAWN_SHIMMER_HZ)
 		var ring_color: Color = SPAWN_RING_COLOR

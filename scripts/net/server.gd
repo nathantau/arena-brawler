@@ -89,6 +89,11 @@ func on_request_mode(peer_id: int, mode: int) -> void:
 		arena.referee.set_mode(mode as MatchRules.Mode)
 
 
+func on_request_team(peer_id: int, team: int) -> void:
+	if _queues.has(peer_id):
+		arena.referee.set_team(peer_id, team)
+
+
 func on_request_arena(peer_id: int, index: int) -> void:
 	if _queues.has(peer_id):
 		arena.referee.set_arena(index)

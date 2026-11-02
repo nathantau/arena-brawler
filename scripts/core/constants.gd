@@ -132,6 +132,14 @@ const DUEL_PLAYERS: int = 2
 const FFA_MAX_PLAYERS: int = 4
 const DUEL_KILL_TARGET: int = 5
 const FFA_KILL_TARGET: int = 10
+## Teams 3v3: round wins needed to take the match, players per team, lives per round (1 respawn), round clock,
+## and the pause between rounds (everyone is reset at their team's spawns).
+const TEAMS_ROUND_TARGET: int = 5
+const TEAM_SIZE: int = 3
+const TEAMS_MAX_PLAYERS: int = TEAM_SIZE * 2
+const TEAMS_LIVES: int = 2
+const TEAMS_ROUND_TIME: float = 60.0
+const TEAMS_INTERMISSION: float = 3.0
 const MATCH_TIME_LIMIT: float = 180.0
 const MATCH_COUNTDOWN: float = 3.0
 const MATCH_RESULTS_TIME: float = 10.0
@@ -143,7 +151,7 @@ const PHYSICS_DT: float = 1.0 / PHYSICS_FPS
 
 # --- Networking ---
 const DEFAULT_PORT: int = 7777
-const MAX_CLIENTS: int = 4
+const MAX_CLIENTS: int = 6
 ## Channel count is set by the client only: Godot 4.7's create_server() passes its channel
 ## argument into ENet's *incoming bandwidth* slot, so the server would advertise ~7 B/s and
 ## clients would throttle away most of their unreliable input packets.

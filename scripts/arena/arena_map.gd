@@ -48,6 +48,15 @@ static func parse(rows: Array[String], tile: float) -> ArenaMap:
 	return map
 
 
+## The spawns on one team's side of the map (team A left half, B right half); all of them if that side has none.
+static func side_spawns(spawns: PackedVector2Array, width: float, team: int) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for s: Vector2 in spawns:
+		if (s.x < width * 0.5) == (team == MatchRules.TEAM_A):
+			out.append(s)
+	return spawns if out.is_empty() else out
+
+
 ## The spawn whose nearest threat is farthest away. With no threats, the first spawn.
 static func pick_spawn(spawns: PackedVector2Array, threats: PackedVector2Array) -> Vector2:
 	if threats.is_empty():

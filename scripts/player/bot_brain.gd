@@ -512,7 +512,7 @@ func _pick_goal(player: Player, pos: Vector2) -> void:
 		var best: Variant = null
 		var best_d: float = INF
 		for p: Player in arena.players:
-			if p == player or p.dead:
+			if player.is_ally(p) or p.dead:
 				continue
 			var d: float = pos.distance_squared_to(p.global_position)
 			if d < best_d:
@@ -561,6 +561,11 @@ func _blocked(player: Player, dir: Vector2) -> bool:
 	return not space.intersect_ray(_wall_query).is_empty()
 
 
+func _is_ally_id(player: Player, id: int) -> bool:
+	var other: Player = arena.get_player(id) if arena != null else null
+	return other != null and player.is_ally(other)
+
+
 ## The earliest enemy projectile that will hit us soon: returns the sidestep direction (ZERO if none) and fills
 ## _threat_time / _threat_big.
 func _scan_threat(player: Player) -> Vector2:
@@ -572,7 +577,7 @@ func _scan_threat(player: Player) -> Vector2:
 	var pos: Vector2 = player.global_position
 	var vitals: float = float(player.stats.hp + player.stats.armor)
 	for s: ProjectilePool.Slot in pool.debug_slots():
-		if not s.active or s.attacker_id == player.player_id:
+		if not s.active or s.attacker_id == player.player_id or _is_ally_id(player, s.attacker_id):
 			continue
 		var reach: float = Constants.PLAYER_RADIUS + s.radius + s.splash_radius * 0.6 + DODGE_MARGIN
 		var side: Vector2 = dodge_dir(pos, s.pos, s.vel, reach, DODGE_HORIZON)
@@ -622,7 +627,7 @@ func _nearest_visible_enemy(player: Player) -> Variant:
 	var best_score: float = Constants.BOT_SIGHT_RANGE * Constants.BOT_SIGHT_RANGE
 	var best_player: Player = null
 	for p: Player in arena.players:
-		if p == player or p.dead:
+		if player.is_ally(p) or p.dead:
 			continue
 		var vit: float = float(p.stats.hp + p.stats.armor) / float(p.stats.max_hp + p.stats.max_armor)
 		var w: float = 1.0 - TARGET_WEAK_BIAS * (1.0 - vit)

@@ -303,6 +303,10 @@ func _bar(pos: Vector2, icon: String, value: int, max_value: int, fill: Color, s
 
 ## Top-centre pills: kills and deaths, then the clock (or warm-up) and the kill target.
 func _draw_score() -> void:
+	var st: MatchState = arena.match_state
+	if st.mode == MatchRules.Mode.TEAMS and st.phase != MatchState.Phase.LOBBY:
+		_draw_round_score(st)
+		return
 	var id: int = player.player_id
 	var kills: String = str(scores.kills_of(id))
 	var deaths: String = str(scores.deaths_of(id))
@@ -320,18 +324,45 @@ func _draw_score() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
 		x += UiStyle.text_width(pair[1], UiStyle.SIZE_HEADING, true) + PILL_ITEM_GAP
 
-	var st: MatchState = arena.match_state
 	var clock: String
 	var urgent: bool = false
 	if st.phase == MatchState.Phase.PLAYING:
-		var t: int = ceili(st.time_left)
-		clock = "%d:%02d · first to %d" % [t / 60, t % 60, MatchRules.kill_target(st.mode)]
-		urgent = t <= URGENT_SECONDS
-		if urgent and t != _last_second and arena.sfx != null:
-			arena.sfx.play(&"tick")
-		_last_second = t
+		clock = "%d:%02d · first to %d" % [ceili(st.time_left) / 60, ceili(st.time_left) % 60, MatchRules.kill_target(st.mode)]
+		urgent = _tick_clock(st)
 	elif st.phase == MatchState.Phase.LOBBY:
 		clock = "Warm-up"
+	_draw_clock(r, st, clock, urgent)
+
+
+## Teams: "2 – 1" round score (your team first, ally blue / enemy red), the round and its clock under it.
+func _draw_round_score(st: MatchState) -> void:
+	var mine: int = player.team if player.team != 0 else MatchRules.TEAM_A
+	var score: String = "%d – %d" % [st.round_scores[mine], st.round_scores[MatchRules.other_team(mine)]]
+	var w: float = UiStyle.text_width(score, UiStyle.SIZE_HEADING, true) + PILL_PAD * 2.0
+	var r := Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, PILL_H))
+	draw_style_box(_panel, r)
+	UiStyle.draw_text(self, Vector2(r.position.x, r.get_center().y + UiStyle.SIZE_HEADING * 0.35), score,
+		UiStyle.SIZE_HEADING, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, true)
+	var clock: String = ""
+	var urgent: bool = false
+	if st.phase == MatchState.Phase.PLAYING:
+		clock = "Round %d · %d:%02d" % [st.round_number, ceili(st.time_left) / 60, ceili(st.time_left) % 60]
+		if st.intermission <= 0.0:
+			urgent = _tick_clock(st)
+	_draw_clock(r, st, clock, urgent)
+
+
+## Last-seconds tick sound once per second; true while the clock is urgent.
+func _tick_clock(st: MatchState) -> bool:
+	var t: int = ceili(st.time_left)
+	var urgent: bool = t <= URGENT_SECONDS
+	if urgent and t != _last_second and arena.sfx != null:
+		arena.sfx.play(&"tick")
+	_last_second = t
+	return urgent
+
+
+func _draw_clock(r: Rect2, st: MatchState, clock: String, urgent: bool) -> void:
 	if clock != "":
 		var y: float = r.end.y + UiStyle.SIZE_SMALL + 6.0
 		var cw: float = UiStyle.text_width(clock, UiStyle.SIZE_SMALL)
@@ -366,6 +397,8 @@ func _draw_messages() -> void:
 		var msg: String
 		if st.may_respawn(player.player_id):
 			msg = "Respawning in %.1f" % maxf(0.0, player.respawn_timer)
+		elif st.mode == MatchRules.Mode.TEAMS and st.is_participant(player.player_id):
+			msg = "Out this round"
 		else:
 			msg = "Spectating · you'll play next match"
 		var w: float = UiStyle.text_width(msg, UiStyle.SIZE_HEADING, true) + PILL_PAD * 2.0

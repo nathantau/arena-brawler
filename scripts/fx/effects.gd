@@ -619,7 +619,7 @@ func _lightning_target(h: HeldBeam, at: Vector2) -> Player:
 	if arena == null:
 		return null
 	for p: Player in arena.players:
-		if p != h.shooter and not p.dead and (p.global_position + p.visual_offset).distance_to(at) < Constants.PLAYER_RADIUS + 10.0:
+		if not h.shooter.is_ally(p) and not p.dead and (p.global_position + p.visual_offset).distance_to(at) < Constants.PLAYER_RADIUS + 10.0:
 			return p
 	return null
 

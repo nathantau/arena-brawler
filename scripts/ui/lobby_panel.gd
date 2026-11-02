@@ -28,6 +28,7 @@ var _title: Label
 var _rules: Label
 var _join_hint: Label
 var _mode_button: Button
+var _team_button: Button
 var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
 var _weapon_row: BoxContainer
@@ -75,9 +76,11 @@ func _ready() -> void:
 		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_mode_button = _button(header, BUTTON_MIN_SIZE)
 	_mode_button.pressed.connect(_on_mode_pressed)
+	_team_button = _button(header, BUTTON_MIN_SIZE)
+	_team_button.pressed.connect(_on_team_pressed)
 	_arena_button = _button(header, BUTTON_MIN_SIZE)
-	# These two grow to fit their text: the arena name must never be clipped to "...".
-	for b: Button in [_mode_button, _arena_button]:
+	# These grow to fit their text: the arena name must never be clipped to "...".
+	for b: Button in [_mode_button, _team_button, _arena_button]:
 		b.clip_text = false
 		b.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	_arena_button.pressed.connect(func() -> void:
@@ -164,11 +167,18 @@ func _refresh() -> void:
 		return
 	var me: Player = arena.local_player
 	_title.text = "LOADING ROOM · %s · %s" % [MatchRules.MODE_NAMES[st.mode], ArenaLayouts.NAMES[st.arena_index]]
-	_rules.text = "First to %d kills · %d:%02d" % [MatchRules.kill_target(st.mode),
-		int(st.time_limit) / 60, int(st.time_limit) % 60]
+	if st.mode == MatchRules.Mode.TEAMS:
+		_rules.text = "First team to %d rounds · %ds rounds · %d lives each" % [MatchRules.kill_target(st.mode),
+			int(minf(st.time_limit, Constants.TEAMS_ROUND_TIME)), Constants.TEAMS_LIVES]
+	else:
+		_rules.text = "First to %d kills · %d:%02d" % [MatchRules.kill_target(st.mode),
+			int(st.time_limit) / 60, int(st.time_limit) % 60]
 	_join_hint.visible = arena.host_address != ""
 	_join_hint.text = "Friends join: %s" % LanAddress.friendly(arena.host_address)
-	_mode_button.text = "Mode: %s" % ("Duel" if st.mode == MatchRules.Mode.DUEL else "FFA")
+	_mode_button.text = "Mode: %s" % MatchRules.SHORT_NAMES[st.mode]
+	_team_button.visible = st.mode == MatchRules.Mode.TEAMS
+	var pick: int = st.team_of(me.player_id)
+	_team_button.text = "Team: %s" % (MatchRules.TEAM_NAMES[pick].trim_prefix("Team ") if pick != 0 else "Auto")
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
 	if _weapons_for != me.character.id:
 		_build_weapon_cards(me.character)
@@ -191,7 +201,13 @@ func _refresh() -> void:
 
 	for child: Node in _rows.get_children():
 		child.queue_free()
-	for p: Player in arena.players:
+	var order: Array[Player] = arena.players.duplicate()
+	var shown_teams: Dictionary[int, int] = {}
+	if st.mode == MatchRules.Mode.TEAMS:  # both teams side by side: balanced preview of who lands where
+		shown_teams = MatchRules.assign_teams(st.participants, st.teams)
+		order.sort_custom(func(a: Player, b: Player) -> bool:
+			return shown_teams.get(a.player_id, 3) < shown_teams.get(b.player_id, 3))
+	for p: Player in order:
 		var tag: String
 		if not st.is_participant(p.player_id):
 			tag = "sits out"
@@ -206,6 +222,8 @@ func _refresh() -> void:
 		row.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
 		row.add_theme_color_override("font_color", p.display_color)
 		row.text = "● %s%s · %s · %s" % [arena.player_name(p.player_id), you, p.character.display_name, tag]
+		if shown_teams.has(p.player_id):
+			row.text = "[%s] %s" % [MatchRules.TEAM_NAMES[shown_teams[p.player_id]].trim_prefix("Team "), row.text]
 
 	_blocker.text = st.blocker
 	_ready_button.text = "UNREADY" if _is_ready() else "READY!"
@@ -300,6 +318,11 @@ func _is_ready() -> bool:
 func _on_mode_pressed() -> void:
 	var next: int = (arena.match_state.mode + 1) % MatchRules.Mode.size()
 	arena.mode_requested.emit(next as MatchRules.Mode)
+
+
+## Cycles Auto -> A -> B.
+func _on_team_pressed() -> void:
+	arena.team_requested.emit((arena.match_state.team_of(arena.local_player.player_id) + 1) % (MatchRules.TEAM_B + 1))
 
 
 func _on_ready_pressed() -> void:

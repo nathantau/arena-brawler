@@ -88,6 +88,8 @@ func on_welcome(your_id: int, match_seed: int, tick: int, roster: Array) -> void
 		session.rpc_set_ready.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, is_ready))
 	arena.mode_requested.connect(func(mode: MatchRules.Mode) -> void:
 		session.rpc_request_mode.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, mode))
+	arena.team_requested.connect(func(team: int) -> void:
+		session.rpc_request_team.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, team))
 	arena.arena_requested.connect(func(index: int) -> void:
 		session.rpc_request_arena.rpc_id(MultiplayerPeer.TARGET_PEER_SERVER, index))
 	arena.character_requested.connect(func(id: StringName) -> void:

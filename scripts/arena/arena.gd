@@ -12,6 +12,8 @@ signal match_updated
 ## the MatchController; online the client forwards them to the server.
 signal ready_requested(is_ready: bool)
 signal mode_requested(mode: MatchRules.Mode)
+## Lobby (Teams): the local player picked a team (0 = auto).
+signal team_requested(team: int)
 signal arena_requested(index: int)
 signal character_requested(id: StringName)
 signal weapon_requested(id: StringName)
@@ -126,6 +128,9 @@ var _heartbeat: float = 0.0
 var _hit_owner: int = 0
 var _streak: int = 0
 var _fx_phase: MatchState.Phase = MatchState.Phase.LOBBY
+var _fx_round: int = 0
+var _client_break: bool = false
+var _fx_break: bool = false
 var _input: LocalInput
 var _shake_rng := RandomNumberGenerator.new()
 
@@ -134,6 +139,7 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 		match_mode: MatchRules.Mode = MatchRules.Mode.FFA, time_limit: float = Constants.MATCH_TIME_LIMIT) -> void:
 	mode = p_mode
 	match_seed = p_match_seed
+	Player.viewer_team = 0
 	name = "Arena"
 	y_sort_enabled = true
 	catalog = WeaponCatalog.load_all()
@@ -160,6 +166,12 @@ func _init(p_mode: Mode = Mode.OFFLINE, p_match_seed: int = Constants.DEFAULT_MA
 			if local_player != null:
 				referee.set_ready(local_player.player_id, is_ready))
 		mode_requested.connect(referee.set_mode)
+		team_requested.connect(func(team: int) -> void:
+			if local_player != null:
+				referee.set_team(local_player.player_id, team))
+		referee.living_hp = _living_hp
+		referee.round_started.connect(_on_round_started)
+		referee.round_ended.connect(func(_winner: int) -> void: projectiles.clear())
 		arena_requested.connect(referee.set_arena)
 		character_requested.connect(func(id: StringName) -> void:
 			if local_player != null:
@@ -222,6 +234,7 @@ func add_player(id: int, color_index: int, ctrl: PlayerController,
 	p.arena_bounds = play_area()
 	p.global_position = _pick_spawn_for(p)
 	p.frozen = match_state.inputs_locked()
+	p.team = _team_for(id)
 	if mode != Mode.CLIENT and not match_state.may_respawn(id):
 		p.sit_out()
 	p.died.connect(_on_player_died)
@@ -238,6 +251,7 @@ func add_player(id: int, color_index: int, ctrl: PlayerController,
 	else:
 		_human_ids.append(id)
 	match_updated.emit()
+	_apply_teams()
 	return p
 
 
@@ -326,6 +340,11 @@ func apply_match_state(a: Array) -> void:
 		_load_layout(match_state.arena_index)
 	if match_state.phase != before:
 		_on_phase_changed(match_state.phase)
+	_apply_teams()
+	if match_state.intermission > 0.0 and not _client_break:
+		projectiles.clear()
+	_client_break = match_state.intermission > 0.0
+	_apply_freeze()
 	match_updated.emit()
 
 
@@ -396,6 +415,7 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	hud.input = input
 	touch.ready_sfx = func() -> void: sfx.play(&"ready")
 	_attach_effects()
+	_apply_teams()
 
 
 ## Where the camera may sit so the view (`view` world units) stays inside `bounds`; an arena smaller than
@@ -564,6 +584,27 @@ func _on_match_updated() -> void:
 			_streak = 0
 			_trauma = 0.0
 	_fx_phase = match_state.phase
+	_round_banners()
+
+
+## Teams: "Round N" when a round starts, who won it when it ends (once each, from the synced state).
+func _round_banners() -> void:
+	var st: MatchState = match_state
+	if st.mode != MatchRules.Mode.TEAMS or st.phase != MatchState.Phase.PLAYING:
+		_fx_round = 0
+		_fx_break = false
+		return
+	if st.round_number != _fx_round and st.intermission <= 0.0:
+		_fx_round = st.round_number
+		hud.banner("Round %d" % st.round_number, UiStyle.C_WHITE)
+	var on_break: bool = st.intermission > 0.0
+	if on_break and not _fx_break:
+		if st.round_winner == 0:
+			hud.banner("Round drawn", UiStyle.C_STEEL)
+		else:
+			hud.banner("%s wins the round" % MatchRules.TEAM_NAMES[st.round_winner],
+				UiStyle.C_YELLOW if st.round_winner == Player.viewer_team else UiStyle.C_WHITE)
+	_fx_break = on_break
 
 
 func _on_skill_used(user: Player, skill: SkillData) -> void:
@@ -666,13 +707,20 @@ func _tick_heartbeat(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	pickups.tick(delta)
 	if mode != Mode.CLIENT:
+		if mode == Mode.OFFLINE:
+			_fill_teams_bots()
 		referee.tick(delta, _human_ids, _bot_ids, scores)
 		_tick_respawns(delta)
 		if not match_state.inputs_locked():
 			pickups.collect(players)
 	elif match_state.phase != MatchState.Phase.LOBBY:
 		# Display only; the server sends the real value on every phase change.
-		match_state.time_left = maxf(0.0, match_state.time_left - delta)
+		if match_state.intermission > 0.0:
+			match_state.intermission = maxf(0.0, match_state.intermission - delta)
+			if match_state.intermission == 0.0:
+				_apply_freeze()
+		else:
+			match_state.time_left = maxf(0.0, match_state.time_left - delta)
 	if camera != null and local_player != null and not local_player.dead:
 		_look = _look.lerp(local_player.facing * Constants.CAMERA_LOOKAHEAD, 1.0 - exp(-CAMERA_LOOK_EASE * delta))
 		camera.zoom = Vector2.ONE * _zoom()
@@ -689,9 +737,54 @@ func _tick_respawns(delta: float) -> void:
 			p.respawn(_pick_spawn_for(p))
 
 
+## Offline Teams needs five bots around the player; the other modes use fewer, extra ones just sit out.
+func _fill_teams_bots() -> void:
+	if match_state.mode != MatchRules.Mode.TEAMS or match_state.phase != MatchState.Phase.LOBBY:
+		return
+	while _bot_ids.size() < Constants.TEAMS_MAX_PLAYERS - 1:
+		add_bot(Constants.BOT_ID_BASE + _bot_ids.size(), free_color_index())
+
+
+## id -> hp of every participant standing right now (for the round-timeout tiebreak).
+func _living_hp() -> Dictionary:
+	var out: Dictionary = {}
+	for id: int in match_state.participants:
+		var p: Player = get_player(id)
+		if p != null and not p.dead:
+			out[id] = p.stats.hp
+	return out
+
+
+func _team_for(id: int) -> int:
+	return match_state.team_of(id) if match_state.mode == MatchRules.Mode.TEAMS else 0
+
+
+## Every player's team (and the viewer's, for ally/enemy colours) follows the match state.
+func _apply_teams() -> void:
+	for p: Player in players:
+		p.team = _team_for(p.player_id)
+	Player.viewer_team = local_player.team if local_player != null else 0
+
+
+func _apply_freeze() -> void:
+	var locked: bool = match_state.inputs_locked()
+	for p: Player in players:
+		p.frozen = locked
+
+
+## Teams, authoritative: the next round begins. Everyone back at their team's spawns with full HP and cooldowns.
+func _on_round_started() -> void:
+	projectiles.clear()
+	crates.reset()
+	pickups.reset()
+	_place_participants()
+	_apply_freeze()
+
+
 ## Side effects of entering a phase, on every peer. Positions are authoritative-only; clients
 ## get them from snapshots.
 func _on_phase_changed(phase: MatchState.Phase) -> void:
+	_apply_teams()
 	match phase:
 		MatchState.Phase.COUNTDOWN:
 			scores.reset()
@@ -708,7 +801,8 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 				sfx.play(&"countdown")
 			MatchState.Phase.PLAYING:
 				sfx.play(&"go")
-				hud.banner("FIGHT!", UiStyle.C_WHITE)
+				if match_state.mode != MatchRules.Mode.TEAMS:
+					hud.banner("FIGHT!", UiStyle.C_WHITE)
 			MatchState.Phase.RESULTS:
 				sfx.play(&"results")
 	var locked: bool = match_state.inputs_locked()
@@ -730,13 +824,17 @@ func _place_participants() -> void:
 func _pick_spawn_for(who: Player) -> Vector2:
 	_threats.clear()
 	for p: Player in players:
-		if p != who and not p.dead:
+		if p != who and not p.dead and (who.team == 0 or p.team == who.team):
 			_threats.append(p.global_position)
+	if who.team != 0:  # Teams: own side of the map, away from teammates
+		return ArenaMap.pick_spawn(ArenaMap.side_spawns(map.spawns, map.size.x, who.team), _threats)
 	return ArenaMap.pick_spawn(map.spawns, _threats)
 
 
 ## Authoritative: re-broadcast, and switch layout (everyone respawns) if the lobby picked another.
 func _on_referee_changed() -> void:
+	_apply_teams()
+	_apply_freeze()
 	if match_state.arena_index != layout_index:
 		_load_layout(match_state.arena_index)
 		for p: Player in players:
@@ -753,6 +851,8 @@ func _on_projectile_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: in
 
 
 func _on_player_died(victim: Player, killer_id: int) -> void:
+	if referee != null:
+		referee.on_death(victim.player_id)
 	scores.register_kill(killer_id, victim.player_id)
 	kill_registered.emit(killer_id, victim.player_id)
 
