@@ -9767,38 +9767,45 @@ def flag_burst_frame(team: str, k: int) -> Image.Image:
 
 
 def flag_hover_frame(team: str, k: int) -> Image.Image:
-    """The carried flag, hovering over the carrier's head (designed at 32 px, then x2): a compact banner hung from a short
-    steel rail with gold end caps, no pole. The cloth waves over the 6 frames like the planted flag. 1 px dark outline."""
+    """The carried flag, hovering over the carrier's head (designed at 32 px, then x2): a swallow-tail pennant hung from a
+    short steel rail with small gold end caps, no pole. Whole columns of cloth are displaced by one smooth travelling sine
+    (so the outline never breaks), lit on the crests and shaded in the troughs; the chevron rides the cloth and stays whole.
+    1 px dark outline."""
     cloth, shade, light = FLAG_COLORS[team]
     c = Canvas(FLAG_HOVER_CELL)
-    c.part(R((6, 5, 26, 6)), STEEL)  # rail
-    c.part(E((4, 3, 8, 8)), YELLOW)  # end caps
-    c.part(E((24, 3, 28, 8)), YELLOW)
     phase0 = math.tau * k / FLAG_FRAMES
-    x0, x1, top0, height = 8, 25, 7, 11
+    x0, x1, top0, height, cx = 8, 25, 8, 12, 16.5
+    prev_ey = None
     for x in range(x0, x1 + 1):
         u = (x - x0) / (x1 - x0)
-        ph = phase0 - x * 0.5
-        dy = round(math.sin(ph) * (0.3 + 1.8 * u))
-        slope = math.cos(ph)
-        top, bottom = top0 + dy, top0 + height + dy - (1 if x > x1 - 3 else 0)
-        mid = (top + bottom) / 2
+        s_ = math.sin(phase0 - x * 0.5)
+        dy = round(s_ * (0.5 + 1.0 * u))  # 0.5 px at the rail, 1.5 px at the free end
+        top = top0 + dy
+        bottom = top0 + height - 1 + dy - max(0, int(5 - abs(x - cx)))  # clean V notch in the bottom edge
         for y in range(top, bottom + 1):
-            if x > x1 - 6 and abs(y - mid) < (x - (x1 - 6)) * 0.55:
-                continue  # swallow-tail
-            col = light if y <= top else cloth
-            if y >= bottom - 1 or slope < -0.35:
+            col = shade if s_ > 0.1 else cloth  # troughs darker, crests lighter
+            if y == top and s_ <= 0.1:
+                col = light  # a 1 px highlight along the crest's top edge
+            elif y == bottom:
                 col = shade
             c.dot(x, y, col)
-        if x0 + 3 <= x <= x0 + 9:  # chevron emblem
-            ey = round(mid) - 2 + abs(x - (x0 + 6))
-            c.dot(x, ey, WHITE)
-            c.dot(x, ey + 1, WHITE)
+        if 12 <= x <= 20:  # chevron emblem, displaced with its column, joined to the previous column
+            ey = top0 + 3 + abs(x - 16) + dy
+            lo = ey if prev_ey is None else min(ey, prev_ey)
+            hi = (ey if prev_ey is None else max(ey, prev_ey)) + 1
+            for y in range(lo, hi + 1):
+                c.dot(x, y, WHITE)
+            prev_ey = ey
+    c.part(R((6, 6, 27, 7)), STEEL)  # rail over the cloth's top edge
+    for ex in (4, 26):  # small gold end caps with a highlight
+        c.part(R((ex, 5, ex + 2, 8)), YELLOW)
+        c.dot(ex, 5, CREAM)
     return up2(c.img)
 
 
 def flag_hover_glow() -> Image.Image:
-    """The soft glow under the hovering flag (opaque white; the game tints it by team and fades it): a Bayer-dithered ellipse, 2 steps."""
+    """The soft glow under the hovering flag (opaque white; the game tints it by team and fades it): a Bayer-dithered
+    ellipse, dense in the middle and thinning to a sparse speckle at the rim."""
     w, h = 48, 20
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     bayer = ((0, 2), (3, 1))
@@ -9807,8 +9814,12 @@ def flag_hover_glow() -> Image.Image:
             d = ((x - w / 2 + 0.5) / (w / 2 - 2)) ** 2 + ((y - h / 2 + 0.5) / (h / 2 - 2)) ** 2
             if d >= 1:
                 continue
-            level = 3 if d < 0.35 else 2 if d < 0.7 else 1
-            if level > bayer[y % 2][x % 2]:
+            if d >= 0.8:
+                on = bayer[y % 2][x % 2] == 0 and (x // 2 + y // 2) % 2 == 0  # ~1/8
+            else:
+                level = 3 if d < 0.3 else 2 if d < 0.55 else 1
+                on = level > bayer[y % 2][x % 2]
+            if on:
                 img.putpixel((x, y), (*WHITE, 255))
     return img
 
