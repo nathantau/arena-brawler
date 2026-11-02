@@ -9641,6 +9641,181 @@ FX.update({
 })
 
 
+# --- Capture the flag (Teams 3v3): banner flag on a pole, glowing base pad, capture burst, return poof ---
+# Ally (blue) / enemy (red) are separate strips because the game tints by the VIEWER's team, not by team id.
+
+FLAG_FRAMES = 6  # the cloth waves one full period over these
+FLAG_CELL = 48  # design frame size (delivered x2); the pole's foot is on row FLAG_FOOT
+FLAG_FOOT = 43
+FLAG_COLORS = {"ally": (BLUE, NAVY, STEEL), "enemy": (RED, MAROON, ORANGE)}  # cloth, shade, highlight
+FLAG_PAD_FRAMES = 6
+FLAG_PAD_CELL = 64
+FLAG_BURST_FRAMES = 12
+FLAG_BURST_CELL = 64  # designed at this size, delivered x2 (see up2)
+FLAG_CARRY_CELL = 80
+FLAG_RETURN_CELL = 96
+
+
+def flag_frame(team: str, k: int) -> Image.Image:
+    """A small banner on a steel pole with a gold finial and a stone foot: the cloth ripples (a travelling sine, bigger
+    toward the free end), folds that turn away from the light go a shade darker, and the swallow-tail end flutters."""
+    cloth, shade, light = FLAG_COLORS[team]
+    c = Canvas(FLAG_CELL)
+    c.part(E((9, 39, 25, 45)), STEEL_D)  # stone foot
+    c.part(R((14, 9, 16, 42)), STEEL)  # pole
+    c.part(E((12, 4, 18, 10)), YELLOW)  # finial
+    phase0 = math.tau * k / FLAG_FRAMES
+    x0, x1, top0, height = 17, 39, 10, 13
+    for x in range(x0, x1 + 1):
+        u = (x - x0) / (x1 - x0)
+        ph = phase0 - x * 0.42
+        dy = round(math.sin(ph) * (0.6 + 2.6 * u))
+        slope = math.cos(ph)
+        top, bottom = top0 + dy, top0 + height + dy - (1 if x > x1 - 3 else 0)
+        mid = (top + bottom) / 2
+        for y in range(top, bottom + 1):
+            if x > x1 - 7 and abs(y - mid) < (x - (x1 - 7)) * 0.55:
+                continue  # swallow-tail notch
+            col = cloth
+            if y <= top:
+                col = light
+            if y >= bottom - 1 or slope < -0.35:
+                col = shade
+            c.dot(x, y, col)
+        if x0 + 4 <= x <= x0 + 10:  # emblem: a white chevron riding the cloth
+            ey = round(mid) - 2 + abs(x - (x0 + 7)) // 1
+            c.dot(x, ey, WHITE)
+            c.dot(x, ey + 1, WHITE)
+    return up2(c.img)
+
+
+def flag_pad_frame(team: str, k: int) -> Image.Image:
+    """The base pad, drawn flat on the floor (3/4 view, so everything is squashed): a steel plate, a channel of team colour
+    that pulses, chevron dashes marching round it, a dithered glow inside and motes rising off it."""
+    cloth, shade, light = FLAG_COLORS[team]
+    n = FLAG_PAD_CELL
+    cx, cy, rx, ry = n // 2, n // 2 + 6, 28, 14
+    c = Canvas(n)
+    c.part(E((cx - rx, cy - ry, cx + rx, cy + ry + 3)), STEEL_D)  # plate with a thick edge
+    c.flat(E((cx - rx + 1, cy - ry + 1, cx + rx - 1, cy + ry)), STEEL)
+    pulse = 0.5 + 0.5 * math.sin(math.tau * k / FLAG_PAD_FRAMES)
+    ring = light if pulse > 0.5 else cloth
+    c.flat(E((cx - rx + 3, cy - ry + 2, cx + rx - 3, cy + ry - 1)), shade)
+    c.flat(E((cx - rx + 5, cy - ry + 3, cx + rx - 5, cy + ry - 2)), ring)  # glowing channel
+    c.flat(E((cx - rx + 8, cy - ry + 5, cx + rx - 8, cy + ry - 4)), shade)  # inner floor
+    for y in range(n):  # dithered glow, fuller on the bright beat
+        for x in range(n):
+            if ((x - cx) / (rx - 9)) ** 2 + ((y - cy + 1) / (ry - 5)) ** 2 < 1.0 and dither_at(x + k, y, 0.25 + 0.3 * pulse):
+                c.dot(x, y, cloth)
+    for i in range(8):  # dashes marching round the channel
+        a = math.tau * (i / 8 + k / (FLAG_PAD_FRAMES * 8.0))
+        c.dot(round(cx + math.cos(a) * (rx - 5)), round(cy - 0.5 + math.sin(a) * (ry - 2.5)), WHITE if i % 2 == 0 else light)
+    for j in range(3):  # motes drifting up off the pad
+        t = ((k / FLAG_PAD_FRAMES) + j / 3.0) % 1.0
+        c.dot(cx + (j - 1) * 9 + round(math.sin(t * math.tau + j) * 2), round(cy - 2 - t * 14), WHITE if t < 0.6 else light)
+    return up2(c.img)
+
+
+def up2(img: Image.Image, keep_outline: bool = True) -> Image.Image:
+    """Integer x2 (NEAREST) so the sprite plays at 1:1 in the game and stays crisp; the 1 px outline is drawn AFTER the
+    scale, so it stays 1 px wide."""
+    big = img.resize((img.width * 2, img.height * 2), Image.NEAREST)
+    return outline(big) if keep_outline else big
+
+
+def _ease_out(t: float) -> float:
+    return 1 - (1 - t) ** 3
+
+
+def flag_burst_frame(team: str, k: int) -> Image.Image:
+    """Capture burst in team colours (designed at 64 px, then x2): a soft dithered flash that swells and fades, a ring
+    shockwave racing out over the floor (squashed, thinning, cooling light -> colour -> shade), and a few banner-coloured
+    sparks rising with drag. Eased throughout (ring and sparks decelerate, the flash fades on a curve)."""
+    cloth, shade, light = FLAG_COLORS[team]
+    n = FLAG_BURST_CELL
+    c = Canvas(n)
+    cx, cy = n // 2, n // 2 + 8
+    t = k / (FLAG_BURST_FRAMES - 1)
+    e = _ease_out(t)
+    flash = (1 - t) ** 1.6
+    if flash > 0.04:  # soft flash: dithered, denser toward the middle
+        r = 5 + 13 * e
+        for y in range(n):
+            for x in range(n):
+                d = math.hypot((x - cx) / r, (y - cy) / (r * 0.55))
+                if d < 1.0 and dither_at(x, y, flash * (1.15 - d)):
+                    c.dot(x, y, WHITE if d < 0.5 or flash > 0.6 else light)
+    if t < 0.95:  # ring shockwave
+        rr = 4 + 25 * e
+        col = WHITE if t < 0.12 else light if t < 0.45 else cloth if t < 0.75 else shade
+        thick = 2 if t < 0.5 else 1
+        for w in range(thick):
+            c.flat(lambda d, f, w=w: d.ellipse((cx - rr + w, cy - rr * 0.5 + w, cx + rr - w, cy + rr * 0.5 - w), None, f, 1), col)
+    rng = random.Random(11)
+    for i in range(9):  # sparks rise from the pad, slowing as they climb, cooling to the shade
+        ang = rng.uniform(-0.55, 0.55)
+        reach = rng.uniform(16, 30)
+        px = cx + rng.uniform(-9, 9) + math.sin(ang) * reach * e
+        py = cy - reach * e * 1.1
+        life = 1 - t
+        if life > 0.12:
+            col = WHITE if t < 0.18 else light if t < 0.5 else cloth if t < 0.8 else shade
+            sdot2(c, round(px), round(py), col)
+            if t < 0.6:
+                sdot2(c, round(px), round(py + 2), cloth)
+    return up2(c.img, keep_outline=False)
+
+
+def flag_carry_frame(team: str, k: int) -> Image.Image:
+    """The flag as it rides a fighter's back (designed at 80 px, then x2): a thin pole rising far above the head with a
+    gold finial, the 6-frame cloth waving at the very top, streaming to the right (the game mirrors it away from where
+    he runs). 1 px dark outline all round so it reads on any floor."""
+    cloth, shade, light = FLAG_COLORS[team]
+    c = Canvas(FLAG_CARRY_CELL)
+    px = 20
+    c.part(E((px - 5, 72, px + 6, 77)), STEEL_D)  # a little foot where the pole meets his back
+    c.part(R((px - 1, 12, px, 74)), STEEL)  # pole, 2 px
+    c.part(E((px - 3, 7, px + 2, 12)), YELLOW)  # finial
+    phase0 = math.tau * k / FLAG_FRAMES
+    x0, x1, top0, height = px + 1, px + 25, 13, 15
+    for x in range(x0, x1 + 1):
+        u = (x - x0) / (x1 - x0)
+        ph = phase0 - x * 0.45
+        dy = round(math.sin(ph) * (0.5 + 2.6 * u))
+        slope = math.cos(ph)
+        top, bottom = top0 + dy, top0 + height + dy - (1 if x > x1 - 3 else 0)
+        mid = (top + bottom) / 2
+        for y in range(top, bottom + 1):
+            if x > x1 - 7 and abs(y - mid) < (x - (x1 - 7)) * 0.55:
+                continue  # swallow-tail
+            col = light if y <= top else cloth
+            if y >= bottom - 1 or slope < -0.35:
+                col = shade
+            c.dot(x, y, col)
+        if x0 + 4 <= x <= x0 + 11:  # chevron emblem
+            ey = round(mid) - 2 + abs(x - (x0 + 8))
+            c.dot(x, ey, WHITE)
+            c.dot(x, ey + 1, WHITE)
+    return up2(c.img)
+
+
+def flag_return_frame(k: int) -> Image.Image:
+    """The flag flies home: the shared cloud poof at half the frames (a quick puff and burst)."""
+    return poof_frame(FLAG_RETURN_CELL, min(POOF_FRAMES - 1, k * 2), WHITE)
+
+
+FX.update({
+    "flag_ally": lambda: strip([flag_frame("ally", k) for k in range(FLAG_FRAMES)]),
+    "flag_enemy": lambda: strip([flag_frame("enemy", k) for k in range(FLAG_FRAMES)]),
+    "flag_pad_ally": lambda: strip([flag_pad_frame("ally", k) for k in range(FLAG_PAD_FRAMES)]),
+    "flag_pad_enemy": lambda: strip([flag_pad_frame("enemy", k) for k in range(FLAG_PAD_FRAMES)]),
+    "flag_capture_ally": lambda: strip([flag_burst_frame("ally", k) for k in range(FLAG_BURST_FRAMES)]),
+    "flag_capture_enemy": lambda: strip([flag_burst_frame("enemy", k) for k in range(FLAG_BURST_FRAMES)]),
+    "flag_carry_ally": lambda: strip([flag_carry_frame("ally", k) for k in range(FLAG_FRAMES)]),
+    "flag_carry_enemy": lambda: strip([flag_carry_frame("enemy", k) for k in range(FLAG_FRAMES)]),
+    "flag_return": lambda: strip([flag_return_frame(k) for k in range(POOF_FRAMES // 2)]),
+})
+
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)

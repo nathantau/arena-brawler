@@ -364,6 +364,15 @@ func get_input(player: Player, delta: float) -> InputFrame:
 	else:
 		move = _roam_move(player, pos, low_hp)
 
+	# Capture the flag (Teams): a flag objective beats roaming and cover; a carrier runs home however the fight goes.
+	var objective: Vector2 = _flag_goal(player)
+	if objective != Vector2.INF:
+		var to_obj: Vector2 = objective - pos
+		var closing: bool = player.flag_carrier or to_obj.length() > Constants.BOT_CARRIER_CLOSE or not has_target
+		if closing:
+			move = to_obj.normalized() if to_obj.length() > Constants.PLAYER_RADIUS * 0.5 else Vector2.ZERO
+			_cover_left = 0.0
+
 	# Pickup pull while fighting with a dry tank.
 	if has_target and _cover_left <= 0.0 and player.stats.energy < player.stats.max_energy * PICKUP_ENERGY_FRACTION:
 		var e: Variant = _nearest_spot(arena.map.energy_spots if arena != null and arena.map != null else PackedVector2Array(), pos, PICKUP_PULL_RANGE)
@@ -485,6 +494,35 @@ func _combat_move(player: Player, w: WeaponData, dist: float, dir: Vector2, low_
 
 
 ## Movement with nobody in sight: investigate where one was, fetch energy when low, else patrol between points.
+## Capture the flag (Teams): where to run, or INF when the normal fighting / roaming applies. Top priority is the enemy
+## carrying our flag, then bringing a flag home; then fetching a lying flag (ours to return, theirs to grab) when close;
+## one bot in three raids the enemy base.
+func _flag_goal(player: Player) -> Vector2:
+	if arena == null or player.team == 0:
+		return Vector2.INF
+	var st: MatchState = arena.match_state
+	if st.mode != MatchRules.Mode.TEAMS or st.phase != MatchState.Phase.PLAYING or st.intermission > 0.0:
+		return Vector2.INF
+	var pos: Vector2 = player.global_position
+	var own: int = player.team
+	var enemy: int = MatchRules.other_team(own)
+	if player.flag_carrier:
+		return arena.flag_base(own)
+	if st.flag_state[own] == MatchState.Flag.CARRIED:
+		var thief: Player = arena.get_player(st.flag_carrier[own])
+		if thief != null and not thief.dead:
+			return thief.global_position
+	if st.flag_state[own] == MatchState.Flag.DROPPED and pos.distance_to(st.flag_pos[own]) < Constants.BOT_FLAG_RANGE:
+		return st.flag_pos[own]
+	if st.flag_state[enemy] == MatchState.Flag.DROPPED and pos.distance_to(st.flag_pos[enemy]) < Constants.BOT_FLAG_RANGE:
+		return st.flag_pos[enemy]
+	if st.flag_state[enemy] == MatchState.Flag.HOME:
+		var base: Vector2 = arena.flag_base(enemy)
+		if (player.player_id + st.round_number) % Constants.BOT_RAID_EVERY == 0 or pos.distance_to(base) < Constants.BOT_FLAG_RANGE:
+			return base
+	return Vector2.INF
+
+
 func _roam_move(player: Player, pos: Vector2, low_hp: bool) -> Vector2:
 	var goal: Vector2 = _goal
 	if _since_target < INVESTIGATE_TIME and not low_hp:
@@ -512,7 +550,7 @@ func _pick_goal(player: Player, pos: Vector2) -> void:
 		var best: Variant = null
 		var best_d: float = INF
 		for p: Player in arena.players:
-			if p == player or p.dead:
+			if player.is_ally(p) or p.dead:
 				continue
 			var d: float = pos.distance_squared_to(p.global_position)
 			if d < best_d:
@@ -561,6 +599,11 @@ func _blocked(player: Player, dir: Vector2) -> bool:
 	return not space.intersect_ray(_wall_query).is_empty()
 
 
+func _is_ally_id(player: Player, id: int) -> bool:
+	var other: Player = arena.get_player(id) if arena != null else null
+	return other != null and player.is_ally(other)
+
+
 ## The earliest enemy projectile that will hit us soon: returns the sidestep direction (ZERO if none) and fills
 ## _threat_time / _threat_big.
 func _scan_threat(player: Player) -> Vector2:
@@ -572,7 +615,7 @@ func _scan_threat(player: Player) -> Vector2:
 	var pos: Vector2 = player.global_position
 	var vitals: float = float(player.stats.hp + player.stats.armor)
 	for s: ProjectilePool.Slot in pool.debug_slots():
-		if not s.active or s.attacker_id == player.player_id:
+		if not s.active or s.attacker_id == player.player_id or _is_ally_id(player, s.attacker_id):
 			continue
 		var reach: float = Constants.PLAYER_RADIUS + s.radius + s.splash_radius * 0.6 + DODGE_MARGIN
 		var side: Vector2 = dodge_dir(pos, s.pos, s.vel, reach, DODGE_HORIZON)
@@ -622,10 +665,12 @@ func _nearest_visible_enemy(player: Player) -> Variant:
 	var best_score: float = Constants.BOT_SIGHT_RANGE * Constants.BOT_SIGHT_RANGE
 	var best_player: Player = null
 	for p: Player in arena.players:
-		if p == player or p.dead:
+		if player.is_ally(p) or p.dead:
 			continue
 		var vit: float = float(p.stats.hp + p.stats.armor) / float(p.stats.max_hp + p.stats.max_armor)
 		var w: float = 1.0 - TARGET_WEAK_BIAS * (1.0 - vit)
+		if p.flag_carrier:  # whoever holds a flag is the target
+			w *= Constants.BOT_CARRIER_TARGET_WEIGHT
 		if p == _prev_target_ref:
 			w *= TARGET_STICK
 		var spots: PackedVector2Array = p.clone_points()

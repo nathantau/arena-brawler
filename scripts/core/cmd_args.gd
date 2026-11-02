@@ -10,7 +10,7 @@ extends RefCounted
 ##   --net-debug                      print net stats periodically
 ##   --touch                          show touch controls on desktop
 ##   --notch                          fake an iPhone's safe-area insets on desktop (UI layout checks)
-##   --mode duel|ffa                  (server / offline) starting match mode, default ffa
+##   --mode duel|ffa|teams            (server / offline) starting match mode, default ffa
 ##   --time-limit S                   (server / offline) match length in seconds (dev/testing)
 ##   --arena N                        (server / offline) starting arena index (ArenaLayouts.NAMES); omitted = random
 ##   --character ID                   (client / offline) pick a character, e.g. warden
@@ -81,7 +81,8 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 			"--net-debug":
 				a.net_debug = true
 			"--mode":
-				a.match_mode = MatchRules.Mode.DUEL if next == "duel" else MatchRules.Mode.FFA
+				a.match_mode = MatchRules.Mode.DUEL if next == "duel" else MatchRules.Mode.TEAMS if next == "teams" \
+					else MatchRules.Mode.FFA
 				i += 1
 			"--character":
 				a.character = StringName(next)

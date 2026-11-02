@@ -10,7 +10,7 @@ enum Mode { OFF, HOST, BROWSE }
 
 const MAGIC: String = "BRWL"
 ## Bump when the net protocol changes: other versions are listed greyed-out ("different version").
-const VERSION: int = 6  # 6: Smoke Bomb makes the user invisible (no more cloud zone); 5: five more specials (new skill ids on the wire); 4: barrier hits in snapshots (StateField.SKILL_HITS); 3: three special slots (InputFrame special2, 3 skills per snapshot); 2: snapshots arrive as several packets per tick
+const VERSION: int = 8  # 8: Teams capture the flag (flag state in the match state) + 1.5x HP; 7: Teams 3v3 mode (match state carries teams / round score, rpc_request_team, 6 seats); 6: Smoke Bomb makes the user invisible (no more cloud zone); 5: five more specials (new skill ids on the wire); 4: barrier hits in snapshots (StateField.SKILL_HITS); 3: three special slots (InputFrame special2, 3 skills per snapshot); 2: snapshots arrive as several packets per tick
 const DISCOVERY_PORT: int = 7778
 const ANNOUNCE_INTERVAL_S: float = 1.0
 const EXPIRY_S: float = 3.0
@@ -112,7 +112,7 @@ static func prune(table: Dictionary, now: float) -> bool:
 
 ## "Alice · FFA · Pit · 2/4" (+ " · playing" when in a match).
 static func label(info: Dictionary) -> String:
-	var mode_name: String = "Duel" if int(info["mode"]) == MatchRules.Mode.DUEL else "FFA"
+	var mode_name: String = MatchRules.SHORT_NAMES[clampi(int(info["mode"]), 0, MatchRules.SHORT_NAMES.size() - 1)]
 	var a: int = int(info["arena"])
 	var arena_name: String = ArenaLayouts.NAMES[a] if a >= 0 and a < ArenaLayouts.count() else "?"
 	var s: String = "%s · %s · %s · %d/%d" % [info["name"], mode_name, arena_name, info["players"], info["max"]]
@@ -231,7 +231,7 @@ func _packet() -> PackedByteArray:
 	var info: Dictionary = {
 		"name": device_name(), "port": _port, "mode": st.mode, "arena": st.arena_index,
 		"players": _arena.players.size(),
-		"max": Constants.DUEL_PLAYERS if st.mode == MatchRules.Mode.DUEL else Constants.FFA_MAX_PLAYERS,
+		"max": MatchRules.max_players(st.mode),
 		"playing": st.phase != MatchState.Phase.LOBBY,
 	}
 	return encode(info)

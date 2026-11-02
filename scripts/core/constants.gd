@@ -132,6 +132,27 @@ const DUEL_PLAYERS: int = 2
 const FFA_MAX_PLAYERS: int = 4
 const DUEL_KILL_TARGET: int = 5
 const FFA_KILL_TARGET: int = 10
+## Teams 3v3: round wins needed to take the match, players per team, lives per round (1 respawn), round clock,
+## and the pause between rounds (everyone is reset at their team's spawns).
+const TEAMS_ROUND_TARGET: int = 5
+const TEAM_SIZE: int = 3
+const TEAMS_MAX_PLAYERS: int = TEAM_SIZE * 2
+const TEAMS_LIVES: int = 2
+const TEAMS_ROUND_TIME: float = 90.0
+const TEAMS_INTERMISSION: float = 3.0
+## Teams: everyone's max HP is multiplied by this (Duel / FFA stay as they are).
+const TEAMS_HP_SCALE: float = 1.5
+## Capture the flag: touch range of a flag / base pad, how long a dropped flag lies before it flies home, and the
+## carrier's move speed multiplier.
+const FLAG_TOUCH_RADIUS: float = 56.0
+const FLAG_RETURN_TIME: float = 8.0
+const FLAG_CARRIER_SPEED_SCALE: float = 0.85
+## Bots: how near a lying flag must be for them to fetch it, how near the carrier's pursuers stop closing in, how much
+## likelier an enemy flag carrier is to be picked as the target (score multiplier), and which bots raid (id + round) % N == 0.
+const BOT_FLAG_RANGE: float = 700.0
+const BOT_CARRIER_CLOSE: float = 200.0
+const BOT_CARRIER_TARGET_WEIGHT: float = 0.2
+const BOT_RAID_EVERY: int = 3
 const MATCH_TIME_LIMIT: float = 180.0
 const MATCH_COUNTDOWN: float = 3.0
 const MATCH_RESULTS_TIME: float = 10.0
@@ -143,7 +164,7 @@ const PHYSICS_DT: float = 1.0 / PHYSICS_FPS
 
 # --- Networking ---
 const DEFAULT_PORT: int = 7777
-const MAX_CLIENTS: int = 4
+const MAX_CLIENTS: int = 6
 ## Channel count is set by the client only: Godot 4.7's create_server() passes its channel
 ## argument into ENet's *incoming bandwidth* slot, so the server would advertise ~7 B/s and
 ## clients would throttle away most of their unreliable input packets.

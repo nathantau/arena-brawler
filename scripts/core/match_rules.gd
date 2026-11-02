@@ -2,9 +2,18 @@ class_name MatchRules
 extends RefCounted
 ## Pure match rules: per-mode settings, who plays, when a match may start, ranking and winner.
 
-enum Mode { DUEL, FFA }
+enum Mode { DUEL, FFA, TEAMS }
 
-const MODE_NAMES: Array[String] = ["Duel 1v1", "Free-for-all"]
+const MODE_NAMES: Array[String] = ["Duel 1v1", "Free-for-all", "Teams 3v3"]
+const SHORT_NAMES: Array[String] = ["Duel", "FFA", "3v3"]
+## Team ids (0 = unassigned / no teams).
+const TEAM_A: int = 1
+const TEAM_B: int = 2
+const TEAM_NAMES: Array[String] = ["", "Team A", "Team B"]
+## Why a round ended (MatchState.round_reason).
+enum Reason { NONE, WIPE, TIMEOUT, CAPTURE }
+## round_result() while both teams still have someone in.
+const ROUND_ON: int = -1
 
 
 static func is_valid_mode(value: int) -> bool:
@@ -12,11 +21,86 @@ static func is_valid_mode(value: int) -> bool:
 
 
 static func max_players(mode: Mode) -> int:
-	return Constants.DUEL_PLAYERS if mode == Mode.DUEL else Constants.FFA_MAX_PLAYERS
+	match mode:
+		Mode.DUEL:
+			return Constants.DUEL_PLAYERS
+		Mode.TEAMS:
+			return Constants.TEAMS_MAX_PLAYERS
+	return Constants.FFA_MAX_PLAYERS
 
 
+## Kills to win (Duel / FFA); round wins to win in Teams.
 static func kill_target(mode: Mode) -> int:
-	return Constants.DUEL_KILL_TARGET if mode == Mode.DUEL else Constants.FFA_KILL_TARGET
+	match mode:
+		Mode.DUEL:
+			return Constants.DUEL_KILL_TARGET
+		Mode.TEAMS:
+			return Constants.TEAMS_ROUND_TARGET
+	return Constants.FFA_KILL_TARGET
+
+
+static func other_team(team: int) -> int:
+	return TEAM_B if team == TEAM_A else TEAM_A
+
+
+static func members(teams: Dictionary, team: int) -> Array[int]:
+	var out: Array[int] = []
+	for id: int in teams:
+		if teams[id] == team:
+			out.append(id)
+	return out
+
+
+## Full team assignment for `participants`: picks (id -> team) are kept up to half the roster per team (rounded up),
+## so a lopsided lobby can't leave a team empty; everyone else joins the smaller team (ties go to A), in order.
+static func assign_teams(participants: Array[int], picks: Dictionary) -> Dictionary[int, int]:
+	var out: Dictionary[int, int] = {}
+	var counts: Array[int] = [0, 0, 0]
+	var cap: int = (participants.size() + 1) / 2
+	for id: int in participants:
+		var t: int = picks.get(id, 0)
+		if (t == TEAM_A or t == TEAM_B) and counts[t] < cap:
+			out[id] = t
+			counts[t] += 1
+	for id: int in participants:
+		if not out.has(id):
+			var t: int = TEAM_A if counts[TEAM_A] <= counts[TEAM_B] else TEAM_B
+			out[id] = t
+			counts[t] += 1
+	return out
+
+
+## ROUND_ON while both teams have a player with lives left; else the team still standing (0 if both are out).
+static func round_result(teams: Dictionary, lives: Dictionary) -> int:
+	var in_a: bool = false
+	var in_b: bool = false
+	for id: int in teams:
+		if lives.get(id, 0) > 0:
+			in_a = in_a or teams[id] == TEAM_A
+			in_b = in_b or teams[id] == TEAM_B
+	if in_a and in_b:
+		return ROUND_ON
+	return TEAM_A if in_a else TEAM_B if in_b else 0
+
+
+## Round clock ran out: the team with more players alive wins, then more total HP; a full tie is 0 (no point).
+## `hp` = id -> hp of every player alive right now. `carrying` = teams currently carrying the enemy flag (not dropped):
+## when exactly one team does, it wins before any of that.
+static func timeout_winner(teams: Dictionary, hp: Dictionary, carrying: Array[int] = []) -> int:
+	if carrying.size() == 1:
+		return carrying[0]
+	var alive: Array[int] = [0, 0, 0]
+	var total: Array[int] = [0, 0, 0]
+	for id: int in hp:
+		var t: int = teams.get(id, 0)
+		if t == TEAM_A or t == TEAM_B:
+			alive[t] += 1
+			total[t] += hp[id]
+	if alive[TEAM_A] != alive[TEAM_B]:
+		return TEAM_A if alive[TEAM_A] > alive[TEAM_B] else TEAM_B
+	if total[TEAM_A] != total[TEAM_B]:
+		return TEAM_A if total[TEAM_A] > total[TEAM_B] else TEAM_B
+	return 0
 
 
 ## Humans always get a seat; bots fill the rest up to the mode's player count.
@@ -86,6 +170,8 @@ static func winner(ranking: Array[int], scores: ScoreBoard) -> int:
 
 
 static func kill_target_reached(ids: Array[int], scores: ScoreBoard, mode: Mode) -> bool:
+	if mode == Mode.TEAMS:
+		return false
 	var target: int = kill_target(mode)
 	for id: int in ids:
 		if scores.kills_of(id) >= target:

@@ -250,7 +250,7 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 	var reach: float = weapon.melee_range + Constants.PLAYER_RADIUS
 	if weapon.reflects:
 		for s: Slot in _slots:
-			if s.active and s.attacker_id != owner_id and s.pos.distance_to(origin) <= reach + s.radius \
+			if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= reach + s.radius \
 					and CombatRules.in_arc(origin, facing, s.pos, weapon.melee_arc_deg):
 				s.vel = facing * s.vel.length()
 				s.attacker_id = owner_id
@@ -270,7 +270,7 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 			continue
 		var target := collider as Player
 		if target != null:
-			if target.player_id == owner_id or not target.can_be_hit() \
+			if _ally(owner_id, target) or not target.can_be_hit() \
 					or not AutoAim.has_line_of_sight(space, _los_query, origin, target.global_position):
 				continue
 			var push: Vector2 = (target.global_position - origin).normalized() * weapon.knockback
@@ -285,7 +285,7 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 ## peer). `damage` > 0 (authoritative only): players and crates in reach take it, pushed away from `origin`.
 func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
 	for s: Slot in _slots:
-		if s.active and s.attacker_id != owner_id and s.pos.distance_to(origin) <= radius + s.radius:
+		if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= radius + s.radius:
 			s.vel = (s.pos - origin).normalized() * s.vel.length()
 			s.attacker_id = owner_id
 			s.life = maxf(s.life, Constants.REFLECT_MIN_LIFE)
@@ -295,7 +295,7 @@ func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int,
 	for result: Dictionary in _overlaps(space, origin, radius, Constants.LAYER_PLAYERS | Constants.LAYER_CRATES):
 		var target := result.collider as Player
 		if target != null:
-			if target.player_id == owner_id or not target.can_be_hit() \
+			if _ally(owner_id, target) or not target.can_be_hit() \
 					or not AutoAim.has_line_of_sight(space, _los_query, origin, target.global_position):
 				continue
 			var push: Vector2 = (target.global_position - origin).normalized() * knockback
@@ -321,14 +321,14 @@ func bloom(owner_id: int, at: Vector2, radius: float, amount: int) -> void:
 func gust(owner_id: int, seq: int, origin: Vector2, dir: Vector2, reach: float, half_angle: float, damage: int,
 		knockback: float) -> void:
 	for s: Slot in _slots:
-		if s.active and s.attacker_id != owner_id and _in_cone(s.pos, origin, dir, reach + s.radius, half_angle):
+		if s.active and _is_enemy_shot(s, owner_id) and _in_cone(s.pos, origin, dir, reach + s.radius, half_angle):
 			s.active = false
 			_add_impact(s.pos, s.radius, s.color)
 	if not authoritative or damage <= 0:
 		return
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	for target: Player in targets:
-		if target.player_id == owner_id or not target.can_be_hit() \
+		if _ally(owner_id, target) or not target.can_be_hit() \
 				or not _in_cone(target.global_position, origin, dir, reach, half_angle) \
 				or not AutoAim.has_line_of_sight(space, _los_query, origin, target.global_position):
 			continue
@@ -354,7 +354,7 @@ func _destroy_shots(owner_id: int, origin: Vector2, radius: float) -> void:
 
 ## Whether `s` is an enemy of `owner_id` (the one place to widen for teams: treat teammates' shots as friendly).
 func _is_enemy_shot(s: Slot, owner_id: int) -> bool:
-	return s.attacker_id != owner_id
+	return not _same_team(s.attacker_id, owner_id)
 
 
 func _slam(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData) -> void:
@@ -423,7 +423,7 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 			break
 		var collider: Object = hit.collider
 		var target := collider as Player
-		if target != null and target.player_id != s.attacker_id and target.can_be_hit():
+		if target != null and not _ally(s.attacker_id, target) and target.can_be_hit():
 			if target.ward() != null:
 				_catch(s, hit.position, target.ward())
 				return
@@ -478,7 +478,7 @@ func _steer(s: Slot, delta: float) -> void:
 	var best: Player = null
 	var best_d: float = INF
 	for p: Player in targets:
-		if p.player_id == s.attacker_id or not p.can_be_hit() or p.is_hidden():
+		if _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden():
 			continue
 		var d: float = s.pos.distance_squared_to(p.global_position)
 		if d < best_d:
@@ -490,13 +490,32 @@ func _steer(s: Slot, delta: float) -> void:
 	s.vel = s.vel.rotated(clampf(turn, -s.homing * delta, s.homing * delta))
 
 
+## True if `target` is the attacker or on the attacker's team (no friendly fire; team 0 = no team).
+func _ally(attacker_id: int, target: Player) -> bool:
+	return target.player_id == attacker_id or _same_team(attacker_id, target.player_id)
+
+
+## Two different player ids on one real team (or the same id).
+func _same_team(a_id: int, b_id: int) -> bool:
+	if a_id == b_id:
+		return true
+	var team_a: int = 0
+	var team_b: int = 0
+	for p: Player in targets:
+		if p.player_id == a_id:
+			team_a = p.team
+		elif p.player_id == b_id:
+			team_b = p.team
+	return team_a != 0 and team_a == team_b
+
+
 ## Owners pass through their own shield; i-framing / dead players don't block shots.
 func _passes_through(collider: Object, attacker_id: int) -> bool:
 	var shield := collider as ShieldWall
 	if shield != null:
-		return shield.owner_id == attacker_id
+		return _same_team(shield.owner_id, attacker_id)
 	var p := collider as Player
-	return p != null and (p.player_id == attacker_id or not p.can_be_hit())
+	return p != null and (_ally(attacker_id, p) or not p.can_be_hit())
 
 
 ## Re-cast the rest of the segment without this body. Rare path, so the alloc is fine.
@@ -564,7 +583,7 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 		var target := collider as Player
 		if target != null:
 			# No self-damage: rocket-jumping would fight client prediction.
-			if target.player_id == s.attacker_id or not target.can_be_hit() \
+			if _ally(s.attacker_id, target) or not target.can_be_hit() \
 					or not AutoAim.has_line_of_sight(space, _los_query, at, target.global_position):
 				continue
 			var offset: Vector2 = target.global_position - at
@@ -585,7 +604,7 @@ func strike(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int
 		return
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	for target: Player in targets:
-		if target.player_id == owner_id or not target.can_be_hit() \
+		if _ally(owner_id, target) or not target.can_be_hit() \
 				or target.global_position.distance_to(origin) > radius \
 				or not AutoAim.has_line_of_sight(space, _los_query, origin, target.global_position):
 			continue
@@ -600,7 +619,7 @@ func burn_segment(owner_id: int, seq: int, from: Vector2, to: Vector2, radius: f
 	if not authoritative:
 		return
 	for target: Player in targets:
-		if target.player_id == owner_id or not target.can_be_hit():
+		if _ally(owner_id, target) or not target.can_be_hit():
 			continue
 		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(target.global_position, from, to)
 		if closest.distance_to(target.global_position) <= radius:

@@ -89,6 +89,12 @@ func rpc_request_mode(mode: int) -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable", CH_EVENTS)
+func rpc_request_team(team: int) -> void:
+	if server != null:
+		server.on_request_team(multiplayer.get_remote_sender_id(), team)
+
+
+@rpc("any_peer", "call_remote", "reliable", CH_EVENTS)
 func rpc_request_arena(index: int) -> void:
 	if server != null:
 		server.on_request_arena(multiplayer.get_remote_sender_id(), index)

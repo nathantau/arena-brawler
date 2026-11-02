@@ -34,6 +34,12 @@ const BANNER_TIME: float = 1.1
 const BANNER_Y: float = 0.28
 const BANNER_POP_TIME: float = 0.14
 ## Last seconds of a match: the clock turns red, pulses and ticks.
+const FLAG_LINE_Y: float = 118.0
+const FLAG_ARROW_INSET: float = 46.0
+const FLAG_ARROW_SIZE: float = 15.0
+const COLOR_FLAG_ENEMY: Color = Color(1.0, 0.35, 0.3)
+const COLOR_ARROW_OUTLINE: Color = Color(0.1, 0.1, 0.18)
+const COLOR_FLAG_ALLY: Color = Color(0.4, 0.7, 1.0)
 const URGENT_SECONDS: int = 10
 const COLOR_URGENT: Color = Color(1.0, 0.45, 0.4)
 ## Red edge glow at low HP (stepped bands, pixel style): fraction of max HP it starts at, band count and width.
@@ -240,6 +246,7 @@ func _draw() -> void:
 			HORIZONTAL_ALIGNMENT_RIGHT, size.x - STATUS_RIGHT_MARGIN)
 	_draw_feed()
 	_draw_messages()
+	_draw_flags()
 	_draw_banners()
 
 
@@ -371,6 +378,10 @@ func _bar(c: CanvasItem, pos: Vector2, icon: String, value: int, max_value: int,
 
 ## Top-centre pills: kills and deaths, then the clock (or warm-up) and the kill target.
 func _score_pill() -> Rect2:
+	var st: MatchState = arena.match_state
+	if _teams_hud(st):
+		var w: float = UiStyle.text_width(_round_score_text(), UiStyle.SIZE_HEADING, true) + PILL_PAD * 2.0
+		return Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, PILL_H))
 	var id: int = player.player_id
 	var item_w: float = ROW_H + 4.0
 	var w: float = PILL_PAD * 2.0 + item_w * 2.0 + UiStyle.text_width(str(scores.kills_of(id)), UiStyle.SIZE_HEADING, true) \
@@ -378,13 +389,35 @@ func _score_pill() -> Rect2:
 	return Rect2(Vector2((size.x - w) * 0.5, 0.0), Vector2(w, PILL_H))
 
 
+func _teams_hud(st: MatchState) -> bool:
+	return st.mode == MatchRules.Mode.TEAMS and st.phase != MatchState.Phase.LOBBY
+
+
+## Teams: "2 – 1", your team first.
+func _round_score_text() -> String:
+	var st: MatchState = arena.match_state
+	var mine: int = player.team if player.team != 0 else MatchRules.TEAM_A
+	return "%d – %d" % [st.round_scores[mine], st.round_scores[MatchRules.other_team(mine)]]
+
+
 func _draw_score(c: CanvasItem) -> void:
+	var st: MatchState = arena.match_state
+	var r: Rect2 = _score_pill()
+	c.draw_style_box(_panel, r)
+	var clock: String = ""
+	var urgent: bool = false
+	if _teams_hud(st):
+		UiStyle.draw_text(c, Vector2(r.position.x, r.get_center().y + UiStyle.SIZE_HEADING * 0.35), _round_score_text(),
+			UiStyle.SIZE_HEADING, UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, true)
+		if st.phase == MatchState.Phase.PLAYING:
+			clock = "Round %d · %d:%02d" % [st.round_number, ceili(st.time_left) / 60, ceili(st.time_left) % 60]
+			urgent = st.intermission <= 0.0 and _tick_clock(st)
+		_draw_clock(c, r, st, clock, urgent)
+		return
 	var id: int = player.player_id
 	var kills: String = str(scores.kills_of(id))
 	var deaths: String = str(scores.deaths_of(id))
 	var item_w: float = ROW_H + 4.0
-	var r: Rect2 = _score_pill()
-	c.draw_style_box(_panel, r)
 	var x: float = r.position.x + PILL_PAD
 	var mid: float = r.position.y + PILL_H * 0.5
 	for pair: Array in [["icon_kills", kills, UiStyle.C_WHITE], ["icon_deaths", deaths, UiStyle.C_STEEL]]:
@@ -393,19 +426,25 @@ func _draw_score(c: CanvasItem) -> void:
 		UiStyle.draw_text(c, Vector2(x, mid + UiStyle.SIZE_HEADING * 0.35), pair[1], UiStyle.SIZE_HEADING, pair[2],
 			HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
 		x += UiStyle.text_width(pair[1], UiStyle.SIZE_HEADING, true) + PILL_ITEM_GAP
-
-	var st: MatchState = arena.match_state
-	var clock: String
-	var urgent: bool = false
 	if st.phase == MatchState.Phase.PLAYING:
-		var t: int = ceili(st.time_left)
-		clock = "%d:%02d · first to %d" % [t / 60, t % 60, MatchRules.kill_target(st.mode)]
-		urgent = t <= URGENT_SECONDS
-		if urgent and t != _last_second and arena.sfx != null:
-			arena.sfx.play(&"tick")
-		_last_second = t
+		clock = "%d:%02d · first to %d" % [ceili(st.time_left) / 60, ceili(st.time_left) % 60, MatchRules.kill_target(st.mode)]
+		urgent = _tick_clock(st)
 	elif st.phase == MatchState.Phase.LOBBY:
 		clock = "Warm-up"
+	_draw_clock(c, r, st, clock, urgent)
+
+
+## Last-seconds tick sound once per second; true while the clock is urgent.
+func _tick_clock(st: MatchState) -> bool:
+	var t: int = ceili(st.time_left)
+	var urgent: bool = t <= URGENT_SECONDS
+	if urgent and t != _last_second and arena.sfx != null:
+		arena.sfx.play(&"tick")
+	_last_second = t
+	return urgent
+
+
+func _draw_clock(c: CanvasItem, r: Rect2, st: MatchState, clock: String, urgent: bool) -> void:
 	if clock != "":
 		var y: float = r.end.y + UiStyle.SIZE_SMALL + 6.0
 		var cw: float = UiStyle.text_width(clock, UiStyle.SIZE_SMALL)
@@ -418,6 +457,79 @@ func _draw_score(c: CanvasItem) -> void:
 			cc = COLOR_URGENT
 			y += (cf - UiStyle.SIZE_SMALL) * 0.5
 		UiStyle.draw_text(c, Vector2(0.0, y), clock, cf, cc, HORIZONTAL_ALIGNMENT_CENTER, size.x)
+
+
+## Capture the flag (Teams): a status line under the clock, and an arrow on the screen edge toward the enemy flag when it
+## is off screen (toward your own base while you carry it).
+func _draw_flags() -> void:
+	var st: MatchState = arena.match_state
+	if st.mode != MatchRules.Mode.TEAMS or st.phase != MatchState.Phase.PLAYING or player.team == 0:
+		return
+	var own: int = player.team
+	var enemy: int = MatchRules.other_team(own)
+	var line: String = ""
+	var color: Color = UiStyle.C_WHITE
+	var target := Vector2.INF
+	var target_color: Color = COLOR_FLAG_ENEMY
+	if player.flag_carrier:
+		line = "You have the flag! Run to your base"
+		color = UiStyle.C_YELLOW
+		target = arena.flag_base(own)
+		target_color = UiStyle.C_YELLOW
+	else:
+		if st.flag_state[own] == MatchState.Flag.CARRIED:
+			line = "Your flag taken!"
+			color = COLOR_FLAG_ENEMY
+		elif st.flag_state[own] == MatchState.Flag.DROPPED:
+			line = "Your flag dropped: touch it to return it"
+			color = UiStyle.C_YELLOW
+		elif st.flag_state[enemy] == MatchState.Flag.CARRIED:
+			line = "Your team has the flag!"
+			color = COLOR_FLAG_ALLY
+		elif st.flag_state[enemy] == MatchState.Flag.DROPPED:
+			line = "Enemy flag dropped!"
+			color = UiStyle.C_YELLOW
+		if st.flag_state[enemy] != MatchState.Flag.CARRIED or st.flag_carrier[enemy] != player.player_id:
+			target = _flag_spot(st, enemy)
+	if line != "" and st.intermission <= 0.0:
+		UiStyle.draw_text(self, Vector2(0.0, FLAG_LINE_Y), line, UiStyle.SIZE_BODY, color, HORIZONTAL_ALIGNMENT_CENTER, size.x, true)
+	if target != Vector2.INF and st.intermission <= 0.0:
+		_draw_edge_arrow(target, target_color)
+
+
+## Where a team's flag is now: carried (on its carrier), lying, or at its base.
+func _flag_spot(st: MatchState, team: int) -> Vector2:
+	match st.flag_state[team]:
+		MatchState.Flag.CARRIED:
+			var carrier: Player = arena.get_player(st.flag_carrier[team])
+			return carrier.global_position if carrier != null else arena.flag_base(team)
+		MatchState.Flag.DROPPED:
+			return st.flag_pos[team]
+	return arena.flag_base(team)
+
+
+## A triangle on the screen edge pointing at the world point `at`, only while it is off screen.
+func _draw_edge_arrow(at: Vector2, color: Color) -> void:
+	var inv: Transform2D = get_global_transform().affine_inverse()
+	var local: Vector2 = inv * (arena.get_global_transform_with_canvas() * at)
+	var box := Rect2(Vector2.ZERO, size).grow(-FLAG_ARROW_INSET)
+	if box.has_point(local):
+		return
+	var centre: Vector2 = size * 0.5
+	var dir: Vector2 = (local - centre).normalized()
+	# Where the ray from the centre leaves the box, so the arrow keeps pointing at the target.
+	var t: float = INF
+	if absf(dir.x) > 0.001:
+		t = minf(t, ((box.end.x if dir.x > 0.0 else box.position.x) - centre.x) / dir.x)
+	if absf(dir.y) > 0.001:
+		t = minf(t, ((box.end.y if dir.y > 0.0 else box.position.y) - centre.y) / dir.y)
+	var spot: Vector2 = centre + dir * t
+	var side: Vector2 = dir.orthogonal()
+	var tip: Vector2 = spot + dir * FLAG_ARROW_SIZE
+	var back: Vector2 = spot - dir * FLAG_ARROW_SIZE * 0.5
+	var pts := PackedVector2Array([tip, back + side * FLAG_ARROW_SIZE * 0.8, back - side * FLAG_ARROW_SIZE * 0.8])
+	draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[0]]), COLOR_ARROW_OUTLINE, 5.0)
+	draw_colored_polygon(pts, color)
 
 
 func _draw_messages() -> void:
@@ -440,6 +552,8 @@ func _draw_messages() -> void:
 		var msg: String
 		if st.may_respawn(player.player_id):
 			msg = "Respawning in %.1f" % maxf(0.0, player.respawn_timer)
+		elif st.mode == MatchRules.Mode.TEAMS and st.is_participant(player.player_id):
+			msg = "Out this round"
 		else:
 			msg = "Spectating · you'll play next match"
 		var w: float = UiStyle.text_width(msg, UiStyle.SIZE_HEADING, true) + PILL_PAD * 2.0

@@ -71,7 +71,7 @@ func _update_auto_target(player: Player) -> void:
 	_candidates.clear()
 	_positions.clear()
 	for p: Player in arena.players:
-		if p == player or p.dead:
+		if player.is_ally(p) or p.dead:
 			continue
 		if not p.is_hidden():
 			_candidates.append(p)
