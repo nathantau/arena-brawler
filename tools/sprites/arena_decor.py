@@ -336,7 +336,7 @@ class Deco:
             d.valve(vx * TILE + 8, d.h - TILE + 18 + thick // 2)
         d.valve(14, 12 * TILE + 5)
         d.valve(d.w - 14, 10 * TILE + 5)
-        for x0 in (2, 12, 22, 32):
+        for x0 in range(2, d.cw - 7, 10):
             d.cable(x0 * TILE + 6, (x0 + 5) * TILE, 15, 4)
             d.cable(x0 * TILE + 18, (x0 + 4) * TILE, d.h - TILE + 8, 3, SHADOW)
         for lx in lamps_x:
@@ -362,13 +362,17 @@ class Deco:
 
 LAMPS_X = (5, 15, 25, 35)
 LAMPS_Y = (6, 17)
+# the wide Teams layouts (56x28 tiles): lamps / drains / props at 180-degree symmetric spots
+WIDE_LAMPS_X = (7, 19, 36, 48)
+WIDE_LAMPS_Y = (7, 20)
 
 
 # ============================================================================================
-def pit(rows: list, ref: Image.Image) -> Deco:
+def pit(rows: list, ref: Image.Image, wide: bool = False) -> Deco:
     """Underground fighting pit: poured concrete slabs, cracks, oil + puddles, drains, a painted ring,
     hazard-striped edges, pipe runs and lamps along the walls, barrels / tyres / sandbags on the wall tops."""
-    d = Deco(rows, ref, 7)
+    d = Deco(rows, ref, 11 if wide else 7)
+    lamps_x, lamps_y = (WIDE_LAMPS_X, WIDE_LAMPS_Y) if wide else (LAMPS_X, LAMPS_Y)
     cx, cy = d.w // 2, d.h // 2
     d.mottle(55)
     d.speckle(5500)
@@ -403,24 +407,34 @@ def pit(rows: list, ref: Image.Image) -> Deco:
         x, y = d.free_spot(20)
         d.blob(x, y, d.rng.randint(8, 18), d.rng.randint(6, 12),
                lambda px, py, dd: d.put(px, py, MAROON) if BAYER[py % 4][px % 4] % 2 else None, edge=0.8)
-    for (tx, ty) in ((9, 5), (30, 18), (9, 18), (30, 5)):  # drains in symmetric pairs
+    for (tx, ty) in (((12, 5), (43, 22), (12, 22), (43, 5)) if wide else ((9, 5), (30, 18), (9, 18), (30, 5))):  # drains in symmetric pairs
         d.drain(tx * TILE + 16, ty * TILE + 16)
     d.puddle(330, 330, 30, 17)
-    d.puddle(1280 - 330, 768 - 330, 30, 17)
+    d.puddle(d.w - 330, d.h - 330, 30, 17)
     for _ in range(8):
         x, y = d.free_spot(30)
         d.puddle(x, y, d.rng.randint(14, 28), d.rng.randint(8, 15))
-    d.pools(LAMPS_X, LAMPS_Y)
+    d.pools(lamps_x, lamps_y)
 
-    d.wall_runs(LAMPS_X, LAMPS_Y, YELLOW, 6, (8, 21, 30), (11, 28))
-    d.barrel(9 * TILE + 8, d.h - TILE + 9, RED)
-    d.barrel(9 * TILE + 24, d.h - TILE + 15, ORANGE)
-    d.sandbags(19 * TILE + 8, d.h - TILE + 18)
-    d.tyres(30 * TILE, d.h - TILE + 14)
-    d.barrel(31 * TILE + 8, 10, ORANGE)
-    d.barrel(31 * TILE + 24, 14, RED)
-    d.sandbags(16 * TILE + 16, 14)
-    d.tyres(3 * TILE, 12)
+    d.wall_runs(lamps_x, lamps_y, YELLOW, 6, (11, 29, 42) if wide else (8, 21, 30), (15, 40) if wide else (11, 28))
+    if wide:
+        d.barrel(13 * TILE + 8, d.h - TILE + 9, RED)
+        d.barrel(13 * TILE + 24, d.h - TILE + 15, ORANGE)
+        d.sandbags(27 * TILE + 8, d.h - TILE + 18)
+        d.tyres(42 * TILE, d.h - TILE + 14)
+        d.barrel(41 * TILE + 8, 10, ORANGE)
+        d.barrel(41 * TILE + 24, 14, RED)
+        d.sandbags(27 * TILE + 16, 14)
+        d.tyres(4 * TILE, 12)
+    else:
+        d.barrel(9 * TILE + 8, d.h - TILE + 9, RED)
+        d.barrel(9 * TILE + 24, d.h - TILE + 15, ORANGE)
+        d.sandbags(19 * TILE + 8, d.h - TILE + 18)
+        d.tyres(30 * TILE, d.h - TILE + 14)
+        d.barrel(31 * TILE + 8, 10, ORANGE)
+        d.barrel(31 * TILE + 24, 14, RED)
+        d.sandbags(16 * TILE + 16, 14)
+        d.tyres(3 * TILE, 12)
     for (x, y) in d.top_cells():
         if 0 < x < d.cw - 1 and 0 < y < d.ch - 1 and d.rng.random() < 0.2:
             d.rebar(x * TILE + d.rng.randint(2, 18), y * TILE + 2)
@@ -432,11 +446,12 @@ def pit(rows: list, ref: Image.Image) -> Deco:
     return d
 
 
-def foundry(rows: list, ref: Image.Image) -> Deco:
+def foundry(rows: list, ref: Image.Image, wide: bool = False) -> Deco:
     """Steel foundry: scorched, oily plate with painted lanes, grates, scrap, steam pipes, furnace vents."""
-    d = Deco(rows, ref, 11)
+    d = Deco(rows, ref, 13 if wide else 11)
+    lamps_x, lamps_y = (WIDE_LAMPS_X, WIDE_LAMPS_Y) if wide else ((6, 14, 26, 34), LAMPS_Y)
     cx, cy = d.w // 2, d.h // 2
-    for lx in (6, 14, 26, 34):  # small solid soot stains under the furnace vents
+    for lx in lamps_x:  # small solid soot stains under the furnace vents
         for y in (TILE + 44, d.h - TILE - 44):
             d.blob(lx * TILE + 16 + d.rng.randint(-10, 10), y, d.rng.randint(14, 20), d.rng.randint(8, 11),
                    lambda px, py, dd: d.shade(px, py, False), edge=0.12)
@@ -469,7 +484,7 @@ def foundry(rows: list, ref: Image.Image) -> Deco:
         for k in range(1, 7):
             for t in (-k, k):
                 d.put(int(cx + ca * (70 - k) - sa * t), int(cy + sa * (70 - k) + ca * t), STEEL_D)
-    for (tx, ty) in ((3, 9), (36, 14), (11, 4), (28, 19), (19, 20), (20, 3)):
+    for (tx, ty) in (((4, 10), (51, 17), (14, 4), (41, 23), (27, 22), (28, 5), (22, 14), (33, 13)) if wide else ((3, 9), (36, 14), (11, 4), (28, 19), (19, 20), (20, 3))):
         d.drain(tx * TILE + 16, ty * TILE + 16, 30, 20)
     for _ in range(80):  # scrap, rivets, embers
         x, y = d.free_spot(10)
@@ -480,15 +495,23 @@ def foundry(rows: list, ref: Image.Image) -> Deco:
     for _ in range(14):
         x, y = d.free_spot(16)
         d.crack(x, y, d.rng.uniform(0, 6.28), d.rng.randint(14, 40), 1)
-    d.pools((6, 14, 26, 34), LAMPS_Y)
+    d.pools(lamps_x, lamps_y)
 
-    d.wall_runs((6, 14, 26, 34), LAMPS_Y, ORANGE, 7, (4, 11, 19, 29, 36), (7, 17, 24, 33))
-    d.barrel(14 * TILE + 8, d.h - TILE + 10, RED)
-    d.barrel(14 * TILE + 24, d.h - TILE + 16, YELLOW)
-    d.tyres(21 * TILE, d.h - TILE + 14)
-    d.barrel(24 * TILE + 8, 12, RED)
-    d.sandbags(6 * TILE + 16, d.h - TILE + 18)
-    d.tyres(28 * TILE, 12)
+    d.wall_runs(lamps_x, lamps_y, ORANGE, 7, (5, 14, 26, 38, 50) if wide else (4, 11, 19, 29, 36), (9, 21, 33, 45) if wide else (7, 17, 24, 33))
+    if wide:
+        d.barrel(19 * TILE + 8, d.h - TILE + 10, RED)
+        d.barrel(19 * TILE + 24, d.h - TILE + 16, YELLOW)
+        d.tyres(30 * TILE, d.h - TILE + 14)
+        d.barrel(36 * TILE + 8, 12, RED)
+        d.sandbags(8 * TILE + 16, d.h - TILE + 18)
+        d.tyres(40 * TILE, 12)
+    else:
+        d.barrel(14 * TILE + 8, d.h - TILE + 10, RED)
+        d.barrel(14 * TILE + 24, d.h - TILE + 16, YELLOW)
+        d.tyres(21 * TILE, d.h - TILE + 14)
+        d.barrel(24 * TILE + 8, 12, RED)
+        d.sandbags(6 * TILE + 16, d.h - TILE + 18)
+        d.tyres(28 * TILE, 12)
     for (x, y) in d.face_cells():
         if 0 < x < d.cw - 1 and y > 0:
             for _ in range(d.rng.randint(0, 2)):

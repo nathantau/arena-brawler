@@ -109,6 +109,8 @@ var projectiles: ProjectilePool
 var crates: CrateField
 var pickups: PickupField
 var layout_index: int = -1
+## The loaded layout is the wide Teams version (derived from match_state.mode, so clients agree with the server).
+var layout_wide: bool = false
 ## Runs the match (null on clients, where the server does); match_state is always set.
 var referee: MatchController
 var match_state: MatchState
@@ -207,12 +209,13 @@ func _ready() -> void:
 ## Build walls and crates for a layout. Authoritative callers then respawn players.
 func _load_layout(index: int) -> void:
 	layout_index = index
-	map = ArenaMap.parse(ArenaLayouts.get_layout(index), Constants.TILE_SIZE)
+	layout_wide = ArenaLayouts.is_wide(match_state.mode)
+	map = ArenaMap.parse(ArenaLayouts.get_layout(index, layout_wide), Constants.TILE_SIZE)
 	if _walls != null:
 		remove_child(_walls)
 		_walls.queue_free()
 	_build_walls()
-	_floor.setup(map, ArenaLayouts.THEMES[index])
+	_floor.setup(map, ArenaLayouts.THEMES[index], ArenaLayouts.decor_name(index, layout_wide))
 	for b: ArtBlock in _wall_blocks:
 		b.queue_free()
 	_ghosted.clear()
@@ -224,6 +227,11 @@ func _load_layout(index: int) -> void:
 	projectiles.clear()
 	for p: Player in players:
 		p.arena_bounds = play_area()
+
+
+## The lobby changed the arena or the mode (Teams swaps in the wide layouts).
+func _layout_stale() -> bool:
+	return match_state.arena_index != layout_index or ArenaLayouts.is_wide(match_state.mode) != layout_wide
 
 
 ## Where team `team`'s flag stands (and its capture pad).
@@ -416,7 +424,7 @@ func apply_match_state(a: Array) -> void:
 	var before: MatchState.Phase = match_state.phase
 	if not match_state.apply_array(a):
 		return
-	if match_state.arena_index != layout_index:
+	if _layout_stale():
 		_load_layout(match_state.arena_index)
 	if match_state.phase != before:
 		_on_phase_changed(match_state.phase)
@@ -993,7 +1001,7 @@ func _pick_spawn_for(who: Player) -> Vector2:
 func _on_referee_changed() -> void:
 	_apply_teams()
 	_apply_freeze()
-	if match_state.arena_index != layout_index:
+	if _layout_stale():
 		_load_layout(match_state.arena_index)
 		for p: Player in players:
 			p.sit_out()

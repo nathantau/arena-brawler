@@ -51,15 +51,18 @@ func _init() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 
-func setup(map: ArenaMap, theme: StringName) -> void:
+## `decor` names the decal / overlay art (the theme's own, or its wide Teams version); tiles always come from `theme`.
+func setup(map: ArenaMap, theme: StringName, decor: StringName = &"") -> void:
+	if decor == &"":
+		decor = theme
 	_rows = map.rows
 	_size = map.size
 	_crate_spots = map.crate_spots
 	_walls = map.walls
 	tiles = load(ART_DIR + "%s_tiles.png" % theme)
-	var decal_path: String = ART_DIR + "%s_decal.png" % theme
+	var decal_path: String = ART_DIR + "%s_decal.png" % decor
 	_decal = load(decal_path) if ResourceLoader.exists(decal_path) else null
-	var overlay_path: String = ART_DIR + "%s_overlay.png" % theme
+	var overlay_path: String = ART_DIR + "%s_overlay.png" % decor
 	_overlay = load(overlay_path) if ResourceLoader.exists(overlay_path) else null
 	queue_redraw()
 
