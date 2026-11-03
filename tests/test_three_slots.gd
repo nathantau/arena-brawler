@@ -1,5 +1,5 @@
 extends GutTest
-## Three special slots: defaults and eligibility per fighter, set_skill swaps, snapshot round-trip, loadout in snapshots.
+## Three skill slots (2 picked + the fixed ultimate): defaults and eligibility per fighter, set_skill swaps, snapshot round-trip.
 
 var characters: CharacterCatalog
 var catalog: WeaponCatalog
@@ -23,72 +23,77 @@ func test_slot_count_is_three() -> void:
 	assert_eq(_player(1, &"flicker").skills.size(), 3)
 
 
-func test_every_rotation_fighter_has_three_distinct_specials_by_default() -> void:
+func test_every_rotation_fighter_has_two_distinct_picks_by_default() -> void:
 	for c: CharacterData in characters.all():
 		var pool: Array[SkillData] = SkillCatalog.shared().specials_for(c)
-		if c.in_rotation:
-			assert_gte(pool.size(), 3, "%s has 3 eligible specials" % c.id)
 		var d: Array[SkillData] = Player.default_skills(c)
-		assert_eq(d.size(), 3, c.id)
+		assert_eq(d.size(), Constants.PICKED_SLOTS, c.id)
 		assert_eq(d[0], SkillCatalog.shared().dash(), "%s: Dash first" % c.id)
-		var second: SkillData = c.signature_skill if c.signature_skill != null else SkillCatalog.shared().get_skill(&"barrier")
-		assert_eq(d[1], second, "%s: signature second (the list leads with Dash and Barrier, defaults are unchanged)" % c.id)
-		assert_true(pool.has(second))
+		assert_true(pool.has(d[1]), "%s: second pick is pickable" % c.id)
+		assert_ne(d[1], c.ultimate, "%s: never the ultimate" % c.id)
 		if c.in_rotation:
-			assert_eq(d.find(d[2]), 2, "%s: third is distinct" % c.id)
+			assert_ne(d[0], d[1], "%s: distinct" % c.id)
+			assert_true(d[1].tags.has(c.id), "%s: the next own-tagged special" % c.id)
 
 
-func test_set_skill_swaps_with_any_other_slot() -> void:
+func test_ultimate_is_the_fixed_third_slot() -> void:
+	for c: CharacterData in characters.all():
+		var p: Player = _player(1, c.id)
+		assert_eq(p.skills[Constants.ULT_SLOT].data, c.ultimate if c.ultimate != null else Player.NO_ULT, c.id)
+
+
+func test_set_skill_swaps_with_the_other_pick() -> void:
 	var p: Player = _player(1, &"flicker")
 	var first: SkillData = p.skills[0].data
-	var third: SkillData = p.skills[2].data
-	p.set_skill(0, third)
-	assert_eq(p.skills[0].data, third)
-	assert_eq(p.skills[2].data, first, "slot 2 swapped, no duplicate")
-	var ids: Array = p.skills.map(func(s: CharacterSkill) -> StringName: return s.data.id)
-	for id: StringName in ids:
-		assert_eq(ids.count(id), 1)
+	var second: SkillData = p.skills[1].data
+	p.set_skill(0, second)
+	assert_eq(p.skills[0].data, second)
+	assert_eq(p.skills[1].data, first, "swapped, no duplicate")
 
 
 func test_switching_character_keeps_usable_picks_without_duplicates() -> void:
 	var p: Player = _player(1, &"flicker")
-	p.set_skill(2, SkillCatalog.shared().get_skill(&"barrier"))
+	p.set_skill(1, SkillCatalog.shared().get_skill(&"barrier"))
 	p.set_character(characters.get_character(&"wukong"))
-	assert_eq(p.skills[2].data.id, &"barrier", "generic pick kept in slot 2")
+	assert_eq(p.skills[1].data.id, &"barrier", "generic pick kept")
+	assert_eq(p.skills[2].data.id, &"great_ape", "the ultimate follows the fighter")
 	var ids: Array = p.skills.map(func(s: CharacterSkill) -> StringName: return s.data.id)
 	for id: StringName in ids:
 		assert_eq(ids.count(id), 1)
 
 
-func test_select_special_accepts_slot_two_only_in_range() -> void:
+func test_select_special_accepts_only_the_picked_slots_and_no_ultimates() -> void:
 	var arena := Arena.new(Arena.Mode.OFFLINE)
 	add_child_autofree(arena)
 	var me: Player = arena.add_player(1, 0, null)
-	arena.select_special(me, 2, &"barrier")
-	assert_eq(me.skills[2].data.id, &"barrier")
+	arena.select_special(me, 1, &"barrier")
+	assert_eq(me.skills[1].data.id, &"barrier")
 	var before: Array = me.skills.map(func(s: CharacterSkill) -> StringName: return s.data.id)
-	arena.select_special(me, 3, &"dash")
-	assert_eq(me.skills.map(func(s: CharacterSkill) -> StringName: return s.data.id), before, "slot 3 rejected")
+	arena.select_special(me, 2, &"dash")
+	assert_eq(me.skills.map(func(s: CharacterSkill) -> StringName: return s.data.id), before, "the ultimate slot is rejected")
+	arena.select_special(me, 0, me.character.ultimate.id)
+	assert_eq(me.skills.map(func(s: CharacterSkill) -> StringName: return s.data.id), before, "ultimates are not pickable")
 
 
 func test_snapshot_round_trip_carries_all_three_slots() -> void:
 	var a: Player = _player(1, &"flicker")
 	var b: Player = _player(2, &"flicker")
-	a.set_skill(2, SkillCatalog.shared().get_skill(&"barrier"))
 	a.skills[2].cooldown_remaining = 2.5
 	a.skills[2].active_remaining = 0.5
 	a._prev_skills = [false, true, true]
+	a.ult_charge = 0.4
 	assert_true(b.apply_state(a.capture_state(), catalog, characters))
 	for i: int in 3:
 		assert_eq(b.skills[i].data.id, a.skills[i].data.id, "slot %d id" % i)
 		assert_almost_eq(b.skills[i].cooldown_remaining, a.skills[i].cooldown_remaining, 0.0001)
 		assert_almost_eq(b.skills[i].active_remaining, a.skills[i].active_remaining, 0.0001)
 	assert_eq(b._prev_skills, a._prev_skills, "edge state of all three buttons")
+	assert_almost_eq(b.ult_charge, 0.4, 0.0001, "charge is in the snapshot")
 
 
 func test_third_button_is_edge_triggered_and_unaffected_by_dead_hold() -> void:
 	var p: Player = _player(1, &"flicker")
-	p.set_skill(2, SkillCatalog.shared().get_skill(&"overdrive") if p.character.can_use_skill(SkillCatalog.shared().get_skill(&"overdrive")) else SkillCatalog.shared().get_skill(&"barrier"))
+	p.ult_charge = 1.0
 	var f := InputFrame.new()
 	f.seq = 1
 	f.aim_vec = Vector2.RIGHT
@@ -103,9 +108,9 @@ func test_third_button_is_edge_triggered_and_unaffected_by_dead_hold() -> void:
 
 func test_swapping_slots_keeps_each_specials_cooldown() -> void:
 	var p: Player = _player(1, &"flicker")
-	var third: SkillData = p.skills[2].data
-	p.skills[2].cooldown_remaining = 4.0
-	p.set_skill(1, third)
-	assert_eq(p.skills[1].data, third)
-	assert_eq(p.skills[1].cooldown_remaining, 4.0, "the special that was cooling down is still cooling down")
-	assert_eq(p.skills[2].cooldown_remaining, 0.0)
+	var second: SkillData = p.skills[1].data
+	p.skills[1].cooldown_remaining = 4.0
+	p.set_skill(0, second)
+	assert_eq(p.skills[0].data, second)
+	assert_eq(p.skills[0].cooldown_remaining, 4.0, "the special that was cooling down is still cooling down")
+	assert_eq(p.skills[1].cooldown_remaining, 0.0)

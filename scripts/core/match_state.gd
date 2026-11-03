@@ -190,7 +190,7 @@ func apply_array(a: Array) -> bool:
 	var gp: Array = a[Field.GAPS]
 	for i: int in range(0, gp.size() - 1, 2):
 		if typeof(gp[i]) == TYPE_INT and typeof(gp[i + 1]) == TYPE_INT and gp[i + 1] != 0:
-			gaps[gp[i]] = gp[i + 1] & ((1 << Constants.SKILL_SLOTS) - 1)
+			gaps[gp[i]] = gp[i + 1] & ((1 << Constants.PICKED_SLOTS) - 1)
 	var fl: PackedFloat32Array = a[Field.FLAGS]
 	for i: int in 2:
 		var t: int = i + 1

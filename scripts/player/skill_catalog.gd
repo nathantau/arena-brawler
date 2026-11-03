@@ -12,6 +12,7 @@ const TOP_IDS: Array[StringName] = [&"dash", &"barrier"]
 var _by_id: Dictionary[StringName, SkillData] = {}
 
 static var _shared: SkillCatalog
+static var _ultimates: Array[SkillData] = []
 
 
 ## One catalog for everyone (players resolve their skills by id from it).
@@ -45,16 +46,25 @@ func dash() -> SkillData:
 func specials_for(c: CharacterData) -> Array[SkillData]:
 	var out: Array[SkillData] = []
 	for s: SkillData in _by_id.values():
-		if s.special and c.can_use_skill(s) and s != c.signature_skill and not TOP_IDS.has(s.id):
+		if s.special and c.can_use_skill(s) and s != c.signature_skill and not TOP_IDS.has(s.id) and not is_ultimate(s):
 			out.append(s)
 	out.sort_custom(func(a: SkillData, b: SkillData) -> bool: return String(a.id) < String(b.id))
-	if c.signature_skill != null:
+	if c.signature_skill != null and not is_ultimate(c.signature_skill):
 		out.push_front(c.signature_skill)
 	for i: int in range(TOP_IDS.size() - 1, -1, -1):
 		var top: SkillData = _by_id.get(TOP_IDS[i])
-		if top != null and top.special and c.can_use_skill(top) and top != c.signature_skill:
+		if top != null and top.special and c.can_use_skill(top) and top != c.signature_skill and not is_ultimate(top):
 			out.push_front(top)
 	return out
+
+
+## True if any fighter has `s` as its fixed ultimate: ultimates are never in a pick pool.
+func is_ultimate(s: SkillData) -> bool:
+	if _ultimates.is_empty():
+		for c: CharacterData in CharacterCatalog.load_all().all():
+			if c.ultimate != null:
+				_ultimates.append(c.ultimate)
+	return _ultimates.has(s)
 
 
 func size() -> int:

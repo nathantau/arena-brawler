@@ -32,7 +32,7 @@ class SimBot extends BotBrain:
 	func get_input(player: Player, delta: float) -> InputFrame:
 		var f: InputFrame = super.get_input(player, delta)
 		for slot: int in range(1, player.skills.size()):
-			if f.fire and player.skills[slot].is_ready() and seen != null \
+			if f.fire and can_press(player, slot) and seen != null \
 					and special_useful(player, player.global_position.distance_to(seen as Vector2)):
 				var press: bool = rng.randf() < 1.5 * delta
 				if slot == 1:

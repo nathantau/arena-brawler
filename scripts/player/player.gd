@@ -25,6 +25,7 @@ enum StateField {
 	HP, ARMOR, ENERGY, ENERGY_ACCUM, TIME_SINCE_DAMAGE, REGEN_ACCUM, INVULNERABLE,
 	CHARACTER, SKILL_IDS, SKILL_COOLDOWNS, SKILL_ACTIVE, SKILL_DIRECTIONS, SKILL_ANCHORS, SKILL_WEAPON_COOLDOWNS,
 	SKILL_HITS,
+	ULT_CHARGE,
 	WEAPON_ID, WEAPON_COOLDOWN, PREV_SKILLS, DEAD, RESPAWN_TIMER, LAST_INPUT_SEQ, SLOW_REMAINING, SLOW_FACTOR,
 	STUN_REMAINING, SPAWN_PROTECT, WEAPON_RAMP, BURN_REMAINING, SOAK_REMAINING, TRAP_REMAINING,
 	COUNT,
@@ -166,6 +167,10 @@ var fallback_weapon: WeaponData
 ## The three specials picked in the loading room (the character's own or generic ones, Dash among them): the first
 ## special button (InputFrame.skill) fires slot 0, the second (InputFrame.special) slot 1, the third (special2) slot 2.
 var skills: Array[CharacterSkill] = []
+## Ultimate charge 0..1 (slot Constants.ULT_SLOT): time and damage dealt fill it, using it empties it, death keeps it.
+var ult_charge: float = 0.0
+## Stands in slot ULT_SLOT for a fighter without an ultimate (never activated).
+static var NO_ULT: SkillData = _no_ult()
 var facing: Vector2 = Vector2.RIGHT
 var _ember_left: float = 0.0
 var _trap_prev: float = 0.0
@@ -277,7 +282,7 @@ func set_character(data: CharacterData) -> void:
 	stats = PlayerStats.new(roundi(data.max_hp * hp_scale), data.max_armor, data.max_energy)
 	var defaults: Array[SkillData] = default_skills(data)
 	var kept: Array[SkillData] = []
-	for i: int in Constants.SKILL_SLOTS:
+	for i: int in Constants.PICKED_SLOTS:
 		var old: SkillData = skills[i].data if i < skills.size() else null
 		kept.append(old if old != null and data.can_use_skill(old) else defaults[i])
 	for i: int in range(1, kept.size()):  # no duplicates: a repeat falls back to the first default not already taken
@@ -286,6 +291,7 @@ func set_character(data: CharacterData) -> void:
 				if not kept.has(d):
 					kept[i] = d
 					break
+	kept.append(data.ultimate if data.ultimate != null else NO_ULT)
 	skills.clear()
 	for sd: SkillData in kept:
 		skills.append(CharacterSkill.new(sd))
@@ -298,13 +304,29 @@ func set_character(data: CharacterData) -> void:
 
 
 ## Every special `data` may pick, Dash included.
+static func _no_ult() -> SkillData:
+	var s := SkillData.new()
+	s.kind = SkillData.Kind.VOLLEY
+	return s
+
+
+## The ultimate button works: this fighter has one and the charge is full.
+func ult_ready() -> bool:
+	return skills[Constants.ULT_SLOT].data != NO_ULT and ult_charge >= 1.0
+
+
+## Damage dealt to an enemy fills the charge (authority; snapshots carry it to the owner).
+func add_ult_damage(dealt: int) -> void:
+	ult_charge = minf(1.0, ult_charge + dealt / Constants.ULT_DAMAGE_PER_CHARGE)
+
+
 static func specials_pool(data: CharacterData) -> Array[SkillData]:
 	return SkillCatalog.shared().specials_for(data)
 
 
-## A fresh pick: Dash on the skill button, the character's signature special on the second, and on the third its next
-## own special (else the next generic one). A fighter with fewer than SKILL_SLOTS eligible specials (the benched Warden
-## and Gunnar: Dash + Barrier only) repeats from the start of its pool.
+## A fresh pick: Dash on the skill button, then the fighter's signature special (else its next own one; an ultimate is
+## never in the pool, so a signature that is the ultimate is skipped for the next own-tagged special, else generic).
+## A fighter with fewer than PICKED_SLOTS eligible specials repeats from the start of its pool.
 static func default_skills(data: CharacterData) -> Array[SkillData]:
 	var pool: Array[SkillData] = specials_pool(data)
 	var out: Array[SkillData] = [SkillCatalog.shared().dash()]
@@ -312,16 +334,16 @@ static func default_skills(data: CharacterData) -> Array[SkillData]:
 	var ordered: Array[SkillData] = pool.filter(own)
 	ordered.append_array(pool.filter(func(sd: SkillData) -> bool: return not own.call(sd)))
 	for sd: SkillData in ordered:
-		if out.size() < Constants.SKILL_SLOTS and not out.has(sd):
+		if out.size() < Constants.PICKED_SLOTS and not out.has(sd):
 			out.append(sd)
-	while out.size() < Constants.SKILL_SLOTS:
+	while out.size() < Constants.PICKED_SLOTS:
 		out.append(pool[out.size() % pool.size()])
 	return out
 
 
 ## Put `data` in skill slot `slot`; if another slot already has it, the two swap.
 func set_skill(slot: int, data: SkillData) -> void:
-	for other: int in skills.size():
+	for other: int in Constants.PICKED_SLOTS:
 		if other != slot and skills[other].data == data:  # swap the slots themselves: cooldowns travel with their special
 			var held: CharacterSkill = skills[other]
 			skills[other] = skills[slot]
@@ -459,8 +481,10 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		_prev_skills = input.pressed_slots()  # a button held (or tapped) while dead must not fire on the respawn frame
 		return
 	stats.tick(delta)
+	ult_charge = minf(1.0, ult_charge + delta / Constants.ULT_PASSIVE_SECONDS)
 	if stats.burn_due > 0 and not replay and projectiles != null and projectiles.authoritative:
-		take_hit(stats.burn_due * stats.burn_damage, false, Vector2.ZERO, stats.burn_attacker)
+		projectiles.credit_damage(stats.burn_attacker, self,
+			take_hit(stats.burn_due * stats.burn_damage, false, Vector2.ZERO, stats.burn_attacker))
 		if dead:
 			return
 	if stats.is_stunned():
@@ -534,7 +558,12 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		_thunder(thundering, input.seq)
 	for i: int in Constants.SKILL_SLOTS:
 		if pressed[i] and not _prev_skills[i] and not skill_locked(i) and not stats.is_stunned():  # one ability at a time
-			_activate(skills[i], input, replay)
+			if i == Constants.ULT_SLOT:
+				if ult_ready() and _activate(skills[i], input, replay):  # the charge replaces the ultimate's cooldown
+					skills[i].cooldown_remaining = 0.0
+					ult_charge = 0.0
+			else:
+				_activate(skills[i], input, replay)
 	_prev_skills = pressed
 
 	var grapple: CharacterSkill = active_skill(SkillData.Kind.GRAPPLE)
@@ -661,17 +690,18 @@ func skill_locked(slot: int) -> bool:
 	return false
 
 
-func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
+## True if the skill went off.
+func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> bool:
 	var dir: Vector2 = _skill_direction(slot.data, input)
 	var landing := Vector2.INF
 	if slot.data.kind == SkillData.Kind.SWING:
 		if not slot.is_ready():
-			return
+			return false
 		landing = swing_landing(dir, slot.data)
 		if landing == Vector2.INF:
-			return  # nowhere to land: no swing, no cooldown
+			return false  # nowhere to land: no swing, no cooldown
 	if not slot.try_activate(dir, global_position, stats):
-		return
+		return false
 	if slot.data.kind != SkillData.Kind.SMOKE:
 		_break_vanish()  # using another special gives her away
 	match slot.data.kind:
@@ -709,6 +739,7 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> void:
 				shot_fired.emit(self, seq, global_position, slot.direction, slot.data.volley_weapon.id)
 	if not replay:
 		skill_used.emit(self, slot.data)
+	return true
 
 
 ## The staff is spinning: shots touching it go back, and a damage tick lands when due. Replay changes nothing.
@@ -1311,6 +1342,7 @@ func capture_state() -> Array:
 	s[StateField.SKILL_DIRECTIONS] = dirs
 	s[StateField.SKILL_ANCHORS] = anchors
 	s[StateField.SKILL_HITS] = hits
+	s[StateField.ULT_CHARGE] = ult_charge
 	s[StateField.SKILL_WEAPON_COOLDOWNS] = form_cds
 	s[StateField.WEAPON_ID] = weapon.data.id
 	s[StateField.WEAPON_COOLDOWN] = weapon.cooldown
@@ -1362,6 +1394,7 @@ func apply_state(s: Array, catalog: WeaponCatalog, characters: CharacterCatalog)
 		slot.hits = s[StateField.SKILL_HITS][i]
 		if slot.form_weapon != null:
 			slot.form_weapon.cooldown = s[StateField.SKILL_WEAPON_COOLDOWNS][i]
+	ult_charge = s[StateField.ULT_CHARGE]
 	if s[StateField.WEAPON_ID] != weapon.data.id:
 		var w: WeaponData = catalog.get_weapon(s[StateField.WEAPON_ID])
 		if w != null:

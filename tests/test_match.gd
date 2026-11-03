@@ -255,8 +255,9 @@ func test_lobby_picks_are_validated() -> void:
 	assert_eq(p.weapon.data.id, &"hive_gun", "retired, other fighters' and form weapons refused")
 	arena.select_special(p, 0, &"smoke_bomb")
 	assert_eq(p.skills[0].data.id, &"smoke_bomb")
-	arena.select_special(p, 1, &"great_ape")
-	arena.select_special(p, 2, &"barrier")
+	var slot1: StringName = p.skills[1].data.id
+	arena.select_special(p, 1, &"great_ape")  # another fighter's, and an ultimate
+	arena.select_special(p, 2, &"barrier")  # the ultimate slot is not pickable
 	arena.select_special(p, 0, &"inferno")
 	assert_eq(p.skills[0].data.id, &"smoke_bomb")
-	assert_eq(p.skills[1].data.id, &"shadow_clones", "others' specials and bad slots refused")
+	assert_eq(p.skills[1].data.id, slot1, "others' specials and bad slots refused")

@@ -60,8 +60,10 @@ func test_dash_and_barrier_lead_every_list_then_the_signature() -> void:
 		var pool: Array[SkillData] = skills.specials_for(c)
 		assert_eq(pool[0], skills.dash(), "%s: Dash first" % c.id)
 		assert_eq(pool[1], skills.get_skill(&"barrier"), "%s: Barrier second" % c.id)
-		if c.signature_skill != null:
+		if c.signature_skill != null and not skills.is_ultimate(c.signature_skill):
 			assert_eq(pool[2], c.signature_skill, "%s: signature third" % c.id)
+		for sd: SkillData in pool:
+			assert_ne(sd, c.ultimate, "%s: the ultimate is never pickable" % c.id)
 
 
 func test_signature_special_is_exclusive() -> void:
@@ -208,34 +210,37 @@ func _player(c: CharacterData) -> Player:
 func test_great_ape_halves_damage_and_swaps_to_fists() -> void:
 	var p: Player = _player(characters.get_character(&"wukong"))
 	var ape: SkillData = skills.get_skill(&"great_ape")
-	assert_eq(p.skills[1].data, ape, "Wukong's signature special")
+	assert_eq(p.skills[2].data, ape, "Wukong's ultimate")
 	assert_ne(p.held_weapon().data.id, &"ape_fists")
-	assert_true(p.skills[1].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
+	assert_true(p.skills[2].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
 	assert_eq(p.held_weapon().data.id, &"ape_fists")
 	assert_eq(ape.form_frames().get_frame_count(&"attack"), Constants.SPRITE_ATTACK_FRAMES, "fists swing")
 	assert_false(p.character.sprite_frames().has_animation(&"attack"), "no attack strip on plain sheets")
 	var before: int = p.stats.hp + p.stats.armor
 	p.take_hit(40, false, Vector2.ZERO, 2)
 	assert_eq(before - (p.stats.hp + p.stats.armor), roundi(40 * ape.form_damage_scale))
-	p.skills[1].tick(ape.duration + 0.01)
-	assert_false(p.skills[1].is_transformed())
+	p.skills[2].tick(ape.duration + 0.01)
+	assert_false(p.skills[2].is_transformed())
 	assert_ne(p.held_weapon().data.id, &"ape_fists", "back to the loadout")
 
 
 func test_switching_character_keeps_usable_specials() -> void:
 	var p: Player = _player(flicker)
 	assert_eq(p.skills[0].data, skills.dash(), "Dash on the skill button by default")
-	assert_eq(p.skills[1].data.id, &"shadow_clones", "signature on the special button")
+	assert_eq(p.skills[1].data, Player.default_skills(flicker)[1], "next own special on the special button")
+	assert_eq(p.skills[2].data, flicker.ultimate, "the ultimate in the third slot")
 	p.set_skill(0, skills.get_skill(&"barrier"))
 	p.set_character(characters.get_character(&"wukong"))
 	assert_eq(p.skills[0].data.id, &"barrier", "generic: kept")
-	assert_eq(p.skills[1].data.id, &"great_ape", "Flicker-only: replaced by the default")
+	assert_eq(p.skills[1].data, Player.default_skills(characters.get_character(&"wukong"))[1], "Flicker-only: replaced by the default")
+	assert_eq(p.skills[2].data.id, &"great_ape", "the ultimate follows the fighter")
 
 
 func test_set_skill_swaps_instead_of_doubling() -> void:
 	var p: Player = _player(flicker)
-	p.set_skill(0, p.skills[1].data)
-	assert_eq(p.skills[0].data.id, &"shadow_clones")
+	var second: SkillData = p.skills[1].data
+	p.set_skill(0, second)
+	assert_eq(p.skills[0].data, second)
 	assert_eq(p.skills[1].data, skills.dash())
 
 
@@ -277,7 +282,8 @@ func test_flicker_can_pick_all_ninja_specials() -> void:
 	var ids: Array[StringName] = []
 	for sk: SkillData in skills.specials_for(flicker):
 		ids.append(sk.id)
-	assert_eq(ids.slice(0, 3), [&"dash", &"barrier", &"shadow_clones"], "Dash, Barrier, then the signature")
+	assert_eq(ids.slice(0, 2), [&"dash", &"barrier"], "Dash, Barrier first")
+	assert_false(ids.has(&"shadow_clones"), "her ultimate is not pickable")
 	for id: StringName in [&"smoke_bomb", &"fan_of_blades", &"grapple_kunai"]:
 		assert_has(ids, id)
 	assert_false(ids.has(&"blink"), "Blink was cut from her kit")
@@ -431,7 +437,7 @@ func test_ape_slam_lands_after_its_windup() -> void:
 	var p: Player = _player(characters.get_character(&"wukong"))
 	p.projectiles = ProjectilePool.new()
 	add_child_autofree(p.projectiles)
-	assert_true(p.skills[1].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
+	assert_true(p.skills[2].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
 	watch_signals(p)
 	var fire := InputFrame.new()
 	fire.fire = true
@@ -450,7 +456,7 @@ func _start_ape_windup() -> Player:
 	var p: Player = _player(characters.get_character(&"wukong"))
 	p.projectiles = ProjectilePool.new()
 	add_child_autofree(p.projectiles)
-	assert_true(p.skills[1].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
+	assert_true(p.skills[2].try_activate(Vector2.RIGHT, Vector2.ZERO, p.stats))
 	var fire := InputFrame.new()
 	fire.fire = true
 	p.simulate(fire, Constants.PHYSICS_DT)

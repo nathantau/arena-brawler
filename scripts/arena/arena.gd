@@ -350,7 +350,7 @@ func select_character(p: Player, id: StringName) -> void:
 	p.set_character(c)
 	if referee != null and not p.is_bot:  # a human's new fighter starts with every ability slot empty (bots keep defaults)
 		_picked[p.player_id] = true
-		referee.set_gap_mask(p.player_id, (1 << Constants.SKILL_SLOTS) - 1)
+		referee.set_gap_mask(p.player_id, (1 << Constants.PICKED_SLOTS) - 1)
 	match_updated.emit()
 
 
@@ -366,7 +366,7 @@ func select_weapon(p: Player, id: StringName) -> void:
 ## Lobby only (authoritative): the special in skill slot `slot`. Must be a special their character can use; an empty
 ## `id` empties the slot (READY is refused until it is filled again).
 func select_special(p: Player, slot: int, id: StringName) -> void:
-	if slot < 0 or slot >= Constants.SKILL_SLOTS or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p) \
+	if slot < 0 or slot >= Constants.PICKED_SLOTS or match_state.phase != MatchState.Phase.LOBBY or is_locked_in(p) \
 			or referee == null:
 		return
 	var mask: int = match_state.gaps.get(p.player_id, 0)
@@ -375,9 +375,9 @@ func select_special(p: Player, slot: int, id: StringName) -> void:
 		match_updated.emit()
 		return
 	var s: SkillData = SkillCatalog.shared().get_skill(id)
-	if s == null or not s.special or not p.character.can_use_skill(s):
+	if s == null or not s.special or not p.character.can_use_skill(s) or SkillCatalog.shared().is_ultimate(s):
 		return
-	for other: int in p.skills.size():  # set_skill swaps with a slot already holding it: the gaps travel too
+	for other: int in Constants.PICKED_SLOTS:  # set_skill swaps with a slot already holding it: the gaps travel too
 		if other != slot and p.skills[other].data == s:
 			var a: int = (mask >> slot) & 1
 			var b: int = (mask >> other) & 1
@@ -394,10 +394,10 @@ func fill_gaps(p: Player) -> void:
 	if mask == 0:
 		return
 	var taken: Array[SkillData] = []
-	for i: int in p.skills.size():
+	for i: int in Constants.PICKED_SLOTS:
 		if (mask >> i) & 1 == 0:
 			taken.append(p.skills[i].data)
-	for i: int in p.skills.size():
+	for i: int in Constants.PICKED_SLOTS:
 		if (mask >> i) & 1 == 0:
 			continue
 		for d: SkillData in Player.default_skills(p.character) + Player.specials_pool(p.character):
@@ -981,6 +981,7 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 func _place_participants() -> void:
 	for p: Player in players:
 		p.sit_out()
+		p.ult_charge = 0.0  # a fresh match / Teams round starts uncharged (a death does not reset it)
 	for id: int in match_state.participants:
 		var p: Player = get_player(id)
 		if p != null:

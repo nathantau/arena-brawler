@@ -59,13 +59,13 @@ func _run(p: Player, frames: int, replay: bool = false) -> void:
 
 # --- catalog -----------------------------------------------------------------------
 
-func test_every_fighter_has_five_own_specials() -> void:
+func test_every_fighter_has_four_own_pickable_specials() -> void:
 	for c: CharacterData in characters.ordered:
 		var own: int = 0
 		for sd: SkillData in skills.specials_for(c):
 			if sd.tags.has(c.id):
 				own += 1
-		assert_gte(own, 5, "%s has %d own specials" % [c.id, own])
+		assert_gte(own, 4, "%s has %d own specials (the ultimate is not pickable)" % [c.id, own])
 
 
 func test_new_specials_belong_to_their_fighters() -> void:

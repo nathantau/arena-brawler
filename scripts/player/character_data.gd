@@ -16,6 +16,8 @@ extends Resource
 @export var signature_weapon: WeaponData
 ## Default slot-0 special. Null = the first special the character can use.
 @export var signature_skill: SkillData
+## The fixed third-slot ultimate (charged, not picked). Null = a locked slot.
+@export var ultimate: SkillData
 ## false = benched: not offered in menus, the loading room or to bots (still loadable by id, e.g. --character).
 @export var in_rotation: bool = true
 ## Horizontal sheet from tools/sprites/generate.py: idle frames, then hit-flash frames, then walk frames.

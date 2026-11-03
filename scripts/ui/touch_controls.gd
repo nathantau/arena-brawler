@@ -38,6 +38,11 @@ const NO_FINGER: int = -1
 const READY_PULSE_TIME: float = 0.45
 const READY_PULSE_GROW: float = 22.0
 const COLOR_READY: Color = Color(1, 0.95, 0.6, 0.9)
+## Ultimate button: gold ready glow (pulses ULT_PULSE_HZ), the charge fill while it fills.
+const COLOR_ULT: Color = Color(1.0, 0.82, 0.2, 1.0)
+const COLOR_ULT_FILL: Color = Color(1.0, 0.8, 0.2, 0.5)
+const ULT_PULSE_HZ: float = 1.6
+const ULT_GLOW_GROW: float = 6.0
 
 const TOUCH_FLAG: String = "--touch"
 
@@ -222,11 +227,15 @@ func _process(delta: float) -> void:
 	if player != null and is_instance_valid(player):
 		for i: int in Constants.SKILL_SLOTS:
 			var sk: CharacterSkill = player.skills[i]
-			var cooling: bool = not sk.is_ready() and not sk.is_active()
-			if _was_cooling[i] and sk.is_ready() and not player.dead:
+			var ult: bool = i == Constants.ULT_SLOT
+			var cooling: bool = (not player.ult_ready() and sk.data != Player.NO_ULT) if ult \
+				else not sk.is_ready() and not sk.is_active()
+			if _was_cooling[i] and (player.ult_ready() if ult else sk.is_ready()) and not player.dead:
 				_pulse[i] = READY_PULSE_TIME
 				if ready_sfx != null:
 					ready_sfx.call()
+				if ult:
+					GameSettings.vibrate(Constants.HAPTIC_ULT_MS)
 			_was_cooling[i] = cooling
 			_pulse[i] = maxf(0.0, _pulse[i] - delta)
 	queue_redraw()
@@ -252,7 +261,7 @@ func _draw() -> void:
 	if player != null and is_instance_valid(player):
 		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.skills[0], skill_held, player.skill_locked(0))
 		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.skills[1], special_held, player.skill_locked(1))
-		_skill_button(_special2_center(), SPECIAL2_RADIUS, SPECIAL2_SCALE, player.skills[2], special2_held, player.skill_locked(2))
+		_ult_button(_special2_center(), SPECIAL2_RADIUS, SPECIAL2_SCALE, special2_held)
 		for i: int in Constants.SKILL_SLOTS:
 			if _pulse[i] > 0.0:
 				var k: float = 1.0 - _pulse[i] / READY_PULSE_TIME
@@ -278,6 +287,26 @@ func _skill_button(c: Vector2, radius: float, scale_px: float, sk: CharacterSkil
 		var secs: String = str(ceili(sk.cooldown_remaining))
 		var w: float = UiStyle.text_width(secs, UiStyle.SIZE_HEADING, true)
 		UiStyle.draw_text(self, c + Vector2(-w * 0.5, UiStyle.SIZE_HEADING * 0.35), secs, UiStyle.SIZE_HEADING,
+			UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
+
+
+## The ultimate: greyed out without one, a radial charge fill while it charges, a pulsing gold glow when full.
+func _ult_button(c: Vector2, radius: float, scale_px: float, held: bool) -> void:
+	var sk: CharacterSkill = player.skills[Constants.ULT_SLOT]
+	if sk.data == Player.NO_ULT:
+		_round(c, "round", scale_px, false)
+		draw_circle(c, radius * 0.9, Color(0.1, 0.1, 0.14, 0.6))
+		return
+	_skill_button(c, radius, scale_px, sk, held, player.skill_locked(Constants.ULT_SLOT))
+	if player.ult_ready():
+		var k: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * ULT_PULSE_HZ)
+		draw_arc(c, radius + ULT_GLOW_GROW * k, 0.0, TAU, SEGMENTS, Color(COLOR_ULT, 0.45 + 0.5 * k), 5.0 + 3.0 * k)
+	elif not sk.is_active():
+		draw_circle(c, radius * 0.9, Color(0.1, 0.1, 0.14, 0.45))
+		draw_arc(c, radius * 0.45, -PI * 0.5, -PI * 0.5 + TAU * player.ult_charge, SEGMENTS, COLOR_ULT_FILL, radius * 0.9)
+		var pct: String = "%d%%" % floori(player.ult_charge * 100.0)
+		var w: float = UiStyle.text_width(pct, UiStyle.SIZE_SMALL, true)
+		UiStyle.draw_text(self, c + Vector2(-w * 0.5, UiStyle.SIZE_SMALL * 0.35), pct, UiStyle.SIZE_SMALL,
 			UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
 
 

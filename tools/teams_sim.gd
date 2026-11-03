@@ -231,7 +231,7 @@ func _shoot_lobby() -> void:
 	if strip:
 		lp._on_fighter_pressed(&"bolt")
 		var ids: Array = lp._special_cards.keys()
-		for k: int in Constants.SKILL_SLOTS:  # a fresh pick has empty slots: equip three to toggle
+		for k: int in Constants.PICKED_SLOTS:  # a fresh pick has empty slots: equip the picks to toggle
 			arena.select_special(arena.get_player(1), k, ids[k])
 		if fly:  # let the slide finish
 			for i: int in 24:

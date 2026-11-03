@@ -50,6 +50,12 @@ const ENERGY_REGEN_PER_SEC: float = 60.0
 ## A snare slows move speed to a fraction for a while (PlayerStats.slow_*): one at a time, a new one refreshes it.
 ## Special slots each fighter equips (slot 0 = skill button, slot 1 = special button, slot 2 = third special button).
 const SKILL_SLOTS: int = 3
+## Slots 0..PICKED_SLOTS-1 are chosen in the loading room; the last slot is the fighter's fixed ultimate.
+const PICKED_SLOTS: int = 2
+const ULT_SLOT: int = 2
+## Ultimate charge (0..1): full after ULT_PASSIVE_SECONDS on its own, or after ULT_DAMAGE_PER_CHARGE damage dealt to enemies.
+const ULT_PASSIVE_SECONDS: float = 60.0
+const ULT_DAMAGE_PER_CHARGE: float = 300.0
 
 # --- Skills (per-character tunables are in data/characters/*.tres) ---
 ## Vine Swing tries landing spots this far apart, from its full range inwards.
@@ -116,6 +122,7 @@ const SPRITE_WALK_MIN_SPEED: float = 40.0
 ## On-screen size of a sprite pixel (64 px art -> 96 px tall on a 720 px-high view).
 const SPRITE_SCALE: float = 1.5
 const HAPTIC_HIT_MS: int = 30
+const HAPTIC_ULT_MS: int = 80  # the ultimate becomes ready
 const HAPTIC_KILL_MS: int = 60
 const HAPTIC_DEALT_MS: int = 20
 const HAPTIC_EXPLOSION_MS: int = 45

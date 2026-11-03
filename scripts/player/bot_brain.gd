@@ -201,8 +201,10 @@ func track_stuck(pos: Vector2, moving: bool, delta: float) -> bool:
 	return stuck
 
 
-## True if a ready special can be pressed now: ready, not locked by the other slot's ability.
+## True if a ready special can be pressed now: ready (the ultimate: fully charged), not locked by the other slot's ability.
 static func can_press(player: Player, slot: int) -> bool:
+	if slot == Constants.ULT_SLOT and not player.ult_ready():
+		return false
 	return player.skills[slot].is_ready() and not player.skill_locked(slot)
 
 
@@ -229,6 +231,8 @@ func slot_useful(player: Player, slot: int, enemy_dist: float) -> bool:
 func slot_wanted(player: Player, slot: int, dist: float, in_sight: bool, pressured: bool) -> bool:
 	if not slot_useful(player, slot, dist):
 		return false
+	if slot == Constants.ULT_SLOT:  # charged: use it as soon as a target is in sight
+		return in_sight
 	var sd: SkillData = player.skills[slot].data
 	var hurt: bool = player.stats.hp < player.stats.max_hp * ESCAPE_HP_FRACTION
 	var escape: bool = hurt and pressured and dist < ESCAPE_DIST
