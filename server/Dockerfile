@@ -5,10 +5,11 @@ FROM debian:bookworm-slim
 ARG TARGETARCH
 RUN useradd --create-home --shell /usr/sbin/nologin arena
 COPY build/server/arena-server.${TARGETARCH} /opt/arena/arena-server
-RUN chmod +x /opt/arena/arena-server
+COPY server/entrypoint.sh /opt/arena/entrypoint.sh
+RUN chmod +x /opt/arena/arena-server /opt/arena/entrypoint.sh
 
 USER arena
 WORKDIR /opt/arena
 EXPOSE 7777/udp
 # Extra server args (e.g. "--bots 2 --mode duel") can be appended to `docker run`.
-ENTRYPOINT ["/opt/arena/arena-server", "--headless", "--", "--server", "--port", "7777"]
+ENTRYPOINT ["/opt/arena/entrypoint.sh"]
