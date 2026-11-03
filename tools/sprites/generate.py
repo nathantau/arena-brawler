@@ -10641,13 +10641,13 @@ FX.update({
 TEMPEST_SIZE = 192
 TEMPEST_R = 84  # art px: the floor ring's radius (SpecialFx.TEMPEST_ART_RADIUS = 126 world px)
 TEMPEST_FOOT = 140  # row of her feet in the front strips (the floor strip is centred on them)
-TEMPEST_H = 112  # funnel height at full growth
+TEMPEST_H = 76  # funnel height at full growth
 TEMPEST_LOOP = 24
 TEMPEST_START = 16
 TEMPEST_END = 14
 TEMPEST_SQUASH = 0.8
 TEMPEST_PETALS = 64
-TEMPEST_STRANDS = 6
+TEMPEST_STRANDS = 5
 PETAL_COLS = ((PINK_L, PINK), (WHITE, PINK_L), (PINK, MAROON), (PINK_L, PINK))
 
 
@@ -10662,7 +10662,7 @@ def _tempest_petals() -> list:
 def _tempest_point(u: float, th: float, grow: float, out: float):
     """(x, y, depth) of the funnel at height fraction `u`, angle `th`: narrow at her feet, wide overhead. `grow` shrinks it (the start),
     `out` flings it outward and up (the end)."""
-    r = (20 + 64 * u ** 0.85) * (0.35 + 0.65 * grow) * (1.0 + out * 1.1)
+    r = (22 + 46 * u ** 0.8) * (0.35 + 0.65 * grow) * (1.0 + out * 1.1)
     return (TEMPEST_SIZE / 2 + math.cos(th) * r, TEMPEST_FOOT - u * TEMPEST_H * grow - out * (18 + 40 * u) + math.sin(th) * r * 0.34,
             math.sin(th))
 
@@ -10681,7 +10681,7 @@ def _tempest_ribbons(c: Canvas, kk: float, grow: float, out: float, front: bool)
         prev = None
         for i in range(36):
             u = 0.03 + 0.94 * i / 35
-            x, y, z = _tempest_point(u, th0 + math.tau * (1.35 * u + kk / TEMPEST_LOOP), grow, out)
+            x, y, z = _tempest_point(u, th0 + math.tau * (0.95 * u + kk / TEMPEST_LOOP), grow, out)
             if prev is not None and (z > 0) == front and (z > 0 or prev[2] <= 0):
                 env = math.sin(math.pi * u) ** 0.6
                 if front:
@@ -10762,6 +10762,33 @@ def tempest_front_frame(kind: str, k: int) -> Image.Image:
     return _clear_edge(img, 2)
 
 
+TEMPEST_ARMS = 4
+
+
+def _tempest_arms(c: Canvas, petals: Canvas, k: int) -> None:
+    """Spiral arms of wind on the floor, all the way round the ring and turning (a full turn per loop), blossoms streaming inward along
+    them from the rim to her feet: `c` gets the arm lines, `petals` the petals."""
+    m = TEMPEST_SIZE // 2
+    rot = math.tau * k / TEMPEST_LOOP
+    for a in range(TEMPEST_ARMS):
+        th0 = math.tau * a / TEMPEST_ARMS + rot
+        prev = None
+        for i in range(44):
+            r = TEMPEST_R * (1 - i / 44 * 0.8)
+            th = th0 + (1 - r / TEMPEST_R) * 4.2
+            p = (round(m + math.cos(th) * r), round(m + math.sin(th) * r * TEMPEST_SQUASH))
+            if prev is not None and (i // 4) % 4 != 3:  # dashed
+                lit = math.sin(th) < 0.35
+                c.flat(L([prev, p], 2 if i < 24 else 1), PINK_L if lit else PINK)
+            prev = p
+        for j in range(6):  # blossoms sweeping inward along the arm
+            u = (j / 6 + k / TEMPEST_LOOP) % 1.0
+            r = TEMPEST_R * (1 - u * 0.8)
+            th = th0 + (1 - r / TEMPEST_R) * 4.2 + 0.12
+            _petal(petals, m + math.cos(th) * r, m + math.sin(th) * r * TEMPEST_SQUASH, th + 1.7 + u * 3, 6.5 - 2.5 * u,
+                   PINK_L if (a + j) % 2 else WHITE, PINK)
+
+
 def tempest_floor_frame(k: int) -> Image.Image:
     """The vortex's floor half (192 px, centred on her feet): a dithered pink pool with ripples running inward, a ring of turning dashes,
     petals drifting low over it and the funnel's far side behind her. Loops over 24 frames."""
@@ -10789,14 +10816,12 @@ def tempest_floor_frame(k: int) -> Image.Image:
         c.flat(L([(round(x), round(y)) for x, y in pts], 2 if lit else 1), PINK_L if lit else PINK)
         if i % 4 == 0:
             sdot(c, round(pts[0][0]), round(pts[0][1]), WHITE)
+    arms = Canvas(n)
+    _tempest_arms(arms, c, k)
     _tempest_draw(c, k, 1.0, 0.0, True)
-    rng = random.Random(33)
-    for i in range(16):  # petals drifting round low on the floor
-        a = rng.uniform(0, math.tau) + math.tau * (1 + i % 2) * k / TEMPEST_LOOP
-        r = rng.uniform(34, 76)
-        _petal(c, m + math.cos(a) * r, m + math.sin(a) * r * TEMPEST_SQUASH, a * 2, 4.5 + (i % 3), PINK_L, PINK)
     img = outline(c.img)
     out = pool.img
+    out.alpha_composite(arms.img)
     out.alpha_composite(img)
     return _clear_edge(out, 2)
 
@@ -10840,6 +10865,38 @@ def _wt_curve(x0, y0, x1, y1, bend, n=10):
     return out
 
 
+WTREE_CLUMPS = ((-52, -6, 14), (-36, -22, 16), (-16, -36, 17), (12, -38, 17), (34, -28, 16), (52, -10, 14), (-46, 8, 12),
+                (46, 8, 12), (-30, -6, 12), (30, -8, 12))  # (dx, dy from the trunk's top, radius): gaps between them show the boughs
+
+
+def _leaf_pts(x: float, y: float, ang: float, ln: float, w: float):
+    ca, sa = math.cos(ang), math.sin(ang)
+    return [(x + ca * ln * 0.5, y + sa * ln * 0.5), (x + ca * ln * 0.1 - sa * w, y + sa * ln * 0.1 + ca * w),
+            (x - ca * ln * 0.5, y - sa * ln * 0.5), (x + ca * ln * 0.1 + sa * w, y + sa * ln * 0.1 - ca * w)]
+
+
+def _wt_clump(c: Canvas, cx: float, cy: float, r: float, seed: int, bias: float) -> None:
+    """A clump of foliage: ~22 small pointed leaves piled back to front, each a flat tone picked by where it sits in the clump (lit top-left,
+    mid, shaded underside; `bias` darkens a clump low in the crown) with a dark line where it overlaps the leaves behind it, a bright pixel
+    on its lit tip and a deep-shade pixel on its far edge."""
+    rng = random.Random(seed)
+    leaves = []
+    for _ in range(32):
+        a = rng.uniform(0, math.tau)
+        d = rng.random() ** 0.55 * r
+        leaves.append((cy + math.sin(a) * d * 0.85, cx + math.cos(a) * d * 1.18, rng.uniform(0, math.pi), rng.uniform(5.4, 7.6)))
+    leaves.sort()
+    for ly, lx, ang, ln in leaves:
+        s = ((lx - cx) / r + (ly - cy) / r) * 0.5 + bias
+        tone = GREEN_L if s < -0.3 else (GREEN if s < 0.12 else GREEN_D)
+        pts = _leaf_pts(lx, ly, ang, ln, ln * 0.3)
+        c.part(P(pts), tone, shade=False)
+        tip = pts[0] if pts[0][0] < pts[2][0] else pts[2]
+        far = pts[2] if tip is pts[0] else pts[0]
+        sdot(c, round(tip[0]), round(tip[1]), LIGHTER[tone])
+        sdot(c, round(far[0]), round(far[1]), DARKER[tone])
+
+
 def wtree_frame(grow: float = 1.0, crown: float = 1.0, sway: float = 0.0, k: int = 0, wilt: float = 0.0, spread: float = 1.0,
                 squash: float = 0.0, shed: float = 0.0) -> Image.Image:
     """The tree (160 px, foot on row WTREE_BASE): gnarled roots gripping the floor, a thick twisting trunk, five boughs and a broad crown
@@ -10849,7 +10906,7 @@ def wtree_frame(grow: float = 1.0, crown: float = 1.0, sway: float = 0.0, k: int
     cx = n // 2
     base = WTREE_BASE
     c = Canvas(n)
-    th = 62 * grow * (1.0 - 0.1 * squash)
+    th = 68 * grow * (1.0 - 0.1 * squash)
     # roots first, flat on the floor
     for i, (ang, ln) in enumerate(((-2.7, 30), (-3.4, 24), (-0.35, 26), (0.45, 32), (-1.2, 18), (-1.9, 16))):
         r = ln * min(1.0, grow * 1.6)
@@ -10868,10 +10925,18 @@ def wtree_frame(grow: float = 1.0, crown: float = 1.0, sway: float = 0.0, k: int
     wid = [max(2.0, 6.8 - 3.4 * (i / 13) ** 0.8 + (2.4 * max(0.0, 1 - i / 3))) * min(1.0, grow * 8) for i in range(14)]
     if grow > 0.04:
         _tube(c, pts, wid, WALNUT_D, WALNUT, WALNUT_L)
-    for i in range(1, 13, 2):  # bark grooves winding up
-        x, y = pts[i]
-        w = wid[i]
-        c.flat(L([(round(x - w * 0.2), round(y + 1)), (round(x + w * 0.5), round(y - 3))], 1), WALNUT_D)
+    if grow > 0.2:  # bark: long grooves down the grain, a lit streak on the left, short cracks and a knot
+        for i in range(13):
+            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+            w0, w1 = wid[i] * 0.8, wid[i + 1] * 0.8
+            for si, (off, col, period) in enumerate(((-0.72, WALNUT_L, 2), (-0.2, WALNUT_D, 3), (0.34, WALNUT_D, 2), (0.76, WALNUT, 1))):
+                if (i + si) % period == 0:
+                    c.flat(L([(round(x0 + off * w0), round(y0)), (round(x1 + off * w1), round(y1))], 1), col)
+            if i % 2 == 1:
+                c.flat(L([(round(x0 + w0 * 0.1), round(y0)), (round(x0 + w0 * 0.55), round(y0 - 1))], 1), WALNUT_D)
+        kx, ky = pts[4]
+        c.flat(E((kx - 1, ky - 3, kx + 2, ky + 2)), WALNUT_D)
+        sdot(c, round(kx - 1), round(ky - 3), WALNUT_L)
     top = pts[-1]
     if grow > 0.55:  # the boughs
         sp = _ease((spread - 0.0))
@@ -10883,31 +10948,23 @@ def wtree_frame(grow: float = 1.0, crown: float = 1.0, sway: float = 0.0, k: int
             ey = top[1] + math.sin(ang) * ln2 * 0.85 + 4
             bp = _wt_curve(top[0], top[1] + 3, ex, ey, 4 * (1 if i % 2 else -1), 8)
             _tube(c, bp, [max(1.0, 4.6 * (1 - j / 10)) for j in range(len(bp))], WALNUT_D, WALNUT, WALNUT_L)
-    # crown: lit clumps, back to front
+    # crown: clumps of leaves (see _wt_clump), swaying a little, higher clumps lit and low ones in shade; gaps show the boughs
     if crown > 0.04 and grow > 0.6:
-        rng = random.Random(1717)
-        lumps = []
-        for i in range(17):
-            a = rng.uniform(0, math.tau)
-            rr = rng.uniform(0.15, 1.0) ** 0.7
-            lx = top[0] + math.cos(a) * rr * 54 * spread + sway * 0.7
-            ly = top[1] - 16 + math.sin(a) * rr * 33 - rr * 12 + 4 * math.sin(k * math.tau / WTREE_IDLE + i)
-            lumps.append((ly, lx, 11 + rng.uniform(0, 7) + (4 if rr < 0.4 else 0), i))
-        lumps.sort()
-        for ly, lx, r, i in lumps:
+        clumps = []
+        for i, (dx, dy, r) in enumerate(WTREE_CLUMPS):
+            wob = 1.3 * math.sin(k * math.tau / WTREE_IDLE + i * 1.3)
+            clumps.append((top[1] + dy * (0.6 + 0.4 * spread) + wob * 0.4, top[0] + dx * spread + sway * (0.45 - dy / 55.0) + wob * 0.5, r, i, dy))
+        clumps.sort()
+        for ly, lx, r, i, dy in clumps:
             r *= crown * (1.0 - 0.25 * wilt) * (1.0 + 0.1 * (1 - squash))
-            if r < 2:
+            if r < 3 or (wilt > 0 and (i * 37) % 17 / 17 < wilt):
                 continue
-            if wilt > 0 and (i * 37) % 17 / 17 < wilt:
-                continue
-            col = GREEN_D if ly > top[1] - 4 + (i % 3) * 3 else (GREEN_L if i % 4 == 0 else GREEN)
-            c.part(E((lx - r, ly - r * 0.82, lx + r, ly + r * 0.82)), col)
-        for ly, lx, r, i in lumps:  # blossoms and leaf glints on the clumps
+            _wt_clump(c, lx, ly, r, 100 + i, max(-0.4, min(0.5, (dy + 18) / 45.0)))
+        for ly, lx, r, i, dy in clumps:  # a few golden blossoms in the foliage
             r *= crown
-            if r > 8 and i % 2 == 0 and (wilt == 0 or i % 5 > wilt * 5):
-                fx, fy = round(lx - r * 0.2 + (i % 3) * 3), round(ly - r * 0.3)
-                col = YELLOW if (k + i) % 4 else WHITE
-                sdot(c, fx, fy, col)
+            if r > 11 and i % 2 == 0 and (wilt == 0 or i % 5 > wilt * 5):
+                fx, fy = round(lx - r * 0.25 + (i % 3) * 3), round(ly - r * 0.25)
+                sdot(c, fx, fy, YELLOW if (k + i) % 4 else WHITE)
                 sdot(c, fx + 1, fy, CREAM)
     img = outline(c.img)
     if wilt > 0:
@@ -10919,7 +10976,16 @@ def wtree_frame(grow: float = 1.0, crown: float = 1.0, sway: float = 0.0, k: int
             lx = cx + rng2.randint(-52, 52)
             ly = top[1] - 10 + ((i * 29 + k * 6) % 70) * shed
             sdot(ov, lx, round(min(base - 2, ly)), (GREEN, GREEN_L, GREEN_D, YELLOW)[i % 4])
-    img.alpha_composite(ov.img)
+    elif crown > 0.9 and grow >= 1.0:  # a few leaves drifting down from the crown, one fall per 8-frame loop
+        for i in range(5):
+            ph = (i / 5 + k / WTREE_IDLE) % 1.0
+            lx = cx + (-46, -22, 6, 30, 50)[i] + 8 * math.sin(ph * math.tau + i) + sway * 0.5
+            ly = top[1] + 6 + ph * (base - top[1] - 10)
+            ang = ph * 7 + i
+            pts = _leaf_pts(lx, ly, ang, 5.0, 1.6)
+            ov.flat(P(pts), (GREEN_L, GREEN, YELLOW, GREEN_L, GREEN)[i])
+            sdot(ov, round(pts[0][0]), round(pts[0][1]), WHITE if i % 2 else CREAM)
+    img.alpha_composite(outline(ov.img))
     return _clear_edge(img, 2)
 
 
@@ -11072,71 +11138,68 @@ ECLIPSE_CELL = 128  # flare / aura / end: centred on his body
 
 
 def eclipse_burst_frame(k: int) -> Image.Image:
-    """The flood of darkness (320 px, floor layer, 24 frames at 60 fps): motes of shadow are sucked in toward his feet while a black disc
-    swells (anticipation), a bright violet ring slams out to the full radius and the dark pours over the floor, then it hangs, its dither
-    opening up from the middle outwards, the rim dashes breaking and motes lifting off as it thins away."""
+    """The flood of darkness (320 px, floor layer, 24 frames at 60 fps; frame 0 is the blast frame, no wind-up): a white-hot flash at his feet
+    and a thick violet ring already racing out, spitting a corona of spikes, behind it a near-solid black disc that reaches the full radius by
+    frame 5. It hangs, then the dither opens from the middle outwards, the rim breaks into dashes and motes lift off as it thins away."""
     n = ECLIPSE_BURST_SIZE
     m = n // 2
     pool = Canvas(n)
     c = Canvas(n)
     rng = random.Random(1999)
     t = k / (ECLIPSE_BURST - 1)
-    if k < 6:  # anticipation
-        u = (k + 1) / 6
-        r0 = 4 + 20 * u * u
-        for i in range(28):
-            a = rng.uniform(0, math.tau) + u * 2.0
-            d = (150 - 120 * u) * rng.uniform(0.5, 1.0)
-            sdot(c, round(m + math.cos(a) * d), round(m + math.sin(a) * d * ECLIPSE_SQUASH), VIOLET_L if i % 3 == 0 else VIOLET)
-        c.flat(E((m - r0, m - r0 * ECLIPSE_SQUASH, m + r0, m + r0 * ECLIPSE_SQUASH)), OUTLINE)
-        c.flat(lambda d, f: d.ellipse((m - r0 - 2, m - (r0 + 2) * ECLIPSE_SQUASH, m + r0 + 2, m + (r0 + 2) * ECLIPSE_SQUASH), outline=f, width=1),
-               WHITE if k > 3 else VIOLET_L)
-        return _clear_edge(outline(c.img), 2)
-    ex = _ease((k - 5) / 4) if k < 9 else 1.0  # the ring slams out over 4 frames
+    ex = 1.0 - (1.0 - min(1.0, (k + 1) / 6.0)) ** 2.4
     r_ = ECLIPSE_R * ex
-    rise = max(0.0, (t - 0.38) / 0.62)  # how far the dark has thinned
+    rise = max(0.0, (t - 0.3) / 0.7)  # how far the dark has thinned
     for y in range(n):
         for x in range(n):
             dx, dy = x - m, (y - m) / ECLIPSE_SQUASH
             d = math.hypot(dx, dy)
-            if d >= r_ or r_ < 4:
+            if d >= r_:
                 continue
             f = d / ECLIPSE_R
-            cover = 0.95 - 0.35 * f
-            hole = rise * 1.25 - (1.0 - f) * 0.55  # the middle clears first
-            cover *= max(0.0, 1.0 - max(0.0, hole + 0.1)) if rise > 0 else 1.0
-            if k < 9:
-                cover *= 0.8
+            cover = 0.99 - 0.3 * f
+            hole = rise * 1.3 - (1.0 - f) * 0.5  # the middle clears first
+            cover *= max(0.0, 1.0 - max(0.0, hole))
             if BAYER[y % 4][x % 4] / 16 < cover:
-                pool.dot(x, y, OUTLINE if f < 0.55 or (x + y) % 3 else VIOLET_D)
-            elif k >= 9 and f > 0.6 and BAYER[(y + 2) % 4][(x + 3) % 4] / 16 < 0.08 * (1 - rise):
+                pool.dot(x, y, OUTLINE if f < 0.7 or (x + y) % 3 else VIOLET_D)
+            elif BAYER[(y + 2) % 4][(x + 3) % 4] / 16 < 0.1 * (1 - rise):
                 pool.dot(x, y, VIOLET)
-    if r_ > 6:  # the rim: a bright ring while it expands, then turning violet dashes that break up
+    bb = (m - r_, m - r_ * ECLIPSE_SQUASH, m + r_, m + r_ * ECLIPSE_SQUASH)
+    if k < 12:  # the bright rim, thick at first, with a second ring just inside and a corona of spikes
+        width = 5 if k < 3 else (4 if k < 6 else (3 if k < 9 else 2))
+        c.flat(lambda d, f: d.ellipse(bb, outline=f, width=width), WHITE if k < 3 else VIOLET_L)
+        if k >= 1:
+            bb2 = (m - r_ + width + 1, m - (r_ - width - 1) * ECLIPSE_SQUASH, m + r_ - width - 1, m + (r_ - width - 1) * ECLIPSE_SQUASH)
+            c.flat(lambda d, f: d.ellipse(bb2, outline=f, width=1), PINK_L if k < 6 else VIOLET)
+        if k < 10:
+            for j in range(40):
+                a = math.tau * j / 40
+                ln = (5 if j % 2 else 10) * (1.0 - k / 10.0) + 2
+                c.flat(L([(m + math.cos(a) * (r_ + 2), m + math.sin(a) * (r_ + 2) * ECLIPSE_SQUASH),
+                          (m + math.cos(a) * (r_ + 2 + ln), m + math.sin(a) * (r_ + 2 + ln) * ECLIPSE_SQUASH)], 1), WHITE if k < 4 else VIOLET_L)
+    else:  # then turning violet dashes that break up
         fade = max(0.0, 1.0 - rise * 1.3)
-        if k < 11:
-            bb = (m - r_, m - r_ * ECLIPSE_SQUASH, m + r_, m + r_ * ECLIPSE_SQUASH)
-            c.flat(lambda d, f: d.ellipse(bb, outline=f, width=3), WHITE if k < 8 else VIOLET_L)
-            bb2 = (m - r_ + 3, m - (r_ - 3) * ECLIPSE_SQUASH, m + r_ - 3, m + (r_ - 3) * ECLIPSE_SQUASH)
-            c.flat(lambda d, f: d.ellipse(bb2, outline=f, width=1), VIOLET)
-        elif fade > 0:
-            dashes = 44
-            for i in range(dashes):
-                if (i * 5) % dashes / dashes > fade:
-                    continue
-                a0 = math.tau * i / dashes + t * 0.9
-                pts = [(m + math.cos(a) * r_, m + math.sin(a) * r_ * ECLIPSE_SQUASH) for a in (a0, a0 + math.tau / dashes * 0.6)]
-                lit = math.sin(a0) < 0.3
-                c.flat(L([(round(x), round(y)) for x, y in pts], 2 if lit else 1), VIOLET_L if lit else VIOLET)
-    if 5 <= k < 12:  # the flash at the heart: rays of the black sun lying along the floor
+        dashes = 44
+        for i in range(dashes):
+            if (i * 5) % dashes / dashes > fade:
+                continue
+            a0 = math.tau * i / dashes + t * 0.9
+            pts = [(m + math.cos(a) * r_, m + math.sin(a) * r_ * ECLIPSE_SQUASH) for a in (a0, a0 + math.tau / dashes * 0.6)]
+            lit = math.sin(a0) < 0.3
+            c.flat(L([(round(x), round(y)) for x, y in pts], 2 if lit else 1), VIOLET_L if lit else VIOLET)
+    if k < 8:  # the flash at the heart: a white-hot disc and rays lying along the floor
+        fr = 26 - k * 3
+        if fr > 2:
+            c.flat(E((m - fr, m - fr * ECLIPSE_SQUASH, m + fr, m + fr * ECLIPSE_SQUASH)), WHITE if k < 4 else PINK_L)
         for j in range(14):
             a = math.tau * j / 14 + 0.15
-            ln = (14 + (k - 5) * 14) * (1.0 if j % 2 == 0 else 0.55)
-            c.flat(L([(m, m), (m + math.cos(a) * ln, m + math.sin(a) * ln * ECLIPSE_SQUASH)], 1), WHITE if k < 8 else PINK_L)
+            ln = (30 + k * 12) * (1.0 if j % 2 == 0 else 0.55)
+            c.flat(L([(m, m), (m + math.cos(a) * ln, m + math.sin(a) * ln * ECLIPSE_SQUASH)], 1), WHITE if k < 4 else PINK_L)
     for j in range(26):  # motes lifting off the dark
         a = rng.uniform(0, math.tau)
         rr = rng.uniform(0.15, 0.95) * ECLIPSE_R
         life = rng.randint(8, 16)
-        age = k - 8 - (j % 5)
+        age = k - 4 - (j % 5)
         if 0 <= age < life:
             sdot(c, round(m + math.cos(a) * rr), round(m + math.sin(a) * rr * ECLIPSE_SQUASH - age * 2.2), (VIOLET_L, PINK_L, VIOLET)[j % 3])
     img = outline(c.img)
@@ -11161,65 +11224,105 @@ def _eclipse_wisps(c: Canvas, k: float, period: float, r: float, spread: float =
 
 
 def eclipse_flare_frame(k: int) -> Image.Image:
-    """The black sun on his chest as it starts (128 px, over him, 14 frames): a dot gathers, snaps open to a black disc ringed with a white
+    """The black sun on his chest as it starts (128 px, over him, 14 frames; full size on frame 0): snaps open as a black disc ringed with a white
     corona and long rays, flashes, then shrinks to a smouldering ring while the rays spin off as sparks."""
     n = ECLIPSE_CELL
     m = n // 2
     c = Canvas(n)
     cy = m + 4
     t = (k + 1) / ECLIPSE_FLARE
-    if k < 3:
-        r0 = 2 + k * 2
-        c.flat(E((m - r0, cy - r0, m + r0, cy + r0)), OUTLINE)
-        c.flat(lambda d, f: d.ellipse((m - r0 - 1, cy - r0 - 1, m + r0 + 1, cy + r0 + 1), outline=f, width=1), WHITE)
-    else:
-        u = (k - 3) / (ECLIPSE_FLARE - 4)
-        r0 = (22 if k < 6 else 22 - 12 * _ease((k - 6) / 8)) * (1.0 + 0.0 * u)
-        rays = 16
-        for j in range(rays):
-            a = math.tau * j / rays + u * 1.2
-            ln = (r0 + 8 + (30 if j % 2 == 0 else 15) * (1 - u) ** 0.7) if k < 11 else (r0 + 4 + 8 * (1 - u))
-            col = WHITE if k < 6 else (VIOLET_L if k < 10 else VIOLET)
-            c.flat(L([(m + math.cos(a) * (r0 + 2), cy + math.sin(a) * (r0 + 2)), (m + math.cos(a) * ln, cy + math.sin(a) * ln)], 2 if j % 2 == 0 and k < 8 else 1), col)
-        c.flat(lambda d, f: d.ellipse((m - r0 - 2, cy - r0 - 2, m + r0 + 2, cy + r0 + 2), outline=f, width=2), WHITE if k < 8 else PINK_L)
-        c.flat(E((m - r0, cy - r0, m + r0, cy + r0)), OUTLINE)
-        c.flat(lambda d, f: d.arc((m - r0 + 2, cy - r0 + 2, m + r0 - 2, cy + r0 - 2), 200, 300, f, 1), VIOLET_D)
+    u = k / (ECLIPSE_FLARE - 1)
+    r0 = 22 if k < 7 else 22 - 12 * _ease((k - 7) / 6)
+    rays = 18
+    for j in range(rays):
+        a = math.tau * j / rays + u * 1.2
+        ln = (r0 + 10 + (34 if j % 2 == 0 else 17) * (1 - u) ** 0.7) if k < 11 else (r0 + 4 + 8 * (1 - u))
+        col = WHITE if k < 6 else (VIOLET_L if k < 10 else VIOLET)
+        c.flat(L([(m + math.cos(a) * (r0 + 2), cy + math.sin(a) * (r0 + 2)), (m + math.cos(a) * ln, cy + math.sin(a) * ln)], 2 if j % 2 == 0 and k < 9 else 1), col)
+    c.flat(lambda d, f: d.ellipse((m - r0 - 3, cy - r0 - 3, m + r0 + 3, cy + r0 + 3), outline=f, width=3), WHITE if k < 8 else PINK_L)
+    c.flat(E((m - r0, cy - r0, m + r0, cy + r0)), OUTLINE)
+    c.flat(lambda d, f: d.arc((m - r0 + 2, cy - r0 + 2, m + r0 - 2, cy + r0 - 2), 200, 300, f, 1), VIOLET_D)
     return _clear_edge(outline(c.img), 2)
+
+
+def _eclipse_halo(k: int, strength: float = 1.0, spread: float = 1.0) -> Image.Image:
+    """He stands in an eclipse (128 px): a dithered dark halo, thickest at its edge, a thin bright ring round it with two glints racing
+    along it, flickering corona spikes outside the ring and a few wisps of shadow. Loops over 8 frames."""
+    n = ECLIPSE_CELL
+    m = n // 2
+    cy = m + 2
+    ax, ay = 44 * spread, 50 * spread
+    halo = Canvas(n)
+    c = Canvas(n)
+    for y in range(n):
+        for x in range(n):
+            e = math.hypot((x - m) / ax, (y - cy) / ay)
+            if e < 1.0 and BAYER[y % 4][x % 4] / 16 < (0.1 + 0.26 * e ** 2) * strength:
+                halo.dot(x, y, OUTLINE if (x + y) % 3 else VIOLET_D)
+    segs = 72
+    glint = [int(k * segs / 2 / ECLIPSE_AURA) % segs, (int(k * segs / 2 / ECLIPSE_AURA) + segs // 2) % segs]
+    pts = [(m + math.cos(math.tau * i / segs) * ax, cy + math.sin(math.tau * i / segs) * ay) for i in range(segs + 1)]
+    for i in range(segs):
+        near = min(((i - g) % segs) for g in glint) < 6
+        c.flat(L([(round(pts[i][0]), round(pts[i][1])), (round(pts[i + 1][0]), round(pts[i + 1][1]))], 2 if near else 1),
+               WHITE if near else VIOLET_L)
+    rng = random.Random(70 + k)
+    for j in range(12):  # corona spikes, re-rolled each frame
+        a = rng.uniform(0, math.tau)
+        ln = rng.uniform(3, 8)
+        c.flat(L([(m + math.cos(a) * (ax + 2), cy + math.sin(a) * (ay + 2)), (m + math.cos(a) * (ax + 2 + ln), cy + math.sin(a) * (ay + 2 + ln))], 1),
+               VIOLET_L if j % 3 else PINK_L)
+    _eclipse_wisps(c, k, ECLIPSE_AURA, 38 * spread, 1.0, 5)
+    out = halo.img
+    out.alpha_composite(outline(c.img))
+    return _clear_edge(out, 2)
 
 
 def eclipse_aura_frame(k: int) -> Image.Image:
-    """The halo he stands in while it lasts (128 px loop, 8 frames): wisps of shadow circling his body, a thin violet corona flickering at the
-    edge and the odd mote drifting up. Sparse, so he stays readable to himself."""
-    c = Canvas(ECLIPSE_CELL)
-    m = ECLIPSE_CELL // 2
-    _eclipse_wisps(c, k, ECLIPSE_AURA, 36)
-    for i in range(10):
-        a = math.tau * (i / 10 + k / ECLIPSE_AURA / 10 * 3)
-        x, y = m + math.cos(a) * 40, m + 2 + math.sin(a) * 20 - 6
-        if (i + k) % 3:
-            sdot(c, round(x), round(y), VIOLET_L if math.sin(a) > 0 else VIOLET)
-    for j in range(5):
-        ph = (j / 5 + k / ECLIPSE_AURA) % 1.0
-        sdot(c, round(m - 30 + j * 15 + 3 * math.sin(ph * 6 + j)), round(m + 24 - ph * 56), PINK_L if ph < 0.5 else VIOLET_L)
-    return _clear_edge(outline(c.img), 2)
+    return _eclipse_halo(k)
 
 
 def eclipse_end_frame(k: int) -> Image.Image:
-    """The halo letting go (128 px, 12 frames): the wisps unwind outward and up, thinning, and the corona's dots drift away."""
-    c = Canvas(ECLIPSE_CELL)
-    m = ECLIPSE_CELL // 2
+    """The halo letting go (128 px, 12 frames): it swells outward, the ring breaks up and everything dithers away with a few motes drifting."""
     t = (k + 1) / ECLIPSE_END
-    _eclipse_wisps(c, k + ECLIPSE_AURA * 0.0, ECLIPSE_AURA, 36 + 24 * t, 1.0, 9)
-    img = outline(c.img)
-    img = dither_out(img, t ** 1.1 * 0.97)
+    img = dither_out(_eclipse_halo(k, 1.0 - 0.4 * t, 1.0 + 0.16 * t), t ** 1.1 * 0.97)
     o = Canvas(ECLIPSE_CELL)
+    m = ECLIPSE_CELL // 2
     rng = random.Random(55)
     for j in range(14):
         a = rng.uniform(0, math.tau)
-        d = 30 + t * rng.uniform(10, 40)
-        sdot(o, round(m + math.cos(a) * d), round(m + math.sin(a) * d * 0.55 - t * 20 * rng.random() - 6), VIOLET_L if j % 2 else PINK_L)
+        d = 40 + t * rng.uniform(8, 36)
+        sdot(o, round(m + math.cos(a) * d), round(m + math.sin(a) * d * 0.9 - t * 16 * rng.random()), VIOLET_L if j % 2 else PINK_L)
     img.alpha_composite(o.img)
     return _clear_edge(img, 2)
+
+
+def eclipse_ground_frame(k: int) -> Image.Image:
+    """The ground under him while it lasts (128 px, floor layer, loop of 8): a dark dithered pool, a thin violet ring of dashes turning
+    round it and motes of shadow lifting off."""
+    n = ECLIPSE_CELL
+    m = n // 2
+    pool = Canvas(n)
+    c = Canvas(n)
+    for y in range(n):
+        for x in range(n):
+            e = math.hypot((x - m) / 46, (y - m) / (46 * ECLIPSE_SQUASH))
+            if e < 1.0 and BAYER[y % 4][x % 4] / 16 < 0.62 - 0.3 * e:
+                pool.dot(x, y, OUTLINE if (x + y) % 3 else VIOLET_D)
+    dashes = 20
+    for i in range(dashes):
+        a0 = math.tau * (i / dashes + k / ECLIPSE_AURA / dashes * 2)
+        pts = [(m + math.cos(a) * 46, m + math.sin(a) * 46 * ECLIPSE_SQUASH) for a in (a0, a0 + math.tau / dashes * 0.6)]
+        c.flat(L([(round(x), round(y)) for x, y in pts], 1), VIOLET_L if math.sin(a0) < 0.3 else VIOLET)
+    rng = random.Random(81)
+    for j in range(7):
+        ph = (rng.random() + k / ECLIPSE_AURA) % 1.0
+        a = rng.uniform(0, math.tau)
+        r = rng.uniform(8, 40)
+        sdot(c, round(m + math.cos(a) * r), round(m + math.sin(a) * r * ECLIPSE_SQUASH - ph * 12), VIOLET_L if ph < 0.6 else VIOLET)
+    out = pool.img
+    out.alpha_composite(outline(c.img))
+    return _clear_edge(out, 2)
 
 
 ICONS["eclipse"] = lambda c: (c.flat(E((0, 0, 12, 12)), VIOLET_L), c.flat(E((1, 1, 11, 11)), VIOLET), c.flat(E((2, 2, 10, 10)), VIOLET_D),
@@ -11231,6 +11334,7 @@ FX.update({
     "eclipse_flare": lambda: strip([eclipse_flare_frame(k) for k in range(ECLIPSE_FLARE)]),
     "eclipse_aura": lambda: strip([eclipse_aura_frame(k) for k in range(ECLIPSE_AURA)]),
     "eclipse_end": lambda: strip([eclipse_end_frame(k) for k in range(ECLIPSE_END)]),
+    "eclipse_ground": lambda: strip([eclipse_ground_frame(k) for k in range(ECLIPSE_AURA)]),
 })
 
 

@@ -422,6 +422,7 @@ const ECLIPSE_BURST_ART: Texture2D = preload(FX_DIR + "eclipse_burst.png")
 const ECLIPSE_FLARE_ART: Texture2D = preload(FX_DIR + "eclipse_flare.png")
 const ECLIPSE_AURA_ART: Texture2D = preload(FX_DIR + "eclipse_aura.png")
 const ECLIPSE_END_ART: Texture2D = preload(FX_DIR + "eclipse_end.png")
+const ECLIPSE_GROUND_ART: Texture2D = preload(FX_DIR + "eclipse_ground.png")
 const ECLIPSE_ART_RADIUS: float = 220.5  # world px: 147 art px
 const ECLIPSE_BURST_TIME: float = 0.4
 const ECLIPSE_FLARE_TIME: float = 0.3
@@ -777,6 +778,15 @@ func _eclipse_edge(p: Player, slot: CharacterSkill, on: bool) -> void:
 		_poof(body, ECLIPSE_FLARE_ART, ECLIPSE_FLARE_TIME)
 	else:
 		_poof(body, ECLIPSE_END_ART, ECLIPSE_END_TIME)
+
+
+## The dark ring of ground under him while Eclipse lasts (floor layer).
+func _draw_eclipse_floor() -> void:
+	if _eclipse_t < 0.0:
+		return
+	var n: int = ECLIPSE_GROUND_ART.get_width() / ECLIPSE_GROUND_ART.get_height()
+	_draw_frame(ECLIPSE_GROUND_ART, int(_eclipse_t * ECLIPSE_AURA_FPS) % n, ECLIPSE_GROUND_ART.get_height(),
+		_eclipse_at + Vector2(0.0, Player.FOOT_RING_Y), Constants.SPRITE_SCALE, clampf(_eclipse_t / ECLIPSE_AURA_EASE, 0.0, 1.0), _floor)
 
 
 func _draw_eclipse() -> void:
@@ -1644,6 +1654,7 @@ func _draw_floor() -> void:
 	_draw_moss()
 	_draw_wtree_floor()
 	_draw_tempest_floor()
+	_draw_eclipse_floor()
 	_draw_shadow_floor()
 	for pf: Poof in _poofs:
 		if pf.on_floor:
