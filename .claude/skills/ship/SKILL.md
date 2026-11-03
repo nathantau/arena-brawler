@@ -42,3 +42,6 @@ ASC_KEY_ID=4TQNW332Q9 ASC_ISSUER_ID=96a7245c-300e-46d7-b2bc-1a795cfcfb2c tools/r
 - If that commit fails (e.g. a missing identity), the upload has already happened. Commit `Bump iOS build to N` by hand. Don't re-run the script: Apple rejects a "Redundant Binary Upload".
 - Report the build number to the user. If `LanDiscovery.VERSION` changed, also tell them every device must update.
 - The release needs the ASC .p8 on this machine and Xcode signed in to team 7J8PR82Q2Z. Bundle ID `com.nabot.brawlbit` must never change.
+
+## Straight to a paired iPhone (no TestFlight)
+When the user wants it on their phone now: iOS export, then the `xcodebuild ... -destination id=<UDID>` + `xcrun devicectl device install app` commands in CLAUDE.md Commands (`xcrun devicectl list devices` for the UDID). Run tests first, same as a push.
