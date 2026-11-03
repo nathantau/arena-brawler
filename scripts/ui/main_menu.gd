@@ -79,16 +79,18 @@ func _ready() -> void:
 	visibility_changed.connect(_sync_browser)
 	_sync_browser()
 
-	var small: Vector2 = Vector2((PLAY_SIZE.x - SPACING * 2.0) / 3.0, ROW_H)
+	var small: Vector2 = Vector2((PLAY_SIZE.x - SPACING * 3.0) / 4.0, ROW_H)
 	_ip_toggle = _button("Enter IP", small)
 	_ip_toggle.pressed.connect(func() -> void: _ip_row.visible = not _ip_row.visible)
 	_host = _button("Host Wi-Fi", small)
 	_host.pressed.connect(host_pressed.emit)
 	var settings := _button("Settings", small)
 	settings.pressed.connect(func() -> void: SettingsPanel.show_on(self))
+	var profile := _button("Profile", small)
+	profile.pressed.connect(func() -> void: ProfilePanel.show_on(self))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", SPACING)
-	for c: Control in [_ip_toggle, _host, settings]:
+	for c: Control in [_ip_toggle, _host, profile, settings]:
 		row.add_child(c)
 	var secondary := _centered(row)
 	box.add_child(secondary)
