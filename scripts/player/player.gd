@@ -182,6 +182,8 @@ var _trap_prev: float = 0.0
 var _trap_age: float = 0.0
 ## Null for client-side remote players (they are positioned by interpolation).
 var controller: PlayerController
+## Training only: hits can't take armor + hp below this (0 = normal rules).
+var min_hp: int = 0
 var projectiles: ProjectilePool
 var match_seed: int = 0
 var dead: bool = false
@@ -1244,6 +1246,8 @@ func take_hit(damage: int, _crit: bool, knockback: Vector2, attacker_id: int) ->
 	var bark: CharacterSkill = active_skill(SkillData.Kind.BARK_SKIN)
 	if bark != null:
 		damage = maxi(1, roundi(damage * bark.data.bark_damage_scale))
+	if min_hp > 0:  # Training: a hit can take armor and hp down to min_hp, never below
+		damage = mini(damage, maxi(0, stats.armor + stats.hp - min_hp))
 	var dealt: int = stats.apply_damage(damage)
 	if dealt <= 0:
 		return 0

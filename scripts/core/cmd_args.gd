@@ -5,6 +5,7 @@ extends RefCounted
 ##   --host [--port N]                listen server: this device hosts AND plays (the menu's HOST button)
 ##   --connect host[:port]            join a server directly
 ##   --offline                        local sandbox vs bots, skip the menu
+##   --training                       the guided Training match (one easy bot), skip the menu
 ##   --discover                       print games found on the LAN for ~4 s, then quit
 ##   --autopilot                      (client) drive + fire automatically, for testing
 ##   --net-debug                      print net stats periodically
@@ -24,6 +25,7 @@ var bots: int = 0
 var connect_host: String = ""
 var connect_port: int = Constants.DEFAULT_PORT
 var offline: bool = false
+var training: bool = false
 var autopilot: bool = false
 ## Test only (--press-special S): with --autopilot, press the special every S seconds whether or not an enemy is in sight.
 var press_special_every: int = 0
@@ -69,6 +71,8 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				i += 1
 			"--offline":
 				a.offline = true
+			"--training":
+				a.training = true
 			"--autopilot":
 				a.autopilot = true
 			"--passive":

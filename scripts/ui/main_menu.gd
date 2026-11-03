@@ -4,6 +4,7 @@ extends Control
 ## then Play vs bots (primary) and join-a-server by IP (direct connect until matchmaking in M6).
 
 signal offline_pressed
+signal training_pressed
 signal host_pressed
 signal join_pressed(address: String)
 
@@ -95,6 +96,11 @@ func _ready() -> void:
 	var secondary := _centered(row)
 	box.add_child(secondary)
 	_hide_while_typing.append(secondary)
+	var training := _button("Training", Vector2(PLAY_SIZE.x, ROW_H))
+	training.pressed.connect(training_pressed.emit)
+	var training_row := _centered(training)
+	box.add_child(training_row)
+	_hide_while_typing.append(training_row)
 
 	var join_row := HBoxContainer.new()
 	join_row.add_theme_constant_override("separation", SPACING)
