@@ -89,6 +89,7 @@ var _ready_buttons: Array[Button] = []
 ## Per fighter card: teammates' hover tags (top) and the lock badge (middle).
 var _fighter_tags: Dictionary[StringName, HBoxContainer] = {}
 var _fighter_badges: Dictionary[StringName, Label] = {}
+var _mastery_badges: Dictionary[StringName, Label] = {}
 var _fighter_frames: Dictionary[StringName, Panel] = {}
 ## Everyone's (fighter, locked) as last drawn, so _process restyles when a teammate browses.
 var _shown_crowd: Array = []
@@ -248,6 +249,14 @@ func _build_fighter_grid(box: BoxContainer) -> void:
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.visible = false
 		_fighter_badges[id] = badge
+		var mastery: Label = _label(card, &"Label")  # mastery level, bottom right corner of the card
+		mastery.text = "Lv %d" % PlayerProfile.level_of(id)
+		mastery.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		mastery.add_theme_font_override("font", UiStyle.bold())
+		mastery.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+		mastery.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING)
+		mastery.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_mastery_badges[id] = mastery
 
 
 ## Width of a grid of `count` fighter cards that wraps into evenly filled rows (4 + 3, not 6 + 1) in `avail` px.
@@ -857,6 +866,7 @@ func _refresh() -> void:
 			_fighter_scroller.reveal(_character_cards[_shown_pick[0]])
 	for id: StringName in _character_cards:
 		_character_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[0] else &"Card"
+		_mastery_badges[id].text = "Lv %d" % PlayerProfile.level_of(id)
 	for id: StringName in _weapon_cards:
 		_weapon_cards[id].theme_type_variation = &"CardSelected" if id == _shown_pick[1] else &"Card"
 		_outline_selected(_weapon_cards[id], id == _shown_pick[1], WEAPON_COLOR)

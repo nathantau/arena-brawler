@@ -1010,6 +1010,7 @@ func _on_referee_changed() -> void:
 
 func _on_projectile_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: int, crit: bool,
 		at: Vector2) -> void:
+	scores.register_damage(owner_id, victim_id, shot_seq, damage)
 	player_hit.emit(owner_id, shot_seq, pellet, victim_id, damage, crit, at)
 	_hit_owner = owner_id
 	hit_landed.emit(victim_id, damage, crit, at)
@@ -1026,6 +1027,8 @@ func _on_player_died(victim: Player, killer_id: int) -> void:
 
 
 func _on_player_shot(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
+	if mode != Mode.CLIENT and match_state.phase == MatchState.Phase.PLAYING:
+		scores.register_shot(shooter.player_id, seq)
 	shot_fired.emit(shooter.player_id, seq, origin, facing, weapon_id)
 
 

@@ -93,6 +93,7 @@ func flag_capture(carrier_id: int, scores: ScoreBoard) -> void:
 		return
 	state.flag_state[flag] = MatchState.Flag.HOME
 	state.flag_carrier[flag] = 0
+	scores.register_capture(carrier_id)
 	_end_round(MatchRules.other_team(flag), MatchRules.Reason.CAPTURE, scores)
 
 
@@ -282,6 +283,10 @@ func _end(scores: ScoreBoard) -> void:
 		row[MatchState.ResultField.ID] = id
 		row[MatchState.ResultField.KILLS] = scores.kills_of(id)
 		row[MatchState.ResultField.DEATHS] = scores.deaths_of(id)
+		row[MatchState.ResultField.DAMAGE] = scores.damage_of(id)
+		row[MatchState.ResultField.SHOTS] = scores.shots_of(id)
+		row[MatchState.ResultField.HITS] = scores.hits_of(id)
+		row[MatchState.ResultField.CAPTURES] = scores.captures_of(id)
 		state.results.append(row)
 	state.winner_id = MatchRules.winner(ranking, scores)
 	if state.mode == MatchRules.Mode.TEAMS:  # the team ahead on rounds (nobody on a tie); winner_id isn't used

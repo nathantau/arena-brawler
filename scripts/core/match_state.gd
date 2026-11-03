@@ -5,8 +5,8 @@ extends RefCounted
 
 enum Phase { LOBBY, COUNTDOWN, PLAYING, RESULTS }
 enum Field { PHASE, MODE, ARENA, TIME_LEFT, TIME_LIMIT, PARTICIPANTS, READY, RESULTS, WINNER, BLOCKER, TEAMS, ROUND_SCORES, ROUND, ROUND_WINNER, INTERMISSION, FLAGS, ROUND_REASON, LOCKS, GAPS, COUNT }
-## One results row: [id, kills, deaths].
-enum ResultField { ID, KILLS, DEATHS, COUNT }
+## One results row: [id, kills, deaths, damage, shots, hits, captures].
+enum ResultField { ID, KILLS, DEATHS, DAMAGE, SHOTS, HITS, CAPTURES, COUNT }
 
 var phase: Phase = Phase.LOBBY
 var mode: MatchRules.Mode = MatchRules.Mode.FFA

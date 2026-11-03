@@ -195,3 +195,20 @@ static func kill_target_reached(ids: Array[int], scores: ScoreBoard, mode: Mode)
 		if scores.kills_of(id) >= target:
 			return true
 	return false
+
+
+## MVP of a results list: most damage, flag captures break a tie (first in the list after that); 0 when
+## nobody dealt damage or captured.
+static func mvp(results: Array) -> int:
+	var best: int = 0
+	var best_dmg: int = 0
+	var best_cap: int = 0
+	for row: Variant in results:
+		var r: Array = row
+		var dmg: int = r[MatchState.ResultField.DAMAGE]
+		var cap: int = r[MatchState.ResultField.CAPTURES]
+		if dmg > best_dmg or (dmg == best_dmg and cap > best_cap):
+			best = r[MatchState.ResultField.ID]
+			best_dmg = dmg
+			best_cap = cap
+	return best
