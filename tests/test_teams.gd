@@ -526,9 +526,11 @@ func test_carrier_is_slower_cannot_dash_and_is_never_concealed() -> void:
 	assert_null(p.active_skill(SkillData.Kind.DASH), "no dash while carrying")
 	assert_true(p.skills[0].is_ready(), "and no cooldown spent")
 	f.skill = false
-	f.special = true  # Smoke Bomb: allowed to cast, but it does not hide a carrier
+	f.special = true  # Smoke Bomb is locked for a carrier: no poof, no cooldown spent
 	f.seq += 1
 	p.simulate(f, DT)
+	assert_null(p.active_skill(SkillData.Kind.SMOKE))
+	assert_true(p.skills[1].is_ready(), "no cooldown spent")
 	Player.viewer_team = B
 	assert_false(p.is_concealed(), "a carrier is never concealed")
 	assert_false(p.is_hidden(), "and can be targeted")
@@ -710,3 +712,61 @@ func test_hidden_enemy_has_no_ring_but_hidden_ally_does() -> void:
 	enemy.team = A
 	assert_gt(enemy.team_ring_color().a, 0.0)
 	Player.viewer_team = 0
+
+
+func _smoke_player(arena: Arena, id: int) -> Player:
+	var p: Player = arena.get_player(id)
+	p.frozen = false
+	p.set_skill(1, SkillCatalog.shared().get_skill(&"smoke_bomb"))
+	return p
+
+
+func _press_special(p: Player) -> void:
+	var f := InputFrame.new()
+	f.special = true
+	f.seq = 900
+	p.simulate(f, DT)
+	f = InputFrame.new()
+	f.seq = 901
+	p.simulate(f, DT)
+
+
+func test_carrier_pressing_smoke_bomb_is_refused_without_spending_the_cooldown() -> void:
+	var arena: Arena = _flag_arena()
+	var thief: Player = _smoke_player(arena, 3)
+	thief.global_position = arena.flag_base(A)
+	arena._tick_flags()
+	assert_true(thief.flag_carrier)
+	assert_true(thief.skill_locked(1), "padlocked")
+	_press_special(thief)
+	assert_null(thief.active_skill(SkillData.Kind.SMOKE))
+	assert_true(thief.skills[1].is_ready())
+
+
+func test_smoke_bomb_works_again_after_a_capture_and_round_reset() -> void:
+	var arena: Arena = _flag_arena()
+	var thief: Player = _smoke_player(arena, 3)
+	thief.global_position = arena.flag_base(A)
+	arena._tick_flags()
+	thief.global_position = arena.flag_base(B)
+	arena._tick_flags()
+	assert_false(thief.flag_carrier, "the capture clears the carrier")
+	assert_true(arena.match_state.inputs_locked(), "round-end freeze")
+	_press_special(thief)
+	assert_null(thief.active_skill(SkillData.Kind.SMOKE), "frozen: refused, nothing spent")
+	assert_true(thief.skills[1].is_ready())
+	arena.referee.tick(Constants.TEAMS_INTERMISSION + 0.1, arena._human_ids, arena._bot_ids, arena.scores)
+	assert_false(arena.match_state.inputs_locked(), "next round running")
+	_press_special(thief)
+	assert_not_null(thief.active_skill(SkillData.Kind.SMOKE), "smoke is active")
+	assert_true(thief.is_vanished(), "and really hides her")
+
+
+func test_picking_up_the_flag_ends_a_running_smoke_bomb() -> void:
+	var arena: Arena = _flag_arena()
+	var thief: Player = _smoke_player(arena, 3)
+	_press_special(thief)
+	assert_true(thief.is_vanished())
+	thief.global_position = arena.flag_base(A)
+	arena._tick_flags()
+	assert_null(thief.active_skill(SkillData.Kind.SMOKE), "no half-working smoke on a carrier")
