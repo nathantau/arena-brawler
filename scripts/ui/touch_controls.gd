@@ -39,6 +39,8 @@ const READY_PULSE_TIME: float = 0.45
 const READY_PULSE_GROW: float = 22.0
 const COLOR_READY: Color = Color(1, 0.95, 0.6, 0.9)
 
+const BUTTON_FIRE: int = -1
+const BUTTON_STICK: int = -2
 const TOUCH_FLAG: String = "--touch"
 
 var player: Player
@@ -131,6 +133,13 @@ func _special2_center() -> Vector2:
 ## Centre of the button for skill slot `i`.
 func _slot_center(i: int) -> Vector2:
 	return [_skill_center(), _special_center(), _special2_center()][i]
+
+
+## Screen position of a button's centre, for the tutorial highlight: slot 0..2, or `BUTTON_FIRE` / `BUTTON_STICK`.
+func button_center(which: int) -> Vector2:
+	var local: Vector2 = _attack_center() if which == BUTTON_FIRE else _joy_center() if which == BUTTON_STICK \
+		else _slot_center(which)
+	return get_global_transform() * local
 
 
 func _input(event: InputEvent) -> void:

@@ -7,6 +7,8 @@ var session: NetSession
 var args: CmdArgs
 
 var _offline_arena: Arena
+## The running offline match is the Training one (Restart in the pause menu repeats it).
+var _training: bool = false
 var _server_arena: Arena
 var _menu: MainMenu
 ## Picks the default arena of a new lobby (the server / offline host decides; clients just show it).
@@ -39,6 +41,8 @@ func _ready() -> void:
 		_start_host()
 	elif args.connect_host != "":
 		_join(args.connect_host, args.connect_port)
+	elif args.training:
+		_start_offline(true)
 	elif args.offline:
 		_start_offline()
 	else:
@@ -143,12 +147,24 @@ func _on_host_leave(_restart: bool) -> void:
 	_show_menu("")
 
 
-func _start_offline() -> void:
+## Play: the first time (and --training) it is the guided Training match, after that a normal one.
+func _on_play() -> void:
+	GameSettings.ensure_loaded()
+	_start_offline(not GameSettings.tutorial_done and not args.autopilot)
+
+
+## `training`: one easy bot, no lobby, `TutorialOverlay` guiding the player (replaces the one-time controls guide).
+func _start_offline(training: bool = false) -> void:
 	_arena_rng.randomize()
+	_training = training
+	if training:
+		GameSettings.howto_seen = true  # the guide replaces the controls page
+		GameSettings.save()
 	_hide_menu()
 	if _offline_arena != null:
 		_offline_arena.queue_free()
-	_offline_arena = Arena.new(Arena.Mode.OFFLINE, Constants.DEFAULT_MATCH_SEED, _chosen_mode(), args.time_limit)
+	_offline_arena = Arena.new(Arena.Mode.OFFLINE, Constants.DEFAULT_MATCH_SEED,
+			MatchRules.Mode.DUEL if training else _chosen_mode(), args.time_limit)
 	_offline_arena.match_state.arena_index = args.pick_arena(_arena_rng)
 	add_child(_offline_arena)
 	_offline_arena.leave_requested.connect(_on_offline_leave, CONNECT_DEFERRED)
@@ -157,8 +173,9 @@ func _start_offline() -> void:
 	input.special_every = args.press_special_every
 	var me: Player = _offline_arena.add_player(1, 0, input)
 	_offline_arena.attach_local_view(me, input)
-	for i: int in Constants.BOT_COUNT:
-		_offline_arena.add_bot(Constants.BOT_ID_BASE + i, _offline_arena.free_color_index())
+	var bot: Player
+	for i: int in (1 if training else Constants.BOT_COUNT):
+		bot = _offline_arena.add_bot(Constants.BOT_ID_BASE + i, _offline_arena.free_color_index())
 	if args.character != &"":
 		_offline_arena.select_character(me, args.character)
 	if args.weapon != &"":
@@ -168,13 +185,21 @@ func _start_offline() -> void:
 	if args.autopilot:
 		_offline_arena.fill_gaps(me)  # the lobby starts with empty ability slots
 		_offline_arena.referee.set_ready(me.player_id, true)
+	if training:
+		TutorialOverlay.setup_bot(bot)
+		_offline_arena.referee.set_ready(me.player_id, true)
+		var guide := TutorialOverlay.new()
+		guide.arena = _offline_arena
+		guide.bot = bot
+		guide.exit_requested.connect(_on_offline_leave.bind(false), CONNECT_DEFERRED)
+		_offline_arena.add_child(guide)
 
 
 ## Pause menu: Restart keeps the character (back to the lobby), Leave returns to the main menu.
 func _on_offline_leave(restart: bool) -> void:
 	if restart:
 		args.character = _offline_arena.local_player.character.id
-		_start_offline()
+		_start_offline(_training)
 		return
 	_offline_arena.queue_free()
 	_offline_arena = null
@@ -210,7 +235,8 @@ func _show_menu(status: String) -> void:
 		ScreenFade.play(self)
 	if _menu == null:
 		_menu = MainMenu.new()
-		_menu.offline_pressed.connect(_start_offline)
+		_menu.offline_pressed.connect(_on_play)
+		_menu.training_pressed.connect(_start_offline.bind(true))
 		_menu.host_pressed.connect(_start_host)
 		_menu.join_pressed.connect(func(address: String) -> void:
 			var addr: Array = CmdArgs.parse_address(address)
