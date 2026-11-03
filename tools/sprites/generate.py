@@ -2262,39 +2262,45 @@ def theme_sheet(floor, wall_top, wall_face, crate, crate_damaged) -> Image.Image
     return sheet
 
 
-def gym_decal() -> Image.Image:
-    """Court markings for the whole Gym (ARENA_W x ARENA_H tiles), hoops centred on the end walls."""
-    w, h = ARENA_W * TILE, ARENA_H * TILE
+def gym_decal(cw: int = ARENA_W, ch: int = ARENA_H) -> Image.Image:
+    """Court markings for the whole Gym (cw x ch tiles), hoops centred on the end walls. The wide Teams court
+    scales the markings with its height (k) so the key, arcs and centre circle keep a court's proportions."""
+    w, h = cw * TILE, ch * TILE
+    k = (ch - 2) / (ARENA_H - 2)
+    S = lambda v: round(v * k)
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     cx, cy = w // 2, h // 2
     paint, line = MAROON + (255,), WHITE + (255,)
     left, right, top, bottom = TILE + 10, w - TILE - 11, TILE + 10, h - TILE - 11
-    d.ellipse((cx - 70, cy - 70, cx + 70, cy + 70), paint)  # centre circle
+    rc = S(70)
+    d.ellipse((cx - rc, cy - rc, cx + rc, cy + rc), paint)  # centre circle
     for side in (1, -1):
         base = left if side == 1 else right
         hoop = base + side * 30
-        lane = (min(base, base + side * 190), cy - 60, max(base, base + side * 190), cy + 60)
+        lane = (min(base, base + side * S(190)), cy - S(60), max(base, base + side * S(190)), cy + S(60))
         d.rectangle(lane, paint)  # the key
         d.rectangle(lane, outline=line, width=2)
-        ft = base + side * 190
-        d.ellipse((ft - 60, cy - 60, ft + 60, cy + 60), outline=line, width=2)  # free-throw circle
-        d.arc((hoop - 300, cy - 300, hoop + 300, cy + 300), -68 if side == 1 else 112, 68 if side == 1 else 248,
+        ft = base + side * S(190)
+        d.ellipse((ft - S(60), cy - S(60), ft + S(60), cy + S(60)), outline=line, width=2)  # free-throw circle
+        ra = S(300)
+        d.arc((hoop - ra, cy - ra, hoop + ra, cy + ra), -68 if side == 1 else 112, 68 if side == 1 else 248,
               line, 2)  # three-point arc
-        for y in (cy - 278, cy + 276):
-            x_end = hoop + side * 112
+        for y in (cy - S(278), cy + S(276)):
+            x_end = hoop + side * S(112)
             d.rectangle((min(base, x_end), y, max(base, x_end), y + 1), line)
         d.rectangle((min(base, base + side * 6), cy - 22, max(base, base + side * 6), cy + 22), WHITE + (255,))  # backboard
         rim = base + side * 16
         d.ellipse((rim - 9, cy - 9, rim + 9, cy + 9), outline=ORANGE + (255,), width=2)
-    d.ellipse((cx - 70, cy - 70, cx + 70, cy + 70), outline=line, width=2)
-    d.ellipse((cx - 22, cy - 22, cx + 22, cy + 22), outline=line, width=2)
+    d.ellipse((cx - rc, cy - rc, cx + rc, cy + rc), outline=line, width=2)
+    d.ellipse((cx - S(22), cy - S(22), cx + S(22), cy + S(22)), outline=line, width=2)
     d.rectangle((cx - 1, top, cx, bottom), line)  # half-court line
     d.rectangle((left, top, right, bottom), outline=line, width=2)  # boundary
     return img
 
 
-DECALS = {"gym": gym_decal}
+WIDE_W, WIDE_H = 56, 28  # the Teams layouts (ArenaLayouts *_WIDE)
+DECALS = {"gym": gym_decal, "gym_wide": lambda: gym_decal(WIDE_W, WIDE_H)}
 
 
 def arena_reference(rows, sheet: Image.Image) -> Image.Image:
@@ -2314,7 +2320,12 @@ def arena_reference(rows, sheet: Image.Image) -> Image.Image:
 
 
 # theme -> (layout const in arena_layouts.gd, builder in arena_decor.py): decal + wall overlay
-ARENA_DECOR = {"pit": ("PIT", arena_decor.pit), "foundry": ("FOUNDRY", arena_decor.foundry)}
+ARENA_DECOR = {
+    "pit": ("pit", "PIT", arena_decor.pit),
+    "foundry": ("foundry", "FOUNDRY", arena_decor.foundry),
+    "pit_wide": ("pit", "PIT_WIDE", lambda rows, ref: arena_decor.pit(rows, ref, True)),
+    "foundry_wide": ("foundry", "FOUNDRY_WIDE", lambda rows, ref: arena_decor.foundry(rows, ref, True)),
+}
 
 
 def pickup_art() -> dict[str, Image.Image]:
@@ -10392,9 +10403,9 @@ def main() -> None:
         img = decal()
         check(img, img.width)
         img.save(ARENA_OUT / f"{name}_decal.png")
-    for name, (const, build) in ARENA_DECOR.items():
+    for name, (theme, const, build) in ARENA_DECOR.items():
         rows = arena_decor.load_layout(const)
-        deco = build(rows, arena_reference(rows, theme_sheet(*THEMES[name])))
+        deco = build(rows, arena_reference(rows, theme_sheet(*THEMES[theme])))
         for img in (deco.floor, deco.over):
             check(img, img.width, edges=False)
         deco.save(ARENA_OUT, name)

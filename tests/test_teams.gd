@@ -631,17 +631,25 @@ func test_every_weapon_hook_fits_its_lobby_card() -> void:
 func test_team_spawns_cluster_at_own_flag_base() -> void:
 	var tile: float = Constants.TILE_SIZE
 	for i: int in ArenaLayouts.count():
-		var map: ArenaMap = ArenaMap.parse(ArenaLayouts.get_layout(i), tile)
-		for team: int in [A, B]:
-			var base: Vector2 = map.flag_base(team, tile)
-			var pts: PackedVector2Array = map.base_spawns(team, tile)
-			assert_gte(pts.size(), 3, "layout %d team %d has spawns" % [i, team])
-			for p: Vector2 in pts:
-				assert_lte(p.distance_to(base), 4.0 * tile, "near base")
-				assert_eq(p.x < map.size.x * 0.5, team == A, "own half")
-				var r: Rect2 = Rect2(p - Vector2.ONE * Constants.PLAYER_RADIUS, Vector2.ONE * Constants.PLAYER_RADIUS * 2.0)
-				for w: Rect2 in map.walls:
-					assert_false(w.intersects(r), "spawn %s overlaps wall" % p)
+		for wide: bool in [false, true]:
+			var map: ArenaMap = ArenaMap.parse(ArenaLayouts.get_layout(i, wide), tile)
+			for team: int in [A, B]:
+				var base: Vector2 = map.flag_base(team, tile)
+				var pts: PackedVector2Array = map.base_spawns(team, tile)
+				assert_gte(pts.size(), 3, "layout %d wide %s team %d has spawns" % [i, wide, team])
+				var far: float = 0.0  # well spread: some pair is at least 2 tiles apart
+				for p: Vector2 in pts:
+					assert_lte(p.distance_to(base), 4.0 * tile, "near base")
+					assert_eq(p.x < map.size.x * 0.5, team == A, "own half")
+					assert_lt(absf(p.x - base.x), 8.0 * tile)
+					var r: Rect2 = Rect2(p - Vector2.ONE * Constants.PLAYER_RADIUS, Vector2.ONE * Constants.PLAYER_RADIUS * 2.0)
+					for w: Rect2 in map.walls:
+						assert_false(w.intersects(r), "spawn %s overlaps wall" % p)
+					for q: Vector2 in pts:
+						far = maxf(far, p.distance_to(q))
+				assert_gte(far, 2.0 * tile, "spawns spread out")
+				var back_wall_gap: float = (base.x if team == A else map.size.x - base.x) / tile
+				assert_lte(back_wall_gap, 4.0, "flag base sits near its back wall")
 
 
 func test_duel_respawn_is_still_2_s() -> void:
