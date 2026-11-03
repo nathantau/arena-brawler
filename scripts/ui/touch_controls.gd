@@ -264,10 +264,12 @@ func _draw() -> void:
 func _skill_button(c: Vector2, radius: float, scale_px: float, sk: CharacterSkill, held: bool, locked: bool = false) -> void:
 	_round(c, "round", scale_px, held)
 	UiStyle.draw_icon(self, sk.data.icon, c + _drop(held), scale_px)
-	if locked:  # the other special is mid-use: greyed out with a padlock, presses are ignored
-		draw_circle(c, radius * 0.9, Color(0.1, 0.1, 0.14, 0.7))
-		draw_arc(c, radius * 0.22, PI, TAU, 12, UiStyle.C_WHITE, 4.0)
-		draw_rect(Rect2(c + Vector2(-radius * 0.3, -radius * 0.02), Vector2(radius * 0.6, radius * 0.45)), UiStyle.C_WHITE)
+	if locked:  # the other special is mid-use: lightly dimmed (icon still readable), small padlock badge, presses ignored
+		draw_circle(c, radius * 0.9, Color(0.1, 0.1, 0.14, 0.35))
+		var b: Vector2 = c + Vector2(radius * 0.62, radius * 0.62)
+		draw_circle(b, radius * 0.34, Color(0.1, 0.1, 0.14, 0.9))
+		draw_arc(b + Vector2(0.0, -radius * 0.04), radius * 0.11, PI, TAU, 10, UiStyle.C_WHITE, 3.0)
+		draw_rect(Rect2(b + Vector2(-radius * 0.15, -radius * 0.04), Vector2(radius * 0.3, radius * 0.22)), UiStyle.C_WHITE)
 	elif sk.is_active():
 		draw_arc(c, radius - 2.0, 0.0, TAU, SEGMENTS, UiStyle.C_TEAL_L, 4.0)
 	elif not sk.is_ready():
