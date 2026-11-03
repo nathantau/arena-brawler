@@ -37,8 +37,8 @@ func start(port: int, bot_count: int, max_clients: int = Constants.MAX_CLIENTS) 
 	arena.pickups.changed.connect(_on_pickups_changed)
 	for i: int in bot_count:
 		arena.add_bot(Constants.BOT_ID_BASE + i, arena.free_color_index())
-	print("[server] listening on UDP %d (seed %d, %d bots, %s)" % [port, arena.match_seed, bot_count,
-		MatchRules.MODE_NAMES[arena.match_state.mode]])
+	print("[server] listening on UDP %d (protocol v%d, seed %d, %d bots, %s)" % [port, LanDiscovery.VERSION,
+		arena.match_seed, bot_count, MatchRules.MODE_NAMES[arena.match_state.mode]])
 	return OK
 
 
