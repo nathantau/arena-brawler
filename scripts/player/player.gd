@@ -144,13 +144,18 @@ var is_bot: bool = false
 ## Teams mode: 0 = no team (Duel / FFA), else MatchRules.TEAM_A / TEAM_B. Allies never hurt or target each other.
 var team: int = 0
 ## Teams: true while this player carries the enemy flag (set from the match state on every peer): slower, no movement
-## specials, and Smoke Bomb doesn't hide them.
-var flag_carrier: bool = false
+## specials, and Smoke Bomb is locked (it would not hide them). Picking up the flag ends a running Smoke Bomb.
+var flag_carrier: bool = false:
+	set(v):
+		flag_carrier = v
+		if v:
+			_break_vanish()
 ## Max HP multiplier from the mode (Constants.TEAMS_HP_SCALE in Teams, else 1).
 var hp_scale: float = 1.0
-## Movement specials a flag carrier can't use.
+## Specials a flag carrier can't use (movement ones, and Smoke Bomb: vanishing never works on a carrier).
 const CARRIER_BLOCKED_KINDS: Array[SkillData.Kind] = [SkillData.Kind.DASH, SkillData.Kind.SWING, SkillData.Kind.GRAPPLE,
-	SkillData.Kind.TRAIL, SkillData.Kind.DRIFT, SkillData.Kind.OVERDRIVE, SkillData.Kind.STEP]
+	SkillData.Kind.TRAIL, SkillData.Kind.DRIFT, SkillData.Kind.OVERDRIVE, SkillData.Kind.STEP,
+	SkillData.Kind.SMOKE]
 ## The team of the player this device watches (0 = none): its Smoke Bomb users stay visible to it.
 static var viewer_team: int = 0
 ## Countdown / results screen: inputs are ignored (timers still run).
