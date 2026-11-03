@@ -113,14 +113,14 @@ func test_match_and_round_start_reset_the_charge() -> void:
 
 
 func test_a_fighter_without_an_ultimate_has_a_locked_slot() -> void:
-	var p: Player = _duo(&"sakura")[0]
+	var p: Player = _duo(&"warden")[0]  # benched, no ultimate
 	assert_eq(p.skills[2].data, Player.NO_ULT)
 	p.ult_charge = 1.0
 	assert_false(p.ult_ready())
 	_step(p, true)
 	assert_eq(p.ult_charge, 1.0, "pressing does nothing")
 	assert_false(p.skills[2].is_active())
-	var copy: Player = _duo(&"sakura")[1]
+	var copy: Player = _duo(&"warden")[1]
 	assert_true(copy.apply_state(p.capture_state(), WeaponCatalog.load_all(), characters), "snapshot works")
 
 
@@ -138,7 +138,11 @@ func test_ultimate_assignments() -> void:
 	assert_eq(characters.get_character(&"wukong").ultimate.id, &"great_ape")
 	assert_eq(characters.get_character(&"flint").ultimate.id, &"inferno")
 	assert_eq(characters.get_character(&"flicker").ultimate.id, &"shadow_clones")
-	assert_null(characters.get_character(&"sakura").ultimate)
+	assert_eq(characters.get_character(&"sakura").ultimate.id, &"hanami_tempest")
+	assert_eq(characters.get_character(&"bolt").ultimate.id, &"thunderstorm")
+	assert_eq(characters.get_character(&"eden").ultimate.id, &"world_tree")
+	assert_eq(characters.get_character(&"shadow").ultimate.id, &"eclipse")
+	assert_null(characters.get_character(&"warden").ultimate)
 
 
 func test_one_ability_rules_still_gate_the_ultimate() -> void:

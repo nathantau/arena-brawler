@@ -4,12 +4,14 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/sakura.png" id="2_sheet"]
 [ext_resource type="Resource" path="res://data/weapons/sakura_fan.tres" id="3_sig"]
 [ext_resource type="Resource" path="res://data/skills/petal_storm.tres" id="5_skill"]
+[ext_resource type="Resource" path="res://data/skills/hanami_tempest.tres" id="9_ult"]
 
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
 signature_weapon = ExtResource("3_sig")
 signature_skill = ExtResource("5_skill")
+ultimate = ExtResource("9_ult")
 weapon_tags = Array[StringName]([&"sakura", &"light", &"precision"])
 id = &"sakura"
 display_name = "Sakura"

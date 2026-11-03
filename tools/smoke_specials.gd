@@ -24,6 +24,8 @@ class Presser extends LocalInput:
 		f.special = n % FRAMES_PER_COMBO == 10
 		f.skill = n % FRAMES_PER_COMBO == 40
 		f.special2 = n % FRAMES_PER_COMBO == 70
+		if f.special2:
+			p.ult_charge = 1.0  # slot 2 is the charged ultimate: fill it so every combo fires it too
 		return f
 
 

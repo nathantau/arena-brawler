@@ -140,11 +140,10 @@ func _on_step(_s: TutorialFlow.Step) -> void:
 	_canvas.queue_redraw()
 
 
-## TRAINING STUB: stands in for the real ultimate charge. Slot 2 is a plain cooldown skill in this tree, so "charged" =
-## ready now. Replace the body with the ultimate-charge API (fill the charge to full) when it exists.
+## The ultimate step fills the charge so the player can try it at once.
 func _fill_ultimate_charge() -> void:
 	if flow.step == TutorialFlow.Step.ULTIMATE and is_instance_valid(player):
-		player.skills[TutorialFlow.ULTIMATE_SLOT].cooldown_remaining = 0.0
+		player.ult_charge = 1.0
 
 
 func _on_player_hit(owner_id: int, _seq: int, _pellet: int, victim_id: int, _dmg: int, _crit: bool,
