@@ -103,6 +103,8 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export_group("Smoke")
 ## Move speed multiplier while invisible: the smoke is a way to reposition, not a free-fire mode.
 @export var smoke_speed_scale: float = 1.0
+## Shadow's Eclipse: firing or using another special does NOT break it, and `volley_weapon` (a blast) goes off on him as it starts.
+@export var smoke_persist: bool = false
 
 @export_group("Ward")
 ## Enemy projectiles crossing into this radius round the player are caught.
@@ -116,6 +118,9 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 ## Push outward from him per tick.
 @export var whirl_knockback: float = 120.0
 @export var whirl_speed_scale: float = 0.75
+## Sakura's Hanami Tempest: whoever a tick hits is also slowed (x`whirl_slow_factor` for `whirl_slow_time`). 0 = no slow.
+@export var whirl_slow_time: float = 0.0
+@export var whirl_slow_factor: float = 1.0
 
 @export_group("Volley")
 @export var volley_weapon: WeaponData
@@ -158,6 +163,12 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var bloom_heal: int = 3
 ## Seconds between heals (the first falls one interval after the press).
 @export var bloom_interval: float = 0.5
+## Eden's World Tree (all default off): each tick also heals teammates in range, hurts enemies in range by `bloom_damage`
+## and roots them (x`bloom_slow_factor` for `bloom_slow_time`).
+@export var bloom_heal_allies: bool = false
+@export var bloom_damage: int = 0
+@export var bloom_slow_time: float = 0.0
+@export var bloom_slow_factor: float = 1.0
 
 
 @export_group("Gust")

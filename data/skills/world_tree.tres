@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="SkillData" format=3]
+
+[ext_resource type="Script" path="res://scripts/player/skill_data.gd" id="1_sk"]
+[ext_resource type="Texture2D" path="res://assets/ui/icon_world_tree.png" id="2_icon"]
+
+[resource]
+script = ExtResource("1_sk")
+icon = ExtResource("2_icon")
+id = &"world_tree"
+display_name = "World Tree"
+kind = 21
+special = true
+blurb = "Tree heals, roots"
+tags = Array[StringName]([&"eden"])
+cooldown = 20.0
+duration = 7.0
+bloom_radius = 160.0
+bloom_heal = 6
+bloom_interval = 0.5
+bloom_heal_allies = true
+bloom_damage = 4
+bloom_slow_time = 0.7
+bloom_slow_factor = 0.3

@@ -321,7 +321,8 @@ const RIFT_FORM_ART: Texture2D = preload(FX_DIR + "rift_form.png")
 const RIFT_LOOP_ART: Texture2D = preload(FX_DIR + "rift_loop.png")
 const RIFT_END_ART: Texture2D = preload(FX_DIR + "rift_end.png")
 const RIFT_LASH_ART: Texture2D = preload(FX_DIR + "rift_lash.png")
-const RAIN_ART_SETS: Dictionary = {&"void_rift": [RIFT_FORM_ART, RIFT_LOOP_ART, RIFT_END_ART, RIFT_LASH_ART]}
+const RAIN_ART_SETS: Dictionary = {&"void_rift": [RIFT_FORM_ART, RIFT_LOOP_ART, RIFT_END_ART, RIFT_LASH_ART],
+	&"thunderstorm": [TSTORM_FLOOR_FORM_ART, TSTORM_FLOOR_ART, TSTORM_FLOOR_END_ART, TSTORM_BOLT_ART]}
 ## Bolt's Tesla Coil shares Cherry Sapling's path (64 px strips, foot on row SAPLING_BASE_Y): [grow, idle, fire, wilt].
 const COIL_ART_SETS: Dictionary = {&"tesla_coil": [preload(FX_DIR + "coil_grow.png"), preload(FX_DIR + "coil_idle.png"),
 	preload(FX_DIR + "coil_fire.png"), preload(FX_DIR + "coil_wilt.png")]}
@@ -370,6 +371,63 @@ const RAIN_KUNAI_TIME: float = 0.6
 const RAIN_KUNAI_BASE_Y: float = 56.0
 ## Extra kunai per tick at spots inside the ring (a victim always takes one).
 const RAIN_EXTRA: int = 3
+## ---- Ultimates (generate.py "Ultimates" block). Each is read from the synced skill state, like the specials they share a path with.
+## Sakura's Hanami Tempest (WHIRL path): a floor loop (far half of the funnel, pool, ring) and a front loop over her, a 0.4 s start and a 0.5 s end.
+const TEMPEST_START_ART: Texture2D = preload(FX_DIR + "tempest_start.png")
+const TEMPEST_FRONT_ART: Texture2D = preload(FX_DIR + "tempest_front.png")
+const TEMPEST_END_ART: Texture2D = preload(FX_DIR + "tempest_end.png")
+const TEMPEST_FLOOR_ART: Texture2D = preload(FX_DIR + "tempest_floor.png")
+const TEMPEST_ART_RADIUS: float = 126.0  # world px: the ring's 84 art px
+const TEMPEST_FOOT_Y: float = 140.0  # the row her feet are on in the front strips
+const TEMPEST_START_TIME: float = 0.4
+const TEMPEST_FPS: float = 24.0  # 24 frames = one second
+const TEMPEST_END_TIME: float = 0.5
+const TEMPEST_FLOOR_FADE: float = 0.3
+## Bolt's Thunderstorm (RAIN path, art set in RAIN_ART_SETS): the cloud bank is drawn upright over the spot, a mark flickers under each
+## victim TSTORM_MARK_LEAD before a strike tick, the bolts are the "drop" strip (strike point on row TSTORM_BOLT_BASE_Y of a 160 px frame).
+const TSTORM_FLOOR_FORM_ART: Texture2D = preload(FX_DIR + "tstorm_floor_form.png")
+const TSTORM_FLOOR_ART: Texture2D = preload(FX_DIR + "tstorm_floor.png")
+const TSTORM_FLOOR_END_ART: Texture2D = preload(FX_DIR + "tstorm_floor_end.png")
+const TSTORM_BOLT_ART: Texture2D = preload(FX_DIR + "tstorm_bolt.png")
+const TSTORM_FORM_ART: Texture2D = preload(FX_DIR + "tstorm_form.png")
+const TSTORM_CLOUD_ART: Texture2D = preload(FX_DIR + "tstorm_cloud.png")
+const TSTORM_END_ART: Texture2D = preload(FX_DIR + "tstorm_end.png")
+const TSTORM_MARK_ART: Texture2D = preload(FX_DIR + "tstorm_mark.png")
+const TSTORM_ART_RADIUS: float = 189.0
+const TSTORM_FLOOR_Y: float = 232.0
+const TSTORM_BOLT_BASE_Y: float = 148.0
+const TSTORM_BOLT_TIME: float = 0.5
+const TSTORM_MARK_LEAD: float = 0.3
+const TSTORM_FORM_TIME: float = 0.4
+const TSTORM_END_TIME: float = 0.5
+const TSTORM_FPS: float = 15.0  # 12 frames, a flash every 6
+## Eden's World Tree (BLOOM path): the tree is upright and depth-sorted (grow / idle / wilt, foot on row WTREE_BASE_Y of a 160 px frame), its
+## ground (roots, thorn rim, a heal pulse every 0.5 s = one bloom tick) is on the floor layer.
+const WTREE_GROW_ART: Texture2D = preload(FX_DIR + "wtree_grow.png")
+const WTREE_IDLE_ART: Texture2D = preload(FX_DIR + "wtree_idle.png")
+const WTREE_WILT_ART: Texture2D = preload(FX_DIR + "wtree_wilt.png")
+const WTREE_FLOOR_FORM_ART: Texture2D = preload(FX_DIR + "wtree_floor_form.png")
+const WTREE_FLOOR_ART: Texture2D = preload(FX_DIR + "wtree_floor.png")
+const WTREE_FLOOR_END_ART: Texture2D = preload(FX_DIR + "wtree_floor_end.png")
+const WTREE_ART_RADIUS: float = 160.5  # world px: the ring's 107 art px
+const WTREE_BASE_Y: float = 142.0
+const WTREE_GROW_FPS: float = 36.0
+const WTREE_IDLE_FPS: float = 8.0
+const WTREE_WILT_FPS: float = 24.0
+const WTREE_FORM_FPS: float = 30.0
+const WTREE_LOOP_FPS: float = 16.0  # 8 frames = the 0.5 s heal tick
+const WTREE_END_FPS: float = 20.0
+## Shadow's Eclipse (SMOKE path): a flood of darkness on the floor and a black-sun flare at the press, a halo of wisps while it lasts.
+const ECLIPSE_BURST_ART: Texture2D = preload(FX_DIR + "eclipse_burst.png")
+const ECLIPSE_FLARE_ART: Texture2D = preload(FX_DIR + "eclipse_flare.png")
+const ECLIPSE_AURA_ART: Texture2D = preload(FX_DIR + "eclipse_aura.png")
+const ECLIPSE_END_ART: Texture2D = preload(FX_DIR + "eclipse_end.png")
+const ECLIPSE_ART_RADIUS: float = 220.5  # world px: 147 art px
+const ECLIPSE_BURST_TIME: float = 0.4
+const ECLIPSE_FLARE_TIME: float = 0.3
+const ECLIPSE_END_TIME: float = 0.4
+const ECLIPSE_AURA_FPS: float = 16.0
+const ECLIPSE_AURA_EASE: float = 0.3
 ## Godspeed (Player.godspeed, every peer): a flash of light and rays when it switches on, a thinning shell of glow when it ends.
 const GOD_FLASH_ART: Texture2D = preload(FX_DIR + "bolt_flash.png")
 const GOD_DOWN_ART: Texture2D = preload(FX_DIR + "bolt_down.png")
@@ -448,6 +506,16 @@ var _bub_scale: float = 1.0
 var _bub_at: Vector2 = Vector2.ZERO
 ## Staff Whirl: seconds spinning (-1 = not), its radius, where he's drawn, which way he faces, damage ticks seen.
 var _whirl_t: float = -1.0
+## Hanami Tempest: seconds in (-1 = off), her feet as drawn, seconds left of the floor glow after it ends.
+var _tempest_t: float = -1.0
+var _tempest_at: Vector2 = Vector2.ZERO
+var _tempest_out: float = -1.0
+var _tempest_k: float = 1.0
+## World Tree: the slot while it stands (else null).
+var _wtree: CharacterSkill
+## Eclipse: seconds in (-1 = off) and where he is drawn.
+var _eclipse_t: float = -1.0
+var _eclipse_at: Vector2 = Vector2.ZERO
 var _whirl_radius: float = 0.0
 var _whirl_at: Vector2 = Vector2.ZERO
 var _whirl_flip: bool = false
@@ -508,6 +576,7 @@ var _quake_started: bool = false
 var _quake_mark: CharacterSkill
 ## Kunai Rain while it lasts (null = not): the slot, where it was, strike ticks seen.
 var _rain: CharacterSkill
+var _rain_marked: int = 0
 var _rain_spot: Vector2 = Vector2.ZERO
 var _rain_ticks: int = 0
 var _od_t: float = -1.0
@@ -558,9 +627,14 @@ func sync(p: Player) -> void:
 	var smoke: CharacterSkill = _slot(p, SkillData.Kind.SMOKE)
 	var vanished: bool = smoke != null and smoke.is_active() and not p.dead
 	if vanished != _was_vanished and (vanished or not p.dead):  # the poof that hides her, and the one she comes back in
-		_poof(p.global_position + p.visual_offset, POOF_BIG, CLONE_POOF_TIME, VANISH_POOF_SCALE)
-		_poofs[-1].tint = VANISH_POOF_TINT
+		if smoke != null and smoke.data.id == &"eclipse":
+			_eclipse_edge(p, smoke, vanished)
+		else:
+			_poof(p.global_position + p.visual_offset, POOF_BIG, CLONE_POOF_TIME, VANISH_POOF_SCALE)
+			_poofs[-1].tint = VANISH_POOF_TINT
 	_was_vanished = vanished
+	_eclipse_at = p.global_position + p.visual_offset
+	_eclipse_t = smoke.elapsed() if vanished and smoke != null and smoke.data.id == &"eclipse" else -1.0
 	var cloning: bool = clones != null and clones.is_cloning()
 	if cloning and not _was_cloning:
 		for at: Vector2 in _points:
@@ -694,11 +768,31 @@ func sync(p: Player) -> void:
 	_floor.queue_redraw()
 
 
+## Eclipse starting (the flood of darkness on the floor, the black sun on him) or ending (the halo unwinds).
+func _eclipse_edge(p: Player, slot: CharacterSkill, on: bool) -> void:
+	var body: Vector2 = p.global_position + p.visual_offset
+	if on:
+		var k: float = slot.data.volley_weapon.splash_radius / ECLIPSE_ART_RADIUS
+		_poof(body + Vector2(0.0, Player.FOOT_RING_Y), ECLIPSE_BURST_ART, ECLIPSE_BURST_TIME, k, true)
+		_poof(body, ECLIPSE_FLARE_ART, ECLIPSE_FLARE_TIME)
+	else:
+		_poof(body, ECLIPSE_END_ART, ECLIPSE_END_TIME)
+
+
+func _draw_eclipse() -> void:
+	if _eclipse_t < 0.0:
+		return
+	var n: int = ECLIPSE_AURA_ART.get_width() / ECLIPSE_AURA_ART.get_height()
+	_draw_frame(ECLIPSE_AURA_ART, int(_eclipse_t * ECLIPSE_AURA_FPS) % n, ECLIPSE_AURA_ART.get_height(), _eclipse_at,
+		Constants.SPRITE_SCALE, clampf(_eclipse_t / ECLIPSE_AURA_EASE, 0.0, 1.0))
+
+
 func _sync_eden(p: Player) -> void:
 	var bark: CharacterSkill = _slot(p, SkillData.Kind.BARK_SKIN)
 	_bark = bark if bark != null and bark.is_barked() and not p.dead else null
 	var bloom: CharacterSkill = _slot(p, SkillData.Kind.BLOOM)
 	_bloom = bloom if bloom != null and bloom.is_active() and not p.dead else null
+	_wtree = _bloom if _bloom != null and _bloom.data.id == &"world_tree" else null
 	var gust: CharacterSkill = _slot(p, SkillData.Kind.GUST)
 	_gust = gust if gust != null and gust.is_gusting() and not p.dead else null
 	_eden_at = p.global_position + p.visual_offset
@@ -752,9 +846,51 @@ func _draw_heal() -> void:
 	_draw_frame(HEAL_ART, int(_time * HEAL_FPS) % n, HEAL_ART.get_height(), _eden_at, Constants.SPRITE_SCALE)
 
 
+## The World Tree: erupts, idles (swaying, motes rising), and withers over the last strip's length. Depth-sorted on its foot.
+func _draw_wtree() -> void:
+	if _wtree == null:
+		return
+	var t: float = _wtree.elapsed()
+	var art: Texture2D = WTREE_IDLE_ART
+	var frame: int = int(t * WTREE_IDLE_FPS)
+	var wilt_time: float = WTREE_WILT_ART.get_width() / WTREE_WILT_ART.get_height() / WTREE_WILT_FPS
+	var grow_time: float = WTREE_GROW_ART.get_width() / WTREE_GROW_ART.get_height() / WTREE_GROW_FPS
+	if t < grow_time:
+		art = WTREE_GROW_ART
+		frame = int(t * WTREE_GROW_FPS)
+	elif _wtree.active_remaining < wilt_time:
+		art = WTREE_WILT_ART
+		frame = int((wilt_time - _wtree.active_remaining) * WTREE_WILT_FPS)
+	var n: int = art.get_width() / art.get_height()
+	var px: float = Constants.SPRITE_SCALE
+	_draw_frame(art, mini(frame, n - 1) if art != WTREE_IDLE_ART else frame % n, art.get_height(),
+		_wtree.anchor + Vector2(0.0, (art.get_height() * 0.5 - WTREE_BASE_Y) * px), px)
+
+
+## The World Tree's ground: roots run out, then the loop pulses gold on every heal tick, and it sinks away at the end.
+func _draw_wtree_floor() -> void:
+	if _wtree == null:
+		return
+	var t: float = _wtree.elapsed()
+	var form_n: int = WTREE_FLOOR_FORM_ART.get_width() / WTREE_FLOOR_FORM_ART.get_height()
+	var end_n: int = WTREE_FLOOR_END_ART.get_width() / WTREE_FLOOR_END_ART.get_height()
+	var form_time: float = form_n / WTREE_FORM_FPS
+	var end_time: float = end_n / WTREE_END_FPS
+	var art: Texture2D = WTREE_FLOOR_ART
+	var frame: int = int(t * WTREE_LOOP_FPS) % (art.get_width() / art.get_height())
+	if t < form_time:
+		art = WTREE_FLOOR_FORM_ART
+		frame = mini(int(t * WTREE_FORM_FPS), form_n - 1)
+	elif _wtree.active_remaining < end_time:
+		art = WTREE_FLOOR_END_ART
+		frame = mini(int((end_time - _wtree.active_remaining) * WTREE_END_FPS), end_n - 1)
+	var k: float = _wtree.data.bloom_radius / WTREE_ART_RADIUS
+	_draw_frame(art, frame, art.get_height(), _wtree.anchor, Constants.SPRITE_SCALE * k, 1.0, _floor)
+
+
 ## The moss patch on the floor: grows, loops (sprouts swaying), wilts over the last strip's length.
 func _draw_moss() -> void:
-	if _bloom == null:
+	if _bloom == null or _wtree != null:
 		return
 	var t: float = _bloom.elapsed()
 	var art: Texture2D = MOSS_ART
@@ -920,15 +1056,60 @@ func _sync_rain(p: Player) -> void:
 			_volley(p, open, ticks)
 		_rain_ticks = ticks
 		_rain_spot = open.anchor
+		var next: int = ticks + 1  # Thunderstorm: a mark flickers under each victim shortly before the tick that strikes them
+		if open.data.id == &"thunderstorm" and next > _rain_marked and next * open.data.storm_interval <= open.data.duration + 0.01 \
+				and open.elapsed() >= next * open.data.storm_interval - TSTORM_MARK_LEAD:
+			_rain_marked = next
+			_mark_storm(p, open)
 	elif _rain != null and not p.dead:
 		var end_art: Texture2D = RAIN_ART_SETS.get(_rain.data.id, [null, null, RAIN_END_ART])[2]
-		_poof(_rain_spot, end_art, RAIN_END_TIME, _rain.data.storm_radius / RAIN_ART_RADIUS, true)
+		_poof(_rain_spot, end_art, RAIN_END_TIME, _rain.data.storm_radius / _rain_radius(_rain.data.id), true)
+		if _rain.data.id == &"thunderstorm":
+			_poof(_rain_spot + Vector2(0.0, (TSTORM_END_ART.get_height() * 0.5 - TSTORM_FLOOR_Y) * Constants.SPRITE_SCALE),
+				TSTORM_END_ART, TSTORM_END_TIME)
+	if open == null:
+		_rain_marked = 0
 	_rain = open
+
+
+static func _rain_radius(id: StringName) -> float:
+	return TSTORM_ART_RADIUS if id == &"thunderstorm" else RAIN_ART_RADIUS
+
+
+## Thunderstorm: the warning under everyone the next tick will strike (same sight rule as the damage).
+func _mark_storm(p: Player, slot: CharacterSkill) -> void:
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var query := PhysicsRayQueryParameters2D.new()
+	for node: Node in p.get_parent().get_children():
+		var target := node as Player
+		if target != null and target != p and not target.dead \
+				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius \
+				and AutoAim.has_line_of_sight(space, query, slot.anchor, target.global_position):
+			_poof(target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y), TSTORM_MARK_ART,
+				TSTORM_MARK_LEAD, 1.0, true)
+
+
+## Thunderstorm's cloud bank over the spot: forms, loops, (the end is a poof).
+func _draw_tstorm_cloud() -> void:
+	if _rain == null or _rain.data.id != &"thunderstorm":
+		return
+	var t: float = _rain.elapsed()
+	var px: float = Constants.SPRITE_SCALE
+	var at: Vector2 = _rain.anchor + Vector2(0.0, (TSTORM_CLOUD_ART.get_height() * 0.5 - TSTORM_FLOOR_Y) * px)
+	var h: float = TSTORM_CLOUD_ART.get_height()
+	if t < TSTORM_FORM_TIME:
+		var n: int = TSTORM_FORM_ART.get_width() / TSTORM_FORM_ART.get_height()
+		_draw_frame(TSTORM_FORM_ART, mini(int(t / TSTORM_FORM_TIME * n), n - 1), h, at, px)
+	else:
+		_draw_frame(TSTORM_CLOUD_ART, int(t * TSTORM_FPS) % (TSTORM_CLOUD_ART.get_width() / TSTORM_CLOUD_ART.get_height()), h, at, px)
 
 
 func _volley(p: Player, slot: CharacterSkill, tick: int) -> void:
 	var drop: Texture2D = RAIN_ART_SETS.get(slot.data.id, [null, null, null, RAIN_KUNAI_ART])[3]
-	var lift := Vector2(0.0, (drop.get_height() * 0.5 - RAIN_KUNAI_BASE_Y) * Constants.SPRITE_SCALE)
+	var thunder: bool = slot.data.id == &"thunderstorm"
+	var base_y: float = TSTORM_BOLT_BASE_Y if thunder else RAIN_KUNAI_BASE_Y
+	var drop_time: float = TSTORM_BOLT_TIME if thunder else RAIN_KUNAI_TIME
+	var lift := Vector2(0.0, (drop.get_height() * 0.5 - base_y) * Constants.SPRITE_SCALE)
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	var query := PhysicsRayQueryParameters2D.new()
 	for node: Node in p.get_parent().get_children():
@@ -937,12 +1118,12 @@ func _volley(p: Player, slot: CharacterSkill, tick: int) -> void:
 				and target.global_position.distance_to(slot.anchor) <= slot.data.storm_radius \
 				and AutoAim.has_line_of_sight(space, query, slot.anchor, target.global_position):
 			var ground: Vector2 = target.global_position + target.visual_offset + Vector2(0.0, Player.FOOT_RING_Y)
-			_poof(ground + lift, drop, RAIN_KUNAI_TIME, 1.0, false, ground.y)
+			_poof(ground + lift, drop, drop_time, 1.0, false, ground.y)
 	for i: int in RAIN_EXTRA:  # varied spots, the same on every peer (a hash of the tick), kept inside the ring
 		var h: float = fposmod(sin(float(tick * 7 + i * 13) * 12.9898 + slot.anchor.x * 0.01) * 43758.5453, 1.0)
 		var h2: float = fposmod(sin(float(tick * 5 + i * 31) * 78.233 + slot.anchor.y * 0.01) * 24634.6345, 1.0)
 		var at: Vector2 = slot.anchor + Vector2.from_angle(h * TAU) * (0.25 + 0.6 * h2) * slot.data.storm_radius
-		_poof(at + lift, drop, RAIN_KUNAI_TIME, 1.0, false, at.y)
+		_poof(at + lift, drop, drop_time, 1.0, false, at.y)
 
 
 func _sync_godspeed(p: Player) -> void:
@@ -1124,6 +1305,8 @@ func _process(delta: float) -> void:
 		_flare_out -= delta
 	if _ward_out >= 0.0:
 		_ward_out -= delta
+	if _tempest_out >= 0.0:
+		_tempest_out -= delta
 	if hides_owner():
 		_body_a = maxf(0.0, _body_a - delta / BODY_FADE_OUT)
 	else:
@@ -1151,10 +1334,14 @@ static func _slot_id(p: Player, id: StringName) -> CharacterSkill:
 
 
 static func _slot(p: Player, kind: SkillData.Kind) -> CharacterSkill:
+	var first: CharacterSkill = null
 	for slot: CharacterSkill in p.skills:
 		if slot.data.kind == kind:
-			return slot
-	return null
+			if slot.is_active():
+				return slot
+			if first == null:
+				first = slot
+	return first
 
 
 ## The owner's sprite is hidden while a morph or the grapple zip pose plays (Player).
@@ -1171,6 +1358,9 @@ func is_swinging() -> bool:
 ## Staff Whirl: dust at his feet as it starts and ends, sparks off the rim on each damage tick (from synced state).
 func _sync_whirl(p: Player) -> void:
 	var whirl: CharacterSkill = _slot(p, SkillData.Kind.WHIRL)
+	if whirl != null and whirl.data.id == &"hanami_tempest":
+		_sync_tempest(p, whirl)
+		return
 	var on: bool = whirl != null and whirl.is_whirling() and not p.dead
 	_whirl_at = p.global_position + p.visual_offset
 	_whirl_flip = p.facing.x < 0.0
@@ -1188,6 +1378,47 @@ func _sync_whirl(p: Player) -> void:
 	elif _whirl_t >= 0.0 and not p.dead:
 		_poof(_whirl_at + Vector2(0.0, SWING_FEET_Y), POOF_SMALL, POOF_TIME, WHIRL_DUST_SCALE)
 	_whirl_t = whirl.elapsed() if on else -1.0
+
+
+## Hanami Tempest: the vortex follows her (drawn from the synced skill time), its end is a poof where she stood.
+func _sync_tempest(p: Player, whirl: CharacterSkill) -> void:
+	var on: bool = whirl.is_whirling() and not p.dead
+	_tempest_at = p.global_position + p.visual_offset + Vector2(0.0, Player.FOOT_RING_Y)
+	_tempest_k = whirl.data.whirl_radius / TEMPEST_ART_RADIUS
+	if on:
+		_tempest_out = -1.0
+	elif _tempest_t >= 0.0 and not p.dead:
+		var px: float = Constants.SPRITE_SCALE * _tempest_k
+		_poof(_tempest_at + Vector2(0.0, (TEMPEST_END_ART.get_height() * 0.5 - TEMPEST_FOOT_Y) * px), TEMPEST_END_ART,
+			TEMPEST_END_TIME, _tempest_k)
+		_tempest_out = TEMPEST_FLOOR_FADE
+	_tempest_t = whirl.elapsed() if on else -1.0
+
+
+func _tempest_frame(art: Texture2D, t: float) -> int:
+	return int(maxf(t - TEMPEST_START_TIME, 0.0) * TEMPEST_FPS) % (art.get_width() / art.get_height())
+
+
+## The funnel over her: the start strip, then the loop (the floor strip carries the far half, pool and ring).
+func _draw_tempest() -> void:
+	if _tempest_t < 0.0:
+		return
+	var px: float = Constants.SPRITE_SCALE * _tempest_k
+	var h: float = TEMPEST_FRONT_ART.get_height()
+	var at: Vector2 = _tempest_at + Vector2(0.0, (h * 0.5 - TEMPEST_FOOT_Y) * px)
+	if _tempest_t < TEMPEST_START_TIME:
+		var n: int = TEMPEST_START_ART.get_width() / TEMPEST_START_ART.get_height()
+		_draw_frame(TEMPEST_START_ART, mini(int(_tempest_t / TEMPEST_START_TIME * n), n - 1), h, at, px)
+	else:
+		_draw_frame(TEMPEST_FRONT_ART, _tempest_frame(TEMPEST_FRONT_ART, _tempest_t), h, at, px)
+
+
+func _draw_tempest_floor() -> void:
+	if _tempest_t < 0.0 and _tempest_out < 0.0:
+		return
+	var alpha: float = clampf(_tempest_t / TEMPEST_START_TIME, 0.0, 1.0) if _tempest_t >= 0.0 else clampf(_tempest_out / TEMPEST_FLOOR_FADE, 0.0, 1.0)
+	_draw_frame(TEMPEST_FLOOR_ART, _tempest_frame(TEMPEST_FLOOR_ART, maxf(_tempest_t, TEMPEST_START_TIME)), TEMPEST_FLOOR_ART.get_height(),
+		_tempest_at, Constants.SPRITE_SCALE * _tempest_k, alpha, _floor)
 
 
 func _sync_swing(p: Player) -> void:
@@ -1258,6 +1489,8 @@ func _rebuild_upright() -> void:
 	var items: Array = []
 	if _sapling != null:
 		items.append([_sapling.anchor.y, _draw_sapling])
+	if _wtree != null:
+		items.append([_wtree.anchor.y - 8.0, _draw_wtree])
 	if _hound != null:
 		items.append([_hound_pos.y + Player.FOOT_RING_Y, _draw_hound])
 	for pf: Poof in _poofs:
@@ -1330,6 +1563,9 @@ func _draw() -> void:
 	_draw_ward()
 	_draw_bubble()
 	_draw_whirl()
+	_draw_tempest()
+	_draw_tstorm_cloud()
+	_draw_eclipse()
 	_draw_pillar()
 	_draw_flare()
 	_draw_swing()
@@ -1378,14 +1614,16 @@ func _draw_floor() -> void:
 			QUAKE_MARK_ART.get_height(), _quake_mark.anchor, px * qk * lerpf(1.12, 1.0, q_near) * lerpf(0.9, 1.0, q_in), q_in, _floor)
 	if _rain != null:  # the target ring opens, loops (closes: a floor poof)
 		var rt: float = _rain.elapsed()
-		var rk: float = px * _rain.data.storm_radius / RAIN_ART_RADIUS
+		var rk: float = px * _rain.data.storm_radius / _rain_radius(_rain.data.id)
 		var ra: float = clampf(rt / RAIN_EASE_IN, 0.0, 1.0)
 		var rain_art: Array = RAIN_ART_SETS.get(_rain.data.id, [RAIN_FORM_ART, RAIN_LOOP_ART])
+		var frame_w: float = rain_art[0].get_height()  # (strips are square)
+		var form_n: int = rain_art[0].get_width() / rain_art[0].get_height()
+		var loop_n: int = rain_art[1].get_width() / rain_art[1].get_height()
 		if rt < RAIN_FORM_TIME:
-			_draw_frame(rain_art[0], mini(int(rt / RAIN_FORM_TIME * RAIN_FORM_COUNT), RAIN_FORM_COUNT - 1), RAIN_SIZE,
-				_rain.anchor, rk, ra, _floor)
+			_draw_frame(rain_art[0], mini(int(rt / RAIN_FORM_TIME * form_n), form_n - 1), frame_w, _rain.anchor, rk, ra, _floor)
 		else:
-			_draw_frame(rain_art[1], int(rt * RAIN_FPS) % RAIN_LOOP_COUNT, RAIN_SIZE, _rain.anchor, rk, 1.0, _floor)
+			_draw_frame(rain_art[1], int(rt * RAIN_FPS * loop_n / RAIN_LOOP_COUNT) % loop_n, frame_w, _rain.anchor, rk, 1.0, _floor)
 	if _whirl_t >= 0.0:
 		_draw_frame(WHIRL_RING_ART, int(_whirl_t * WHIRL_FPS) % (WHIRL_RING_ART.get_width() / WHIRL_RING_ART.get_height()),
 			WHIRL_RING_ART.get_height(), _whirl_at, px * _whirl_radius / WHIRL_ART_RADIUS,
@@ -1404,6 +1642,8 @@ func _draw_floor() -> void:
 		_floor.draw_arc(_ward_at, _ward_radius, 0.0, TAU, 48, Color(WARD_GLOW, WARD_RING_ALPHA * glow), 2.0)
 	_draw_overdrive_floor()
 	_draw_moss()
+	_draw_wtree_floor()
+	_draw_tempest_floor()
 	_draw_shadow_floor()
 	for pf: Poof in _poofs:
 		if pf.on_floor:
