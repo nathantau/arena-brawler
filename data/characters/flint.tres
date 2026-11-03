@@ -5,11 +5,14 @@
 [ext_resource type="Resource" path="res://data/weapons/flint_palm.tres" id="3_sig"]
 [ext_resource type="Resource" path="res://data/skills/inferno.tres" id="5_skill"]
 
+[ext_resource type="Resource" path="res://data/skills/inferno.tres" id="9_ult"]
+
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
 signature_weapon = ExtResource("3_sig")
 signature_skill = ExtResource("5_skill")
+ultimate = ExtResource("9_ult")
 weapon_tags = Array[StringName]([&"flint", &"explosive", &"arcane", &"light"])
 id = &"flint"
 display_name = "Flint"

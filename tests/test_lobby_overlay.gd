@@ -46,27 +46,29 @@ func test_locking_in_closes_unlocking_does_not() -> void:
 
 
 func test_tapping_an_unequipped_ability_takes_the_first_empty_slot() -> void:
-	var r: Dictionary = LobbyOverlay.toggle([&"dash", &"", &"leaf_gust"], &"barrier")
+	var r: Dictionary = LobbyOverlay.toggle([&"dash", &""], &"barrier", [0, 1])
 	assert_eq(r["kind"], "add")
 	assert_eq(r["slot"], 1)
-	assert_eq(LobbyOverlay.toggle([&"", &"", &"leaf_gust"], &"barrier")["slot"], 0)
+	assert_eq(LobbyOverlay.toggle([&"", &""], &"barrier", [0, 1])["slot"], 0)
 
 
 func test_tapping_an_equipped_ability_removes_it() -> void:
-	var r: Dictionary = LobbyOverlay.toggle([&"dash", &"bark_skin", &"leaf_gust"], &"bark_skin")
+	var r: Dictionary = LobbyOverlay.toggle([&"dash", &"bark_skin"], &"bark_skin", [0, 1])
 	assert_eq(r["kind"], "remove")
 	assert_eq(r["slot"], 1)
 
 
-func test_full_slots_refuse_a_new_ability() -> void:
-	assert_eq(LobbyOverlay.toggle([&"dash", &"bark_skin", &"leaf_gust"], &"barrier")["kind"], "full")
+func test_full_slots_replace_the_least_recently_set() -> void:
+	var r: Dictionary = LobbyOverlay.toggle([&"dash", &"bark_skin"], &"barrier", [1, 0])
+	assert_eq(r["kind"], "add")
+	assert_eq(r["slot"], 1, "slot 1 was set longest ago")
 
 
 func test_remove_then_add_round_trip() -> void:
-	var slots: Array = [&"dash", &"bark_skin", &"leaf_gust"]
-	var r: Dictionary = LobbyOverlay.toggle(slots, &"bark_skin")
+	var slots: Array = [&"dash", &"bark_skin"]
+	var r: Dictionary = LobbyOverlay.toggle(slots, &"bark_skin", [0, 1])
 	slots[r["slot"]] = &""
-	r = LobbyOverlay.toggle(slots, &"barrier")
+	r = LobbyOverlay.toggle(slots, &"barrier", [0, 1])
 	assert_eq(r["kind"], "add")
 	assert_eq(r["slot"], 1, "the freed slot")
 

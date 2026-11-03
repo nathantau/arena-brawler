@@ -26,6 +26,7 @@ func _player(slot0: StringName, slot1: StringName, who: StringName = &"flicker",
 	p.skills[0] = CharacterSkill.new(skills.get_skill(slot0))
 	p.skills[1] = CharacterSkill.new(skills.get_skill(slot1))
 	p.skills[2] = CharacterSkill.new(skills.get_skill(slot2))
+	p.ult_charge = 1.0  # slot 2 is the ultimate: these tests use it as a plain third slot
 	return p
 
 

@@ -341,16 +341,22 @@ func _draw_vitals(c: CanvasItem) -> void:
 		var y: float = name_y
 		for pair: Array in [[player.skills[0], "Space", 0], [player.skills[1], "E", 1], [player.skills[2], "Q", 2]]:
 			var sk: CharacterSkill = pair[0]
+			var ult: bool = pair[2] == Constants.ULT_SLOT
+			if ult and sk.data == Player.NO_ULT:
+				continue
 			var text: String = "%s [%s]" % [sk.data.display_name, pair[1]]
+			var ready: bool = player.ult_ready() if ult else sk.is_ready()
 			if player.skill_locked(pair[2] as int):
 				text += " · locked"
 			elif sk.is_active():
 				text += " · active"
-			elif not sk.is_ready():
+			elif ult and not ready:
+				text += " · %d%%" % floori(player.ult_charge * 100.0)
+			elif not ready:
 				text += " · %.1fs" % sk.cooldown_remaining
 			y += UiStyle.SIZE_SMALL + 6.0
 			UiStyle.draw_text(c, Vector2(2.0, y), text, UiStyle.SIZE_SMALL,
-				UiStyle.C_WHITE if sk.is_ready() and not player.skill_locked(pair[2] as int) else UiStyle.C_DIM)
+				UiStyle.C_WHITE if ready and not player.skill_locked(pair[2] as int) else UiStyle.C_DIM)
 
 
 ## Icon, then a pixel bar (outline, dark well, two-tone fill, highlight) with "value / max" inside.

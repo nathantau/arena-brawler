@@ -966,11 +966,22 @@ func line_hit(owner_id: int, seq: int, from: Vector2, to: Vector2, half_width: f
 			(result.collider as Crate).take_damage(damage)
 
 
+## Damage dealt to an enemy charges the attacker's ultimate (authority only).
+func credit_damage(attacker_id: int, target: Player, dealt: int) -> void:
+	if not authoritative or dealt <= 0 or _ally(attacker_id, target):
+		return
+	for p: Player in targets:
+		if p.player_id == attacker_id:
+			p.add_ult_damage(dealt)
+			return
+
+
 ## `key_owner`: the pellet key's owner (differs from the attacker after a reflection).
 func _damage_player(target: Player, attacker_id: int, seq: int, pellet: int, damage: int, crit: bool,
 		knockback: Vector2, at: Vector2, key_owner: int = -1, snare_time: float = 0.0, snare_factor: float = 1.0,
 		shot: Slot = null) -> void:
 	var dealt: int = target.take_hit(damage, crit, knockback, attacker_id)
+	credit_damage(attacker_id, target, dealt)
 	if dealt > 0:
 		if snare_time > 0.0:
 			target.stats.apply_slow(snare_time, snare_factor)

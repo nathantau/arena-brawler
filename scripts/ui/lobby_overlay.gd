@@ -2,8 +2,8 @@ class_name LobbyOverlay
 extends RefCounted
 ## The character select's detail overlay: closed on the fighter grid, opened by tapping a fighter (it then shows that
 ## fighter's abilities and weapons), closed by the scrim, the back button or by locking in.
-## Abilities are plain toggles: tapping an unequipped one fills the first empty slot, tapping an equipped one empties
-## its slot, and nothing is ever replaced behind the player's back.
+## Abilities are toggles: tapping an unequipped one fills the first empty slot (or, with both full, replaces the least
+## recently set one), tapping an equipped one empties its slot.
 ## Pure logic (no nodes) so the flow is unit-testable.
 
 var is_open: bool = false
@@ -40,16 +40,16 @@ func ready_pressed(will_be_ready: bool) -> void:
 
 
 ## What a tap on ability `id` does, given the slots (each an ability id, or &"" when empty):
-## {"kind": "add", "slot": first empty slot}, {"kind": "remove", "slot": its slot} or {"kind": "full"} when every
-## slot is taken by other abilities.
-static func toggle(slots: Array, id: StringName) -> Dictionary:
+## {"kind": "add", "slot": first empty slot, else the first of `recent` (slot indices, least recently set first)} or
+## {"kind": "remove", "slot": its slot}.
+static func toggle(slots: Array, id: StringName, recent: Array) -> Dictionary:
 	var held: int = slots.find(id)
 	if held >= 0:
 		return {"kind": "remove", "slot": held}
 	var empty: int = slots.find(&"")
 	if empty >= 0:
 		return {"kind": "add", "slot": empty}
-	return {"kind": "full"}
+	return {"kind": "add", "slot": recent[0]}
 
 
 ## A tab (or a loadout slot card) was tapped. Returns true when the shown list changed.
@@ -59,7 +59,7 @@ func show_tab(t: Tab) -> bool:
 	return changed
 
 
-## An ability was just equipped; `slots` are the slots afterwards. Filling the third one moves on to the weapons.
+## An ability was just equipped; `slots` are the slots afterwards. Filling the last one moves on to the weapons.
 ## Returns true when the tab switched.
 func ability_added(slots: Array) -> bool:
 	if tab == Tab.ABILITIES and not slots.has(&""):
