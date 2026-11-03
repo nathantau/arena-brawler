@@ -57,6 +57,27 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
 8. After each milestone, update the **Status** section below and commit with a clear message.
 9. Ask before adding new dependencies or changing the stack.
 
+## How the user works with Claude (read this on any new machine/session)
+- **Roles:**
+  - Implementation (features, fixes, art) goes to subagents running `model: sonnet` with `isolation: worktree`. Use `.claude/agents/*` where one fits.
+  - The main session briefs those agents, reviews their work, opens PRs, merges, tests and ships. It does not write the bulk code itself.
+- **"push" = merge + test + push main + TestFlight upload**, all in the same turn. Follow `.claude/skills/ship/SKILL.md`, which covers git identity, PRs, tests, the release and its pitfalls.
+- **Hard rules:**
+  - Never install or use the `gh` CLI. `tools/release/gh_pr.sh` calls the API instead.
+  - Never force-push.
+  - Never read the App Store Connect `.p8` key.
+  - Never change the bundle ID `com.nabot.brawlbit`.
+  - Never set git config: export the identity env vars as described in the ship skill.
+- **Tests before every push or release:** GUT plus the smoke test, both green.
+- **Don't steal focus:** the user works on this Mac. Prefer `--headless`. Launch windowed Godot with `open -g -W -n -a /Applications/Godot.app --args ... --log-file <log>`. For the Simulator, use `open -g` or `xcrun simctl`.
+- **Screenshots for review:** add `window/size/viewport_width=2532` / `viewport_height=1170` to that `override.cfg`, then run `-s tools/teams_sim.gd -- fight=1 arena=N shot=<png>`.
+  - Keep screenshots in a temp dir. Never commit them.
+- **Art bar is premium:** look at agents' screenshots or GIFs yourself and send weak work back before showing the user.
+- **Balancing stays light:** pick sensible numbers by comparing with existing fighters, and run one quick sim at most. Do a real tuning pass only when asked.
+- **Benched:** Gunnar (`twinshot`) and Warden are benched. Don't add to or balance them unless asked.
+- **Ponytail mode is on by default** (`.claude/skills/ponytail`, full level): smallest complete change, end replies with what was skipped/risky.
+- **Replies:** short and plain. Say what shipped, the build number, and what wasn't verified (e.g. not tried on two real devices).
+
 ## Milestones
 1. **M1 – Local combat feel (single player vs dummy bots):** movement, joystick, auto-aim, 3 weapons, energy, HP/armor, dash skill, one arena. Make it *feel good* before networking.
 2. **M2 – Networking:** headless server, 2 clients on LAN, prediction + reconciliation + interpolation, server-side hit detection.
