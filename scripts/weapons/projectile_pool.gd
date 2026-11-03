@@ -401,7 +401,8 @@ func _toward_shooter(s: Slot, origin: Vector2, facing: Vector2) -> Vector2:
 ## wall is in the way, so it never lands on the far side of a wall).
 ## Staff Whirl: enemy projectiles within `radius` of `origin` fly back outward and become `owner_id`'s (every
 ## peer). `damage` > 0 (authoritative only): players and crates in reach take it, pushed away from `origin`.
-func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float) -> void:
+func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int, knockback: float,
+		slow_time: float = 0.0, slow_factor: float = 1.0) -> void:
 	for s: Slot in _slots:
 		if s.active and _is_enemy_shot(s, owner_id) and s.pos.distance_to(origin) <= radius + s.radius:
 			s.vel = (s.pos - origin).normalized() * s.vel.length()
@@ -417,20 +418,28 @@ func whirl(owner_id: int, seq: int, origin: Vector2, radius: float, damage: int,
 					or not AutoAim.has_line_of_sight(space, _los_query, origin, target.global_position):
 				continue
 			var push: Vector2 = (target.global_position - origin).normalized() * knockback
-			_damage_player(target, owner_id, seq, 0, damage, false, push, target.global_position)
+			_damage_player(target, owner_id, seq, 0, damage, false, push, target.global_position, -1, slow_time, slow_factor)
 		elif result.collider is Crate:
 			(result.collider as Crate).take_damage(damage)
 
 
 ## Verdant Bloom: heals `owner_id` (and only them) by `amount` if they stand within `radius` of the patch at `at`
-## (their feet). Authoritative only.
-func bloom(owner_id: int, at: Vector2, radius: float, amount: int) -> void:
+## (their feet). Authoritative only. World Tree (`allies`, `damage`, `slow_time`): teammates in range are healed too, and
+## enemies in range take `damage` (keyed `seq`) and are rooted (x`slow_factor` for `slow_time`).
+func bloom(owner_id: int, at: Vector2, radius: float, amount: int, allies: bool = false, seq: int = 0, damage: int = 0,
+		slow_time: float = 0.0, slow_factor: float = 1.0) -> void:
 	if not authoritative:
 		return
 	for target: Player in targets:
-		if target.player_id == owner_id and not target.dead \
-				and (target.global_position + Vector2(0.0, Player.FOOT_RING_Y)).distance_to(at) <= radius:
+		if target.dead or (target.global_position + Vector2(0.0, Player.FOOT_RING_Y)).distance_to(at) > radius:
+			continue
+		if target.player_id == owner_id or (allies and _ally(owner_id, target)):
 			target.stats.heal(amount)
+		elif not _ally(owner_id, target) and (damage > 0 or slow_time > 0.0) and target.can_be_hit():
+			if damage > 0:
+				_damage_player(target, owner_id, seq, 0, damage, false, Vector2.ZERO, target.global_position, -1, slow_time, slow_factor)
+			else:
+				target.stats.apply_slow(slow_time, slow_factor)
 
 
 ## Leaf Gust: enemy projectiles inside the cone (apex `origin`, along `dir`, `reach` long, `half_angle` rad each side)

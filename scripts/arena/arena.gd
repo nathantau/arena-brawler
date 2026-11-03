@@ -710,7 +710,7 @@ func _on_skill_used(user: Player, skill: SkillData) -> void:
 		return
 	effects.burst(user.global_position, user.display_color, BURST_SKILL_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE,
 		PARTICLE_LIFE)
-	sfx.play(Sfx.skill_sound(skill.kind), user.global_position)
+	sfx.play(Sfx.skill_sound(skill.kind, skill.id), user.global_position)
 	match skill.kind:
 		SkillData.Kind.TRANSFORM:
 			effects.burst(user.global_position, Color.WHITE, BURST_EXPLOSION_COUNT, BURST_DEATH_SPEED,

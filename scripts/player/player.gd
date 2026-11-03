@@ -106,6 +106,8 @@ const SURFACE_DIRECTIONS: int = 16
 const HOUND_SEQ_OFFSET: int = 1 << 32
 ## Lightning Beam ticks and Thunder Strike bolts are keyed too (above 32 bits, clear of the offsets above).
 const BEAM_SEQ_OFFSET: int = 1 << 33
+## World Tree's thorn ticks (keyed like every other relayed hit).
+const BLOOM_SEQ_OFFSET: int = 1 << 35
 const THUNDER_SEQ_OFFSET: int = 1 << 34
 ## The Gloom Hound's body radius against the feet-level walls.
 const HOUND_RADIUS: float = 14.0
@@ -530,7 +532,9 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			if sapling_before[i] >= 0.0 and skills[i].sapling_shot_due(sapling_before[i]):
 				_sapling_shoot(skills[i], input.seq)
 			if projectiles != null and bloom_before[i] >= 0.0 and skills[i].bloom_tick_due(bloom_before[i]):
-				projectiles.bloom(player_id, skills[i].anchor, skills[i].data.bloom_radius, skills[i].data.bloom_heal)
+				var bd: SkillData = skills[i].data
+				projectiles.bloom(player_id, skills[i].anchor, bd.bloom_radius, bd.bloom_heal, bd.bloom_heal_allies,
+					input.seq + BLOOM_SEQ_OFFSET, bd.bloom_damage, bd.bloom_slow_time, bd.bloom_slow_factor)
 	if step_was != null and not step_was.is_active():
 		_surface()  # rises from under whatever he slid through, onto the nearest floor, then strikes from there
 	_shadow_tick(step_was, hound_was, hound_before, input.seq, delta, replay)
@@ -710,7 +714,7 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> bool:
 	if not slot.try_activate(dir, global_position, stats):
 		return false
 	if slot.data.kind != SkillData.Kind.SMOKE:
-		_break_vanish()  # using another special gives her away
+		_break_vanish()  # using another special gives her away (not during Eclipse, see `smoke_persist`)
 	match slot.data.kind:
 		SkillData.Kind.SWING:
 			slot.direction = landing - global_position
@@ -739,8 +743,8 @@ func _activate(slot: CharacterSkill, input: InputFrame, replay: bool) -> bool:
 			slot.direction *= bind_length(slot.direction, slot.data)
 			if slot.direction.is_zero_approx():  # a wall at his feet: no line at all (a zero heading would catch anyone)
 				slot.active_remaining = 0.0
-		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE:
-			if not replay:
+		SkillData.Kind.VOLLEY, SkillData.Kind.SNARE, SkillData.Kind.SMOKE:
+			if not replay and slot.data.volley_weapon != null:  # (Eclipse's burst; Smoke Bomb has none)
 				var seq: int = input.seq + VOLLEY_SEQ_OFFSET
 				projectiles.fire_shot(player_id, seq, global_position, slot.direction, slot.data.volley_weapon, match_seed)
 				shot_fired.emit(self, seq, global_position, slot.direction, slot.data.volley_weapon.id)
@@ -755,7 +759,7 @@ func _whirl(slot: CharacterSkill, seq: int, delta: float, replay: bool) -> void:
 		return
 	var d: SkillData = slot.data
 	projectiles.whirl(player_id, seq + WHIRL_SEQ_OFFSET, global_position, d.whirl_radius,
-		d.whirl_damage if slot.whirl_tick_due(delta) else 0, d.whirl_knockback)
+		d.whirl_damage if slot.whirl_tick_due(delta) else 0, d.whirl_knockback, d.whirl_slow_time, d.whirl_slow_factor)
 
 
 ## The leaf gust: enemy shots in the cone are destroyed on every step it lasts (so ones flying into it die too); the hit
@@ -1037,7 +1041,7 @@ func is_concealed() -> bool:
 ## Smoke Bomb ends early (she attacked): the cooldown keeps running. SpecialFx sees it end and pops the closing poof.
 func _break_vanish() -> void:
 	var smoke: CharacterSkill = active_skill(SkillData.Kind.SMOKE)
-	if smoke != null:
+	if smoke != null and not smoke.data.smoke_persist:
 		smoke.active_remaining = 0.0
 
 

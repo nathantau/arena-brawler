@@ -28,6 +28,11 @@ const SKILL_SOUNDS: Dictionary[int, StringName] = {
 	SkillData.Kind.QUAKE: &"quake", SkillData.Kind.RAIN: &"rain",
 }
 
+## Ultimates (and any skill with a sound of its own) override their kind's sound by skill id.
+const SKILL_ID_SOUNDS: Dictionary[StringName, StringName] = {
+	&"hanami_tempest": &"tempest", &"thunderstorm": &"thunderstorm", &"world_tree": &"world_tree", &"eclipse": &"eclipse",
+}
+
 enum Wave { SINE, SQUARE, SAW, NOISE }
 ## Recipe fields: duration s, start Hz, end Hz, wave, noise mix 0..1, noise smoothing 0..1
 ## (higher = duller), attack s, decay rate (1/s), volume 0..1.
@@ -74,6 +79,11 @@ const RECIPES: Dictionary[StringName, Array] = {
 	# Eden's Thorn Quake: a deep earthy rumble; Shade's Kunai Rain: a quick whistling patter.
 	&"quake": [0.5, 110.0, 55.0, Wave.SAW, 0.75, 0.85, 0.01, 6.0, 0.6],
 	&"rain": [0.4, 1800.0, 500.0, Wave.SQUARE, 0.5, 0.2, 0.002, 9.0, 0.35],
+	# Ultimates: a swelling petal gale, a rolling thunder-crack, a deep growing creak with a chime, a low inhale of darkness.
+	&"tempest": [0.9, 260.0, 1100.0, Wave.NOISE, 0.9, 0.3, 0.12, 3.5, 0.55],
+	&"thunderstorm": [1.0, 180.0, 40.0, Wave.SAW, 0.9, 0.55, 0.003, 3.2, 0.8],
+	&"world_tree": [0.9, 70.0, 260.0, Wave.SINE, 0.3, 0.7, 0.15, 3.0, 0.6],
+	&"eclipse": [1.0, 600.0, 45.0, Wave.SAW, 0.6, 0.85, 0.05, 3.0, 0.65],
 	&"bind": [0.3, 1200.0, 160.0, Wave.SQUARE, 0.25, 0.4, 0.002, 10.0, 0.4],
 	# Feedback: ready ping, hit confirm ticks, kill ding, streak sting, low-HP thump, empty-energy click, last-seconds tick.
 	&"ready": [0.14, 900.0, 1500.0, Wave.SINE, 0.0, 0.0, 0.003, 14.0, 0.3],
@@ -103,8 +113,8 @@ func _ready() -> void:
 		_voices.append(v)
 
 
-static func skill_sound(kind: int) -> StringName:
-	return SKILL_SOUNDS.get(kind, &"dash")
+static func skill_sound(kind: int, id: StringName = &"") -> StringName:
+	return SKILL_ID_SOUNDS.get(id, SKILL_SOUNDS.get(kind, &"dash"))
 
 
 ## Plays `id`, quieter the farther `at` is from the listener. INF = non-positional.

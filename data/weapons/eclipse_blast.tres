@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+
+[resource]
+script = ExtResource("1_wd")
+id = &"eclipse_blast"
+display_name = "Eclipse"
+pickup = false
+damage = 30
+energy_cost = 0
+knockback = 220.0
+color = Color(0.41, 0.27, 0.62, 1)
+splash_radius = 220.0
+splash_edge_scale = 0.6
+snare_time = 3.0
+snare_factor = 0.6
+blast = true
+destroys_shots = true
+held_art = false
+tags = Array[StringName]([&"shadow_eclipse"])
