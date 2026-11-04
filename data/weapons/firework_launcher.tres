@@ -11,6 +11,7 @@ script = ExtResource("1_wd")
 projectile_sprite = ExtResource("9_proj")
 sprite = ExtResource("2_sprite")
 id = &"firework_launcher"
+rarity = 2
 display_name = "Firework Launcher"
 muzzle_x = 42.0
 burst_art = ExtResource("10_x")

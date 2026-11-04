@@ -31,6 +31,8 @@ func _ready() -> void:
 
 	args = CmdArgs.parse(OS.get_cmdline_user_args())
 	LocalInput.passive_test = args.passive
+	if args.unlock_all or args.autopilot:
+		Unlocks.unlock_all()
 	# Render at the sim rate: on 120 Hz phones, frames between sim ticks made moving sprites judder.
 	Engine.max_fps = Constants.PHYSICS_FPS
 	if args.discover:

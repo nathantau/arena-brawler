@@ -7,6 +7,7 @@
 script = ExtResource("1_sk")
 icon = ExtResource("2_icon")
 id = &"staff_whirl"
+rarity = 1
 display_name = "Staff Whirl"
 kind = 11
 special = true

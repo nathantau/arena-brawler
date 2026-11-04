@@ -6,6 +6,7 @@ extends RefCounted
 ##   --connect host[:port]            join a server directly
 ##   --offline                        local sandbox vs bots, skip the menu
 ##   --training                       the guided Training match (one easy bot), skip the menu
+##   --unlock-all                     every ability and weapon counts as unlocked (smoke / screenshots)
 ##   --discover                       print games found on the LAN for ~4 s, then quit
 ##   --autopilot                      (client) drive + fire automatically, for testing
 ##   --net-debug                      print net stats periodically
@@ -26,6 +27,7 @@ var connect_host: String = ""
 var connect_port: int = Constants.DEFAULT_PORT
 var offline: bool = false
 var training: bool = false
+var unlock_all: bool = false
 var autopilot: bool = false
 ## Test only (--press-special S): with --autopilot, press the special every S seconds whether or not an enemy is in sight.
 var press_special_every: int = 0
@@ -73,6 +75,8 @@ static func parse(args: PackedStringArray) -> CmdArgs:
 				a.offline = true
 			"--training":
 				a.training = true
+			"--unlock-all":
+				a.unlock_all = true
 			"--autopilot":
 				a.autopilot = true
 			"--passive":

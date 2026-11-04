@@ -11,6 +11,7 @@ script = ExtResource("1_wd")
 projectile_sprite = ExtResource("9_proj")
 sprite = ExtResource("2_sprite")
 id = &"splash_soaker"
+rarity = 1
 display_name = "Splash Soaker"
 muzzle_x = 40.0
 pickup = true

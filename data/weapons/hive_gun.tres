@@ -9,6 +9,7 @@ script = ExtResource("1_wd")
 projectile_sprite = ExtResource("9_proj")
 sprite = ExtResource("2_sprite")
 id = &"hive_gun"
+rarity = 2
 display_name = "Hive Gun"
 muzzle_x = 38.0
 pickup = true
