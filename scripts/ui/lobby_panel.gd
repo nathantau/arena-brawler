@@ -13,20 +13,22 @@ const SPACING: int = 10
 const TEAM_ALLY_COLOR: Color = Color8(110, 160, 255)
 const BAR_H: float = 52.0
 const BUTTON_MIN_SIZE: Vector2 = Vector2(150, BAR_H)
-const READY_MIN_SIZE: Vector2 = Vector2(240, 68)
-const LEAVE_MIN_SIZE: Vector2 = Vector2(120, 68)
+const READY_MIN_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
+const LEAVE_MIN_SIZE: Vector2 = Vector2(120, UiStyle.TOUCH_MIN_H)
 ## The roster row's compact portraits.
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(112, 124)
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(112, 142)
+## The portrait starts below a strip for the card's tags (hover pills left, Lv pill right), so nothing sits on a head.
+const CARD_ART_TOP: float = 34.0
 ## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
 ## the cell's body box, so they all stand in the same spot.
 const FIGHTER_ART_SCALE: float = 1.25
 const FIGHTER_ART_SIZE: Vector2 = Vector2(96, 72)
 ## The lineup column beside the big fighter: one small animated entry per teammate / opponent.
-const LINEUP_W: float = 250.0
-const LINEUP_ART_SCALE: float = 1.0
-const LINEUP_ART_SIZE: Vector2 = Vector2(84, 64)
+const LINEUP_W: float = 390.0
+const LINEUP_ART_SCALE: float = 2.0
+const LINEUP_ART_SIZE: Vector2 = Vector2(168, 112)
 ## Width of the name + stat block in the showcase's top left corner.
-const INFO_W: float = 230.0
+const INFO_W: float = 190.0
 ## Specials are rows (icon, name + cooldown, one-line description) in a column; 7 (5 own + Dash + Barrier) fit.
 const SKILL_ROW_H: float = 92.0
 const SKILL_ICON_SIZE: Vector2 = Vector2(52, 52)
@@ -55,9 +57,16 @@ const TOAST_TIME: float = 2.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 const COLOR_STAGE: Color = Color(0.105, 0.105, 0.19)
 ## The big preview: pixel scale is a whole number (the sheet cell times this), it zooms in over ZOOM_TIME.
-## Space kept clear above the fighter in the showcase.
-const PREVIEW_TOP: float = 20.0
-const PREVIEW_MAX_SCALE: int = 6
+const PREVIEW_MAX_SCALE: int = 10
+## The fighter (crown to feet, in art px) should fill about this much of the showcase's height; his feet stand on a
+## floor line this far down it.
+const FIGHTER_ART_H: float = 54.0
+const PREVIEW_FILL: float = 0.78
+const FLOOR_LINE: float = 0.9
+## The spotlight behind him: SPOT_BANDS nested ellipses (radii in art px), each adding SPOT_COLOR.
+const SPOT_BANDS: int = 4
+const SPOT_RADIUS: Vector2 = Vector2(36.0, 50.0)
+const SPOT_COLOR: Color = Color(0.85, 0.9, 1.0, 0.06)
 const ZOOM_FROM: float = 0.72
 ## A new pick also slides in from the side by this many art pixels.
 const SLIDE_FROM: float = 36.0
@@ -223,7 +232,7 @@ func _build_showcase(box: BoxContainer) -> void:
 	mid.add_child(lineup_scroller)
 	_lineup = lineup_scroller.content
 	_lineup.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_lineup.alignment = BoxContainer.ALIGNMENT_CENTER
+	_lineup.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_lineup.add_theme_constant_override("separation", 6)
 	_build_stage(mid)
 
@@ -239,6 +248,9 @@ func _build_fighter_grid(box: BoxContainer) -> void:
 	grid.add_theme_constant_override("separation", SPACING)
 	for c: CharacterData in arena.characters.ordered:
 		var card: Button = _card(grid, CHARACTER_CARD_SIZE, _fighter_art(c), [c.display_name])
+		var card_box: BoxContainer = card.get_child(0)  # (the portrait goes under the tag strip)
+		card_box.alignment = BoxContainer.ALIGNMENT_BEGIN
+		card_box.offset_top = CARD_ART_TOP
 		var id: StringName = c.id
 		_fighter_scroller.on_tap(card, func() -> void: _on_fighter_pressed(id))
 		_character_cards[id] = card
@@ -260,19 +272,25 @@ func _build_fighter_grid(box: BoxContainer) -> void:
 		badge.add_theme_font_override("font", UiStyle.body_font(true))
 		# A strip across the foot of the portrait.
 		badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, SPACING)
-		badge.offset_top = SPACING + FIGHTER_ART_SIZE.y - BADGE_H
-		badge.offset_bottom = SPACING + FIGHTER_ART_SIZE.y
+		badge.offset_top = CARD_ART_TOP + FIGHTER_ART_SIZE.y - BADGE_H
+		badge.offset_bottom = CARD_ART_TOP + FIGHTER_ART_SIZE.y
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.visible = false
 		_fighter_badges[id] = badge
-		var mastery: Label = _label(card, &"Label")  # mastery level, bottom right corner of the card
+		var mastery: Label = _label(card, &"Label")  # mastery level, a dark pill at the top right of the card
 		mastery.text = "Lv %d" % PlayerProfile.level_of(id)
 		mastery.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 		mastery.add_theme_font_override("font", UiStyle.bold())
 		mastery.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 		mastery.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 6)
+		var pill := StyleBoxFlat.new()
+		pill.bg_color = Color(0.03, 0.03, 0.07, 0.85)
+		pill.set_corner_radius_all(8)
+		pill.content_margin_left = 6.0
+		pill.content_margin_right = 6.0
+		mastery.add_theme_stylebox_override("normal", pill)
 		mastery.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_mastery_badges[id] = mastery
 
@@ -717,27 +735,43 @@ func _slide_overlay(animate: bool) -> void:
 		_overlay.visible = open
 
 
-## Integer pixel scale that fits the sprite cell under the name block of a stage this big.
+## Integer pixel scale that makes the fighter fill PREVIEW_FILL of a stage this tall (and fit its width).
 static func preview_scale(stage: Vector2) -> int:
 	var cell: float = float(Constants.SPRITE_CELL_SIZE) * 0.9
-	var fit: float = minf((stage.x - 40.0) / cell, (stage.y - PREVIEW_TOP - 40.0) / cell)
+	var fit: float = minf((stage.x - 40.0) / cell, stage.y * PREVIEW_FILL / FIGHTER_ART_H)
 	return clampi(floori(fit), 2, PREVIEW_MAX_SCALE)
 
 
 func _layout_stage() -> void:
 	var s: int = preview_scale(_stage.size)
 	_sprite.scale = Vector2.ONE * s
-	var room: float = _stage.size.y - PREVIEW_TOP - 30.0
-	_pivot.position = Vector2(_stage.size.x * 0.5, PREVIEW_TOP + room * 0.5 + 4.0 * s)
+	# Centred, but never under the name block on a narrow stage (his crown reaches about 30 art px either side).
+	var x: float = clampf(maxf(_stage.size.x * 0.5, 18.0 + INFO_W + 30.0 * s), 0.0, _stage.size.x - 30.0 * s)
+	_pivot.position = Vector2(x, _stage.size.y * FLOOR_LINE - 22.0 * s)
 	_backdrop.art_scale = s
 	_backdrop.floor_y = _pivot.position.y + 22.0 * s
 	_floor_fx.queue_redraw()
 
 
-## A soft contact shadow under the fighter's feet.
+## A dithered spotlight behind the fighter (stepped bands with checkered edges, art-pixel cells) and a soft contact
+## shadow under his feet.
 func _draw_floor_fx() -> void:
 	var s: float = _sprite.scale.x
 	var feet: Vector2 = _pivot.position + Vector2(0.0, 22.0 * s)
+	var centre: Vector2 = feet - Vector2(0.0, FIGHTER_ART_H * 0.5 * s)
+	for band: int in SPOT_BANDS:
+		var k: float = 1.0 - float(band) / SPOT_BANDS
+		var radii := Vector2(SPOT_RADIUS.x, SPOT_RADIUS.y) * s * k
+		_floor_fx.draw_set_transform(centre, 0.0, Vector2(1.0, radii.y / radii.x))
+		_floor_fx.draw_circle(Vector2.ZERO, radii.x, SPOT_COLOR)
+		_floor_fx.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var steps: int = int(TAU * maxf(radii.x, radii.y) / s)  # one cell per art pixel round the edge, every other one lit
+		for i: int in steps:
+			if i % 2 == 0:
+				continue
+			var a: float = TAU * i / steps
+			var at: Vector2 = centre + Vector2(cos(a) * radii.x * 1.04, sin(a) * radii.y * 1.04)
+			_floor_fx.draw_rect(Rect2((at / s).floor() * s, Vector2(s, s)), SPOT_COLOR)
 	_floor_fx.draw_set_transform(feet, 0.0, Vector2(1.0, 0.28))
 	var r: float = 18.0 * s
 	for i: int in 5:
@@ -1012,7 +1046,7 @@ func _lineup_entry(p: Player, state: String, color: Color) -> void:
 		var l: Label = _label(text, &"Label")
 		l.add_theme_font_override("font", UiStyle.body_font(i != 1))
 		l.add_theme_color_override("font_color", color if i == 2 else UiStyle.C_WHITE if i == 0 else UiStyle.C_DIM)
-		_fit_body(l, lines[i], text_w, UiStyle.SIZE_BODY if i == 0 else UiStyle.SIZE_SMALL, i != 1)
+		_fit_body(l, lines[i], text_w, UiStyle.SIZE_HEADING if i == 0 else UiStyle.SIZE_BODY, i != 1)
 
 
 ## Locks held by humans (bots yield to them, so they never block a lock-in).

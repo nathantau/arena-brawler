@@ -58,7 +58,8 @@ func test_lobby_lineup_state() -> void:
 
 
 func test_lobby_preview_is_a_big_whole_scale() -> void:
-	var phone := Vector2(1000.0, 330.0)  # the showcase on a phone: the fighter stands at x3, never fractional
-	assert_eq(LobbyPanel.preview_scale(phone), 3)
+	var phone := Vector2(1000.0, 330.0)  # the showcase on a phone: the fighter stands at x4, never fractional
+	assert_eq(LobbyPanel.preview_scale(phone), 4)
+	assert_true(4 * LobbyPanel.FIGHTER_ART_H <= phone.y * LobbyPanel.FLOOR_LINE, "feet on the floor line, head inside the stage")
 	assert_eq(LobbyPanel.preview_scale(Vector2(60.0, 60.0)), 2, "never below x2")
 	assert_eq(LobbyPanel.preview_scale(Vector2(4000.0, 4000.0)), LobbyPanel.PREVIEW_MAX_SCALE)
