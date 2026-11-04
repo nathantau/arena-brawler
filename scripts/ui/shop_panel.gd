@@ -319,7 +319,7 @@ func _refresh() -> void:
 	var pool: Array = Unlocks.box_pool(_fighter)
 	var all: Array = lockable(_fighter)
 	_name_label.text = _fighter.display_name
-	_left_label.text = "%d left in the box" % pool.size() if not pool.is_empty() else "Everything unlocked"
+	_left_label.text = "%d still locked" % pool.size() if not pool.is_empty() else "Everything unlocked"
 	_collection_title.text = "COLLECTION  %d / %d" % [all.size() - pool.size(), all.size()]
 	for child: Node in _slots.get_children():
 		child.queue_free()
