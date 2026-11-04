@@ -212,7 +212,6 @@ func clear() -> void:
 	_ramps.clear()
 
 
-## Read-only view for tests / debugging.
 ## True while a tethered shot (Yo-Yo) of `owner` is in flight: its thrower's hand holds only the empty loop.
 ## Read from the slots every peer simulates, so no synced state.
 func tether_out(owner: int) -> bool:
@@ -222,6 +221,7 @@ func tether_out(owner: int) -> bool:
 	return false
 
 
+## Read-only view for tests / debugging.
 func debug_slots() -> Array[Slot]:
 	return _slots
 
@@ -904,13 +904,14 @@ func _splashed(s: Slot, at: Vector2, p: Player, space: PhysicsDirectSpaceState2D
 
 ## The enemy standing nearest a burst at `at`, inside its splash radius (null if none): where a chain starts.
 func _splash_anchor(s: Slot, at: Vector2) -> Player:
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	var best: Player = null
-	var best_d: float = pow(s.splash_radius + Constants.PLAYER_RADIUS, 2.0)
+	var best_d: float = INF
 	for p: Player in targets:
-		if _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden():
-			continue
+		if _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden() or not _splashed(s, at, p, space):
+			continue  # (a foe behind a wall takes no splash, so it can't start the chain either)
 		var d: float = at.distance_squared_to(p.global_position)
-		if d <= best_d:
+		if d < best_d:
 			best_d = d
 			best = p
 	return best

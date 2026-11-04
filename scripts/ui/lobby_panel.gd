@@ -1553,7 +1553,7 @@ var _asked: Dictionary = {}
 func _enforce_unlocks(me: Player) -> void:
 	var c: CharacterData = me.character
 	if not Unlocks.is_weapon_unlocked(c, me.weapon.data):
-		if _asked.get(&"weapon") != me.weapon.data.id:  # once per locked pick, not on every refresh until the snapshot lands
+		if c.signature_weapon != null and _asked.get(&"weapon") != me.weapon.data.id:  # once per locked pick, not on every refresh until the snapshot lands
 			_asked[&"weapon"] = me.weapon.data.id
 			arena.weapon_requested.emit(c.signature_weapon.id)
 	else:
