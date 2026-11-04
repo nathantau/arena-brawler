@@ -55,12 +55,16 @@ func test_pool_excludes_starters_ultimates_and_unlocked() -> void:
 		assert_ne(e["id"], first["id"])
 
 
-func test_fun_weapons_are_rare_or_epic() -> void:
+func test_fun_weapons_span_every_rarity() -> void:
 	var c: CharacterData = _fighters()[0]
 	var w: Array = Unlocks.box_pool(c).filter(func(e: Dictionary) -> bool: return e["kind"] == &"weapon")
-	assert_eq(w.size(), 5)
+	assert_eq(w.size(), 10, "five fun weapons and five more")
+	var tiers: Array[int] = []
 	for e: Dictionary in w:
-		assert_gte(e["rarity"], 1)
+		if not tiers.has(e["rarity"]):
+			tiers.append(e["rarity"])
+	tiers.sort()
+	assert_eq(tiers, [0, 1, 2] as Array[int])
 
 
 func test_roll_respects_weights_and_empty_tiers() -> void:

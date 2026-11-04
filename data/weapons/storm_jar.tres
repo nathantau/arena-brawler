@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/storm_jar.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/storm_jar.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/jar_shatter.png" id="10_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"storm_jar"
+rarity = 2
+display_name = "Storm Jar"
+muzzle_x = 42.0
+burst_art = ExtResource("10_x")
+burst_art_radius = 28.0
+pickup = true
+damage = 16
+fire_interval = 0.9
+spread_deg = 2.0
+projectile_speed = 440.0
+projectile_range = 480.0
+projectile_radius = 6.0
+energy_cost = 66
+knockback = 90.0
+color = Color(1, 0.9, 0.4, 1)
+screen_shake = 0.14
+sfx = &"shot_launcher"
+splash_radius = 38.0
+splash_edge_scale = 0.5
+lob_height = 22.0
+chain_range = 150.0
+chain_scale = 0.6
+hook = "Shatters, lightning jumps on"

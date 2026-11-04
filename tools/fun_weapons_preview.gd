@@ -39,7 +39,27 @@ const ROWS_CLOSE: Array = [
 	{"label": "Bees (2x): 4-frame wing flap, outlined, circling then stinging", "zoom": 2, "focus": Vector2(0, 0),
 		"at": [10, 20, 30, 40, 50, 60]},
 ]
+## `-- new`: the five newer shared weapons (new_weapons_preview.png): Confetti Popper, Cactus Cannon (on a target, then on open
+## ground for the full needle ring), Disc Launcher (aimed at the nearest wall), Yo-Yo and Storm Jar. `dump=<dir>` with `only=N`
+## also writes every 2nd physics frame of that row as <dir>/f_NNN.png (for GIFs).
+const ROWS_NEW: Array = [
+	{"label": "Confetti Popper: a wide pop of 7 coloured bits, short range, a puff where they land", "zoom": 1,
+		"focus": Vector2(-60, 0), "at": [3, 8, 13, 18, 24, 32]},
+	{"label": "Cactus Cannon (hit): a lobbed spiky ball, green burst, a ring of needles flies out", "zoom": 1,
+		"focus": Vector2(-40, 0), "at": [20, 36, 48, 52, 56, 62]},
+	{"label": "Cactus Cannon (open ground): at the end of the throw the ring of 6 needles", "zoom": 1,
+		"focus": Vector2(60, 0), "at": [30, 48, 60, 64, 68, 76]},
+	{"label": "Disc Launcher: a fast spinning disc ricochets off the wall, harder every bounce", "zoom": 1,
+		"focus": Vector2(0, 0), "at": [6, 14, 22, 30, 40, 52, 64]},
+	{"label": "Yo-Yo: thrown out on its string, hits, comes back and hits again", "zoom": 1,
+		"focus": Vector2(-20, 0), "at": [4, 10, 16, 22, 30, 40]},
+	{"label": "Storm Jar: lobbed jar shatters, a thunder ring and lightning jumps to the second fighter", "zoom": 1,
+		"focus": Vector2(-30, 0), "at": [20, 28, 32, 34, 38, 46]},
+]
 var ROWS: Array = ROWS_WIDE
+var dump_dir: String = ""
+var new_set: bool = false
+var disc_focus: Vector2 = Vector2.ZERO
 var close: bool = false
 var arena: Arena
 var me: Player
@@ -63,6 +83,12 @@ func _initialize() -> void:
 			close = true
 			ROWS = ROWS_CLOSE
 			out_path = "res://fun_weapons_close.png"
+		elif arg == "new":
+			new_set = true
+			ROWS = ROWS_NEW
+			out_path = "res://new_weapons_preview.png"
+		elif arg.begins_with("dump="):
+			dump_dir = arg.substr(5)
 		elif arg.begins_with("out="):
 			out_path = arg.substr(4)
 	InputSetup.ensure_actions()
@@ -122,6 +148,8 @@ func _tick() -> void:
 			_finish()
 		return
 	_scenario(row, n)
+	if dump_dir != "" and n % 2 == 0 and n < 110:
+		_dump(row, n)
 	if ROWS[row].at.has(n):
 		_grab(row)
 
@@ -162,7 +190,51 @@ func _scenario_close(row: int, n: int) -> void:
 				_fire(me, Vector2.RIGHT, &"hive_gun")
 
 
+func _scenario_new(row: int, n: int) -> void:
+	_put(b, Vector2(-700, -600))
+	a.stats.tick(1.0 / 60.0)
+	if n == 0:
+		a.stats.reset()
+		a.stats.invulnerable_time = 0.0
+		arena.effects.clear()
+	_put(me, Vector2(-200, 0))
+	_put(a, Vector2(0, 0))
+	me.facing = Vector2.RIGHT
+	match row:
+		0:
+			_put(a, Vector2(-60, 0))
+			if n == 0 or n == 40:
+				_fire(me, Vector2.RIGHT, &"confetti_popper")
+		1:
+			_put(a, Vector2(150, 0))
+			if n == 0:
+				_fire(me, Vector2.RIGHT, &"cactus_cannon")
+		2:
+			_put(a, Vector2(-700, 300))
+			if n == 0:
+				_fire(me, Vector2.RIGHT, &"cactus_cannon")
+		3:
+			_put(a, Vector2(-700, 300))
+			var edge: float = arena.play_area().end.x - home.x - 170.0
+			_put(me, Vector2(edge, 0))
+			disc_focus = Vector2(edge - 90.0, 0)
+			if n == 0:
+				_fire(me, Vector2(1.0, -0.12).normalized(), &"disc_launcher")
+		4:
+			_put(a, Vector2(-50, 0))
+			if n == 0:
+				_fire(me, Vector2.RIGHT, &"yoyo")
+		5:
+			_put(a, Vector2(100, 0))
+			_put(b, Vector2(100, 105))
+			if n == 0:
+				_fire(me, Vector2.RIGHT, &"storm_jar")
+
+
 func _scenario(row: int, n: int) -> void:
+	if new_set:
+		_scenario_new(row, n)
+		return
 	if close:
 		_scenario_close(row, n)
 		return
@@ -197,18 +269,29 @@ func _scenario(row: int, n: int) -> void:
 				_fire(me, Vector2.RIGHT, &"hive_gun")
 
 
-func _grab(row: int) -> void:
+func _crop(row: int) -> Image:
 	await RenderingServer.frame_post_draw
 	var img: Image = root.get_texture().get_image()
 	img.convert(Image.FORMAT_RGBA8)
 	var zoom: int = ROWS[row].zoom
 	var crop_size: Vector2i = CELL / zoom
-	var at: Vector2 = root.get_canvas_transform() * (home + ROWS[row].focus as Vector2)
+	var focus: Vector2 = disc_focus if new_set and row == 3 else ROWS[row].focus as Vector2
+	var at: Vector2 = root.get_canvas_transform() * (home + focus)
 	var corner: Vector2i = (Vector2i(at) - crop_size / 2).clamp(Vector2i.ZERO, img.get_size() - crop_size)
 	var crop: Image = img.get_region(Rect2i(corner, crop_size))
 	if zoom > 1:
 		crop.resize(CELL.x, CELL.y, Image.INTERPOLATE_NEAREST)
-	shots[row].append(crop)
+	return crop
+
+
+func _grab(row: int) -> void:
+	shots[row].append(await _crop(row))
+
+
+func _dump(row: int, n: int) -> void:
+	var im: Image = await _crop(row)
+	DirAccess.make_dir_recursive_absolute(dump_dir)
+	im.save_png("%s/f_%03d.png" % [dump_dir, n])
 
 
 ## Blits the cells onto the sheet, then the row labels (rendered in a transparent SubViewport) over it.
@@ -228,6 +311,8 @@ func _finish() -> void:
 			var im: Image = shots[rows[i]][c]
 			sheet.blit_rect(im, Rect2i(Vector2i.ZERO, CELL), Vector2i(PAD + c * (CELL.x + PAD), _row_y(i) + LABEL_H))
 	var ids: Array[StringName] = [&"splash_soaker", &"bubble_wand", &"snowball_cannon", &"firework_launcher", &"hive_gun"]
+	if new_set:
+		ids = [&"confetti_popper", &"cactus_cannon", &"disc_launcher", &"yoyo", &"storm_jar"]
 	for i: int in ids.size():  # held-weapon icons at 3x
 		var icon: Image = _w(ids[i]).sprite.get_image()
 		icon.convert(Image.FORMAT_RGBA8)

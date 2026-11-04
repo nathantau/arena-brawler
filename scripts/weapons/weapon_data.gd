@@ -149,6 +149,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var impact_art: Texture2D
 @export var splat_art: Texture2D
 @export var fx_every: int = 1
+## A boomerang drawn on a string from its thrower's hand (Yo-Yo).
+@export var tether: bool = false
 
 @export_group("Melee")
 @export var melee_range: float = 64.0

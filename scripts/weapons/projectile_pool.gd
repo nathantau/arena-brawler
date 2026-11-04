@@ -60,6 +60,8 @@ const FUSE_PULSE_SCALE: float = 0.2
 const RAINBOW: Array[Color] = [Color8(217, 71, 75), Color8(245, 210, 86), Color8(126, 224, 207), Color8(226, 110, 160),
 	Color8(172, 210, 104), Color8(240, 138, 62)]
 const FLAP_FPS_SCALE: float = 2.5
+const STRING_STEP: float = 1.0
+const STRING_COLORS: Array[Color] = [Color8(244, 240, 226), Color8(244, 240, 226), Color8(170, 176, 190)]
 const LOB_SHADOW: Color = Color(0, 0, 0, 0.28)
 const LOB_SHADOW_SIZE: Vector2 = Vector2(0.9, 0.4)
 const HIT_MASK: int = Constants.LAYER_WALLS | Constants.LAYER_PLAYERS | Constants.LAYER_SHIELDS | Constants.LAYER_CRATES
@@ -311,7 +313,7 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 ## Whether a weapon uses any of the "Fun" hooks (so its slots keep a weapon reference).
 static func _is_fun(w: WeaponData) -> bool:
 	return w.lob_height > 0.0 or w.curve_deg != 0.0 or w.wobble_amp > 0.0 or w.grow_max > 0.0 or w.soak_time > 0.0 \
-		or w.trap_time > 0.0 or w.sting_delay > 0.0 or w.rainbow_trail or w.impact_art != null or w.splat_art != null
+		or w.trap_time > 0.0 or w.sting_delay > 0.0 or w.rainbow_trail or w.impact_art != null or w.splat_art != null or w.tether
 
 
 func _beam(owner_id: int, seq: int, pellet: int, origin: Vector2, dir: Vector2, weapon: WeaponData,
@@ -854,6 +856,10 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 		burst_shown.emit(at, s.splash_radius, s.burst_art, s.burst_art_radius)
 	if s.split_count > 0:
 		_spawn_shards(s, at)
+	if s.chain_range > 0.0:  # Storm Jar: lightning jumps on from the foe nearest the burst
+		var anchor: Player = _splash_anchor(s, at)
+		if anchor != null:
+			_chain(s, anchor, s.damage)
 	if not authoritative:
 		return
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
@@ -876,6 +882,20 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 			var crate: Crate = collider
 			var cdist: float = maxf(0.0, crate.global_position.distance_to(at) - crate.size * 0.5)
 			crate.take_damage(CombatRules.splash_damage(s.damage, cdist, s.splash_radius, s.splash_edge))
+
+
+## The enemy standing nearest a burst at `at`, inside its splash radius (null if none): where a chain starts.
+func _splash_anchor(s: Slot, at: Vector2) -> Player:
+	var best: Player = null
+	var best_d: float = pow(s.splash_radius + Constants.PLAYER_RADIUS, 2.0)
+	for p: Player in targets:
+		if _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden():
+			continue
+		var d: float = at.distance_squared_to(p.global_position)
+		if d <= best_d:
+			best_d = d
+			best = p
+	return best
 
 
 ## Seed Sling: the burst throws `split_count` small shards fanning onward (along the shot's velocity).
@@ -1029,6 +1049,21 @@ func _add_impact(at: Vector2, radius: float, color: Color) -> void:
 	imp.color = color
 
 
+## Yo-Yo: a pixel string from the thrower's hand to the yo-yo.
+func _draw_string(s: Slot, w: WeaponData, px: float) -> void:
+	draw_set_transform(Vector2.ZERO)
+	for p: Player in targets:
+		if p.player_id != s.owner_id:
+			continue
+		var from: Vector2 = p.shot_origin(w)
+		var span: Vector2 = s.pos - from
+		var n: int = int(span.length() / (px * STRING_STEP))
+		for i: int in n:
+			var at: Vector2 = ((from + span * (float(i) / float(maxi(n, 1)))) / px).floor() * px
+			draw_rect(Rect2(at, Vector2(px, px)), STRING_COLORS[i % STRING_COLORS.size()])
+		return
+
+
 func _draw() -> void:
 	var pulse: float = 1.0 + sin(_time * FUSE_PULSE_SPEED) * FUSE_PULSE_SCALE
 	var px: float = Constants.SPRITE_SCALE
@@ -1073,6 +1108,8 @@ func _draw() -> void:
 					angle - Constants.BOOMERANG_SPIN * Constants.BOOMERANG_GHOST_GAP * (g + 1), Vector2(scale_px, scale_px))
 				draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
 					Color(1, 1, 1, Constants.BOOMERANG_GHOST_ALPHA / (g + 1)))
+		if w != null and w.tether:
+			_draw_string(s, w, px)
 		if w != null and w.grow_max > 0.0 and s.base_radius > 0.0:
 			scale_px *= s.radius / s.base_radius
 		var frame: int = s.frame_lock if s.frame_lock >= 0 else tick % frames
