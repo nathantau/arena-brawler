@@ -100,15 +100,14 @@ func test_charge_survives_death_and_respawn() -> void:
 	assert_almost_eq(p.ult_charge, 0.6, 0.0001, "not reset on death")
 
 
-func test_match_and_round_start_reset_the_charge() -> void:
+func test_match_start_resets_the_charge_but_a_new_round_keeps_it() -> void:
 	var arena := Arena.new(Arena.Mode.OFFLINE, 1, MatchRules.Mode.TEAMS)
 	add_child_autofree(arena)
 	var p: Player = arena.add_player(1, 0, null)
 	p.ult_charge = 0.8
 	arena._on_round_started()
-	assert_eq(p.ult_charge, 0.0, "new Teams round")
-	p.ult_charge = 0.8
-	arena._place_participants()
+	assert_eq(p.ult_charge, 0.8, "new Teams round keeps it")
+	arena._on_phase_changed(MatchState.Phase.COUNTDOWN)
 	assert_eq(p.ult_charge, 0.0, "new match")
 
 
