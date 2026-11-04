@@ -5,6 +5,7 @@ extends RefCounted
 ## Starter set per fighter, never in a box: Dash, Barrier, its default skills, signature skill + weapon, ultimate.
 
 const BOX_PRICE: int = 100
+const UNLOCK_CODE: String = "test"
 ## A box rolls from ALL of a fighter's lockable items; an owned result is a duplicate and refunds gold by rarity.
 ## After PITY_DUPES duplicates in a row (per fighter, saved in PlayerProfile.pity) the next box only rolls locked items.
 const DUPE_REFUND: Array[int] = [30, 50, 80]
@@ -146,3 +147,16 @@ static func open_box(c: CharacterData, rng: RandomNumberGenerator = null) -> Dic
 ## Dev / tests: every pickable ability and weapon counts as unlocked (in memory only, nothing is saved).
 static func unlock_all() -> void:
 	all_unlocked = true
+
+
+## Settings "Enter code": the unlock code permanently adds every lockable ability and weapon to the saved profile.
+## Case-insensitive, whitespace trimmed. False (nothing changed) for any other code.
+static func redeem(code: String) -> bool:
+	if code.strip_edges().to_lower() != UNLOCK_CODE:
+		return false
+	PlayerProfile.ensure_loaded()
+	for c: CharacterData in CharacterCatalog.load_all().ordered:
+		for e: Dictionary in lockable(c):
+			PlayerProfile.unlocked[key(e["kind"], e["id"])] = true
+	PlayerProfile.save()
+	return true

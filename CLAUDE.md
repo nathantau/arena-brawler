@@ -98,6 +98,7 @@ A mobile real-time PvP arena shooter. Combat feel is inspired by top-down roguel
   `--arena N` (0 = Pit, 1 = Foundry, 2 = Gym; default random), `--time-limit S` (shorter matches for testing)
 - Pick a character (client / offline): `--character flicker|warden|twinshot|wukong|flint|sakura|bolt|shadow|eden`
   (ids; shown as Shade / Warden / Gunnar / Apex / Flint / Sakura / Bolt / Shadow / Eden: `display_name` only, ids, files and art keep the old names)
+- Preview the settings panel (incl. the Enter code row): `tools/settings_preview.gd`, same override.cfg + `open -g` recipe as shop_preview, args `-- --touch out=<dir>`. Unlock code `test` (`Unlocks.redeem`) permanently unlocks every lockable skill/weapon in the saved profile.
 - Render frames to check visuals without a screen: `godot --path . --write-movie /tmp/f.png --fixed-fps 30 --quit-after 300 -- --offline --autopilot --touch`
 - LAN discovery e2e: `godot --path . --headless -- --host --port 7790 --autopilot &` then `godot --path . --headless -- --discover` (browses ~4 s, prints `[discover] found ...`; add `--no-broadcast` to the host to test the unicast sweep alone). The menu's join list uses the same `LanDiscovery`.
 - Net debugging: add `--net-debug` (prints server/client net stats every second, logs reconciliation corrections);
