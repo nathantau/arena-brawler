@@ -11338,6 +11338,459 @@ FX.update({
 })
 
 
+# --- Blind box (shop loot crate): a chunky mystery box with a "?" plate, metal straps and a glowing seam under the lid ---
+# One silhouette, three rarities (common = steel / cool blue, rare = violet, epic = gold with a warm glow). Strips are
+# assets/fx/box_<rarity>_<anim>.png (+ rays_<rarity>.png), square cells, horizontal. The shop screen plays them; the frame
+# count is width / height.
+#
+#   strip                 frames  cell      suggested fps
+#   box_<r>_idle             8     64x64    8   (loop: bob, seam pulse, glint sweep, twinkles)
+#   box_<r>_shake            8     64x64    16  (once: rattle + lid lifts + light leaks, then play open)
+#   box_<r>_open            12    160x160   14  (once, hold the last frame: lid blows off, beam, burst, confetti)
+#   rays_<r>                 8    128x128   6   (loop: slow rotating light rays, behind the reveal card)
+#
+# The box is drawn in a 44x38 art-px area (BOX_W x BOX_H). In `open` it keeps that size, centred in the 160 cell (the lid
+# lands on the floor to its right); idle / shake keep it centred in 64 with the floor shadow 5 px above the cell bottom.
+BOX_CELL = 64
+BOX_IDLE_FRAMES = 8
+BOX_SHAKE_FRAMES = 8
+BOX_OPEN_CELL = 160
+BOX_OPEN_FRAMES = 12
+BOX_RAYS_CELL = 128
+BOX_RAYS_FRAMES = 8
+BOX_W, BOX_H = 44, 38
+# glow = (dark, mid, light, hot); sparkles = twinkles in idle; confetti = pieces in the open burst
+BOX_THEMES = {
+    "common": dict(body=BLUE, panel=NAVY, cap=STEEL, glow=(BLUE, TEAL, TEAL_L, WHITE), sparkles=2, halo=0.0, confetti=18,
+                   colors=(TEAL_L, STEEL, TEAL, WHITE, STEEL_D)),
+    "rare": dict(body=VIOLET, panel=VIOLET_D, cap=STEEL, glow=(VIOLET, VIOLET_L, PINK_L, WHITE), sparkles=4, halo=0.5,
+                 confetti=24, colors=(VIOLET_L, PINK_L, PINK, WHITE, STEEL)),
+    "epic": dict(body=OCHRE, panel=BROWN, cap=YELLOW, glow=(ORANGE, YELLOW, CREAM, WHITE), sparkles=6, halo=1.0,
+                 confetti=32, colors=(YELLOW, ORANGE, CREAM, WHITE, RED, OCHRE)),
+}
+BOX_SPARKLE_SLOTS = [(5, 18, 3, 0), (58, 14, 3, 3), (60, 38, 2, 5), (9, 44, 2, 2), (22, 5, 2, 6), (45, 6, 3, 1)]  # x, y, peak size, phase
+BOX_MARK = [".######.", "##....##", "##....##", "......##", "....###.", "...##...", "...##...", "........", "...##...", "...##..."]
+
+
+def box_tone(th, v, bay):
+    """Glow colour for intensity v (0..1+), dithered with the Bayer matrix value `bay` (0..1)."""
+    v = v - (bay - 0.5) * 0.4
+    d, m, l, h = th["glow"]
+    return h if v > 0.85 else l if v > 0.6 else m if v > 0.33 else d if v > 0.14 else None
+
+
+def box_glow_blob(img, th, cx, cy, rx, ry, amount, power=None):
+    """A soft glow halo, only onto empty pixels: banded rings (a checker fringe, then solid, then a brighter checker) so it
+    reads as a clean glow rather than noise. `amount` 0..1 scales its size and how many bands show."""
+    px = img.load()
+    d_, m_, l_, h_ = th["glow"]
+    rx, ry = rx * (0.55 + 0.45 * amount), ry * (0.55 + 0.45 * amount)
+    for y in range(max(0, int(cy - ry) - 1), min(img.height, int(cy + ry) + 2)):
+        for x in range(max(0, int(cx - rx) - 1), min(img.width, int(cx + rx) + 2)):
+            d = math.hypot((x - cx) / rx, (y - cy) / ry)
+            if d >= 1 or px[x, y][3]:
+                continue
+            chk = (x + y) % 2 == 0
+            col = None
+            if d > 0.78:
+                col = d_ if chk and (d < 0.9 or (x % 2 == 0 and y % 2 == 0)) else None
+            elif d > 0.3:
+                col = d_ if chk else None
+            else:
+                col = (m_ if chk else d_) if amount >= 0.6 else (d_ if chk else None)
+            if col:
+                px[x, y] = col + (255,)
+
+
+def box_column(img, th, cx, y_base, half0, half1, height, amount, jitter=0.3):
+    """A vertical beam of light rising from y_base: a white-hot core, a light body and a dithered edge, fading out at the top."""
+    px = img.load()
+    d, m, l, h = th["glow"]
+    for y in range(max(2, y_base - height), y_base):
+        f = (y_base - y) / height
+        hw = half0 + (half1 - half0) * f
+        fade = amount * (1 - 0.85 * f ** 1.4)
+        for x in range(int(cx - hw) - 1, int(cx + hw) + 2):
+            if not 2 <= x < img.width - 2 or px[x, y][3]:
+                continue
+            u = abs(x - cx + 0.5) / hw
+            if u >= 1:
+                continue
+            bay = BAYER4[y % 4][x % 4] / 16
+            v = fade * (1 - u ** 2.4) - (bay - 0.5) * jitter * (u + 0.2)
+            col = h if v > 0.78 else l if v > 0.5 else m if v > 0.26 else d if v > 0.08 else None
+            if col:
+                px[x, y] = col + (255,)
+
+
+def box_sparkle(img, x, y, size, th):
+    """A plus-shaped twinkle: size 1 = a dot, 2 = 3x3 plus, 3 = a 5x5 plus with a hot core."""
+    if size <= 0:
+        return
+    px = img.load()
+    _, m, l, h = th["glow"]
+
+    def put(a, b, col):
+        if 0 <= a < img.width and 0 <= b < img.height:
+            px[a, b] = col + (255,)
+    put(x, y, h)
+    if size >= 2:
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            put(x + dx, y + dy, l)
+    if size >= 3:
+        for dx, dy in ((2, 0), (-2, 0), (0, 2), (0, -2)):
+            put(x + dx, y + dy, m)
+
+
+def box_lid(c, th, ox, oy):
+    """The lid: a lit top face, the front with end caps and a clasp plaque."""
+    body, cap = th["body"], th["cap"]
+    c.part(R((ox + 3, oy, ox + 40, oy + 5)), LIGHTER[body])
+    c.part(R((ox, oy + 5, ox + 43, oy + 12)), body)
+    for x0, x1 in ((ox, ox + 4), (ox + 39, ox + 43)):
+        c.part(R((x0, oy + 5, x1, oy + 12)), cap)
+    c.dot(ox + 2, oy + 8, DARKER[cap])
+    c.dot(ox + 41, oy + 8, DARKER[cap])
+    c.part(R((ox + 18, oy + 7, ox + 25, oy + 12)), cap)
+    c.flat(R((ox + 21, oy + 9, ox + 22, oy + 10)), OUTLINE)
+
+
+def box_body(c, th, ox, oy, g, open_top=False):
+    """Body: body-colour planks, two riveted metal straps, a recessed plate with the glowing "?"."""
+    body, cap, panel = th["body"], th["cap"], th["panel"]
+    top = oy + 6 if open_top else oy + 13
+    c.part(R((ox + 3, oy + 13, ox + 40, oy + 37)), body)
+    if open_top:
+        c.part(R((ox + 3, oy + 6, ox + 40, oy + 14)), LIGHTER[body])
+    for x0, x1 in ((ox + 3, ox + 8), (ox + 35, ox + 40)):
+        c.part(R((x0, top, x1, oy + 37)), cap)
+    for rx in (ox + 5, ox + 37):
+        for ry in (top + 3, oy + 33):
+            c.dot(rx, ry, LIGHTER[cap])
+            c.dot(rx + 1, ry, cap)
+            c.dot(rx, ry + 1, cap)
+            c.dot(rx + 1, ry + 1, DARKER[cap])
+    # the recessed plate
+    px0, py0, px1, py1 = ox + 11, oy + 17, ox + 32, oy + 34
+    c.flat(R((px0, py0, px1, py1)), panel)
+    c.flat(L([(px0, py0), (px1, py0)], 1), OUTLINE)
+    c.flat(L([(px0, py0), (px0, py1)], 1), OUTLINE)
+    c.flat(L([(px0 + 1, py1), (px1, py1)], 1), DARKER[panel])
+    c.flat(L([(px1, py0 + 1), (px1, py1)], 1), DARKER[panel])
+    # the "?" (glow tied to the seam level g)
+    d, m, l, h = th["glow"]
+    base, lit, shade = (m, l, d) if g < 2 else (l, h, m)
+    mx, my = ox + 17, oy + 21
+    cells = {(mx + i, my + j) for j, row in enumerate(BOX_MARK) for i, ch in enumerate(row) if ch == "#"}
+    for (x, y) in cells:  # a hard drop shadow down and right
+        for dx, dy in ((1, 1), (1, 0), (0, 1)):
+            if (x + dx, y + dy) not in cells:
+                c.dot(x + dx, y + dy, OUTLINE)
+    for (x, y) in cells:
+        col = base
+        if (x, y - 1) not in cells or (x - 1, y) not in cells:
+            col = lit
+        elif (x, y + 1) not in cells or (x + 1, y) not in cells:
+            col = shade
+        c.dot(x, y, col)
+
+
+def box_seam(c, th, ox, oy, lift, g):
+    """The glowing gap under the lid: a thin line that thickens and whitens with g (0..3), a bright slot when lifted."""
+    d, m, l, h = th["glow"]
+    x0, x1 = ox + 3, ox + 40
+    if lift == 0:
+        rows = [(oy + 13, (m, l, h, h)[g])]
+        if g >= 2:
+            rows.append((oy + 14, (m, m, l, l)[g]))
+    else:
+        rows = [(oy + 13 - lift, l)] + [(y, h) for y in range(oy + 14 - lift, oy + 13)] + [(oy + 13, l)]
+    for y, col in rows:
+        c.flat(L([(x0, y), (x1, y)], 1), col)
+    if lift:  # the light spills down the front of the body
+        c.flat(L([(x0, oy + 14), (x1, oy + 14)], 1), m)
+        for x in range(x0, x1 + 1):
+            if (x + oy) % 2 == 0:
+                c.dot(x, oy + 15, m)
+
+
+def box_layer(th, n, ox, oy, lift=0, g=1, lid_dx=0, glint=None, open_top=False, lid=True):
+    """The box on its own transparent layer, outlined."""
+    c = Canvas(n)
+    box_body(c, th, ox, oy, g, open_top)
+    if lid:
+        box_lid(c, th, ox + lid_dx, oy - lift)
+        box_seam(c, th, ox, oy, lift, g)
+    if glint is not None:
+        px = c.img.load()
+        metal = {th["cap"], DARKER[th["cap"]], LIGHTER[th["cap"]]}
+        for y in range(n):
+            for x in range(n):
+                r, gg, b, a = px[x, y]
+                col = (r, gg, b)
+                if a and col not in (OUTLINE, th["panel"], DARKER[th["panel"]]) and col in LIGHTER:
+                    s = abs(x + 0.8 * y - glint)
+                    if s < 0.9 and col in metal:
+                        px[x, y] = WHITE + (255,)
+                    elif s < 1.7:
+                        px[x, y] = LIGHTER[col] + (255,)
+    return outline(c.img)
+
+
+def box_shadow(img, cx, y, half, rows=2, color=None):
+    """A floor ellipse: a solid core with a checker fringe (the shadow, or in `color` a glow)."""
+    px = img.load()
+    for dy in range(-rows, rows + 1):
+        w = half * math.sqrt(max(0.0, 1 - (dy / (rows + 0.6)) ** 2))
+        for x in range(int(cx - w) - 1, int(cx + w) + 2):
+            u = abs(x - cx) / max(w, 1)
+            if u > 1 or not 0 <= x < img.width or not 0 <= y + dy < img.height:
+                continue
+            if (u < 0.78 and abs(dy) < rows) or (x + y + dy) % 2 == 0:
+                if color is None or not px[x, y + dy][3]:
+                    px[x, y + dy] = (color or OUTLINE) + (255,)
+
+
+def box_floor_glow(img, th, cx, y, half, amount):
+    """The glow the box throws on the floor: a wide dark-glow ellipse under the shadow, a mid-glow core when strong."""
+    box_shadow(img, cx, y, half * 1.5, 3, th["glow"][0])
+    if amount > 0.5:
+        box_shadow(img, cx, y, half * 1.1, 2, th["glow"][1])
+
+
+def box_idle_frame(r, k, shake=False):
+    th = BOX_THEMES[r]
+    n = BOX_CELL
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    ox, oy0 = 10, 11
+    if shake:
+        t = k / (BOX_SHAKE_FRAMES - 1)
+        dx = [0, -1, 1, -2, 2, -2, 3, -3][k]
+        lift = [0, 1, 1, 2, 3, 4, 5, 6][k]
+        lid_dx = [0, 1, -1, 1, -1, 2, -2, 2][k]
+        dy = [1, 0, 0, -1, 0, -1, 0, -1][k]
+        g = [1, 1, 2, 2, 3, 3, 3, 3][k]
+        glint = None
+    else:
+        dx, lift, lid_dx = 0, 0, 0
+        dy = -[0, 0, 1, 2, 2, 2, 1, 0][k]
+        g = [1, 2, 3, 3, 2, 1, 0, 0][k]
+        glint = None if k in (0, 7) else -2 + (k - 1) * 14
+    ox += dx
+    oy = oy0 + dy
+    if th["halo"]:
+        box_floor_glow(img, th, 31.5, 52, 15 + dy * 0.9, th["halo"] * (0.3 + 0.2 * g) if not shake else 0.4 + 0.6 * k / 7)
+    box_shadow(img, 31.5, 52, 15 + dy * 0.9)
+    img.alpha_composite(box_layer(th, n, ox, oy, lift, g, lid_dx, glint))
+    if shake and lift:  # light streaming out sideways through the gap
+        px = img.load()
+        d, m, l, h = th["glow"]
+        gy = oy + 13 - lift // 2
+        for side in (-1, 1):
+            length = 3 + lift * 2
+            x_start = ox + (2 if side < 0 else 41)
+            for i in range(length):
+                col = h if i < 2 else l if i < length - 2 else m
+                xx = x_start + side * i
+                if 0 < xx < n - 1:
+                    px[xx, gy] = col + (255,)
+                    if i < length - 3 and lift >= 2:
+                        px[xx, gy + 1] = m + (255,)
+    if shake and k >= 3:  # sparks fly up off the lid
+        rng = random.Random(5 + k)
+        px = img.load()
+        d, m, l, h = th["glow"]
+        for i in range(k - 2):
+            sx, sy = ox + rng.randint(4, 40), max(3, oy - lift - rng.randint(3, 4 + 2 * k)) if False else max(3, oy - lift - rng.randint(2, 3 + 2 * k))
+            px[sx, sy] = h + (255,)
+            px[sx, sy + 1] = l + (255,)
+            px[sx, sy + 2] = m + (255,)
+    if not shake:
+        for i, (sx, sy, peak, ph) in enumerate(BOX_SPARKLE_SLOTS[:th["sparkles"]]):
+            size = min(peak, [0, 2, 3, 3, 2, 0, 0, 0][(k - ph) % 8])
+            box_sparkle(img, sx, sy + dy // 2, size, th)
+    return img
+
+
+# open: per frame (box dy, lid pos (dx, dy, angle), beam (height, intensity), starburst radius, ring radius)
+BOX_OPEN_BOX_DY = [2, -3, -1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+BOX_OPEN_LID = [(0, -2, 0), (1, -14, -12), (4, -36, -50), (10, -54, -115), (18, -60, -185), (27, -52, -245), (36, -34, -300),
+                (43, -10, -335), (48, 30, -350), (50, 24, -346), (50, 30, -352), (50, 30, -352)]
+BOX_OPEN_BEAM = [(0, 0.0), (56, 1.0), (92, 1.0), (96, 1.0), (96, 0.95), (92, 0.85), (86, 0.72), (80, 0.62), (74, 0.52), (68, 0.46),
+                 (64, 0.42), (64, 0.42)]
+BOX_OPEN_STAR = [0, 24, 38, 26, 14, 0, 0, 0, 0, 0, 0, 0]
+BOX_OPEN_RING = [0, 10, 20, 30, 38, 45, 50, 0, 0, 0, 0, 0]
+
+
+def box_confetti(r):
+    """Confetti pieces and spark streaks for the open burst: (birth, angle, speed, colour, spin, is_spark, drag)."""
+    th = BOX_THEMES[r]
+    rng = random.Random(7 + len(r))
+    out = []
+    for i in range(th["confetti"]):
+        a = -math.pi / 2 + rng.uniform(-1.15, 1.15)
+        out.append((rng.choice((1, 2, 2, 3)), a, rng.uniform(7.0, 11.5), rng.choice(th["colors"]), rng.randrange(3), False, rng.uniform(0.84, 0.9)))
+    for i in range(10):
+        a = math.tau * (i + rng.uniform(0, 0.8)) / 10
+        out.append((1, a, rng.uniform(5, 9), th["glow"][3] if i % 2 else th["glow"][2], 0, True, 0.86))
+    return out
+
+
+def box_burst_layer(r, k, n, cx, cy):
+    """Flying confetti pieces and spark streaks at open frame k."""
+    th = BOX_THEMES[r]
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    px = img.load()
+
+    def put(x, y, col):
+        x, y = int(round(x)), int(round(y))
+        if 2 <= x < n - 2 and 2 <= y < n - 2:
+            px[x, y] = col + (255,)
+    for birth, a, sp, col, spin, spark, drag in box_confetti(r):
+        if k < birth:
+            continue
+        x, y, vx, vy, trail = cx, cy, math.cos(a) * sp, math.sin(a) * sp, []
+        for _ in range(k - birth + 1):
+            trail.append((x, y))
+            x += vx
+            y += vy
+            vx *= drag
+            vy = vy * drag + 0.12
+        tau = k - birth
+        life = 6 if spark else 9
+        if tau >= life:
+            continue
+        if spark:  # a streak: bright head, fading tail
+            put(x, y, WHITE)
+            tx, ty = trail[-1]
+            put((tx + x) / 2, (ty + y) / 2, th["glow"][2])
+            put(tx, ty, th["glow"][1])
+        else:
+            w, h = ((4, 3), (3, 4), (3, 3))[(tau + spin) % 3]
+            if tau >= life - 2 and (tau + spin) % 2:  # thin out before they vanish
+                put(x, y, col)
+                continue
+            for i in range(w):
+                for j in range(h):
+                    put(x + i, y + j, DARKER[col] if (j == h - 1 or i == w - 1) else col)
+            put(x, y, LIGHTER[col])
+    return img
+
+
+def box_starburst(img, th, cx, cy, radius, ring):
+    """A white-hot flash with 8 spikes (4 long, 4 short) plus a thin dithered ring."""
+    px = img.load()
+    d, m, l, h = th["glow"]
+    n = img.width
+    big = max(radius, ring) + 2
+    for y in range(max(2, int(cy - big)), min(n - 2, int(cy + big) + 1)):
+        for x in range(max(2, int(cx - big)), min(n - 2, int(cx + big) + 1)):
+            dx, dy = x - cx, y - cy
+            rr = math.hypot(dx, dy)
+            col = None
+            if radius:
+                a = math.atan2(dy, dx)
+                lobe = abs(math.cos(a * 4)) ** 9
+                longer = 1.0 if round(a / (math.pi / 4)) % 2 == 0 else 0.62
+                lim = radius * longer * lobe + radius * 0.3
+                if rr <= lim:
+                    v = 1 - rr / max(lim, 1)
+                    col = h if v > 0.3 or rr < radius * 0.3 else l if v > 0.12 else m
+            if ring and col is None and abs(rr - ring) < 1.2:
+                fade = max(0.0, 1 - ring / 62)
+                if BAYER4[y % 4][x % 4] / 16 < 0.3 + 0.9 * fade:
+                    col = l if abs(rr - ring) < 0.7 else m
+            if col:
+                px[x, y] = col + (255,)
+
+
+def box_pad(im, p):
+    out = Image.new("RGBA", (im.width + 2 * p, im.height + 2 * p), (0, 0, 0, 0))
+    out.paste(im, (p, p))
+    return out
+
+
+def box_open_frame(r, k):
+    th = BOX_THEMES[r]
+    n = BOX_OPEN_CELL
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    ox, oy = n // 2 - BOX_W // 2, 92
+    cx, floor = n // 2, oy + 41
+    oyk = oy + BOX_OPEN_BOX_DY[k]
+    if th['halo']:
+        box_floor_glow(img, th, cx - 0.5, floor, 17, 1.0)
+    box_shadow(img, cx - 0.5, floor, 17)
+    height, amount = BOX_OPEN_BEAM[k]
+    opened = k >= 1
+    if k >= 1:
+        box_glow_blob(img, th, cx, oy + 6, 44, 38, (0.4 + 0.6 * th["halo"]) * (1.0 if k < 8 else 0.6))
+    if height:
+        box_column(img, th, cx, oyk + 11, 15, 12 + 14 * amount, height, amount)
+    if opened:
+        img.alpha_composite(box_layer(th, n, ox, oyk, g=3, lid=False, open_top=True))
+        px = img.load()  # the window into the box: rows of glow across the opening
+        d, m, l, h = th["glow"]
+        for i, col in enumerate([m, l, h, h, h] if k < 8 else [d, m, l, l, h]):
+            for x in range(ox + 9, ox + 35):
+                px[x, oyk + 8 + i] = col + (255,)
+    else:
+        img.alpha_composite(box_layer(th, n, ox, oyk, lift=2, g=3))
+    if k >= 2:
+        img.alpha_composite(box_burst_layer(r, k, n, cx, oyk + 8))
+    if opened:  # the lid in flight: drawn upright, rotated, re-outlined
+        lx, ly, ang = BOX_OPEN_LID[k]
+        c = Canvas(64)
+        box_lid(c, th, 8, 10)
+        lid = c.img.crop(c.img.getbbox()).rotate(-ang, resample=Image.NEAREST, expand=True)
+        lid = outline(box_pad(lid, 1))
+        img.alpha_composite(lid, (int(cx + lx - lid.width / 2), int(oy + 6 + ly - lid.height / 2)))
+    if BOX_OPEN_STAR[k] or BOX_OPEN_RING[k]:
+        box_starburst(img, th, cx, oyk + 10, BOX_OPEN_STAR[k], BOX_OPEN_RING[k])
+    if k >= 8:  # settled: a few twinkles round the open box
+        spots = [(-44, -34, 3), (46, -44, 2), (-30, -62, 2), (30, -70, 3), (0, -88, 3), (-52, -6, 2)]
+        for sx, sy, peak in spots[:2 + th["sparkles"] // 2]:
+            box_sparkle(img, cx + sx, oy + sy, peak if k >= 10 else peak - 1, th)
+    return img
+
+
+def box_rays_frame(r, k):
+    """A slow rotating light-ray backdrop: 12 tapered rays, dithered out toward the rim; 8 frames = one ray period."""
+    th = BOX_THEMES[r]
+    n = BOX_RAYS_CELL
+    img = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    px = img.load()
+    d, m, l, h = th["glow"]
+    spokes = 12
+    period = math.tau / spokes
+    phase = period * k / BOX_RAYS_FRAMES
+    c0 = n / 2 - 0.5
+    rim = n / 2 - 3
+    for y in range(n):
+        for x in range(n):
+            dx, dy = x - c0, y - c0
+            rr = math.hypot(dx, dy)
+            if rr > rim or rr < 4:
+                continue
+            edge = abs(((math.atan2(dy, dx) - phase) % period) - period / 2) / (period / 2)  # 1 on a ray's centre line, 0 mid-gap
+            edge = 1 - edge
+            if edge > 0.5:
+                continue
+            v = (1 - rr / rim) ** 1.1 * (1.0 - edge * 1.3)
+            col = box_tone(th, v * 0.95, BAYER4[y % 4][x % 4] / 16)
+            if col is not None:
+                px[x, y] = (l if col == h else col) + (255,)
+    return img
+
+
+for _r in BOX_THEMES:
+    FX.update({
+        f"box_{_r}_idle": lambda _r=_r: strip([box_idle_frame(_r, k) for k in range(BOX_IDLE_FRAMES)]),
+        f"box_{_r}_shake": lambda _r=_r: strip([box_idle_frame(_r, k, True) for k in range(BOX_SHAKE_FRAMES)]),
+        f"box_{_r}_open": lambda _r=_r: strip([box_open_frame(_r, k) for k in range(BOX_OPEN_FRAMES)]),
+        f"rays_{_r}": lambda _r=_r: strip([box_rays_frame(_r, k) for k in range(BOX_RAYS_FRAMES)]),
+    })
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for name, build in (CHARACTERS | FORMS).items():
