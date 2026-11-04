@@ -1544,18 +1544,31 @@ func _locked_tap(card: Button) -> bool:
 	return true
 
 
+## What `_enforce_unlocks` already asked a replacement for (slot key -> the locked id), so each mismatch emits once.
+var _asked: Dictionary = {}
+
+
 ## If the synced weapon or an ability slot holds something that is locked for this fighter (a pick carried over from
 ## another fighter), ask for the defaults instead: the UI never leaves a locked item equipped.
 func _enforce_unlocks(me: Player) -> void:
 	var c: CharacterData = me.character
 	if not Unlocks.is_weapon_unlocked(c, me.weapon.data):
-		arena.weapon_requested.emit(c.signature_weapon.id)
+		if c.signature_weapon != null and _asked.get(&"weapon") != me.weapon.data.id:  # once per locked pick, not on every refresh until the snapshot lands
+			_asked[&"weapon"] = me.weapon.data.id
+			arena.weapon_requested.emit(c.signature_weapon.id)
+	else:
+		_asked.erase(&"weapon")
 	var held: Array[SkillData] = []
 	for i: int in Constants.PICKED_SLOTS:
 		held.append(me.skills[i].data)
 	for i: int in Constants.PICKED_SLOTS:
+		var key := StringName("slot%d" % i)
 		if Unlocks.is_skill_unlocked(c, held[i]):
+			_asked.erase(key)
 			continue
+		if _asked.get(key) == held[i].id:
+			continue
+		_asked[key] = held[i].id
 		for d: SkillData in Player.default_skills(c) + Player.specials_pool(c):
 			if Unlocks.is_skill_unlocked(c, d) and not held.has(d):
 				held[i] = d

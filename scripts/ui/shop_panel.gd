@@ -25,6 +25,7 @@ var _fighter: CharacterData
 var _cards: Dictionary[StringName, Button] = {}
 var _left_labels: Dictionary[StringName, Label] = {}
 var _gold: GoldChip
+var _opened_dupe: bool = false
 var _stage: Control
 var _idle: Texture2D
 var _idle_frames: int = 8
@@ -234,7 +235,14 @@ func _build_body() -> Control:
 	_stage.clip_contents = true
 	_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.draw.connect(_draw_stage)
-	body.add_child(_stage)
+	var stage_col := VBoxContainer.new()  # leaves the same empty strip under the stage as the reason line under the button
+	stage_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stage_col.add_theme_constant_override("separation", SPACING)
+	stage_col.add_child(_stage)
+	var margin_below := Control.new()
+	margin_below.custom_minimum_size.y = UiStyle.SIZE_SMALL + 6
+	stage_col.add_child(margin_below)
+	body.add_child(stage_col)
 	var side := VBoxContainer.new()
 	side.custom_minimum_size.x = SIDE_W
 	side.add_theme_constant_override("separation", SPACING)
@@ -376,6 +384,7 @@ func _on_open() -> Dictionary:
 	var info: Dictionary = item_info(got)
 	info["dupe"] = got["dupe"]
 	info["refund"] = got["refund"]
+	_opened_dupe = bool(got["dupe"])
 	_opening = BoxOpening.new(info, again, _sfx)
 	_opening.closed.connect(_on_opening_closed)
 	add_child(_opening)
@@ -384,7 +393,7 @@ func _on_open() -> Dictionary:
 
 func _on_opening_closed(again: bool) -> void:
 	_opening = null
-	_gold.set_gold(PlayerProfile.gold, true)
+	_gold.set_gold(PlayerProfile.gold, not _opened_dupe)  # the reveal's wallet chip already counted a dupe's refund
 	_refresh()
 	if again:
 		_on_open.call_deferred()

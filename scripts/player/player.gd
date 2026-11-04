@@ -1608,7 +1608,7 @@ func _draw_gun(ci: CanvasItem, offset: Vector2) -> void:
 		ci.draw_set_transform(hand_at, 0.0, Vector2(scale_px * flip_v, scale_px))
 	else:
 		ci.draw_set_transform(hand_at, angle, Vector2(scale_px, scale_px * flip_v))
-	w.draw_held(ci, WEAPON_GRIP, tint)
+	w.draw_held(ci, WEAPON_GRIP, tint, w.tether and projectiles != null and projectiles.tether_out(player_id))
 
 
 func _draw_bars(r: float) -> void:

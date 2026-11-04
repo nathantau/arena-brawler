@@ -251,3 +251,15 @@ func test_load_clamps_and_old_profiles_get_start_gold() -> void:
 	assert_eq(PlayerProfile.gold, 0)
 	assert_true(PlayerProfile.unlocked.has("skill:x"))
 	assert_false(PlayerProfile.unlocked.has("weapon:y"))
+
+
+func test_load_survives_non_numeric_wallet_and_pity_values() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("wallet", "gold", [1, 2])
+	cfg.set_value("pity", "flint", {"a": 1})
+	cfg.set_value("pity", "eden", 2)
+	cfg.save(TMP)
+	PlayerProfile.load_from(TMP)
+	assert_eq(PlayerProfile.gold, PlayerProfile.START_GOLD, "a bad value falls back instead of erroring")
+	assert_false(PlayerProfile.pity.has("flint"))
+	assert_eq(PlayerProfile.pity_of(&"eden"), 2)

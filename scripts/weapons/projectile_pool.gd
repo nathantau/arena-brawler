@@ -212,6 +212,15 @@ func clear() -> void:
 	_ramps.clear()
 
 
+## True while a tethered shot (Yo-Yo) of `owner` is in flight: its thrower's hand holds only the empty loop.
+## Read from the slots every peer simulates, so no synced state.
+func tether_out(owner: int) -> bool:
+	for s: Slot in _slots:
+		if s.active and s.owner_id == owner and s.weapon != null and s.weapon.tether:
+			return true
+	return false
+
+
 ## Read-only view for tests / debugging.
 func debug_slots() -> Array[Slot]:
 	return _slots
@@ -722,12 +731,15 @@ func _direct_hit(s: Slot, target: Player, at: Vector2) -> void:
 
 
 ## Lightning jumps from `from` to the nearest other enemy in sight within chain_range for chain_scale x damage.
-func _chain(s: Slot, from: Player, damage: int) -> void:
+## `burst_at`: after a splash burst, skip foes the burst itself already hit (inside its radius with a clear line).
+func _chain(s: Slot, from: Player, damage: int, burst: bool = false, burst_at: Vector2 = Vector2.ZERO) -> void:
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	var best: Player = null
 	var best_d: float = s.chain_range * s.chain_range
 	for p: Player in targets:
 		if p == from or _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden():
+			continue
+		if burst and _splashed(s, burst_at, p, space):
 			continue
 		var d: float = from.global_position.distance_squared_to(p.global_position)
 		if d < best_d and AutoAim.has_line_of_sight(space, _los_query, from.global_position, p.global_position):
@@ -859,7 +871,7 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 	if s.chain_range > 0.0:  # Storm Jar: lightning jumps on from the foe nearest the burst
 		var anchor: Player = _splash_anchor(s, at)
 		if anchor != null:
-			_chain(s, anchor, s.damage)
+			_chain(s, anchor, s.damage, true, at)
 	if not authoritative:
 		return
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
@@ -884,15 +896,22 @@ func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> voi
 			crate.take_damage(CombatRules.splash_damage(s.damage, cdist, s.splash_radius, s.splash_edge))
 
 
+## True if a burst at `at` damages `p` (inside the splash with a clear line), mirrors the loop in `_explode`.
+func _splashed(s: Slot, at: Vector2, p: Player, space: PhysicsDirectSpaceState2D) -> bool:
+	return at.distance_to(p.global_position) <= s.splash_radius + Constants.PLAYER_RADIUS \
+		and AutoAim.has_line_of_sight(space, _los_query, at, p.global_position)
+
+
 ## The enemy standing nearest a burst at `at`, inside its splash radius (null if none): where a chain starts.
 func _splash_anchor(s: Slot, at: Vector2) -> Player:
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	var best: Player = null
-	var best_d: float = pow(s.splash_radius + Constants.PLAYER_RADIUS, 2.0)
+	var best_d: float = INF
 	for p: Player in targets:
-		if _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden():
-			continue
+		if _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden() or not _splashed(s, at, p, space):
+			continue  # (a foe behind a wall takes no splash, so it can't start the chain either)
 		var d: float = at.distance_squared_to(p.global_position)
-		if d <= best_d:
+		if d < best_d:
 			best_d = d
 			best = p
 	return best

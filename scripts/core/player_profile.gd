@@ -118,6 +118,11 @@ static func record_match(fighter: StringName, won: bool, match_kills: int, match
 		"level_before": level_before, "level_after": level_after, "gold": gold_gained, "gold_after": gold}
 
 
+## A hand-edited value that isn't a number (an array, say) falls back to `fallback` instead of erroring.
+static func _whole(v: Variant, fallback: int) -> int:
+	return int(v) if typeof(v) in [TYPE_INT, TYPE_FLOAT, TYPE_STRING] else fallback
+
+
 ## Missing file or keys keep the defaults; negatives are clamped so a hand-edited file can't break the maths.
 static func load_from(p: String) -> void:
 	_loaded = true
@@ -136,14 +141,14 @@ static func load_from(p: String) -> void:
 	wins = maxi(int(cfg.get_value("totals", "wins", 0)), 0)
 	kills = maxi(int(cfg.get_value("totals", "kills", 0)), 0)
 	damage = maxi(int(cfg.get_value("totals", "damage", 0)), 0)
-	gold = maxi(int(cfg.get_value("wallet", "gold", START_GOLD)), 0)
+	gold = maxi(_whole(cfg.get_value("wallet", "gold", START_GOLD), START_GOLD), 0)
 	if cfg.has_section("unlocks"):
 		for key: String in cfg.get_section_keys("unlocks"):
 			if cfg.get_value("unlocks", key, false):
 				unlocked[key] = true
 	if cfg.has_section("pity"):
 		for id: String in cfg.get_section_keys("pity"):
-			var n: int = clampi(int(cfg.get_value("pity", id, 0)), 0, Unlocks.PITY_DUPES)
+			var n: int = clampi(_whole(cfg.get_value("pity", id, 0), 0), 0, Unlocks.PITY_DUPES)
 			if n > 0:
 				pity[id] = n
 	for section: String in cfg.get_sections():
