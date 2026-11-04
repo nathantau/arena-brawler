@@ -46,3 +46,19 @@ func test_safe_area_fit_stops_listening_when_the_control_is_freed() -> void:
 	c.free()
 	assert_eq(host.get_viewport().size_changed.get_connections().size(), before, "no stale resize handler on a freed screen")
 	host.get_viewport().size_changed.emit()  # must not touch the freed control
+
+
+func test_lobby_lineup_state() -> void:
+	assert_eq(LobbyPanel.lineup_state(true, false, true, false), "LOCKED")
+	assert_eq(LobbyPanel.lineup_state(true, false, false, false), "hovering")
+	assert_eq(LobbyPanel.lineup_state(true, true, true, false), "hovering", "a bot never shows locked")
+	assert_eq(LobbyPanel.lineup_state(false, true, false, false), "bot")
+	assert_eq(LobbyPanel.lineup_state(false, false, false, true), "READY")
+	assert_eq(LobbyPanel.lineup_state(false, false, false, false), "picking")
+
+
+func test_lobby_preview_is_a_big_whole_scale() -> void:
+	var phone := Vector2(1000.0, 330.0)  # the showcase on a phone: the fighter stands at x3, never fractional
+	assert_eq(LobbyPanel.preview_scale(phone), 3)
+	assert_eq(LobbyPanel.preview_scale(Vector2(60.0, 60.0)), 2, "never below x2")
+	assert_eq(LobbyPanel.preview_scale(Vector2(4000.0, 4000.0)), LobbyPanel.PREVIEW_MAX_SCALE)
