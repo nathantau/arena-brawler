@@ -326,6 +326,8 @@ func ult_ready() -> bool:
 
 ## Damage dealt to an enemy fills the charge (authority; snapshots carry it to the owner).
 func add_ult_damage(dealt: int) -> void:
+	if skills[Constants.ULT_SLOT].is_active():
+		return  # the ultimate's own run (and its damage) never refills it: it ends at 0
 	ult_charge = minf(1.0, ult_charge + dealt / Constants.ULT_DAMAGE_PER_CHARGE)
 
 
@@ -490,7 +492,8 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 		_prev_skills = input.pressed_slots()  # a button held (or tapped) while dead must not fire on the respawn frame
 		return
 	stats.tick(delta)
-	ult_charge = minf(1.0, ult_charge + delta / Constants.ULT_PASSIVE_SECONDS)
+	if not skills[Constants.ULT_SLOT].is_active():
+		ult_charge = minf(1.0, ult_charge + delta / Constants.ULT_PASSIVE_SECONDS)
 	if stats.burn_due > 0 and not replay and projectiles != null and projectiles.authoritative:
 		projectiles.credit_damage(stats.burn_attacker, self,
 			take_hit(stats.burn_due * stats.burn_damage, false, Vector2.ZERO, stats.burn_attacker))

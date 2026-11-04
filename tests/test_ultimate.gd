@@ -82,7 +82,7 @@ func test_press_when_full_uses_it_and_empties_the_charge() -> void:
 	p.ult_charge = 1.0
 	_step(p, true)
 	assert_true(p.skills[2].is_active(), "Great Ape is on")
-	assert_lt(p.ult_charge, 0.01)
+	assert_eq(p.ult_charge, 0.0)
 	assert_eq(p.skills[2].cooldown_remaining, 0.0, "the ultimate's own cooldown is ignored")
 	p.skills[2].active_remaining = 0.0
 	_step(p, false, 2)
@@ -171,3 +171,14 @@ func test_a_flag_carrier_can_still_ult() -> void:
 	assert_false(p.skill_locked(Constants.ULT_SLOT))
 	_step(p, true)
 	assert_lt(p.ult_charge, 0.01, "fired")
+
+
+func test_charge_stays_zero_while_the_ultimate_runs() -> void:
+	var p: Player = _duo()[0]
+	p.ult_charge = 1.0
+	_step(p, true)
+	for i: int in 120:
+		_step(p, false, 2 + i)
+		p.add_ult_damage(50)
+	assert_true(p.skills[2].is_active(), "Great Ape still on")
+	assert_eq(p.ult_charge, 0.0, "no passive or damage charge mid-ult")
