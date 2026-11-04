@@ -121,6 +121,7 @@ var camera: Camera2D
 var hud: Hud
 var effects: Effects
 var sfx: Sfx
+var _burst_sound_at: Vector2 = Vector2.INF  ## where a burst strip with its own sound just went off (skips the generic explosion sound)
 
 var _by_id: Dictionary[int, Player] = {}
 var _threats := PackedVector2Array()
@@ -564,8 +565,17 @@ func _attach_effects() -> void:
 		sfx.play(&"laser", to))
 	projectiles.deflected.connect(effects.deflect)
 	projectiles.exploded.connect(_fx_explosion)
-	projectiles.burst_shown.connect(effects.burst_strip)
-	projectiles.fx_spawned.connect(effects.fun_impact)
+	projectiles.burst_shown.connect(func(at: Vector2, radius: float, art: Texture2D, art_radius: float) -> void:
+		effects.burst_strip(at, radius, art, art_radius)
+		var snd: StringName = Sfx.burst_sound(art)
+		if snd != &"":
+			_burst_sound_at = at  # its sound replaces the generic explosion that follows
+			sfx.play(snd, at))
+	projectiles.fx_spawned.connect(func(at: Vector2, w: WeaponData, seed: int) -> void:
+		effects.fun_impact(at, w, seed)
+		var snd: StringName = Sfx.impact_sound(w.id)
+		if snd != &"":
+			sfx.play(snd, at))
 	hit_landed.connect(_fx_hit)
 	match_updated.connect(_on_match_updated)
 	kill_registered.connect(_fx_kill)
@@ -607,7 +617,7 @@ func _fx_shot(owner_id: int, origin: Vector2, facing: Vector2, w: WeaponData) ->
 	var muzzle: Vector2 = origin + facing * w.muzzle_distance()
 	effects.burst(muzzle, w.color, BURST_MUZZLE_COUNT, BURST_MUZZLE_SPEED, PARTICLE_SIZE * 0.6, PARTICLE_LIFE * 0.4,
 		facing, BURST_MUZZLE_SPREAD)
-	sfx.play(w.sfx, origin)
+	sfx.play(w.sfx, origin, w.projectile_range / maxf(w.projectile_speed, 1.0) if w.boomerang else -1.0)  # a boomerang turns round at range / speed
 	if local_player != null and owner_id == local_player.player_id:
 		add_shake(w.screen_shake)
 		# Recoil: nudge the view back against the shot, a touch on top of the random shake.
@@ -618,7 +628,10 @@ func _fx_explosion(at: Vector2, radius: float, color: Color, slam: bool, art: bo
 	if art:
 		effects.blast(at, radius, slam)
 	effects.burst(at, color, BURST_EXPLOSION_COUNT, BURST_DEATH_SPEED, PARTICLE_SIZE * 1.5, PARTICLE_LIFE * 1.5)
-	sfx.play(&"explosion", at)
+	if at == _burst_sound_at:
+		_burst_sound_at = Vector2.INF
+	else:
+		sfx.play(&"explosion", at)
 	if local_player != null:
 		var d: float = local_player.global_position.distance_to(at)
 		add_shake(SHAKE_EXPLOSION * clampf(1.0 - d / SHAKE_EXPLOSION_RANGE, 0.0, 1.0))
