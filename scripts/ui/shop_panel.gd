@@ -1,8 +1,8 @@
 class_name ShopPanel
 extends Control
-## Full-screen "Shop" from the main menu: spend gold on blind boxes. Pick a fighter (its box only rolls its own locked
-## abilities and weapons), see the odds and what is still locked, open a box (`Unlocks.open_box` decides at the tap),
-## then `BoxOpening` plays the reveal. Gold only. Mounted on its own top CanvasLayer like ProfilePanel.
+## Full-screen "Shop" from the main menu: spend gold on the one global blind box (it rolls every still-locked ability
+## and weapon of all playable fighters). See the odds and the whole collection, open a box (`Unlocks.open_box` decides
+## at the tap), then `BoxOpening` plays the reveal. Gold only. Mounted on its own top CanvasLayer like ProfilePanel.
 
 const LAYER: int = 110
 const SPACING: int = 10
@@ -10,9 +10,6 @@ const COLOR_BG: Color = Color(0.07, 0.07, 0.13)
 const COLOR_STAGE: Color = Color(0.105, 0.105, 0.19)
 const BACK_SIZE: Vector2 = Vector2(150, UiStyle.TOUCH_MIN_H)
 const OPEN_SIZE: Vector2 = Vector2(0, UiStyle.TOUCH_MIN_H)
-const CARD_SIZE: Vector2 = Vector2(112, 132)
-const PORTRAIT_SIZE: Vector2 = Vector2(96, 72)
-const PORTRAIT_SCALE: float = 1.25
 const SIDE_W: float = 430.0
 const SLOT_SIZE: float = 56.0
 const BOX_FPS: float = 8.0
@@ -21,22 +18,18 @@ const COLOR_DISABLED_TEXT: Color = Color(0.7, 0.7, 0.78)
 
 var _on_close: Callable
 var _characters: CharacterCatalog
-var _fighter: CharacterData
-var _cards: Dictionary[StringName, Button] = {}
-var _left_labels: Dictionary[StringName, Label] = {}
 var _gold: GoldChip
 var _opened_dupe: bool = false
 var _stage: Control
 var _idle: Texture2D
 var _idle_frames: int = 8
-var _name_label: Label
 var _left_label: Label
 var _collection_title: Label
-var _slots: HFlowContainer
+var _groups: VBoxContainer
 var _odds: Label
 var _open_button: Button
 var _reason: Label
-var _scroller: HScroller
+var _collection: HScroller
 var _sfx: Sfx
 var _opening: BoxOpening
 ## Seeded for tests / previews; null = Unlocks randomizes.
@@ -76,11 +69,6 @@ static func odds_text() -> String:
 	return " · ".join(parts)
 
 
-## Every ability and weapon a box can ever give `c` (locked or not): [{kind, id, rarity}], abilities first.
-static func lockable(c: CharacterData) -> Array:
-	return Unlocks.lockable(c)
-
-
 ## "Duplicates refund 30 / 50 / 80 gold · new item guaranteed after 3 duplicates"
 static func dupe_text() -> String:
 	var parts: Array[String] = []
@@ -89,18 +77,19 @@ static func dupe_text() -> String:
 	return "Duplicates refund %s gold · new item guaranteed after %d duplicates" % [" / ".join(parts), Unlocks.PITY_DUPES]
 
 
-## What the reveal card and the collection show for a pool entry: {name, kind, icon, weapon, desc, rarity}. Descriptions
+## What the reveal card and the collection show for a pool entry: {name, kind, icon, weapon, desc, rarity, fighter}. Descriptions
 ## are the lobby rows' own text: an ability's blurb, a weapon's damage / cost line + hook.
 static func item_info(entry: Dictionary) -> Dictionary:
 	if entry["kind"] == &"skill":
 		var s: SkillData = SkillCatalog.shared().get_skill(entry["id"])
+		var owner: CharacterData = CharacterCatalog.load_all().get_character(entry.get("fighter", &""))
 		return {"name": s.display_name, "kind": "Ability", "icon": s.icon, "weapon": false, "desc": s.blurb,
-			"rarity": s.rarity}
+			"rarity": s.rarity, "fighter": owner.display_name if owner != null else ""}
 	var w: WeaponData = _weapon_catalog().get_weapon(entry["id"])
 	var desc: String = "%d dmg · %s" % [w.damage * maxi(1, w.pellets), "free" if w.energy_cost == 0 else "%d energy" % w.energy_cost]
 	if w.hook != "":
 		desc += "\n" + w.hook
-	return {"name": w.display_name, "kind": "Weapon", "icon": w.sprite, "weapon": true, "desc": desc, "rarity": w.rarity}
+	return {"name": w.display_name, "kind": "Weapon", "icon": w.sprite, "weapon": true, "desc": desc, "rarity": w.rarity, "fighter": ""}
 
 
 static var _weapons: WeaponCatalog
@@ -138,22 +127,8 @@ func _ready() -> void:
 	root.add_theme_constant_override("separation", SPACING)
 	margin.add_child(root)
 	root.add_child(_build_top_bar())
-	root.add_child(_build_picker())
 	root.add_child(_build_body())
-	var first: CharacterData = _default_fighter()
-	_select(first.id)
-	_scroller.reveal(_cards[first.id])
-
-
-## The fighter you play most (mastery XP) that still has something to open, else the first.
-func _default_fighter() -> CharacterData:
-	var best: CharacterData = null
-	for c: CharacterData in _characters.ordered:
-		if Unlocks.box_pool(c).is_empty():
-			continue
-		if best == null or PlayerProfile.xp_of(c.id) > PlayerProfile.xp_of(best.id):
-			best = c
-	return best if best != null else _characters.ordered[0]
+	_refresh()
 
 
 func _build_top_bar() -> Control:
@@ -183,48 +158,6 @@ func _build_top_bar() -> Control:
 	return bar
 
 
-func _build_picker() -> Control:
-	_scroller = HScroller.new()
-	_scroller.fade_color = COLOR_BG
-	var row: BoxContainer = _scroller.content
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_theme_constant_override("separation", SPACING)
-	for c: CharacterData in _characters.ordered:
-		var card := Button.new()
-		card.theme_type_variation = &"Card"
-		card.custom_minimum_size = CARD_SIZE
-		card.focus_mode = Control.FOCUS_NONE
-		row.add_child(card)
-		var col := VBoxContainer.new()
-		col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 6)
-		col.add_theme_constant_override("separation", 0)
-		col.alignment = BoxContainer.ALIGNMENT_CENTER
-		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(col)
-		var art: Control = _portrait(c)
-		art.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		col.add_child(art)
-		var name_label := Label.new()
-		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_label.add_theme_font_override("font", UiStyle.bold())
-		name_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
-		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		UiStyle.fit_label(name_label, c.display_name, CARD_SIZE.x - 20.0, UiStyle.SIZE_SMALL, UiStyle.SIZE_TINY - 2, true)
-		col.add_child(name_label)
-		var left := Label.new()
-		left.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		left.add_theme_font_override("font", UiStyle.body_font(true))
-		left.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
-		left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		col.add_child(left)
-		var id: StringName = c.id
-		_scroller.on_tap(card, func() -> void: _select(id))
-		_cards[id] = card
-		_left_labels[id] = left
-	return _scroller
-
-
 func _build_body() -> Control:
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -247,10 +180,11 @@ func _build_body() -> Control:
 	side.custom_minimum_size.x = SIDE_W
 	side.add_theme_constant_override("separation", SPACING)
 	body.add_child(side)
-	_name_label = Label.new()
-	_name_label.add_theme_font_override("font", UiStyle.bold())
-	_name_label.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
-	side.add_child(_name_label)
+	var name_label := Label.new()
+	name_label.text = "Mystery Box"
+	name_label.add_theme_font_override("font", UiStyle.bold())
+	name_label.add_theme_font_size_override("font_size", UiStyle.SIZE_HEADING)
+	side.add_child(name_label)
 	_left_label = Label.new()
 	_left_label.theme_type_variation = &"DimLabel"
 	side.add_child(_left_label)
@@ -258,13 +192,14 @@ func _build_body() -> Control:
 	_collection_title.theme_type_variation = &"DimLabel"
 	_collection_title.add_theme_font_override("font", UiStyle.body_font(true))
 	side.add_child(_collection_title)
-	_slots = HFlowContainer.new()
-	_slots.add_theme_constant_override("h_separation", 6)
-	_slots.add_theme_constant_override("v_separation", 6)
-	side.add_child(_slots)
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	side.add_child(spacer)
+	_collection = HScroller.new(true)  # the whole collection scrolls on a short phone screen
+	_collection.fade_color = COLOR_BG
+	_collection.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	side.add_child(_collection)
+	_groups = VBoxContainer.new()
+	_groups.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_groups.add_theme_constant_override("separation", SPACING)
+	_collection.content.add_child(_groups)
 	_odds = Label.new()
 	_odds.text = odds_text()
 	_odds.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -294,46 +229,20 @@ func _build_body() -> Control:
 	return body
 
 
-## Animated idle portrait (same window the lobby roster uses).
-func _portrait(c: CharacterData) -> Control:
-	var window := Control.new()
-	window.custom_minimum_size = PORTRAIT_SIZE
-	window.clip_contents = true
-	window.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sprite := AnimatedSprite2D.new()
-	sprite.sprite_frames = c.sprite_frames()
-	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sprite.scale = Vector2.ONE * PORTRAIT_SCALE
-	sprite.position = PORTRAIT_SIZE * 0.5
-	window.add_child(sprite)
-	sprite.play(&"idle")
-	return window
-
-
-# --- selection / state ------------------------------------------------------------------------------------------
-
-func _select(id: StringName) -> void:
-	_fighter = _characters.get_character(id)
-	_refresh()
-
+# --- state ------------------------------------------------------------------------------------------------------
 
 func _refresh() -> void:
-	for c: CharacterData in _characters.ordered:
-		var n: int = Unlocks.box_pool(c).size()
-		var left: Label = _left_labels[c.id]
-		left.text = "%d left" % n if n > 0 else "All unlocked"
-		left.add_theme_color_override("font_color", UiStyle.C_YELLOW if n > 0 else UiStyle.C_TEAL_L)
-		_cards[c.id].theme_type_variation = &"CardGold" if c.id == _fighter.id else &"Card"
-	var pool: Array = Unlocks.box_pool(_fighter)
-	var all: Array = lockable(_fighter)
-	_name_label.text = _fighter.display_name
+	var pool: Array = Unlocks.box_pool_all()
+	var all: Array = Unlocks.lockable_all()
 	_left_label.text = "%d still locked" % pool.size() if not pool.is_empty() else "Everything unlocked"
 	_collection_title.text = "COLLECTION  %d / %d" % [all.size() - pool.size(), all.size()]
-	for child: Node in _slots.get_children():
+	for child: Node in _groups.get_children():
 		child.queue_free()
-		_slots.remove_child(child)
-	for entry: Dictionary in all:
-		_slots.add_child(_slot(entry, _is_unlocked(entry)))
+		_groups.remove_child(child)
+	# one section per fighter's abilities (in roster order), then the shared weapons
+	for c: CharacterData in _characters.ordered:
+		_add_group(c.display_name, all.filter(func(e: Dictionary) -> bool: return e["kind"] == &"skill" and e["fighter"] == c.id))
+	_add_group("Weapons", all.filter(func(e: Dictionary) -> bool: return e["kind"] == &"weapon"))
 	var state: String = open_state(PlayerProfile.gold, pool.size())
 	_open_button.text = "Open box · %d" % Unlocks.BOX_PRICE
 	_open_button.disabled = state != ""
@@ -342,10 +251,21 @@ func _refresh() -> void:
 	_stage.queue_redraw()
 
 
-func _is_unlocked(entry: Dictionary) -> bool:
-	if entry["kind"] == &"skill":
-		return Unlocks.is_skill_unlocked(_fighter, SkillCatalog.shared().get_skill(entry["id"]))
-	return Unlocks.is_weapon_unlocked(_fighter, _weapon_catalog().get_weapon(entry["id"]))
+func _add_group(title: String, entries: Array) -> void:
+	if entries.is_empty():
+		return
+	var head := Label.new()
+	head.text = title.to_upper()
+	head.add_theme_font_override("font", UiStyle.body_font(true))
+	head.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+	head.add_theme_color_override("font_color", UiStyle.C_STEEL)
+	_groups.add_child(head)
+	var flow := HFlowContainer.new()
+	flow.add_theme_constant_override("h_separation", 6)
+	flow.add_theme_constant_override("v_separation", 6)
+	_groups.add_child(flow)
+	for entry: Dictionary in entries:
+		flow.add_child(_slot(entry, Unlocks.is_owned(entry)))
 
 
 ## One collection tile: the item's icon in its rarity colour, dimmed with a padlock while still locked.
@@ -374,13 +294,13 @@ func _slot(entry: Dictionary, unlocked: bool) -> Control:
 
 ## The result is decided here, the animation only plays it. Returns what was rolled ({} if nothing was opened).
 func _on_open() -> Dictionary:
-	if _opening != null or _fighter == null:
+	if _opening != null:
 		return {}
-	var got: Dictionary = Unlocks.open_box(_fighter, rng)
+	var got: Dictionary = Unlocks.open_box(rng)
 	if got.is_empty():
 		_refresh()
 		return {}
-	var again: bool = open_state(PlayerProfile.gold, Unlocks.box_pool(_fighter).size()) == ""
+	var again: bool = open_state(PlayerProfile.gold, Unlocks.box_pool_all().size()) == ""
 	var info: Dictionary = item_info(got)
 	info["dupe"] = got["dupe"]
 	info["refund"] = got["refund"]
@@ -405,7 +325,7 @@ func _process(_delta: float) -> void:
 	_stage.queue_redraw()
 
 
-## The fighter's box on a lit floor, idle strip at the biggest whole-number scale that fits.
+## The box on a lit floor, idle strip at the biggest whole-number scale that fits.
 func _draw_stage() -> void:
 	var r := Rect2(Vector2.ZERO, _stage.size)
 	_stage.draw_rect(r, COLOR_STAGE)

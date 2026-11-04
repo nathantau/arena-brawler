@@ -30,8 +30,8 @@ static var fighters: Dictionary = {}
 static var gold: int = START_GOLD
 ## "skill:<id>" / "weapon:<id>" -> true: unlocked abilities and weapons (see Unlocks).
 static var unlocked: Dictionary = {}
-## fighter id (String) -> consecutive duplicate boxes (bad-luck protection, see Unlocks.PITY_DUPES).
-static var pity: Dictionary = {}
+## Consecutive duplicate boxes (bad-luck protection, see Unlocks.PITY_DUPES). One global counter.
+static var pity: int = 0
 static var _loaded: bool = false
 
 
@@ -56,11 +56,6 @@ static func spend_gold(n: int) -> bool:
 	gold -= n
 	save()
 	return true
-
-
-static func pity_of(fighter: StringName) -> int:
-	ensure_loaded()
-	return int(pity.get(String(fighter), 0))
 
 
 ## Total XP needed to reach `level` (level 1 = 0).
@@ -133,7 +128,7 @@ static func load_from(p: String) -> void:
 	fighters = {}
 	gold = START_GOLD
 	unlocked = {}
-	pity = {}
+	pity = 0
 	var cfg := ConfigFile.new()
 	if cfg.load(p) != OK:
 		# A crash mid-save can corrupt an existing file: the last good copy is next to it. (A missing file = fresh profile.)
@@ -149,11 +144,8 @@ static func load_from(p: String) -> void:
 		for key: String in cfg.get_section_keys("unlocks"):
 			if cfg.get_value("unlocks", key, false):
 				unlocked[key] = true
-	if cfg.has_section("pity"):
-		for id: String in cfg.get_section_keys("pity"):
-			var n: int = clampi(_whole(cfg.get_value("pity", id, 0), 0), 0, Unlocks.PITY_DUPES)
-			if n > 0:
-				pity[id] = n
+	# Old saves had one entry per fighter in [pity]; only the global "all" key counts now.
+	pity = clampi(_whole(cfg.get_value("pity", "all", 0), 0), 0, Unlocks.PITY_DUPES)
 	for section: String in cfg.get_sections():
 		if section.begins_with("fighter:"):
 			fighters[section.substr(8)] = {
@@ -171,8 +163,8 @@ static func save_to(p: String) -> Error:
 	cfg.set_value("wallet", "gold", gold)
 	for key: String in unlocked:
 		cfg.set_value("unlocks", key, true)
-	for id: String in pity:
-		cfg.set_value("pity", id, pity[id])
+	if pity > 0:
+		cfg.set_value("pity", "all", pity)
 	for id: String in fighters:
 		var f: Dictionary = fighters[id]
 		for k: String in ["matches", "wins", "xp"]:

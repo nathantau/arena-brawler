@@ -20,10 +20,9 @@ func after_each() -> void:
 
 func test_code_unlocks_everything_and_saves() -> void:
 	assert_true(Unlocks.redeem("  TeSt "))
-	for c: CharacterData in CharacterCatalog.load_all().ordered:
-		for e: Dictionary in Unlocks.lockable(c):
-			assert_true(PlayerProfile.unlocked.has(Unlocks.key(e["kind"], e["id"])), "%s %s" % [c.id, e["id"]])
-		assert_true(Unlocks.box_pool(c).is_empty(), "%s has nothing left to roll" % c.id)
+	for e: Dictionary in Unlocks.lockable_all():
+		assert_true(PlayerProfile.unlocked.has(Unlocks.key(e["kind"], e["id"])), str(e["id"]))
+	assert_true(Unlocks.box_pool_all().is_empty(), "nothing left to roll")
 	PlayerProfile.unlocked = {}
 	PlayerProfile.load_from(TMP)
 	assert_false(PlayerProfile.unlocked.is_empty(), "persisted to disk")

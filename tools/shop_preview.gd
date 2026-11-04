@@ -3,7 +3,7 @@ extends SceneTree
 ## common ability and an epic weapon, plus the main menu with the gold chip). Needs a window; run it without stealing
 ## focus (override.cfg as in CLAUDE.md Commands, plus `window/size/viewport_width=2532` / `viewport_height=1170`):
 ##   open -g -W -n -a /Applications/Godot.app --args --path "$PWD" --log-file /tmp/shop.log -s tools/shop_preview.gd \
-##       -- --touch --notch --pixel-ratio=3 out=/tmp/shop [gold=450] [fighter=eden]
+##       -- --touch --notch --pixel-ratio=3 out=/tmp/shop [gold=450]
 ## Writes <out>/<W>x<H>_<name>.png and uses a temp profile, so the real save is never touched.
 
 const PROFILE: String = "user://shop_preview.cfg"
@@ -11,7 +11,6 @@ const SETTLE_FRAMES: int = 24
 
 var out: String = "/tmp/shop_preview"
 var gold: int = 450
-var fighter: StringName = &""
 
 
 func _initialize() -> void:
@@ -21,7 +20,6 @@ func _initialize() -> void:
 			match kv[0]:
 				"out": out = kv[1]
 				"gold": gold = int(kv[1])
-				"fighter": fighter = StringName(kv[1])
 	DirAccess.make_dir_recursive_absolute(out)
 	UiStyle.install()
 	UiStyle.install_scaling(root)
@@ -43,14 +41,10 @@ func run() -> void:
 	panel.rng = RandomNumberGenerator.new()
 	root.add_child(panel)
 	await _frames(SETTLE_FRAMES)
-	if fighter != &"":
-		panel._select(fighter)
-		await _frames(4)
 	_shoot("shop_idle")
-	var c: CharacterData = panel._fighter
 	# a few unlocked, so the collection shows both states
-	var pool: Array = Unlocks.box_pool(c)
-	for k: int in mini(2, pool.size()):
+	var pool: Array = Unlocks.box_pool_all()
+	for k: int in mini(6, pool.size()):
 		PlayerProfile.unlocked[Unlocks.key(pool[k]["kind"], pool[k]["id"])] = true
 	panel._refresh()
 	await _frames(4)
@@ -98,15 +92,14 @@ func run() -> void:
 	quit()
 
 
-## A box-pool-style entry of `rarity` and `kind` from any fighter's lockable set (any kind if none matches).
+## A box-pool-style entry of `rarity` and `kind` from the global lockable set (any kind if none matches).
 func _entry(rarity: int, kind: StringName) -> Dictionary:
 	var any: Dictionary = {}
-	for c: CharacterData in CharacterCatalog.load_all().ordered:
-		for e: Dictionary in ShopPanel.lockable(c):
-			if e["rarity"] == rarity:
-				if e["kind"] == kind:
-					return e
-				any = e
+	for e: Dictionary in Unlocks.lockable_all():
+		if e["rarity"] == rarity:
+			if e["kind"] == kind:
+				return e
+			any = e
 	return any
 
 

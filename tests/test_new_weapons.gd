@@ -103,10 +103,10 @@ func test_every_fighter_can_use_them_and_they_start_locked_in_the_box_pool() -> 
 		for w: WeaponData in Unlocks.weapons_for(c):
 			listed.append(w.id)
 		var lockable: Array[StringName] = []
-		for e: Dictionary in Unlocks.lockable(c):
+		for e: Dictionary in Unlocks.lockable_all():
 			lockable.append(e.id)
 		var pool_ids: Array[StringName] = []
-		for e: Dictionary in Unlocks.box_pool(c):
+		for e: Dictionary in Unlocks.box_pool_all():
 			pool_ids.append(e.id)
 		for id: StringName in IDS:
 			assert_true(c.can_use(_w(id)), "%s can use %s" % [c.id, id])
