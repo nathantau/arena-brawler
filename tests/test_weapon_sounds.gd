@@ -29,6 +29,9 @@ func test_follow_ups_impacts_and_bursts_resolve_to_recipes() -> void:
 	assert_eq(Sfx.burst_sound(load("res://assets/fx/jar_shatter.png")), &"jar_shatter")
 	assert_eq(Sfx.burst_sound(null), &"")
 	assert_eq(Sfx.FOLLOW_UPS[&"yoyo_out"][0], &"yoyo_back")
+	assert_lt(Sfx.FOLLOW_UPS[&"yoyo_out"][1], 0.0, "the yo-yo's delay comes from its range / speed, not a constant")
+	var yo: WeaponData = WeaponCatalog.load_all().get_weapon(&"yoyo")
+	assert_almost_eq(yo.projectile_range / yo.projectile_speed, 0.52, 0.01)
 
 
 func test_new_recipes_are_short_and_not_loud() -> void:

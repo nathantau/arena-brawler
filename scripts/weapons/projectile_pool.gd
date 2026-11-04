@@ -851,9 +851,9 @@ func _finish(s: Slot, at: Vector2, pop: bool = true) -> void:
 
 func _explode(s: Slot, at: Vector2, slam: bool = false, art: bool = true) -> void:
 	s.active = false
-	exploded.emit(at, s.splash_radius, s.color, slam, art and s.burst_art == null)
-	if s.burst_art != null:
+	if s.burst_art != null:  # first, so Arena knows a burst strip (maybe with its own sound) goes with the explosion
 		burst_shown.emit(at, s.splash_radius, s.burst_art, s.burst_art_radius)
+	exploded.emit(at, s.splash_radius, s.color, slam, art and s.burst_art == null)
 	if s.split_count > 0:
 		_spawn_shards(s, at)
 	if s.chain_range > 0.0:  # Storm Jar: lightning jumps on from the foe nearest the burst

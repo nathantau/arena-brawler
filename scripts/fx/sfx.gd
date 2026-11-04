@@ -34,8 +34,9 @@ const SKILL_ID_SOUNDS: Dictionary[StringName, StringName] = {
 }
 
 ## A second sound that trails a first one: [sound, delay s]. (Recipes are one sweep each; this layers two.)
+## A negative delay = the caller's `follow_delay` (the yo-yo turns round after range / speed), none given = no follow-up.
 const FOLLOW_UPS: Dictionary[StringName, Array] = {
-	&"confetti_pop": [&"confetti_rustle", 0.05], &"yoyo_out": [&"yoyo_back", 0.3], &"jar_shatter": [&"jar_crackle", 0.05],
+	&"confetti_pop": [&"confetti_rustle", 0.05], &"yoyo_out": [&"yoyo_back", -1.0], &"jar_shatter": [&"jar_crackle", 0.05],
 }
 ## Impact sound by weapon id (played with the weapon's impact strip) and by burst strip name (splash bursts).
 const IMPACT_SOUNDS: Dictionary[StringName, StringName] = {&"confetti_popper": &"confetti_rustle"}
@@ -152,7 +153,7 @@ static func burst_sound(art: Texture2D) -> StringName:
 
 
 ## Plays `id`, quieter the farther `at` is from the listener. INF = non-positional.
-func play(id: StringName, at: Vector2 = Vector2.INF) -> void:
+func play(id: StringName, at: Vector2 = Vector2.INF, follow_delay: float = -1.0) -> void:
 	var stream: AudioStreamWAV = _streams.get(id)
 	if stream == null:
 		return
@@ -173,7 +174,9 @@ func play(id: StringName, at: Vector2 = Vector2.INF) -> void:
 	v.play()
 	if FOLLOW_UPS.has(id) and is_inside_tree():
 		var f: Array = FOLLOW_UPS[id]
-		get_tree().create_timer(f[1]).timeout.connect(func() -> void: play(f[0], at))
+		var delay: float = f[1] if f[1] >= 0.0 else follow_delay
+		if delay >= 0.0:
+			get_tree().create_timer(delay).timeout.connect(func() -> void: play(f[0], at))
 
 
 static func synthesize(r: Array, rng: RandomNumberGenerator) -> AudioStreamWAV:
