@@ -103,7 +103,7 @@ func test_each_weapon_is_an_untagged_pickup_of_the_right_rarity_with_a_hook() ->
 func test_every_fighter_can_use_them_and_they_start_locked_in_the_box_pool() -> void:
 	for c: CharacterData in characters.ordered:
 		var pool_ids: Array[StringName] = []
-		for e: Dictionary in Unlocks.box_pool(c):
+		for e: Dictionary in Unlocks.box_pool_all():
 			pool_ids.append(e.id)
 		for id: StringName in IDS:
 			assert_true(c.can_use(_w(id)), "%s can use %s" % [c.id, id])

@@ -45,12 +45,15 @@ func test_frames_from_strip_size() -> void:
 
 
 func test_every_pool_entry_has_card_info() -> void:
-	for c: CharacterData in CharacterCatalog.load_all().ordered:
-		for e: Dictionary in ShopPanel.lockable(c):
-			var info: Dictionary = ShopPanel.item_info(e)
-			assert_ne(info["name"], "", "%s %s" % [c.id, e["id"]])
-			assert_not_null(info["icon"], "%s %s icon" % [c.id, e["id"]])
-			assert_eq(info["rarity"], e["rarity"])
+	for e: Dictionary in Unlocks.lockable_all():
+		var info: Dictionary = ShopPanel.item_info(e)
+		assert_ne(info["name"], "", str(e["id"]))
+		assert_not_null(info["icon"], "%s icon" % e["id"])
+		assert_eq(info["rarity"], e["rarity"])
+		if e["kind"] == &"skill":
+			assert_ne(info["fighter"], "", "%s names its fighter" % e["id"])
+		else:
+			assert_eq(info["fighter"], "")
 
 
 func test_opening_via_the_panel_spends_gold_and_unlocks_one_item() -> void:
@@ -59,12 +62,11 @@ func test_opening_via_the_panel_spends_gold_and_unlocks_one_item() -> void:
 	panel.rng = RandomNumberGenerator.new()
 	panel.rng.seed = 3
 	add_child_autofree(panel)
-	var c: CharacterData = panel._fighter
-	var before: int = Unlocks.box_pool(c).size()
+	var before: int = Unlocks.box_pool_all().size()
 	var got: Dictionary = panel._on_open()
 	assert_false(got.is_empty())
 	assert_eq(PlayerProfile.gold, 150)
-	assert_eq(Unlocks.box_pool(c).size(), before - 1)
+	assert_eq(Unlocks.box_pool_all().size(), before - 1)
 	assert_eq(PlayerProfile.unlocked.size(), 1)
 	assert_true(PlayerProfile.unlocked.has(Unlocks.key(got["kind"], got["id"])))
 	assert_not_null(panel._opening, "the reveal plays")
@@ -104,15 +106,14 @@ func test_dupe_line_matches_the_constants() -> void:
 func test_opening_a_duplicate_via_the_panel_refunds_gold() -> void:
 	var panel: ShopPanel = ShopPanel.new()
 	add_child_autofree(panel)
-	var c: CharacterData = panel._fighter
-	var all: Array = Unlocks.lockable(c)
+	var all: Array = Unlocks.lockable_all()
 	for i: int in all.size() - 1:  # one item locked: nearly every box is a duplicate
 		PlayerProfile.unlocked[Unlocks.key(all[i]["kind"], all[i]["id"])] = true
 	panel.rng = RandomNumberGenerator.new()
 	var start: int = 1000
 	for s: int in 40:
 		PlayerProfile.gold = start
-		PlayerProfile.pity.clear()
+		PlayerProfile.pity = 0
 		panel.rng.seed = s
 		panel._opening = null
 		var got: Dictionary = panel._on_open()
@@ -127,3 +128,13 @@ func test_opening_a_duplicate_via_the_panel_refunds_gold() -> void:
 		panel._opening.jump_to(panel._opening.settled_time() + 0.1)
 		return
 	fail_test("no duplicate in 40 seeds")
+
+
+func test_everything_unlocked_shows_the_done_state() -> void:
+	Unlocks.redeem("test")
+	PlayerProfile.gold = 500
+	var panel: ShopPanel = ShopPanel.new()
+	add_child_autofree(panel)
+	assert_true(panel._open_button.disabled)
+	assert_eq(panel._reason.text, "All unlocked")
+	assert_eq(panel._left_label.text, "Everything unlocked")

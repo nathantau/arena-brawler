@@ -306,7 +306,8 @@ func _build_card() -> void:
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(icon)
 	_line(col, info["name"], UiStyle.SIZE_HEADING, UiStyle.C_WHITE, false, true)
-	_line(col, "%s · %s" % [info["kind"], Unlocks.RARITY_NAMES[rarity]], UiStyle.SIZE_SMALL, color, true, true)
+	var kind: String = "%s ability" % info["fighter"] if info.get("fighter", "") != "" else info["kind"]
+	_line(col, "%s · %s" % [kind, Unlocks.RARITY_NAMES[rarity]], UiStyle.SIZE_SMALL, color, true, true)
 	if rarity > 0:
 		_line(col, Unlocks.dmg_bonus_text(rarity), UiStyle.SIZE_SMALL, color, true, true)
 	if is_dupe():
