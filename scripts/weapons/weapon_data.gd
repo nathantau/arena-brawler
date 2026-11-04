@@ -128,6 +128,8 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 ## Sine wobble: the heading swings by up to `wobble_amp` rad/s at `wobble_hz`, phase per pellet (bubbles, bees).
 @export var wobble_amp: float = 0.0
 @export var wobble_hz: float = 0.0
+## Drawn size multiplier for the projectile sprite only (hitbox stays `projectile_radius`).
+@export var projectile_scale: float = 1.0
 ## > 0: damage and size grow from x1 to x`grow_max` over the shot's range (Snowball Cannon).
 @export var grow_max: float = 0.0
 ## A hit soaks the victim this long: slowed, drips, can't burn (PlayerStats.soak).

@@ -136,7 +136,10 @@ static func load_from(p: String) -> void:
 	pity = {}
 	var cfg := ConfigFile.new()
 	if cfg.load(p) != OK:
-		return
+		# A crash mid-save can corrupt an existing file: the last good copy is next to it. (A missing file = fresh profile.)
+		cfg = ConfigFile.new()
+		if not FileAccess.file_exists(p) or cfg.load(p + ".bak") != OK:
+			return
 	matches = maxi(int(cfg.get_value("totals", "matches", 0)), 0)
 	wins = maxi(int(cfg.get_value("totals", "wins", 0)), 0)
 	kills = maxi(int(cfg.get_value("totals", "kills", 0)), 0)
@@ -174,7 +177,14 @@ static func save_to(p: String) -> Error:
 		var f: Dictionary = fighters[id]
 		for k: String in ["matches", "wins", "xp"]:
 			cfg.set_value("fighter:" + id, k, f[k])
-	return cfg.save(p)
+	# Atomic: write a temp file, keep the current good file as .bak, then rename the temp over it.
+	var tmp: String = p + ".tmp"
+	var err: Error = cfg.save(tmp)
+	if err != OK:
+		return err
+	if FileAccess.file_exists(p):
+		DirAccess.copy_absolute(p, p + ".bak")
+	return DirAccess.rename_absolute(tmp, p)
 
 
 static func save() -> void:

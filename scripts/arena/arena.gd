@@ -31,6 +31,8 @@ signal hit_landed(victim_id: int, damage: int, crit: bool, at: Vector2)
 enum Mode { OFFLINE, SERVER, CLIENT }
 
 ## Only used by characters without a signature weapon.
+## Min gap between wall-ricochet sounds, so a bouncing volley stays a tink and not a rattle.
+const BOUNCE_SOUND_GAP_MS: int = 60
 const FALLBACK_WEAPON: StringName = &"pistol"
 const PLAYER_COLORS: Array[Color] = [
 	Color(0.35, 0.75, 1.0), Color(0.95, 0.45, 0.4), Color(0.75, 0.5, 0.95),
@@ -121,6 +123,7 @@ var camera: Camera2D
 var hud: Hud
 var effects: Effects
 var sfx: Sfx
+var _last_bounce_ms: int = 0
 var _burst_sound_at: Vector2 = Vector2.INF  ## where a burst strip with its own sound just went off (skips the generic explosion sound)
 
 var _by_id: Dictionary[int, Player] = {}
@@ -570,6 +573,12 @@ func _attach_effects() -> void:
 		var snd: StringName = Sfx.burst_sound(art)
 		if snd != &"":
 			_burst_sound_at = at  # its sound replaces the generic explosion that follows
+			sfx.play(snd, at))
+	projectiles.bounced.connect(func(at: Vector2, w: WeaponData) -> void:
+		var snd: StringName = Sfx.bounce_sound(w.id)
+		var now: int = Time.get_ticks_msec()
+		if snd != &"" and now - _last_bounce_ms >= BOUNCE_SOUND_GAP_MS:  # quick ricochets don't stack
+			_last_bounce_ms = now
 			sfx.play(snd, at))
 	projectiles.fx_spawned.connect(func(at: Vector2, w: WeaponData, seed: int) -> void:
 		effects.fun_impact(at, w, seed)

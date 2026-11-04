@@ -24,6 +24,7 @@ knockback = 30.0
 color = Color(0.49, 0.88, 0.81, 1)
 screen_shake = 0.03
 sfx = &"disc_whirr"
+projectile_scale = 1.6
 bounces = 3
 bounce_damping = 1.0
 bounce_damage_gain = 0.3

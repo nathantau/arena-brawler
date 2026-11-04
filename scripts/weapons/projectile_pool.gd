@@ -29,6 +29,9 @@ signal exploded(at: Vector2, radius: float, color: Color, slam: bool, art: bool)
 ## A splash weapon with its own burst strip (WeaponData.burst_art): `art_radius` = art px to the splash edge.
 signal burst_shown(at: Vector2, radius: float, art: Texture2D, art_radius: float)
 
+## A shot ricocheted off a wall (cosmetic, every peer; client pools run the same bounce).
+signal bounced(at: Vector2, weapon: WeaponData)
+
 ## A fun weapon's shot ended (hit, wall or end of range): play its impact strip / floor decal (cosmetic, every peer).
 signal fx_spawned(at: Vector2, weapon: WeaponData, seed: int)
 
@@ -816,6 +819,8 @@ func _bounce(s: Slot, at: Vector2, normal: Vector2, delta: float) -> void:
 	if s.bounce_gain > 0.0:  # bank shots hit harder
 		s.damage = roundi(s.base_damage * (1.0 + s.bounce_gain * s.bounced))
 	s.life -= delta
+	if s.weapon != null:
+		bounced.emit(at, s.weapon)
 
 
 ## End of flight on an obstacle: explode if it has splash, else just pop.
@@ -1127,6 +1132,8 @@ func _draw() -> void:
 					angle - Constants.BOOMERANG_SPIN * Constants.BOOMERANG_GHOST_GAP * (g + 1), Vector2(scale_px, scale_px))
 				draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2((tick % frames) * h, 0, h, h),
 					Color(1, 1, 1, Constants.BOOMERANG_GHOST_ALPHA / (g + 1)))
+		if w != null:
+			scale_px *= w.projectile_scale
 		if w != null and w.tether:
 			_draw_string(s, w, px)
 		if w != null and w.grow_max > 0.0 and s.base_radius > 0.0:
