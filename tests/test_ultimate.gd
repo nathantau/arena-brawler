@@ -82,7 +82,7 @@ func test_press_when_full_uses_it_and_empties_the_charge() -> void:
 	p.ult_charge = 1.0
 	_step(p, true)
 	assert_true(p.skills[2].is_active(), "Great Ape is on")
-	assert_lt(p.ult_charge, 0.01)
+	assert_eq(p.ult_charge, 0.0)
 	assert_eq(p.skills[2].cooldown_remaining, 0.0, "the ultimate's own cooldown is ignored")
 	p.skills[2].active_remaining = 0.0
 	_step(p, false, 2)
@@ -100,15 +100,14 @@ func test_charge_survives_death_and_respawn() -> void:
 	assert_almost_eq(p.ult_charge, 0.6, 0.0001, "not reset on death")
 
 
-func test_match_and_round_start_reset_the_charge() -> void:
+func test_match_start_resets_the_charge_but_a_new_round_keeps_it() -> void:
 	var arena := Arena.new(Arena.Mode.OFFLINE, 1, MatchRules.Mode.TEAMS)
 	add_child_autofree(arena)
 	var p: Player = arena.add_player(1, 0, null)
 	p.ult_charge = 0.8
 	arena._on_round_started()
-	assert_eq(p.ult_charge, 0.0, "new Teams round")
-	p.ult_charge = 0.8
-	arena._place_participants()
+	assert_eq(p.ult_charge, 0.8, "new Teams round keeps it")
+	arena._on_phase_changed(MatchState.Phase.COUNTDOWN)
 	assert_eq(p.ult_charge, 0.0, "new match")
 
 
@@ -163,3 +162,23 @@ func test_one_ability_rules_still_gate_the_ultimate() -> void:
 	p.skills[0].active_remaining = 0.0
 	_step(p, true, 3)
 	assert_false(p.skills[2].is_active(), "stunned")
+
+
+func test_a_flag_carrier_can_still_ult() -> void:
+	var p: Player = _duo(&"shadow")[0]  # Eclipse is a SMOKE kind, which carriers can't use as a normal pick
+	p.flag_carrier = true
+	p.ult_charge = 1.0
+	assert_false(p.skill_locked(Constants.ULT_SLOT))
+	_step(p, true)
+	assert_lt(p.ult_charge, 0.01, "fired")
+
+
+func test_charge_stays_zero_while_the_ultimate_runs() -> void:
+	var p: Player = _duo()[0]
+	p.ult_charge = 1.0
+	_step(p, true)
+	for i: int in 120:
+		_step(p, false, 2 + i)
+		p.add_ult_damage(50)
+	assert_true(p.skills[2].is_active(), "Great Ape still on")
+	assert_eq(p.ult_charge, 0.0, "no passive or damage charge mid-ult")

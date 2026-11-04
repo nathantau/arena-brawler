@@ -956,6 +956,7 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 			if mode != Mode.CLIENT:
 				for p: Player in players:
 					fill_gaps(p)
+					p.ult_charge = 0.0  # a fresh match starts uncharged; Teams rounds and deaths keep it
 				crates.reset()
 				pickups.reset()
 				_place_participants()
@@ -981,7 +982,6 @@ func _on_phase_changed(phase: MatchState.Phase) -> void:
 func _place_participants() -> void:
 	for p: Player in players:
 		p.sit_out()
-		p.ult_charge = 0.0  # a fresh match / Teams round starts uncharged (a death does not reset it)
 	for id: int in match_state.participants:
 		var p: Player = get_player(id)
 		if p != null:

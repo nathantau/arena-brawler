@@ -144,7 +144,7 @@ const FFA_KILL_TARGET: int = 10
 const TEAMS_ROUND_TARGET: int = 5
 const TEAM_SIZE: int = 3
 const TEAMS_MAX_PLAYERS: int = TEAM_SIZE * 2
-const TEAMS_RESPAWN_DELAY: float = 10.0
+const TEAMS_RESPAWN_DELAY: float = 8.0
 const TEAMS_ROUND_TIME: float = 120.0
 const TEAMS_INTERMISSION: float = 3.0
 ## Teams: everyone's max HP is multiplied by this (Duel / FFA stay as they are).
