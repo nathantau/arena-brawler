@@ -8,7 +8,7 @@ const BOX_PRICE: int = 100
 ## Odds per rarity tier (SkillData / WeaponData.rarity 0 common, 1 rare, 2 epic).
 const RARITY_WEIGHTS: Array[int] = [60, 30, 10]
 const RARITY_NAMES: Array[String] = ["Common", "Rare", "Epic"]
-const RARITY_COLORS: Array[Color] = [Color8(154, 167, 194), Color8(80, 160, 255), Color8(190, 100, 240)]
+const RARITY_COLORS: Array[Color] = [Color8(154, 167, 194), Color8(176, 110, 255), Color8(255, 196, 64)]  # steel, violet, gold: the box art
 
 static var _weapons: WeaponCatalog
 ## --unlock-all / tests: everything counts as unlocked without touching the profile.
