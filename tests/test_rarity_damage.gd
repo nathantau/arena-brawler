@@ -42,14 +42,32 @@ func test_rarity_multiplier_rounds_and_keeps_a_hit_at_least_one() -> void:
 	assert_eq(CombatRules.scaled(40, 0), 40)
 	assert_eq(CombatRules.scaled(40, 1), 42)
 	assert_eq(CombatRules.scaled(40, 2), 44)
-	assert_eq(CombatRules.scaled(10, 1), 11, "10.5 rounds up")
-	assert_eq(CombatRules.scaled(3, 1), 3, "3.15 rounds down")
+	assert_between(CombatRules.scaled(10, 1, 3), 10, 11, "10.5 rounds either way")
+	assert_eq(CombatRules.scaled(3, 1, 7), CombatRules.scaled(3, 1, 7), "same salt, same result")
 	assert_eq(CombatRules.scaled(1, 2), 1, "min 1")
 	assert_eq(CombatRules.scaled(0, 2), 0, "no hit stays no hit")
 	assert_eq(CombatRules.scaled(40, 9), 44, "rarity clamps")
 	assert_eq(Unlocks.dmg_bonus_text(0), "")
 	assert_eq(Unlocks.dmg_bonus_text(1), "+5% dmg")
 	assert_eq(Unlocks.dmg_bonus_text(2), "+10% dmg")
+
+
+func _mean(damage: int, rarity: int) -> float:
+	var total: int = 0
+	for salt: int in 20000:
+		var v: int = CombatRules.scaled(damage, rarity, salt)
+		var x: float = damage * Constants.RARITY_DAMAGE_MULT[rarity]
+		assert_between(v, floori(x + 0.0001), ceili(x - 0.0001))
+		total += v
+	return float(total) / 20000.0
+
+
+func test_small_hits_average_damage_times_the_multiplier() -> void:
+	assert_almost_eq(_mean(2, 2), 2.2, 0.05, "2-dmg epic")
+	assert_almost_eq(_mean(3, 1), 3.15, 0.05, "3-dmg rare")
+	assert_almost_eq(_mean(40, 1), 42.0, 0.001, "exact products never wobble")
+	assert_eq(CombatRules.scaled(40, 1, 99), 42)
+	assert_eq(CombatRules.scaled(1, 2, 5) >= 1, true)
 
 
 func test_weapon_damage_scales_by_its_own_rarity() -> void:
@@ -108,7 +126,7 @@ func test_epic_ability_damage_is_scaled_through_its_skilldata() -> void:
 	var common: int = await _thunder_hit(0)
 	var epic: int = await _thunder_hit(2)
 	assert_eq(common, base)
-	assert_eq(epic, CombatRules.scaled(base, 2))
+	assert_between(epic, floori(base * 1.1), floori(base * 1.1) + 1)
 	assert_gt(epic, common)
 
 

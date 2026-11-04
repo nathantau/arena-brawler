@@ -157,6 +157,7 @@ var _ramps: Dictionary = {}
 
 ## Rarity whose damage multiplier the shot being spawned right now uses (set by fire_shot).
 var _shot_rarity: int = 0
+var _shot_salt: int = 0  # owner + seq of that shot: seeds the rarity bonus's rounding
 
 
 func _ready() -> void:
@@ -178,6 +179,7 @@ func _ready() -> void:
 func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int,
 		rarity: int = -1) -> void:
 	_shot_rarity = weapon.rarity if rarity < 0 else rarity
+	_shot_salt = owner_id * 1000003 + seq
 	if weapon.blast:
 		_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
 		if weapon.destroys_shots:
@@ -227,7 +229,7 @@ func _volley(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: 
 	var crit: bool = CombatRules.roll_crit(weapon, _shot_rng)
 	if weapon.crit_every > 0 and _streak_hit(owner_id, weapon.crit_every):
 		crit = true
-	var damage: int = CombatRules.damage_for(weapon, crit, _shot_rarity)
+	var damage: int = CombatRules.damage_for(weapon, crit, _shot_rarity, _shot_salt)
 	var dirs: PackedVector2Array = CombatRules.shot_directions(facing, weapon, _shot_rng)
 	for i: int in dirs.size():
 		if weapon.kind == WeaponData.Kind.BEAM:
@@ -287,7 +289,7 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.bounce_gain = weapon.bounce_damage_gain
 	slot.bounced = 0
 	slot.burn_time = weapon.burn_time
-	slot.burn_damage = CombatRules.scaled(weapon.burn_damage, _shot_rarity)
+	slot.burn_damage = CombatRules.scaled(weapon.burn_damage, _shot_rarity, _shot_salt + 1)
 	slot.burn_interval = weapon.burn_interval
 	slot.backstab = weapon.backstab_bonus
 	slot.split_count = weapon.split_count
@@ -376,7 +378,7 @@ func _swing(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: W
 	if not authoritative:
 		return
 	var crit: bool = CombatRules.roll_crit(weapon, _shot_rng)
-	var damage: int = CombatRules.damage_for(weapon, crit, _shot_rarity)
+	var damage: int = CombatRules.damage_for(weapon, crit, _shot_rarity, _shot_salt)
 	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
 	for result: Dictionary in _overlaps(space, origin, reach, Constants.LAYER_PLAYERS | Constants.LAYER_CRATES):
 		var collider: Object = result.collider
@@ -505,7 +507,7 @@ func _blast(owner_id: int, seq: int, at: Vector2, weapon: WeaponData, slam: bool
 	blast.attacker_id = owner_id
 	blast.shot_seq = seq
 	blast.crit = CombatRules.roll_crit(weapon, _shot_rng)
-	blast.damage = CombatRules.damage_for(weapon, blast.crit, _shot_rarity)
+	blast.damage = CombatRules.damage_for(weapon, blast.crit, _shot_rarity, _shot_salt)
 	blast.knockback = weapon.knockback
 	blast.snare_time = weapon.snare_time
 	blast.snare_factor = weapon.snare_factor

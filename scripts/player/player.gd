@@ -537,20 +537,20 @@ func simulate(input: InputFrame, delta: float, replay: bool = false) -> void:
 			if projectiles != null and bloom_before[i] >= 0.0 and skills[i].bloom_tick_due(bloom_before[i]):
 				var bd: SkillData = skills[i].data
 				projectiles.bloom(player_id, skills[i].anchor, bd.bloom_radius, bd.bloom_heal, bd.bloom_heal_allies,
-					input.seq + BLOOM_SEQ_OFFSET, CombatRules.scaled(bd.bloom_damage, bd.rarity), bd.bloom_slow_time, bd.bloom_slow_factor)
+					input.seq + BLOOM_SEQ_OFFSET, CombatRules.scaled(bd.bloom_damage, bd.rarity, player_id + input.seq), bd.bloom_slow_time, bd.bloom_slow_factor)
 	if step_was != null and not step_was.is_active():
 		_surface()  # rises from under whatever he slid through, onto the nearest floor, then strikes from there
 	_shadow_tick(step_was, hound_was, hound_before, input.seq, delta, replay)
 	if storm != null and not replay and storm.storm_tick_due(storm_before):
 		var sd: SkillData = storm.data
-		projectiles.strike(player_id, input.seq + STORM_SEQ_OFFSET, storm.anchor, sd.storm_radius, CombatRules.scaled(sd.storm_damage, sd.rarity),
+		projectiles.strike(player_id, input.seq + STORM_SEQ_OFFSET, storm.anchor, sd.storm_radius, CombatRules.scaled(sd.storm_damage, sd.rarity, player_id + input.seq),
 			sd.storm_knockback)
 	if burning != null and not replay:
 		_burn_trail(burning, burn_before, input.seq)
 	if pillar != null and not replay and pillar.pillar_slammed(pillar_before):
 		var d: SkillData = pillar.data
 		projectiles.line_hit(player_id, input.seq + PILLAR_SEQ_OFFSET, pillar.anchor, pillar.anchor + pillar.direction,
-			d.pillar_width * 0.5, CombatRules.scaled(d.pillar_damage, d.rarity), d.pillar_knockback)
+			d.pillar_width * 0.5, CombatRules.scaled(d.pillar_damage, d.rarity, player_id + input.seq), d.pillar_knockback)
 	if nova != null and not replay and nova.nova_burst(nova_before):
 		var key: int = input.seq + NOVA_SEQ_OFFSET
 		projectiles.fire_shot(player_id, key, global_position, nova.direction, nova.data.nova_blast, match_seed, nova.data.rarity)
@@ -762,7 +762,7 @@ func _whirl(slot: CharacterSkill, seq: int, delta: float, replay: bool) -> void:
 		return
 	var d: SkillData = slot.data
 	projectiles.whirl(player_id, seq + WHIRL_SEQ_OFFSET, global_position, d.whirl_radius,
-		CombatRules.scaled(d.whirl_damage, d.rarity) if slot.whirl_tick_due(delta) else 0, d.whirl_knockback, d.whirl_slow_time, d.whirl_slow_factor)
+		CombatRules.scaled(d.whirl_damage, d.rarity, player_id + seq) if slot.whirl_tick_due(delta) else 0, d.whirl_knockback, d.whirl_slow_time, d.whirl_slow_factor)
 
 
 ## The leaf gust: enemy shots in the cone are destroyed on every step it lasts (so ones flying into it die too); the hit
@@ -773,7 +773,7 @@ func _gust(slot: CharacterSkill, seq: int, replay: bool) -> void:
 		return
 	var d: SkillData = slot.data
 	projectiles.gust(player_id, seq + GUST_SEQ_OFFSET, global_position, slot.direction, d.gust_range,
-		deg_to_rad(d.gust_half_angle_deg), CombatRules.scaled(d.gust_damage, d.rarity) if slot.gust_just_pressed() else 0, d.gust_knockback)
+		deg_to_rad(d.gust_half_angle_deg), CombatRules.scaled(d.gust_damage, d.rarity, player_id + seq) if slot.gust_just_pressed() else 0, d.gust_knockback)
 
 
 ## The tree shoots one petal at the nearest visible enemy in range (shadow clones count, smoked ones don't). Ties go
@@ -817,7 +817,7 @@ func _shadow_tick(step_was: CharacterSkill, hound_was: CharacterSkill, hound_bef
 		return
 	if step_was != null and not step_was.is_active():
 		var d: SkillData = step_was.data
-		projectiles.strike(player_id, seq + STEP_SEQ_OFFSET, global_position, d.step_radius, CombatRules.scaled(d.step_damage, d.rarity),
+		projectiles.strike(player_id, seq + STEP_SEQ_OFFSET, global_position, d.step_radius, CombatRules.scaled(d.step_damage, d.rarity, player_id + seq),
 			d.step_knockback)
 	if hound_was != null and hound_was.is_active():
 		_hound_step(hound_was, hound_before, seq, delta)
@@ -871,7 +871,7 @@ func _hound_step(slot: CharacterSkill, before: float, seq: int, delta: float) ->
 	var bites: int = floori((slot.elapsed() - d.hound_rise_time + CharacterSkill.WHIRL_EPSILON) / interval)
 	var bites_before: int = floori((before - d.hound_rise_time + CharacterSkill.WHIRL_EPSILON) / interval)
 	if (before >= d.hound_rise_time and bites > bites_before) or before < d.hound_rise_time:  # the first bite is on rising
-		projectiles.strike(player_id, seq + HOUND_SEQ_OFFSET, slot.anchor, d.hound_bite_radius, CombatRules.scaled(d.hound_damage, d.rarity),
+		projectiles.strike(player_id, seq + HOUND_SEQ_OFFSET, slot.anchor, d.hound_bite_radius, CombatRules.scaled(d.hound_damage, d.rarity, player_id + seq),
 			d.hound_knockback)
 
 
@@ -919,7 +919,7 @@ func _burn_trail(slot: CharacterSkill, before: float, seq: int) -> void:
 	var tick_now: int = floori(slot.elapsed() / d.trail_tick + 0.0001)
 	if tick_now > floori(before / d.trail_tick + 0.0001):
 		projectiles.burn_segment(player_id, seq + TRAIL_SEQ_OFFSET, slot.anchor, slot.anchor + slot.direction,
-			d.trail_radius, CombatRules.scaled(d.trail_damage, d.rarity))
+			d.trail_radius, CombatRules.scaled(d.trail_damage, d.rarity, player_id + seq))
 
 
 func _trail_dash(delta: float) -> CharacterSkill:

@@ -311,7 +311,7 @@ func test_hound_rises_ahead_chases_the_nearest_enemy_and_bites() -> void:
 	assert_eq(far.stats.hp, far.stats.max_hp, "only the nearest is chased")
 	for h: Array in hits:
 		assert_eq(h[0], 2)
-		assert_eq(h[1], CombatRules.scaled(d.hound_damage, d.rarity))
+		assert_between(h[1], d.hound_damage, d.hound_damage + 1)
 	var bitten: int = hits.size()
 	assert_gte(bitten, 2, "bites more than once")
 	assert_lte(bitten, 1 + ceili(d.duration / d.hound_bite_interval), "with a cooldown between bites")
