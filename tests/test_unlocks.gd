@@ -85,29 +85,125 @@ func test_roll_respects_weights_and_empty_tiers() -> void:
 	assert_almost_eq(epics / 3000.0, 10.0 / 70.0, 0.03)
 
 
-func test_open_box_spends_refuses_and_never_repeats_until_exhausted() -> void:
-	var c: CharacterData = _fighters()[0]
+## Marks every lockable item of `c` as owned except the last `keep` ones; returns the ones left locked.
+func _own_all_but(c: CharacterData, keep: int) -> Array:
+	var all: Array = Unlocks.lockable(c)
+	for i: int in all.size() - keep:
+		PlayerProfile.unlocked[Unlocks.key(all[i]["kind"], all[i]["id"])] = true
+	return all.slice(all.size() - keep)
+
+
+func _rng(seed_: int) -> RandomNumberGenerator:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 3
-	var size: int = Unlocks.box_pool(c).size()
+	rng.seed = seed_
+	return rng
+
+
+func test_open_box_spends_and_refuses_when_short() -> void:
+	var c: CharacterData = _fighters()[0]
 	PlayerProfile.gold = Unlocks.BOX_PRICE - 1
-	assert_eq(Unlocks.open_box(c, rng), {})
+	assert_eq(Unlocks.open_box(c, _rng(3)), {})
 	assert_eq(PlayerProfile.gold, Unlocks.BOX_PRICE - 1)
-	PlayerProfile.gold = Unlocks.BOX_PRICE * (size + 2)
-	var seen: Dictionary = {}
-	for i: int in size:
-		var got: Dictionary = Unlocks.open_box(c, rng)
-		assert_false(got.is_empty())
-		var key: String = Unlocks.key(got["kind"], got["id"])
-		assert_false(seen.has(key), "duplicate " + key)
-		seen[key] = true
-		assert_true(PlayerProfile.unlocked.has(key))
-	assert_eq(PlayerProfile.gold, Unlocks.BOX_PRICE * 2)
-	assert_true(Unlocks.box_pool(c).is_empty())
-	assert_eq(Unlocks.open_box(c, rng), {})  # exhausted: nothing is charged
-	assert_eq(PlayerProfile.gold, Unlocks.BOX_PRICE * 2)
+	PlayerProfile.gold = 500
+	var got: Dictionary = Unlocks.open_box(c, _rng(3))  # nothing owned yet: always new
+	assert_false(got.is_empty())
+	assert_false(got["dupe"])
+	assert_eq(got["refund"], 0)
+	assert_eq(PlayerProfile.gold, 500 - Unlocks.BOX_PRICE)
+	assert_true(PlayerProfile.unlocked.has(Unlocks.key(got["kind"], got["id"])))
+	assert_eq(PlayerProfile.pity_of(c.id), 0)
 	PlayerProfile.load_from(TMP)  # saved
-	assert_eq(PlayerProfile.unlocked.size(), size)
+	assert_eq(PlayerProfile.unlocked.size(), 1)
+
+
+func test_boxes_roll_duplicates_and_refund_by_rarity() -> void:
+	var c: CharacterData = _fighters()[0]
+	var locked: Array = _own_all_but(c, 5)
+	var seen: Dictionary = {}
+	for s: int in 60:
+		PlayerProfile.gold = 1000
+		PlayerProfile.pity.clear()
+		var got: Dictionary = Unlocks.open_box(c, _rng(s))
+		assert_true(got.has("dupe") and got.has("refund"))
+		if got["dupe"]:
+			assert_eq(got["refund"], Unlocks.DUPE_REFUND[got["rarity"]])
+			assert_eq(PlayerProfile.gold, 1000 - Unlocks.BOX_PRICE + got["refund"])
+			assert_eq(PlayerProfile.pity_of(c.id), 1)
+			seen[got["rarity"]] = true
+		else:
+			assert_eq(got["refund"], 0)
+			assert_eq(PlayerProfile.gold, 1000 - Unlocks.BOX_PRICE)
+			PlayerProfile.unlocked.erase(Unlocks.key(got["kind"], got["id"]))  # keep 5 locked
+	assert_gte(seen.size(), 2, "dupes of several rarities show up")
+	assert_eq(locked.size(), 5)
+	assert_eq(Unlocks.DUPE_REFUND, [30, 50, 80] as Array[int])
+
+
+func test_pity_forces_a_new_item_after_three_duplicates_and_resets() -> void:
+	var c: CharacterData = _fighters()[0]
+	var locked: Array = _own_all_but(c, 4)
+	var found: bool = false
+	for s: int in 80:
+		PlayerProfile.pity.clear()
+		PlayerProfile.pity[String(c.id)] = Unlocks.PITY_DUPES - 1
+		PlayerProfile.gold = 1000
+		for e: Dictionary in locked:
+			PlayerProfile.unlocked.erase(Unlocks.key(e["kind"], e["id"]))
+		if not Unlocks.open_box(c, _rng(s))["dupe"]:
+			continue
+		found = true
+		assert_eq(PlayerProfile.pity_of(c.id), Unlocks.PITY_DUPES, "the third duplicate in a row")
+		var got: Dictionary = Unlocks.open_box(c, _rng(s))  # at the cap the box only rolls locked items
+		assert_false(got["dupe"])
+		assert_eq(PlayerProfile.pity_of(c.id), 0, "a new unlock resets it")
+		break
+	assert_true(found)
+
+
+func test_pity_run_never_exceeds_three_duplicates() -> void:
+	var c: CharacterData = _fighters()[0]
+	var locked: Array = _own_all_but(c, 1)  # one item left: dupes are very likely until it comes
+	PlayerProfile.gold = 100000
+	var rng: RandomNumberGenerator = _rng(5)
+	var run: int = 0
+	while not Unlocks.box_pool(c).is_empty():
+		var got: Dictionary = Unlocks.open_box(c, rng)
+		if got["dupe"]:
+			run += 1
+			assert_lte(run, Unlocks.PITY_DUPES)
+		else:
+			assert_eq(got["id"], locked[0]["id"])
+	assert_eq(PlayerProfile.pity_of(c.id), 0)
+
+
+func test_pity_is_per_fighter_and_saved_loaded_clamped() -> void:
+	PlayerProfile.pity["eden"] = 2
+	PlayerProfile.pity["bolt"] = 1
+	PlayerProfile.save()
+	PlayerProfile.load_from(TMP)
+	assert_eq(PlayerProfile.pity_of(&"eden"), 2)
+	assert_eq(PlayerProfile.pity_of(&"bolt"), 1)
+	assert_eq(PlayerProfile.pity_of(&"shadow"), 0)
+	var cfg := ConfigFile.new()
+	cfg.set_value("pity", "eden", 99)
+	cfg.set_value("pity", "bolt", -4)
+	cfg.save(TMP)
+	PlayerProfile.load_from(TMP)
+	assert_eq(PlayerProfile.pity_of(&"eden"), Unlocks.PITY_DUPES)
+	assert_eq(PlayerProfile.pity_of(&"bolt"), 0)
+
+
+func test_everything_unlocked_still_refuses_and_pool_counts_locked_only() -> void:
+	var c: CharacterData = _fighters()[0]
+	var all: int = Unlocks.lockable(c).size()
+	assert_eq(Unlocks.box_pool(c).size(), all)
+	_own_all_but(c, 2)
+	assert_eq(Unlocks.box_pool(c).size(), 2)
+	_own_all_but(c, 0)
+	assert_true(Unlocks.box_pool(c).is_empty())
+	PlayerProfile.gold = 500
+	assert_eq(Unlocks.open_box(c, _rng(1)), {})
+	assert_eq(PlayerProfile.gold, 500)
 
 
 func test_unlock_all_flag() -> void:

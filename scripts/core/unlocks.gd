@@ -5,6 +5,10 @@ extends RefCounted
 ## Starter set per fighter, never in a box: Dash, Barrier, its default skills, signature skill + weapon, ultimate.
 
 const BOX_PRICE: int = 100
+## A box rolls from ALL of a fighter's lockable items; an owned result is a duplicate and refunds gold by rarity.
+## After PITY_DUPES duplicates in a row (per fighter, saved in PlayerProfile.pity) the next box only rolls locked items.
+const DUPE_REFUND: Array[int] = [30, 50, 80]
+const PITY_DUPES: int = 3
 ## Odds per rarity tier (SkillData / WeaponData.rarity 0 common, 1 rare, 2 epic).
 const RARITY_WEIGHTS: Array[int] = [60, 30, 10]
 const RARITY_NAMES: Array[String] = ["Common", "Rare", "Epic"]
@@ -67,6 +71,22 @@ static func box_pool(c: CharacterData) -> Array:
 	return out
 
 
+## Every ability and weapon a box can ever give `c`, owned or not: [{kind, id, rarity}], abilities first.
+static func lockable(c: CharacterData) -> Array:
+	var out: Array = []
+	for s: SkillData in SkillCatalog.shared().specials_for(c):
+		if not is_starter_skill(c, s):
+			out.append({"kind": &"skill", "id": s.id, "rarity": s.rarity})
+	for w: WeaponData in weapons_for(c):
+		if w != c.signature_weapon:
+			out.append({"kind": &"weapon", "id": w.id, "rarity": w.rarity})
+	return out
+
+
+static func refund_for(rarity: int) -> int:
+	return DUPE_REFUND[clampi(rarity, 0, DUPE_REFUND.size() - 1)]
+
+
 ## Picks a rarity tier by weight among the tiers that still have entries, then an entry in it. {} for an empty pool.
 static func roll(pool: Array, rng: RandomNumberGenerator) -> Dictionary:
 	var total: int = 0
@@ -90,19 +110,30 @@ static func _in_tier(pool: Array, tier: int) -> Array:
 	return pool.filter(func(e: Dictionary) -> bool: return clampi(e["rarity"], 0, RARITY_WEIGHTS.size() - 1) == tier)
 
 
-## Pays BOX_PRICE for a roll from `c`'s pool and unlocks the result. {} if the pool is empty or gold is short.
+## Pays BOX_PRICE for a roll from all of `c`'s lockable items (only the still-locked ones once the pity count is
+## reached). A new item is unlocked; an owned one is a duplicate and refunds DUPE_REFUND. Returns the entry plus
+## `dupe` and `refund`; {} if everything is unlocked or gold is short.
 static func open_box(c: CharacterData, rng: RandomNumberGenerator = null) -> Dictionary:
 	PlayerProfile.ensure_loaded()
-	var pool: Array = box_pool(c)
-	if pool.is_empty() or PlayerProfile.gold < BOX_PRICE:
+	var locked: Array = box_pool(c)
+	if locked.is_empty() or PlayerProfile.gold < BOX_PRICE:
 		return {}
 	if rng == null:
 		rng = RandomNumberGenerator.new()
 		rng.randomize()
-	var got: Dictionary = roll(pool, rng)
+	var pity: int = PlayerProfile.pity_of(c.id)
+	var got: Dictionary = roll(locked if pity >= PITY_DUPES else lockable(c), rng).duplicate()
 	if not PlayerProfile.spend_gold(BOX_PRICE):
 		return {}
-	PlayerProfile.unlocked[key(got["kind"], got["id"])] = true
+	var k: String = key(got["kind"], got["id"])
+	got["dupe"] = not locked.any(func(e: Dictionary) -> bool: return key(e["kind"], e["id"]) == k)
+	got["refund"] = refund_for(got["rarity"]) if got["dupe"] else 0
+	if got["dupe"]:
+		PlayerProfile.gold += got["refund"]
+		PlayerProfile.pity[String(c.id)] = pity + 1
+	else:
+		PlayerProfile.unlocked[k] = true
+		PlayerProfile.pity.erase(String(c.id))
 	PlayerProfile.save()
 	return got
 

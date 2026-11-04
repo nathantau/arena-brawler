@@ -70,6 +70,7 @@ const RECIPES: Dictionary[StringName, Array] = {
 	&"box_rattle": [0.09, 260.0, 160.0, Wave.SQUARE, 0.7, 0.5, 0.001, 30.0, 0.4],
 	&"box_burst": [0.55, 160.0, 900.0, Wave.SAW, 0.6, 0.4, 0.002, 6.0, 0.6],
 	&"box_chime": [0.5, 880.0, 1760.0, Wave.SINE, 0.0, 0.0, 0.004, 5.0, 0.4],
+	&"box_chime_soft": [0.3, 660.0, 880.0, Wave.SINE, 0.0, 0.0, 0.004, 7.0, 0.22],  # a duplicate: lower, shorter, quieter
 	&"box_chime_epic": [0.9, 660.0, 1980.0, Wave.SQUARE, 0.05, 0.1, 0.004, 3.5, 0.4],
 	&"boost": [0.5, 200.0, 1000.0, Wave.SAW, 0.3, 0.3, 0.02, 5.0, 0.4],
 	# Bolt: a rising crackle, and a low crack of thunder.

@@ -95,3 +95,35 @@ func test_opening_timeline_orders_and_skip() -> void:
 	assert_almost_eq(o._t, o.burst_time(), 0.001)
 	o.tap()
 	assert_almost_eq(o._t, o.settled_time(), 0.001)
+
+
+func test_dupe_line_matches_the_constants() -> void:
+	assert_eq(ShopPanel.dupe_text(), "Duplicates refund 30 / 50 / 80 gold · new item guaranteed after 3 duplicates")
+
+
+func test_opening_a_duplicate_via_the_panel_refunds_gold() -> void:
+	var panel: ShopPanel = ShopPanel.new()
+	add_child_autofree(panel)
+	var c: CharacterData = panel._fighter
+	var all: Array = Unlocks.lockable(c)
+	for i: int in all.size() - 1:  # one item locked: nearly every box is a duplicate
+		PlayerProfile.unlocked[Unlocks.key(all[i]["kind"], all[i]["id"])] = true
+	panel.rng = RandomNumberGenerator.new()
+	var start: int = 1000
+	for s: int in 40:
+		PlayerProfile.gold = start
+		PlayerProfile.pity.clear()
+		panel.rng.seed = s
+		panel._opening = null
+		var got: Dictionary = panel._on_open()
+		if got.is_empty() or not got["dupe"]:
+			PlayerProfile.unlocked.erase(Unlocks.key(all[-1]["kind"], all[-1]["id"]))
+			continue
+		assert_eq(PlayerProfile.gold, start - Unlocks.BOX_PRICE + got["refund"])
+		assert_true(panel._opening.is_dupe())
+		assert_eq(panel._opening.info["refund"], got["refund"])
+		assert_not_null(panel._opening._balance, "balance chip for the count-up")
+		panel._opening.frozen = true
+		panel._opening.jump_to(panel._opening.settled_time() + 0.1)
+		return
+	fail_test("no duplicate in 40 seeds")

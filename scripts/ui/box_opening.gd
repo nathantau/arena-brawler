@@ -59,6 +59,7 @@ var _buttons: HBoxContainer
 var _sfx: Sfx
 var _rng := RandomNumberGenerator.new()
 var _done: bool = false
+var _balance: GoldChip
 
 
 ## Frames in a horizontal strip of square cells.
@@ -75,6 +76,11 @@ func _init(info_: Dictionary, can_again_: bool, sfx: Sfx = null) -> void:
 	can_again = can_again_
 	_sfx = sfx
 	rarity = clampi(int(info["rarity"]), 0, Unlocks.RARITY_NAMES.size() - 1)
+
+
+## A duplicate (`info.dupe`, `info.refund` gold): same sequence and card, a softer chime, and the refund counts into the balance.
+func is_dupe() -> bool:
+	return bool(info.get("dupe", false))
 
 
 func _ready() -> void:
@@ -98,6 +104,7 @@ func _ready() -> void:
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_flash)
 	_build_buttons()
+	_build_balance()
 	resized.connect(_place)
 	_place()
 
@@ -169,8 +176,8 @@ func _events() -> void:
 		_play(&"box_burst")
 		GameSettings.vibrate(70 if rarity < 2 else 140)
 	if _crossed(card_time()):
-		_play(&"box_chime_epic" if rarity == 2 else &"box_chime")
-		if rarity == 2:
+		_play(&"box_chime_soft" if is_dupe() else (&"box_chime_epic" if rarity == 2 else &"box_chime"))
+		if rarity == 2 and not is_dupe():
 			GameSettings.vibrate(90)
 
 
@@ -239,6 +246,10 @@ func _place() -> void:
 	_card.scale = Vector2.ONE * lerpf(0.4, 1.0, e)
 	_card.modulate.a = clampf(k * 3.0, 0.0, 1.0)
 	_card.visible = _t >= card_time()
+	if _balance != null:
+		_balance.visible = _card.visible
+		if _crossed(settled_time()):
+			_balance.set_gold(PlayerProfile.gold, true)
 	# Flash on the burst; epic flashes again as the card comes out.
 	var fa: float = 0.0
 	var ft: float = FLASH_TIME[rarity]
@@ -296,6 +307,12 @@ func _build_card() -> void:
 	col.add_child(icon)
 	_line(col, info["name"], UiStyle.SIZE_HEADING, UiStyle.C_WHITE, false, true)
 	_line(col, "%s · %s" % [info["kind"], Unlocks.RARITY_NAMES[rarity]], UiStyle.SIZE_SMALL, color, true, true)
+	if is_dupe():
+		_line(col, "DUPLICATE", UiStyle.SIZE_SMALL, UiStyle.C_DIM, true, true)
+		var refund := GoldChip.new(UiStyle.SIZE_BODY)
+		refund.label.text = "+%d gold" % int(info["refund"])
+		refund.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		col.add_child(refund)
 	var desc: Label = _line(col, info["desc"], UiStyle.SIZE_SMALL, UiStyle.C_DIM, true)
 	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc.custom_minimum_size.x = CARD_W - 48.0
@@ -313,6 +330,22 @@ func _line(parent: Control, text: String, font_size: int, color: Color, body: bo
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(l)
 	return l
+
+
+## Duplicates only: the wallet top right, showing the balance before the refund and counting up once the card settles.
+func _build_balance() -> void:
+	if not is_dupe():
+		return
+	_balance = GoldChip.new(UiStyle.SIZE_HEADING)
+	_balance.set_gold(PlayerProfile.gold - int(info["refund"]))
+	_balance.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE)
+	var inset: Vector4 = UiStyle.safe_insets(get_viewport())
+	_balance.offset_left -= inset.z + 16.0
+	_balance.offset_right -= inset.z + 16.0
+	_balance.offset_top += inset.y + 12.0
+	_balance.offset_bottom += inset.y + 12.0
+	_balance.visible = false
+	add_child(_balance)
 
 
 func _build_buttons() -> void:

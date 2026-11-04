@@ -77,6 +77,23 @@ func run() -> void:
 		_shoot("%s_reveal" % name)
 		o.queue_free()
 		await _frames(2)
+	# duplicate reveal: the same card with a DUPLICATE tag and the refund, the wallet counting up after it settles
+	var dupe: Dictionary = ShopPanel.item_info(picks["rare"])
+	dupe["dupe"] = true
+	dupe["refund"] = Unlocks.refund_for(dupe["rarity"])
+	PlayerProfile.gold += dupe["refund"]
+	var d := BoxOpening.new(dupe, true)
+	panel.add_child(d)
+	await _frames(2)
+	d.frozen = true
+	d.jump_to(d.settled_time() - 0.05)
+	await _frames(3)
+	d.jump_to(d.settled_time() + 0.02)
+	await _frames(8)
+	_shoot("dupe_counting")
+	await _frames(60)
+	_shoot("dupe_reveal")
+	d.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(PROFILE))
 	quit()
 
