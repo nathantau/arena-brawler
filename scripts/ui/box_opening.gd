@@ -28,6 +28,8 @@ const CARD_RISE: float = 0.5
 const RAYS_FADE: Array[float] = [0.5, 0.5, 0.9]
 const FLASH_TIME: Array[float] = [0.28, 0.32, 0.5]
 const SHAKE_PX: Array[float] = [5.0, 6.0, 9.0]
+## Clear space kept between the composition (rays / card) and the top of the screen.
+const EDGE_MARGIN: float = 16.0
 const BURST_KICK: float = 16.0
 const KICK_TIME: float = 0.35
 const VEIL: Color = Color(0.02, 0.02, 0.06, 0.96)
@@ -120,8 +122,10 @@ func settled_time() -> float:
 
 ## Scale of the strips: whole numbers only, as big as the screen allows while the card still fits above the box.
 func art_scale() -> int:
-	var room: float = floor_y() - _card_height() - 30.0
-	return clampi(mini(int(room / BOX_TOP_ABOVE_FLOOR), int(size.y / 200.0)), 1, 4)
+	var card_fit: int = int((floor_y() - _card_height() - 14.0 - EDGE_MARGIN) / BOX_TOP_ABOVE_FLOOR)
+	# rays are centred on the box top: their top edge is (box top + half a rays cell) above the floor
+	var rays_fit: int = int((floor_y() - EDGE_MARGIN) / (BOX_TOP_ABOVE_FLOOR + RAYS_CELL * 0.5))
+	return clampi(mini(mini(card_fit, rays_fit), int(size.y / 200.0)), 1, 4)
 
 
 func floor_y() -> float:
@@ -212,10 +216,9 @@ func _draw() -> void:
 
 func _draw_rays(centre: Vector2, s: int) -> void:
 	var a: float = clampf((_t - burst_time()) / RAYS_FADE[rarity], 0.0, 1.0)
-	var rs: int = clampi(int(size.y * 0.95 / RAYS_CELL), 1, 6)
 	var f: int = int(_t * RAYS_FPS) % _rays_frames
-	var mid: Vector2 = centre - Vector2(0.0, BOX_TOP_ABOVE_FLOOR * s + _card_height() * 0.5 + 14.0)
-	var half: float = RAYS_CELL * rs * 0.5
+	var mid: Vector2 = centre - Vector2(0.0, BOX_TOP_ABOVE_FLOOR * s)  # on the beam, just above the box
+	var half: float = RAYS_CELL * s * 0.5  # same pixel size as the box strips
 	draw_texture_rect_region(_rays, Rect2((mid - Vector2.ONE * half).round(), Vector2.ONE * half * 2.0),
 		Rect2(f * RAYS_CELL, 0, RAYS_CELL, RAYS_CELL), Color(1, 1, 1, a * 0.9))
 
