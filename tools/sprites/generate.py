@@ -10726,26 +10726,24 @@ def duck_lobber(c: Canvas, t: int = 0) -> None:
 
 
 def popcorn_popper(c: Canvas, t: int = 0) -> None:
-    """A striped popcorn bucket heaped with fluffy corn, a steel nozzle for a barrel and kernels popping off the end."""
-    c.part(blobs([(7, 7, 4), (12, 6, 4), (17, 6, 4), (22, 8, 3), (10, 9, 3), (15, 9, 3), (20, 10, 3)]), CREAM)  # the heap
-    for bx, by in ((8, 7), (14, 5), (19, 7), (11, 9), (22, 8)):  # butter
-        c.dot(bx, by, YELLOW)
-    c.dot(6, 5, WHITE)
-    c.dot(12, 4, WHITE)
-    c.dot(17, 4, WHITE)
-
-    def edge(y: int, f: float) -> float:  # x across the bucket at row y (f 0 = left edge, 1 = right edge)
-        left = 4 + 3 * (y - 10) / 11
-        right = 25 - 3 * (y - 10) / 11
+    """A red-and-white striped popcorn box heaped with individually shaded puffy kernels and butter bits, a steel nozzle for a
+    barrel and kernels popping off the end."""
+    for x, y, r in ((8, 6, 3), (13, 5, 3), (18, 6, 3), (23, 7, 2.5), (6, 8, 3), (11, 8, 3), (16, 8, 3), (21, 9, 3)):  # back row first
+        c.part(blobs([(x, y, r), (x - 1.5, y + 1, r - 1), (x + 1.5, y + 1, r - 1)]), CREAM)
+    for x, y in ((8, 5), (13, 4), (18, 5), (6, 7), (16, 7)):  # a lit speck on each puff
+        c.dot(x, y, WHITE)
+    for x, y in ((11, 6), (21, 7), (15, 9), (7, 9)):  # butter
+        c.dot(x, y, YELLOW)
+        c.dot(x + 1, y, ORANGE)
+    def edge(y: int, f: float) -> float:  # x across the box at row y (f 0 = left edge, 1 = right edge)
+        left = 4 + 2 * (y - 11) / 10
+        right = 25 - 2 * (y - 11) / 10
         return left + f * (right - left)
-    c.part(P([(4, 10), (25, 10), (22, 21), (7, 21)]), WHITE)  # bucket
-    for f0, f1 in ((0.0, 0.2), (0.4, 0.6), (0.8, 1.0)):
-        c.flat(P([(edge(10, f0), 10), (edge(10, f1), 10), (edge(21, f1), 21), (edge(21, f0), 21)]), RED)
-    c.part(RR((3, 9, 26, 11), 1), RED)  # rim
+    c.part(P([(4, 11), (25, 11), (23, 21), (6, 21)]), WHITE)  # the box
+    for f0, f1 in ((0 / 6, 1 / 6), (2 / 6, 3 / 6), (4 / 6, 5 / 6)):  # clean stripes
+        c.flat(P([(edge(11, f0), 11), (edge(11, f1), 11), (edge(21, f1), 21), (edge(21, f0), 21)]), RED)
+    c.part(RR((3, 9, 26, 12), 1), RED)  # rim
     c.flat(L([(5, 9), (24, 9)], 1), ORANGE)
-    c.flat(RR((10, 14, 19, 19), 1), YELLOW)  # label
-    c.flat(L([(12, 16), (17, 16)], 1), ORANGE)
-    c.flat(L([(12, 18), (15, 18)], 1), ORANGE)
     c.part(R((25, 12, 36, 18)), STEEL_D)  # barrel
     c.flat(L([(26, 13), (35, 13)], 1), STEEL)
     c.part(RR((35, 10, 42, 20), 1), STEEL)  # nozzle
@@ -10793,19 +10791,28 @@ def magnet_blaster(c: Canvas, t: int = 0) -> None:
 
 
 def pumpkin_mortar(c: Canvas, t: int = 0) -> None:
-    """A jack-o'-lantern pumpkin dragging a steel mortar tube: curly green stem, ribs, a glowing carved grin."""
+    """A jack-o'-lantern dragging a steel mortar tube: curly green stem, two side ribs, two triangle eyes and a toothy grin
+    that glow from inside."""
     c.part(P([(5, 15), (10, 15), (9, 21), (4, 21)]), BROWN)  # grip
     c.part(E((3, 5, 31, 21)), ORANGE)  # the pumpkin
-    for pts in (((17, 6), (15, 10), (15, 16), (17, 20)), ((10, 7), (7, 12), (9, 19)), ((24, 7), (27, 12), (25, 19))):
+    for pts in (((9, 7), (6, 13), (8, 19)), ((25, 7), (28, 13), (26, 19))):
         c.flat(L(list(pts), 1), RED)  # ribs
     c.flat(L([(7, 9), (11, 6)], 1), YELLOW)
     c.part(P([(16, 2), (20, 2), (21, 6), (15, 6)]), GREEN)  # stem
     c.flat(L([(21, 3), (24, 2), (25, 4)], 1), GREEN_L)
-    c.flat(P([(7, 13), (12, 13), (9.5, 9)]), YELLOW)  # eyes
-    c.flat(P([(19, 13), (24, 13), (21.5, 9)]), YELLOW)
-    c.flat(P([(7, 16), (10, 18), (12, 16), (15, 18), (18, 16), (21, 18), (24, 16), (22, 20), (9, 20)]), YELLOW)  # grin
-    c.flat(R((9, 18, 10, 19)), ORANGE)
-    c.flat(R((16, 18, 17, 19)), ORANGE)
+    c.flat(P([(8, 14), (14, 14), (11, 9)]), RED)  # eyes: a red rim, the glow inside
+    c.flat(P([(18, 14), (24, 14), (21, 9)]), RED)
+    c.flat(P([(9, 13), (13, 13), (11, 10)]), YELLOW)
+    c.flat(P([(19, 13), (23, 13), (21, 10)]), YELLOW)
+    c.dot(11, 12, WHITE)
+    c.dot(21, 12, WHITE)
+    c.flat(R((8, 16, 24, 19)), RED)  # grin: red rim, glowing inside, teeth cut into it
+    c.flat(R((9, 17, 23, 18)), YELLOW)
+    for x in (10, 14, 18, 22):
+        c.flat(R((x, 16, x + 1, 17)), ORANGE)  # top teeth
+    for x in (12, 16, 20):
+        c.flat(R((x, 18, x + 1, 19)), ORANGE)  # bottom teeth
+    c.dot(15, 17, WHITE)
     c.part(R((28, 9, 39, 17)), STEEL_D)  # mortar tube
     c.flat(L([(29, 10), (38, 10)], 1), STEEL)
     c.part(RR((38, 6, 44, 20), 1), STEEL)  # muzzle ring
@@ -10853,18 +10860,21 @@ WEAPONS.update({"duck_lobber": duck_lobber, "popcorn_popper": popcorn_popper, "m
 
 # --- bullets -----------------------------------------------------------------------------------------------------
 
-def duck_shot(c: Canvas, f: int) -> None:  # a rubber duck in side view, beak right, tail wag + wing flap (4 frames)
-    m = PROJ // 2
-    wag = (0, 1, 0, -1)[f]
-    c.part(P([(m - 5, m + 1), (m - 8, m - 2 + wag), (m - 4, m - 1)]), YELLOW)  # tail
-    c.part(E((m - 7, m - 2, m + 3, m + 6)), YELLOW)  # body
-    c.part(E((m - 1, m - 6, m + 5, m)), YELLOW)  # head
-    c.flat(R((m - 1, m - 2, m + 2, m + 1)), YELLOW)  # neck
-    c.part(P([(m + 4, m - 4), (m + 7, m - 3), (m + 7, m - 1), (m + 4, m - 1)]), ORANGE)  # beak
-    flap = (0, 1, 2, 1)[f]
-    c.flat(P([(m - 5, m + 1), (m, m), (m - 2, m + 4 - flap // 2)]), ORANGE)  # wing
-    c.dot(m + 2, m - 4, NAVY)
-    c.dot(m - 5, m - 1, WHITE)
+def duck_shot(c: Canvas, f: int) -> None:  # a rubber duck in side view, beak right: a clear yellow body, head, orange beak, eye (4 frames bob + wag)
+    d = (0, -1, 0, 1)[f]  # the whole duck bobs
+    w = (0, 1, 0, -1)[f]  # tail wag
+    c.flat(P([(3, 9 + d + w), (2, 5 + d + w), (6, 8 + d)]), OCHRE)  # tail
+    c.flat(P([(3, 8 + d + w), (3, 6 + d + w), (6, 8 + d)]), YELLOW)
+    c.flat(E((3, 9 + d, 14, 16 + d)), OCHRE)  # body: a darker underside under the yellow
+    c.flat(E((3, 8 + d, 14, 14 + d)), YELLOW)
+    c.flat(E((8, 3 + d, 15, 10 + d)), YELLOW)  # head
+    c.flat(R((9, 8 + d, 12, 11 + d)), YELLOW)  # neck
+    c.flat(P([(14, 5 + d), (17, 6 + d), (17, 8 + d), (14, 8 + d)]), ORANGE)  # beak
+    c.flat(L([(14, 8 + d), (17, 8 + d)], 1), RED)
+    c.dot(12, 5 + d, NAVY)
+    c.dot(11, 4 + d, WHITE)  # glint on the head
+    c.flat(L([(5, 10 + d), (9, 9 + d)], 1), WHITE)  # sheen on the back
+    c.flat(L([(6, 13 + d), (9, 14 + d), (12, 12 + d)], 1), OCHRE)  # the wing
 
 
 def popcorn_shot(c: Canvas, f: int) -> None:  # frames 0-1 an unpopped kernel, 2-3 the popped puff: it flickers popping as it flies
@@ -10923,18 +10933,24 @@ def pumpkin_seed(c: Canvas, f: int) -> None:  # one pale pointed seed, tip right
     c.dot(m - ln, m, OCHRE)
 
 
-def black_hole_shot(c: Canvas, f: int) -> None:  # a violet sphere with a void for a heart and three spiral arms turning 30 deg a frame
-    m = PROJ // 2 - 0.5
-    c.part(E((m - 7, m - 7, m + 7, m + 7)), VIOLET)
-    c.flat(E((m - 5, m - 5, m + 5, m + 5)), VIOLET_D)
-    c.flat(E((m - 3.5, m - 3.5, m + 3.5, m + 3.5)), OUTLINE)
-    for arm in range(3):
-        base = math.tau * arm / 3 + f * math.tau / 12
-        for s in range(9):
-            r = 3.6 + s * 0.38
-            a = base + s * 0.42
-            c.dot(round(m + math.cos(a) * r), round(m + math.sin(a) * r), PINK_L if s > 5 else VIOLET_L)
-    c.dot(int(m) - 4, int(m) - 5, WHITE)
+def black_hole_shot(c: Canvas, f: int) -> None:  # a near-black core, a hot accretion ring brighter on one side (it turns a quarter a frame), a dark halo
+    m = PROJ / 2 - 0.5
+    rot = f * math.pi / 2
+    for y in range(PROJ):
+        for x in range(PROJ):
+            dx, dy = x - m, y - m
+            d = math.hypot(dx, dy)
+            a = math.atan2(dy, dx)
+            if d < 3.7:
+                c.dot(x, y, OUTLINE)  # the void
+            elif d < 4.6:
+                c.dot(x, y, VIOLET_D)  # lensing rim
+            elif d - 0.7 * math.sin(2 * a + rot * 2) < 6.8:
+                lit = (math.cos(a - rot) + 1) / 2  # the bright side comes round with the frame
+                col = WHITE if lit > 0.9 else PINK_L if lit > 0.72 else PINK if lit > 0.5 else VIOLET_L if lit > 0.3 else VIOLET
+                c.dot(x, y, col)
+            elif d < 7.7:
+                c.dot(x, y, VIOLET_D if (x + y) % 2 == 0 or math.cos(a - rot) < 0 else VIOLET)  # dark halo, a bit of violet on the lit side
 
 
 PROJECTILES.update({"duck_lobber": duck_shot, "popcorn_popper": popcorn_shot, "magnet_blaster": magnet_shot,
@@ -10955,36 +10971,46 @@ def _dots(img: Image.Image, cx: float, cy: float, radius: float, n: int, cols, p
 
 
 def duck_pop_frame(k: int, n: int = 8) -> Image.Image:
-    """A rubber-duck pop (56 px): a yellow-white squeak flash, soap foam and water flung out, torn yellow bits, droplets falling."""
+    """A rubber-duck pop (56 px, reaches ~26 px out): a squeak flash, big soap-foam clumps and a crown of water flung out, torn
+    yellow rubber bits, droplets arcing and falling, then foam sinking and thinning."""
     t = k / (n - 1)
     m = 28
     c = Canvas(56)
-    e = ease_out(min(1.0, t * 1.15))
-    shrink = 1.0 - max(0.0, t - 0.45) / 0.55
-    if k < 3:
-        c.part(blobs([(m, m, (7, 9, 8)[k]), (m - 3, m + 2, 5), (m + 4, m - 2, 4)]), YELLOW if k else WHITE)
-    for i in range(8):  # foam: a ring of soap bubbles that swells and thins
-        a = math.tau * i / 8 + 0.3
-        r = round((4.4 - 1.0 * (i % 2)) * shrink)
+    e = ease_out(min(1.0, t * 1.1))
+    shrink = 1.0 - max(0.0, t - 0.4) / 0.6
+    if k < 4:  # the yellow burst core
+        c.part(blobs([(m, m, (8, 11, 9, 6)[k]), (m - 4, m + 3, (4, 6, 5, 3)[k]), (m + 5, m - 3, (4, 5, 4, 3)[k])]), YELLOW if k else WHITE)
+    for i in range(9):  # foam clumps: bubbly white blobs that swell out and sink
+        a = math.tau * i / 9 + 0.3
+        r = round((6.5 - 1.3 * (i % 3)) * shrink)
         if r >= 1 and k >= 1:
-            c.part(blobs([(m + math.cos(a) * (5 + 13 * e), m + math.sin(a) * (4 + 11 * e) + 3 * t * t, r)]), WHITE if i % 2 else CREAM)
-    for i in range(4):  # torn rubber bits
-        a = math.tau * i / 4 + 0.9
-        if k >= 1 and shrink > 0.2:
-            bx, by = m + math.cos(a) * (6 + 16 * e), m + math.sin(a) * (5 + 13 * e) + 9 * t * t
+            reach = 7 + 16 * e
+            c.part(blobs([(m + math.cos(a) * reach, m + math.sin(a) * reach * 0.85 + 5 * t * t, r),
+                          (m + math.cos(a) * reach + 2, m + math.sin(a) * reach * 0.85 + 5 * t * t - 2, max(0, r - 3))]),
+                   WHITE if i % 2 else CREAM)
+    for i in range(5):  # torn rubber bits
+        a = math.tau * i / 5 + 0.9
+        if k >= 1 and shrink > 0.25:
+            bx, by = m + math.cos(a) * (8 + 18 * e), m + math.sin(a) * (6 + 14 * e) + 10 * t * t
             c.part(P([(bx - 2, by - 1), (bx + 2, by - 2), (bx + 1, by + 2)]), ORANGE if i == 0 else YELLOW)
     img = outline(c.img)
-    for i in range(10):  # water droplets arc out and fall
-        a = math.tau * i / 10 + 0.15
-        dist = (9 + 11 * (i % 3) / 2) * e + 4
-        if t > 0.8 and i % 2:
+    for i in range(18):  # water: 2 px droplets with a glint, arcing out and falling
+        a = math.tau * i / 18 + 0.15
+        dist = (10 + 12 * (i % 3) / 2) * e + 6
+        if t > 0.7 and i % 2:
             continue
-        x, y = round(m + math.cos(a) * dist), round(m + math.sin(a) * dist * 0.9 + 12 * t * t)
-        put(img, x, y, TEAL_L if i % 2 else BLUE)
+        x, y = round(m + math.cos(a) * dist), round(m + math.sin(a) * dist * 0.9 + 14 * t * t)
+        col = TEAL_L if i % 2 else BLUE
+        put(img, x, y, col)
+        put(img, x + 1, y, col)
+        put(img, x, y + 1, DARKER[col])
         if t < 0.5:
-            put(img, x, y + 1, TEAL_L)
-    if k >= 2 and t < 0.8:  # a squeak sparkle
-        star4(img, m + 14, m - 14, 1 if k > 3 else 2, YELLOW)
+            put(img, x, y - 1, WHITE)
+    if 1 <= k <= 5:  # a ring of splash dashes under it all
+        _dots(img, m, m + 2, 12 + 12 * e, 18, (TEAL_L, WHITE), dash=2)
+    if k >= 2 and t < 0.85:  # squeak sparkles
+        star4(img, m + 16, m - 16, 1 if k > 3 else 2, YELLOW)
+        star4(img, m - 17, m - 12, 1, WHITE)
     return img
 
 
@@ -11098,59 +11124,71 @@ def pumpkin_burst_frame(k: int, n: int = 10) -> Image.Image:
 
 
 def hole_implode_frame(k: int, n: int = 10) -> Image.Image:
-    """A black hole imploding (80 px): a violet ring of matter spirals in and tightens, the void swells, a white flash, a ring bursts out."""
+    """A black hole imploding (80 px): a dense spiral of streaks collapses into a void, a white-magenta flash, then a thick
+    dithered shock ring rolls out and fades."""
     m = 40
     img = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
-    inward = min(1.0, k / 6.0)
-    pull = inward ** 2.2
-    R_ = 33.0 * (1.0 - pull) + 4
-    if k <= 6:
-        for arm in range(4):  # spiral streaks of matter falling in
-            for s in range(10):
-                u = s / 10
-                r = R_ * (0.45 + 0.55 * u)
-                a = arm * math.tau / 4 + (1 - u) * 1.4 + k * 0.55
-                col = PINK_L if s > 7 else VIOLET_L if s > 4 else VIOLET
-                put(img, round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.92), col)
-                put(img, round(m + math.cos(a) * r) + 1, round(m + math.sin(a) * r * 0.92), col)
-                put(img, round(m + math.cos(a) * r), round(m + math.sin(a) * r * 0.92) + 1, DARKER[col])
-        if k < 6:  # the leading ring
-            _dots(img, m, m, R_, 36 if k < 3 else 24, (VIOLET_L, PINK_L, VIOLET), phase=k * 0.25, dash=3)
-        core = 3 + 7 * pull
-        # a dithered violet haze inside the ring
-        for y in range(80):
-            for x in range(80):
-                d = math.hypot(x - m, (y - m) / 0.92)
-                if core + 2 < d < R_ * 0.9 and (x + y) % 2 == 0 and d > R_ * 0.9 - 7 - 8 * pull:
-                    put(img, x, y, VIOLET)
-        c = Canvas(80)
-        c.part(E((m - core - 1, m - core - 1, m + core + 1, m + core + 1)), VIOLET)
-        c.flat(E((m - core, m - core, m + core, m + core)), OUTLINE)
-        core_img = outline(c.img)
-        img.alpha_composite(core_img)
-    elif k == 7:  # the flash: a white-hot star in a hard ring
+
+    def ring(rr: float, th: float, cols, haze: bool = True) -> None:
+        """A solid ring ending at radius rr, `th` thick, colours from inner (bright) to outer, with a dithered falloff both sides."""
         for y in range(80):
             for x in range(80):
                 d = math.hypot(x - m, y - m)
-                if d < 9:
-                    put(img, x, y, WHITE if d < 6 else PINK_L)
-                elif d < 13 and (x + y) % 2 == 0:
-                    put(img, x, y, VIOLET_L)
-        star4(img, m, m, 14, PINK_L)
-        _dots(img, m, m, 17, 32, (WHITE, VIOLET_L), dash=2)
-    else:  # a shock ring flies out and thins; the void shrinks away
+                if rr - th <= d <= rr:
+                    u = (d - (rr - th)) / max(th, 1)
+                    put(img, x, y, cols[min(len(cols) - 1, int(u * len(cols)))])
+                elif haze and rr < d <= rr + 4 and (x + y) % 2 == 0 and (d - rr) / 4 < 0.75:
+                    put(img, x, y, cols[-1])
+                elif haze and rr - th - 6 <= d < rr - th and (x + y) % 2 == 0 and (rr - th - d) / 6 < 0.75:
+                    put(img, x, y, cols[0] if (x // 2 + y // 2) % 2 else cols[min(1, len(cols) - 1)])
+    if k <= 5:
+        grow = (k / 5.0) ** 1.8
+        reach = 35.0 * (1.0 - grow) + 5
+        core = 3.0 + 8.0 * grow
+        for y in range(80):  # a dark dithered pool the matter falls through
+            for x in range(80):
+                d = math.hypot(x - m, y - m)
+                if core + 1 < d < reach + 3 and (x + y) % 2 == 0 and d > reach * 0.35:
+                    put(img, x, y, VIOLET_D)
+        for arm in range(7):  # the spiral: streaks winding tighter toward the core
+            base = math.tau * arm / 7 + k * 0.45
+            for s_ in range(34):
+                u = s_ / 33.0  # 0 outer .. 1 inner
+                if (s_ + k * 2 + arm) % 7 > 4:
+                    continue  # gaps make dashes that appear to run inward
+                r = reach * (1.0 - u) ** 0.8 + core + 1
+                a = base + u * 2.6
+                col = VIOLET if u < 0.3 else VIOLET_L if u < 0.55 else PINK if u < 0.78 else PINK_L if u < 0.93 else WHITE
+                x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r)
+                put(img, x, y, col)
+                put(img, x + 1, y, col)
+                put(img, x, y + 1, DARKER[col] if u < 0.9 else col)
+        c = Canvas(80)
+        c.part(E((m - core - 2, m - core - 2, m + core + 2, m + core + 2)), PINK if k >= 3 else VIOLET)
+        c.flat(E((m - core, m - core, m + core, m + core)), OUTLINE)
+        img.alpha_composite(outline(c.img))
+    elif k == 6:  # the flash
+        ring(15, 15, (WHITE, WHITE, PINK_L, PINK), haze=True)
+        star4(img, m, m, 22, PINK_L)
+        star4(img, m, m, 10, WHITE)
+        for y in range(80):
+            for x in range(80):
+                if abs(x - m) == abs(y - m) and 8 < math.hypot(x - m, y - m) < 20:
+                    put(img, x, y, WHITE if (x + y) % 4 == 0 else PINK_L)
+    else:  # the shock ring: thick, bright inside, fading and thinning as it rolls out
         j = k - 7
-        r = 12 + 14 * j
-        _dots(img, m, m, r, 40 - 6 * j, (VIOLET_L, PINK_L) if j < 3 else (VIOLET, VIOLET_L), phase=j, dash=2 if j < 2 else 1)
-        if j < 3:
+        rr = (17, 27, 35)[j]
+        th = (7, 5, 3)[j]
+        ring(rr, th, ((WHITE, PINK_L, PINK, VIOLET), (PINK_L, PINK, VIOLET_L, VIOLET), (VIOLET_L, VIOLET, VIOLET_D))[j])
+        if j < 2:
             c = Canvas(80)
-            rr = 7 - 3 * j
-            c.part(E((m - rr, m - rr, m + rr, m + rr)), VIOLET)
-            c.flat(E((m - rr + 1, m - rr + 1, m + rr - 1, m + rr - 1)), OUTLINE)
+            cr = 7 - 4 * j
+            c.part(E((m - cr, m - cr, m + cr, m + cr)), PINK if j == 0 else VIOLET)
+            c.flat(E((m - cr + 1, m - cr + 1, m + cr - 1, m + cr - 1)), OUTLINE)
             img.alpha_composite(outline(c.img))
-        for i in range(8):
-            a = math.tau * i / 8 + 0.3
-            put(img, round(m + math.cos(a) * (r + 5 + 3 * j)), round(m + math.sin(a) * (r + 5 + 3 * j)), PINK_L if i % 2 else VIOLET_L)
+        for i in range(10):  # debris sparks riding the ring
+            a = math.tau * i / 10 + j
+            put(img, round(m + math.cos(a) * (rr + 3 + i % 3)), round(m + math.sin(a) * (rr + 3 + i % 3)), WHITE if j == 0 else PINK_L if j == 1 else VIOLET_L)
     return img
 
 

@@ -61,7 +61,7 @@ const ROWS_NEW: Array = [
 ## hand), Pumpkin Mortar (burst + 3 seeds) and Black Hole Orb (drags two foes in over its flight, then implodes).
 const ROWS_MORE: Array = [
 	{"label": "Rubber Duck Lobber: a lobbed duck bounces off the wall and pops in a splash of foam and water", "zoom": 1,
-		"focus": Vector2(0, 0), "at": [8, 18, 26, 42, 58, 68]},
+		"focus": Vector2(0, 0), "at": [6, 14, 22, 62, 66, 72]},
 	{"label": "Popcorn Popper: a scatter of kernels that flicker into puffs and pop where they land", "zoom": 1,
 		"focus": Vector2(-60, 0), "at": [3, 8, 13, 18, 24, 32]},
 	{"label": "Magnet Blaster: a horseshoe bolt hits, field rings close in and the foe is yanked toward the shooter", "zoom": 1,
