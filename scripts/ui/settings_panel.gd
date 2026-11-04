@@ -9,6 +9,8 @@ const PANEL_MIN_SIZE: Vector2 = Vector2(620, 0)
 const SPACING: int = 14
 const BUTTON_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
 const SLIDER_MIN_SIZE: Vector2 = Vector2(280, 48)
+const FIELD_MIN_SIZE: Vector2 = Vector2(280, UiStyle.TOUCH_MIN_H)
+const REDEEM_BUTTON_SIZE: Vector2 = Vector2(150, UiStyle.TOUCH_MIN_H)
 const COLOR_VEIL: Color = Color(0.05, 0.05, 0.1, 0.8)
 const HOWTO: Array[String] = [
 	"MOVE   drag anywhere on the left side",
@@ -21,6 +23,9 @@ const HOWTO: Array[String] = [
 var _settings_page: Control
 var _howto_page: Control
 var _on_close: Callable
+var _center: CenterContainer
+var _code: LineEdit
+var _code_status: Label
 var _start_on_howto: bool = false
 
 
@@ -52,12 +57,12 @@ func _ready() -> void:
 	veil.color = COLOR_VEIL
 	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(veil)  # swallows taps meant for what's underneath
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
+	_center = CenterContainer.new()
+	_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_center)
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = PANEL_MIN_SIZE
-	center.add_child(panel)
+	_center.add_child(panel)
 	var pages := VBoxContainer.new()
 	panel.add_child(pages)
 	_settings_page = _build_settings()
@@ -89,6 +94,7 @@ func _build_settings() -> Control:
 		GameSettings.haptics = on
 		GameSettings.vibrate(Constants.HAPTIC_KILL_MS))
 	box.add_child(haptics)
+	_code_row(box)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", SPACING)
@@ -101,6 +107,48 @@ func _build_settings() -> Control:
 	done.pressed.connect(_close)
 	row.add_child(done)
 	return box
+
+
+## "Enter code" row: a text field and Redeem, with a one-line result under it.
+func _code_row(parent: Node) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", SPACING)
+	parent.add_child(row)
+	var label := Label.new()
+	label.text = "Enter code"
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	_code = LineEdit.new()
+	_code.placeholder_text = "code"
+	_code.custom_minimum_size = FIELD_MIN_SIZE
+	_code.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_DEFAULT
+	_code.text_submitted.connect(func(_t: String) -> void: _redeem())
+	row.add_child(_code)
+	var redeem := _button("Redeem")
+	redeem.custom_minimum_size = REDEEM_BUTTON_SIZE
+	redeem.pressed.connect(_redeem)
+	row.add_child(redeem)
+	_code_status = Label.new()
+	_code_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_code_status.visible = false
+	parent.add_child(_code_status)
+
+
+func _redeem() -> void:
+	DisplayServer.virtual_keyboard_hide()
+	_code.release_focus()
+	_code_status.text = "Everything unlocked!" if Unlocks.redeem(_code.text) else "Invalid code"
+	_code_status.visible = true
+	_code.clear()
+
+
+## Keeps the panel above the on-screen keyboard while the code field is being typed in.
+func _process(_delta: float) -> void:
+	var win_h: float = float(DisplayServer.window_get_size().y)
+	var lift: float = 0.0
+	if _code != null and _code.has_focus() and win_h > 0.0:
+		lift = float(DisplayServer.virtual_keyboard_get_height()) * get_viewport().get_visible_rect().size.y / win_h
+	_center.offset_bottom = -lift
 
 
 func _build_howto() -> Control:
