@@ -1416,7 +1416,16 @@ func _weapon_card(art: Control, w: WeaponData) -> Button:
 	for i: int in lines.size():
 		if lines[i] == "":
 			continue
-		var l: Label = _label(text, &"Label" if i == 0 else &"DimLabel")
+		var l: Label
+		if i == 0:  # name, with the rarity's "+5% dmg" in its colour on the right
+			var top := HBoxContainer.new()
+			top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			text.add_child(top)
+			l = _label(top, &"Label")
+			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_rarity_bonus(top, w.rarity)
+		else:
+			l = _label(text, &"DimLabel")
 		l.add_theme_font_override("font", UiStyle.body_font(i == 0))
 		l.add_theme_font_size_override("font_size", LIST_NAME_SIZE if i == 0 else LIST_TEXT_SIZE)
 		l.text = lines[i]
@@ -1424,6 +1433,18 @@ func _weapon_card(art: Control, w: WeaponData) -> Button:
 		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return card
+
+
+## A small "+5% dmg" tag in the rarity colour (nothing for common); returns it (or a hidden stub) so callers can reorder.
+func _rarity_bonus(parent: Control, rarity: int) -> Label:
+	var l := _label(parent, &"Label")
+	l.text = Unlocks.dmg_bonus_text(rarity)
+	l.visible = l.text != ""
+	l.add_theme_font_override("font", UiStyle.body_font(true))
+	l.add_theme_font_size_override("font_size", LIST_TEXT_SIZE)
+	l.add_theme_color_override("font_color", Unlocks.RARITY_COLORS[clampi(rarity, 0, Unlocks.RARITY_COLORS.size() - 1)])
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
 
 
 ## A special row: icon, bold name with its cooldown on the right, one-line description below.
@@ -1467,6 +1488,7 @@ func _skill_row(sk: SkillData) -> Button:
 	cd_label.add_theme_font_override("font", UiStyle.body_font(true))
 	cd_label.add_theme_color_override("font_color", UiStyle.C_TEAL_L)
 	cd_label.text = "CD %ds" % roundi(sk.cooldown)
+	top.move_child(_rarity_bonus(top, sk.rarity), 1)
 	var blurb_label: Label = _label(text, &"DimLabel")
 	blurb_label.add_theme_font_size_override("font_size", LIST_TEXT_SIZE)
 	blurb_label.add_theme_font_override("font", UiStyle.body_font())

@@ -17,10 +17,16 @@ static func roll_crit(weapon: WeaponData, rng: RandomNumberGenerator) -> bool:
 	return rng.randf() < weapon.crit_chance
 
 
-static func damage_for(weapon: WeaponData, crit: bool) -> int:
-	if crit:
-		return roundi(weapon.damage * weapon.crit_multiplier)
-	return weapon.damage
+## Weapon damage after crit and the rarity bonus (`rarity` = the owning weapon's / ability's tier).
+static func damage_for(weapon: WeaponData, crit: bool, rarity: int = 0) -> int:
+	return scaled(roundi(weapon.damage * weapon.crit_multiplier) if crit else weapon.damage, rarity)
+
+
+## `damage` x the rarity tier's multiplier (Constants.RARITY_DAMAGE_MULT), rounded; a hit that did >= 1 stays >= 1.
+static func scaled(damage: int, rarity: int) -> int:
+	if damage <= 0:
+		return damage
+	return maxi(1, roundi(damage * Constants.RARITY_DAMAGE_MULT[clampi(rarity, 0, Constants.RARITY_DAMAGE_MULT.size() - 1)]))
 
 
 ## Directions for every pellet of one shot: an even fan across `pellet_spread_deg`
