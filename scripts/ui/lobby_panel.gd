@@ -65,8 +65,11 @@ const PREVIEW_FILL: float = 0.78
 const FLOOR_LINE: float = 0.85
 ## Teams: your teammates stand on the same stage beside you, MATE_SLOTS of them, a little smaller (see `mate_scale`).
 const MATE_SLOTS: int = 2
-const MATE_TINT: Color = Color(0.82, 0.84, 0.9)
-const MATE_TAG_W: float = 190.0
+## They stand farther back (their feet MATE_RAISE of the stage height above yours), darkened toward the backdrop, with
+## your fighter overlapping their inner edge.
+const MATE_RAISE: float = 0.12
+const MATE_TINT: Color = Color(0.66, 0.69, 0.8)
+const MATE_TAG_W: float = 170.0
 ## The spotlight behind him: SPOT_BANDS nested ellipses (radii in art px), each adding SPOT_COLOR.
 const SPOT_BANDS: int = 4
 const SPOT_RADIUS: Vector2 = Vector2(36.0, 50.0)
@@ -389,7 +392,7 @@ func _build_stage(body: BoxContainer) -> void:
 		tag.visible = false
 		tag.custom_minimum_size.x = MATE_TAG_W
 		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		tag.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		tag.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
 		tag.add_theme_font_override("font", UiStyle.body_font(true))
 		var tag_box := StyleBoxFlat.new()
 		tag_box.bg_color = Color(0.03, 0.03, 0.07, 0.8)
@@ -791,7 +794,7 @@ func _layout_stage() -> void:
 	# Centred, but never under the name block on a narrow stage (a crown reaches about 30 art px either side; in Teams
 	# the teammates stand beside you, so the whole lineup has to clear it).
 	var sm: int = mate_scale(s)
-	var side: float = 22.0 * (s + sm)
+	var side: float = 22.0 * s + 15.0 * sm  # (your body half-width + most of theirs: you cover the inner edge of each)
 	var half: float = side + 30.0 * sm if _teams_stage else 30.0 * s
 	var x: float = maxf(_stage.size.x * 0.5, 18.0 + INFO_W + half)
 	if x > _stage.size.x - half:
@@ -799,10 +802,13 @@ func _layout_stage() -> void:
 	var feet_y: float = _stage.size.y * FLOOR_LINE
 	_pivot.position = Vector2(x, feet_y - 22.0 * s)
 	for i: int in MATE_SLOTS:  # first teammate on your left, second on your right
-		var mx: float = x + side * (-1.0 if i == 0 else 1.0)
-		_mate_pivots[i].position = Vector2(mx, feet_y - 22.0 * sm)
+		var sign: float = -1.0 if i == 0 else 1.0
+		var mate_feet: float = feet_y - _stage.size.y * MATE_RAISE
+		_mate_pivots[i].position = Vector2(x + side * sign, mate_feet - 22.0 * sm)
 		_mate_sprites[i].scale = Vector2.ONE * sm
-		_mate_tags[i].position = Vector2(mx - MATE_TAG_W * 0.5, feet_y + 5.0 * sm + 4.0)  # (soles reach about 5 art px under the floor line)
+		# The tag sits under his raised feet (soles reach ~5 art px lower), pushed outward so it never runs under you.
+		var tag_mid: float = maxf(side, 22.0 * s + 4.0 + MATE_TAG_W * 0.5)
+		_mate_tags[i].position = Vector2(x + sign * tag_mid - MATE_TAG_W * 0.5, mate_feet + 5.0 * sm + 2.0)
 	_backdrop.art_scale = s
 	_backdrop.floor_y = _pivot.position.y + 22.0 * s
 	_floor_fx.queue_redraw()
