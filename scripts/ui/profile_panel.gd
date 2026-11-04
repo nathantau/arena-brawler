@@ -55,7 +55,7 @@ func _ready() -> void:
 	box.add_child(totals)
 	var rate: String = "%d%%" % roundi(100.0 * PlayerProfile.wins / PlayerProfile.matches) if PlayerProfile.matches > 0 else "-"
 	for t: Array in [["MATCHES", PlayerProfile.matches], ["WINS", PlayerProfile.wins], ["WIN RATE", rate],
-			["KILLS", PlayerProfile.kills], ["DAMAGE", PlayerProfile.damage]]:
+			["KILLS", PlayerProfile.kills], ["DAMAGE", PlayerProfile.damage], ["GOLD", PlayerProfile.gold]]:
 		totals.add_child(_stat(t[0], str(t[1])))
 	var grid := GridContainer.new()
 	grid.columns = COLUMNS

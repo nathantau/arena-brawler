@@ -57,6 +57,8 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 		STEP = 30, HOUND = 31, BIND = 32, RAIN = 33, LIGHTNING = 40, THUNDER = 41 }
 
 @export var id: StringName = &""
+## Box rarity (see Unlocks): 0 common, 1 rare, 2 epic.
+@export var rarity: int = 0
 @export var display_name: String = ""
 @export var kind: Kind = Kind.DASH
 ## Pickable in the loading room's special slot (false for the shared Dash).

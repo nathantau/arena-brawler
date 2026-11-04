@@ -28,6 +28,7 @@ var _title: Label
 var _rows: VBoxContainer
 var _footer: Label
 var _xp_label: Label
+var _gold_label: Label
 var _level_label: Label
 var _up_label: Label
 var _bar_fill: ColorRect
@@ -193,6 +194,8 @@ func _build_xp() -> Control:
 	var bar_row := CenterContainer.new()
 	bar_row.add_child(track)
 	col.add_child(bar_row)
+	_gold_label = _text(col, "", UiStyle.C_YELLOW)
+	_gold_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return col
 
 
@@ -222,15 +225,23 @@ func show_progress(info: Dictionary) -> void:
 	var before: int = info["xp_before"]
 	var after: int = info["xp_after"]
 	_set_xp(before)
+	_gold_label.visible = info.has("gold")
+	_set_gold(0.0, info.get("gold", 0))
 	var tw := create_tween()
 	tw.tween_interval(XP_ANIM_DELAY)
 	tw.tween_method(_set_xp, float(before), float(after), XP_ANIM_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_method(_set_gold.bind(info.get("gold", 0)), 0.0, 1.0, XP_ANIM_TIME)
 	if info["level_after"] > info["level_before"]:
 		tw.tween_callback(func() -> void:
 			_up_label.visible = true
 			_up_label.pivot_offset = _up_label.size * 0.5
 			var pop := create_tween()
 			pop.tween_property(_up_label, "scale", Vector2.ONE, 0.25).from(Vector2(1.8, 1.8)).set_trans(Tween.TRANS_BACK))
+
+
+## Counts "+N gold" up as `t` runs 0..1.
+func _set_gold(t: float, total: int) -> void:
+	_gold_label.text = "+%d gold" % roundi(total * t)
 
 
 func _set_xp(xp: float) -> void:

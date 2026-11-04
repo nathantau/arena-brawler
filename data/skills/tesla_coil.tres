@@ -8,6 +8,7 @@
 script = ExtResource("1_sk")
 icon = ExtResource("2_icon")
 id = &"tesla_coil"
+rarity = 1
 display_name = "Tesla Coil"
 kind = 18
 special = true

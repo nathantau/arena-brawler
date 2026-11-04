@@ -11,6 +11,7 @@ script = ExtResource("1_wd")
 projectile_sprite = ExtResource("9_proj")
 sprite = ExtResource("2_sprite")
 id = &"snowball_cannon"
+rarity = 1
 display_name = "Snowball Cannon"
 muzzle_x = 40.0
 pickup = true

@@ -7,6 +7,7 @@
 script = ExtResource("1_sk")
 icon = ExtResource("2_icon")
 id = &"leaf_gust"
+rarity = 1
 display_name = "Leaf Gust"
 kind = 22
 special = true

@@ -7,6 +7,7 @@
 script = ExtResource("1_sk")
 icon = ExtResource("2_icon")
 id = &"kunai_rain"
+rarity = 2
 display_name = "Kunai Rain"
 kind = 33
 special = true

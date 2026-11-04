@@ -39,6 +39,7 @@ const TAB_H: float = 56.0
 ## Loadout pane: card height, and how an icon flies from its row into its slot (then the slot pops).
 const SLOT_CARD_H: float = 84.0
 ## Weapons carry a warm accent (slot card, selected card, header); abilities the blue one.
+const LOCK_SIZE: Vector2 = Vector2(22, 28)
 const WEAPON_COLOR: Color = Color8(240, 170, 70)
 const SLOT_ICON_SIZE: Vector2 = Vector2(64, 40)
 const FLY_TIME: float = 0.2
@@ -974,6 +975,7 @@ func _refresh() -> void:
 	_arena_button.text = "Arena: %s" % ArenaLayouts.NAMES[st.arena_index]
 	if _weapons_for != me.character.id:
 		_build_weapon_cards(me.character)
+	_enforce_unlocks(me)
 	_shown_pick = _pick()
 	if _shown_pick[0] != _preview_id:
 		_show_preview(me.character)
@@ -1278,6 +1280,7 @@ func _build_weapon_cards(c: CharacterData) -> void:
 		var art: TextureRect = _art(w.sprite, WEAPON_ART_SCALE)
 		var card: Button = _weapon_card(art, w)
 		var id: StringName = w.id
+		_mark_locked(card, not Unlocks.is_weapon_unlocked(c, w), w.rarity)
 		_weapon_scroller.on_tap(card, func() -> void: _on_weapon_pressed(id))
 		_weapon_cards[id] = card
 		_weapon_icons[id] = art
@@ -1290,6 +1293,7 @@ func _build_weapon_cards(c: CharacterData) -> void:
 	for sk: SkillData in SkillCatalog.shared().specials_for(c):
 		var card: Button = _skill_row(sk)
 		var sid: StringName = sk.id
+		_mark_locked(card, not Unlocks.is_skill_unlocked(c, sk), sk.rarity)
 		_detail_scroller.on_tap(card, func() -> void: _on_special_pressed(sid))
 		_special_cards[sid] = card
 		var badge: Label = _label(card, &"Label")
@@ -1304,6 +1308,8 @@ func _build_weapon_cards(c: CharacterData) -> void:
 ## A plain toggle: an unequipped ability fills the first empty slot (its icon flies in), an equipped one is removed,
 ## and with both slots full the least recently set one is replaced.
 func _on_special_pressed(id: StringName) -> void:
+	if _special_cards.has(id) and _locked_tap(_special_cards[id]):
+		return
 	var r: Dictionary = LobbyOverlay.toggle(_slots(), id, _recent_slots)
 	match r["kind"]:
 		"add":
@@ -1323,6 +1329,8 @@ func _on_special_pressed(id: StringName) -> void:
 
 
 func _on_weapon_pressed(id: StringName) -> void:
+	if _weapon_cards.has(id) and _locked_tap(_weapon_cards[id]):
+		return
 	arena.weapon_requested.emit(id)
 	if _weapon_icons.has(id) and id != _shown_pick[1]:
 		_fly_icon(_weapon_icons[id], Constants.SKILL_SLOTS)
@@ -1471,8 +1479,73 @@ func _skill_row(sk: SkillData) -> Button:
 	return b
 
 
+## A locked ability / weapon card (not unlocked in the profile): greyed, a padlock, an edge in its rarity colour.
+func _mark_locked(card: Button, locked: bool, rarity: int) -> void:
+	if not locked:
+		return
+	var edge: Color = Unlocks.RARITY_COLORS[clampi(rarity, 0, Unlocks.RARITY_COLORS.size() - 1)]
+	card.set_meta(&"locked", edge)
+	card.modulate = Color(0.6, 0.6, 0.65)
+	var pad := Control.new()  # padlock: shackle ring over a body
+	pad.custom_minimum_size = LOCK_SIZE
+	pad.size = LOCK_SIZE
+	pad.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING * 2)
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pad.draw.connect(func() -> void:
+		var w: float = LOCK_SIZE.x
+		pad.draw_arc(Vector2(w * 0.5, w * 0.42), w * 0.3, PI, TAU, 12, edge, 3.0)
+		pad.draw_rect(Rect2(0.0, w * 0.42, w, LOCK_SIZE.y - w * 0.42), edge)
+		pad.draw_rect(Rect2(w * 0.43, w * 0.62, w * 0.14, w * 0.3), UiStyle.C_OUTLINE))
+	card.add_child(pad)
+	_outline_selected(card, false)
+
+
+## True (and a small shake + hint) when `card` is locked, so the tap does nothing.
+func _locked_tap(card: Button) -> bool:
+	if not card.has_meta(&"locked"):
+		return false
+	card.pivot_offset = card.size * 0.5
+	var tween: Tween = create_tween()
+	for angle: float in [1.5, -1.5, 1.0, 0.0]:
+		tween.tween_property(card, "rotation_degrees", angle, 0.04)
+	if card.get_node_or_null("Hint") == null:
+		var hint := Label.new()
+		hint.name = "Hint"
+		hint.text = "Open a box in the Shop"
+		hint.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		hint.add_theme_font_override("font", UiStyle.body_font(true))
+		hint.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+		hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+		hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(hint)
+		get_tree().create_timer(1.2).timeout.connect(hint.queue_free)
+	return true
+
+
+## If the synced weapon or an ability slot holds something that is locked for this fighter (a pick carried over from
+## another fighter), ask for the defaults instead: the UI never leaves a locked item equipped.
+func _enforce_unlocks(me: Player) -> void:
+	var c: CharacterData = me.character
+	if not Unlocks.is_weapon_unlocked(c, me.weapon.data):
+		arena.weapon_requested.emit(c.signature_weapon.id)
+	var held: Array[SkillData] = []
+	for i: int in Constants.PICKED_SLOTS:
+		held.append(me.skills[i].data)
+	for i: int in Constants.PICKED_SLOTS:
+		if Unlocks.is_skill_unlocked(c, held[i]):
+			continue
+		for d: SkillData in Player.default_skills(c) + Player.specials_pool(c):
+			if Unlocks.is_skill_unlocked(c, d) and not held.has(d):
+				held[i] = d
+				arena.special_requested.emit(i, d.id)
+				break
+
+
 ## A picked special / weapon card or the target slot: an outline and tint over the card style (removed when off).
 func _outline_selected(card: Button, on: bool, color: Color = TEAM_ALLY_COLOR) -> void:
+	if not on and card.has_meta(&"locked"):  # a locked card keeps its rarity edge
+		on = true
+		color = card.get_meta(&"locked")
 	for state: StringName in [&"normal", &"hover", &"pressed"]:
 		if not on:
 			card.remove_theme_stylebox_override(state)
