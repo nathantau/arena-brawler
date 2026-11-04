@@ -40,6 +40,8 @@ const FOLLOW_UPS: Dictionary[StringName, Array] = {
 }
 ## Impact sound by weapon id (played with the weapon's impact strip) and by burst strip name (splash bursts).
 const IMPACT_SOUNDS: Dictionary[StringName, StringName] = {&"confetti_popper": &"confetti_rustle"}
+## Wall-ricochet sound by weapon id (rate-limited by the arena); weapons without an entry bounce silently.
+const BOUNCE_SOUNDS: Dictionary[StringName, StringName] = {&"disc_launcher": &"disc_tink"}
 const BURST_SOUNDS: Dictionary[StringName, StringName] = {&"cactus_pop": &"cactus_prickle", &"jar_shatter": &"jar_shatter"}
 
 enum Wave { SINE, SQUARE, SAW, NOISE }
@@ -59,6 +61,7 @@ const RECIPES: Dictionary[StringName, Array] = {
 	&"cactus_thoomp": [0.2, 190.0, 70.0, Wave.SINE, 0.25, 0.7, 0.003, 16.0, 0.5],
 	&"cactus_prickle": [0.12, 2200.0, 900.0, Wave.SQUARE, 0.6, 0.1, 0.001, 35.0, 0.28],
 	&"disc_whirr": [0.14, 700.0, 1700.0, Wave.SAW, 0.3, 0.2, 0.004, 22.0, 0.25],
+	&"disc_tink": [0.09, 3100.0, 2700.0, Wave.SINE, 0.15, 0.1, 0.001, 45.0, 0.28],
 	&"yoyo_out": [0.14, 300.0, 800.0, Wave.NOISE, 1.0, 0.4, 0.01, 18.0, 0.3],
 	&"yoyo_back": [0.12, 700.0, 300.0, Wave.NOISE, 1.0, 0.4, 0.01, 20.0, 0.17],
 	&"jar_clink": [0.12, 2400.0, 2000.0, Wave.SINE, 0.1, 0.1, 0.001, 30.0, 0.3],
@@ -145,6 +148,10 @@ static func skill_sound(kind: int, id: StringName = &"") -> StringName:
 
 static func impact_sound(weapon_id: StringName) -> StringName:
 	return IMPACT_SOUNDS.get(weapon_id, &"")
+
+
+static func bounce_sound(weapon_id: StringName) -> StringName:
+	return BOUNCE_SOUNDS.get(weapon_id, &"")
 
 
 ## The sound for a splash burst drawn with `art` (by file name), or &"" for none.
