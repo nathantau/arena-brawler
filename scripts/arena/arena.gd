@@ -30,9 +30,9 @@ signal hit_landed(victim_id: int, damage: int, crit: bool, at: Vector2)
 
 enum Mode { OFFLINE, SERVER, CLIENT }
 
-## Only used by characters without a signature weapon.
 ## Min gap between wall-ricochet sounds, so a bouncing volley stays a tink and not a rattle.
 const BOUNCE_SOUND_GAP_MS: int = 60
+## Only used by characters without a signature weapon.
 const FALLBACK_WEAPON: StringName = &"pistol"
 const PLAYER_COLORS: Array[Color] = [
 	Color(0.35, 0.75, 1.0), Color(0.95, 0.45, 0.4), Color(0.75, 0.5, 0.95),
