@@ -11402,14 +11402,18 @@ def box_glow_blob(img, th, cx, cy, rx, ry, amount, power=None):
                 px[x, y] = col + (255,)
 
 
-def box_column(img, th, cx, y_base, half0, half1, height, amount, jitter=0.3):
-    """A vertical beam of light rising from y_base: a white-hot core, a light body and a dithered edge, fading out at the top."""
+def box_shaft(img, th, cx, y_base, half0, half1, height, amount, k=0):
+    """A light shaft rising from y_base: a white-hot core column, a light body, soft dithered sides, widening upward and
+    dithering out to nothing over its top ~40% (no top edge). Settle frames (k >= 8) get a gentle upward-drifting shimmer."""
     px = img.load()
     d, m, l, h = th["glow"]
     for y in range(max(2, y_base - height), y_base):
         f = (y_base - y) / height
-        hw = half0 + (half1 - half0) * f
-        fade = amount * (1 - 0.85 * f ** 1.4)
+        hw = half0 + (half1 - half0 + 4) * f ** 0.85
+        s = min(1.0, max(0.0, (f - 0.5) / 0.5))
+        shim = 0.0
+        if k >= 8:
+            shim = 0.13 * math.sin(y * 0.42 + (k - 8) * 1.7) + 0.06 * math.sin(y * 0.9 - (k - 8) * 2.3)
         for x in range(int(cx - hw) - 1, int(cx + hw) + 2):
             if not 2 <= x < img.width - 2 or px[x, y][3]:
                 continue
@@ -11417,8 +11421,13 @@ def box_column(img, th, cx, y_base, half0, half1, height, amount, jitter=0.3):
             if u >= 1:
                 continue
             bay = BAYER4[y % 4][x % 4] / 16
-            v = fade * (1 - u ** 2.4) - (bay - 0.5) * jitter * (u + 0.2)
-            col = h if v > 0.78 else l if v > 0.5 else m if v > 0.26 else d if v > 0.08 else None
+            core = max(0.0, 1 - u / 0.3) * 0.4
+            noise = ((x * 73856093) ^ (y * 19349663)) % 997 / 997
+            if s > 0 and bay * 0.55 + noise * 0.45 + 0.02 >= (1 - s) ** 1.1:  # dither dissolve, same density across the width, ragged
+
+                continue
+            v = amount * (1 - u ** 1.4) * (1 - 0.6 * s) + core * amount + shim * amount - (bay - 0.5) * (0.12 + 0.5 * u ** 2)
+            col = h if v > 0.85 else l if v > 0.55 else m if v > 0.3 else d if v > 0.1 else None
             if col:
                 px[x, y] = col + (255,)
 
@@ -11725,7 +11734,7 @@ def box_open_frame(r, k):
     if k >= 1:
         box_glow_blob(img, th, cx, oy + 6, 44, 38, (0.4 + 0.6 * th["halo"]) * (1.0 if k < 8 else 0.6))
     if height:
-        box_column(img, th, cx, oyk + 11, 15, 12 + 14 * amount, height, amount)
+        box_shaft(img, th, cx, oyk + 11, 15, 12 + 14 * amount, height, amount, k)
     if opened:
         img.alpha_composite(box_layer(th, n, ox, oyk, g=3, lid=False, open_top=True))
         px = img.load()  # the window into the box: rows of glow across the opening
