@@ -56,10 +56,27 @@ const ROWS_NEW: Array = [
 	{"label": "Storm Jar: lobbed jar shatters, a thunder ring and lightning jumps to the second fighter", "zoom": 1,
 		"focus": Vector2(-30, 0), "at": [20, 28, 32, 34, 38, 46]},
 ]
+## `-- more`: the five even-more weapons (more_weapons_preview.png): Rubber Duck Lobber (bounces off the wall, pops), Popcorn
+## Popper, Magnet Blaster (the foe is yanked toward the shooter: nobody simulates here, so his knockback is integrated by
+## hand), Pumpkin Mortar (burst + 3 seeds) and Black Hole Orb (drags two foes in over its flight, then implodes).
+const ROWS_MORE: Array = [
+	{"label": "Rubber Duck Lobber: a lobbed duck bounces off the wall and pops in a splash of foam and water", "zoom": 1,
+		"focus": Vector2(0, 0), "at": [8, 18, 26, 42, 58, 68]},
+	{"label": "Popcorn Popper: a scatter of kernels that flicker into puffs and pop where they land", "zoom": 1,
+		"focus": Vector2(-60, 0), "at": [3, 8, 13, 18, 24, 32]},
+	{"label": "Magnet Blaster: a horseshoe bolt hits, field rings close in and the foe is yanked toward the shooter", "zoom": 1,
+		"focus": Vector2(-60, 0), "at": [4, 10, 14, 18, 24, 32]},
+	{"label": "Pumpkin Mortar: a lobbed pumpkin bursts in a squelchy splat and throws three seeds", "zoom": 1,
+		"focus": Vector2(-20, 0), "at": [14, 24, 29, 33, 38, 48]},
+	{"label": "Black Hole Orb: a slow orb drags both foes in as it flies, then implodes with a flash and a shock ring", "zoom": 1,
+		"focus": Vector2(-20, 0), "at": [15, 45, 65, 77, 82, 90]},
+]
 var ROWS: Array = ROWS_WIDE
 var dump_dir: String = ""
 var new_set: bool = false
+var more_set: bool = false
 var disc_focus: Vector2 = Vector2.ZERO
+var focus_now: Vector2 = Vector2.INF  ## a scenario can move the camera (`-- more`)
 var close: bool = false
 var arena: Arena
 var me: Player
@@ -87,6 +104,10 @@ func _initialize() -> void:
 			new_set = true
 			ROWS = ROWS_NEW
 			out_path = "res://new_weapons_preview.png"
+		elif arg == "more":
+			more_set = true
+			ROWS = ROWS_MORE
+			out_path = "res://more_weapons_preview.png"
 		elif arg.begins_with("dump="):
 			dump_dir = arg.substr(5)
 		elif arg.begins_with("out="):
@@ -231,7 +252,51 @@ func _scenario_new(row: int, n: int) -> void:
 				_fire(me, Vector2.RIGHT, &"storm_jar")
 
 
+func _scenario_more(row: int, n: int) -> void:
+	if row != 4:
+		_put(b, Vector2(-700, -600))
+	a.stats.tick(1.0 / 60.0)
+	if n == 0:
+		a.stats.reset()
+		a.stats.invulnerable_time = 0.0
+		arena.effects.clear()
+	_put(me, Vector2(-200, 0))
+	me.facing = Vector2.RIGHT
+	focus_now = Vector2.INF
+	match row:
+		0:
+			var edge: float = arena.play_area().end.x - home.x - 130.0
+			focus_now = Vector2(edge - 100.0, 0)
+			_put(me, Vector2(edge, 0))
+			_put(a, Vector2(-700, 300))
+			if n == 0:
+				_fire(me, Vector2(1.0, -0.1).normalized(), &"duck_lobber")
+		1:
+			_put(a, Vector2(-60, 0))
+			if n == 0 or n == 40:
+				_fire(me, Vector2.RIGHT, &"popcorn_popper")
+		2:
+			if n == 0:
+				_put(a, Vector2(0, 0))
+				_fire(me, Vector2.RIGHT, &"magnet_blaster")
+			else:  # the pull: knockback integrated by hand (a bit of decay like Player.simulate)
+				a.global_position += a.velocity * (1.0 / 60.0)
+				a.velocity = a.velocity.move_toward(Vector2.ZERO, Constants.PLAYER_DECEL / 60.0)
+		3:
+			_put(a, Vector2(60, 0))
+			if n == 0:
+				_fire(me, Vector2.RIGHT, &"pumpkin_mortar")
+		4:
+			if n == 0:
+				_put(a, Vector2(90, 10))
+				_put(b, Vector2(30, -70))
+				_fire(me, Vector2.RIGHT, &"black_hole_orb")
+
+
 func _scenario(row: int, n: int) -> void:
+	if more_set:
+		_scenario_more(row, n)
+		return
 	if new_set:
 		_scenario_new(row, n)
 		return
@@ -275,7 +340,7 @@ func _crop(row: int) -> Image:
 	img.convert(Image.FORMAT_RGBA8)
 	var zoom: int = ROWS[row].zoom
 	var crop_size: Vector2i = CELL / zoom
-	var focus: Vector2 = disc_focus if new_set and row == 3 else ROWS[row].focus as Vector2
+	var focus: Vector2 = disc_focus if new_set and row == 3 else focus_now if more_set and focus_now != Vector2.INF else ROWS[row].focus as Vector2
 	var at: Vector2 = root.get_canvas_transform() * (home + focus)
 	var corner: Vector2i = (Vector2i(at) - crop_size / 2).clamp(Vector2i.ZERO, img.get_size() - crop_size)
 	var crop: Image = img.get_region(Rect2i(corner, crop_size))
@@ -313,6 +378,8 @@ func _finish() -> void:
 	var ids: Array[StringName] = [&"splash_soaker", &"bubble_wand", &"snowball_cannon", &"firework_launcher", &"hive_gun"]
 	if new_set:
 		ids = [&"confetti_popper", &"cactus_cannon", &"disc_launcher", &"yoyo", &"storm_jar"]
+	if more_set:
+		ids = [&"duck_lobber", &"popcorn_popper", &"magnet_blaster", &"pumpkin_mortar", &"black_hole_orb"]
 	for i: int in ids.size():  # held-weapon icons at 3x
 		var icon: Image = _w(ids[i]).sprite.get_image()
 		icon.convert(Image.FORMAT_RGBA8)

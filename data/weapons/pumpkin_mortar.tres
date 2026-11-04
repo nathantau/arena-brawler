@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/pumpkin_mortar.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/pumpkin_mortar.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/pumpkin_burst.png" id="10_x"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/pumpkin_seed.png" id="11_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"pumpkin_mortar"
+rarity = 1
+display_name = "Pumpkin Mortar"
+muzzle_x = 40.0
+burst_art = ExtResource("10_x")
+burst_art_radius = 27.0
+pickup = true
+damage = 15
+fire_interval = 0.95
+spread_deg = 2.0
+projectile_speed = 360.0
+projectile_range = 400.0
+projectile_radius = 7.0
+energy_cost = 66
+knockback = 110.0
+color = Color(0.94, 0.54, 0.24, 1)
+screen_shake = 0.14
+sfx = &"pumpkin_thunk"
+splash_radius = 40.0
+splash_edge_scale = 0.5
+lob_height = 26.0
+split_count = 3
+split_scale = 0.4
+split_fan_deg = 70.0
+split_range = 150.0
+split_speed = 340.0
+projectile_scale = 1.2
+split_sprite = ExtResource("11_x")
+hook = "Bursts into three seeds"

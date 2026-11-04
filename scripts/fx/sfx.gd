@@ -37,12 +37,17 @@ const SKILL_ID_SOUNDS: Dictionary[StringName, StringName] = {
 ## A negative delay = the caller's `follow_delay` (the yo-yo turns round after range / speed), none given = no follow-up.
 const FOLLOW_UPS: Dictionary[StringName, Array] = {
 	&"confetti_pop": [&"confetti_rustle", 0.05], &"yoyo_out": [&"yoyo_back", -1.0], &"jar_shatter": [&"jar_crackle", 0.05],
+	&"popcorn_pop": [&"popcorn_crackle", 0.07], &"magnet_zap": [&"magnet_hum", 0.06], &"hole_warble": [&"hole_warble_down", 0.12],
 }
 ## Impact sound by weapon id (played with the weapon's impact strip) and by burst strip name (splash bursts).
-const IMPACT_SOUNDS: Dictionary[StringName, StringName] = {&"confetti_popper": &"confetti_rustle"}
+const IMPACT_SOUNDS: Dictionary[StringName, StringName] = {
+	&"confetti_popper": &"confetti_rustle", &"popcorn_popper": &"popcorn_tick", &"magnet_blaster": &"magnet_clack",
+}
 ## Wall-ricochet sound by weapon id (rate-limited by the arena); weapons without an entry bounce silently.
-const BOUNCE_SOUNDS: Dictionary[StringName, StringName] = {&"disc_launcher": &"disc_tink"}
-const BURST_SOUNDS: Dictionary[StringName, StringName] = {&"cactus_pop": &"cactus_prickle", &"jar_shatter": &"jar_shatter"}
+const BOUNCE_SOUNDS: Dictionary[StringName, StringName] = {&"disc_launcher": &"disc_tink", &"duck_lobber": &"duck_bounce"}
+const BURST_SOUNDS: Dictionary[StringName, StringName] = {&"cactus_pop": &"cactus_prickle", &"jar_shatter": &"jar_shatter",
+	&"duck_pop": &"duck_pop", &"pumpkin_burst": &"pumpkin_squelch", &"hole_implode": &"hole_whoomp",
+}
 
 enum Wave { SINE, SQUARE, SAW, NOISE }
 ## Recipe fields: duration s, start Hz, end Hz, wave, noise mix 0..1, noise smoothing 0..1
@@ -67,6 +72,21 @@ const RECIPES: Dictionary[StringName, Array] = {
 	&"jar_clink": [0.12, 2400.0, 2000.0, Wave.SINE, 0.1, 0.1, 0.001, 30.0, 0.3],
 	&"jar_shatter": [0.25, 3200.0, 1200.0, Wave.NOISE, 0.9, 0.1, 0.001, 18.0, 0.35],
 	&"jar_crackle": [0.3, 1800.0, 400.0, Wave.SAW, 0.7, 0.15, 0.002, 10.0, 0.25],
+	# Even more shared weapons: squeaky duck, popcorn pops + crackle, magnet zap + hum, hollow pumpkin thunk + squelch, black-hole warble + whoomp.
+	&"duck_squeak": [0.11, 1000.0, 1900.0, Wave.SINE, 0.08, 0.1, 0.004, 18.0, 0.3],
+	&"duck_bounce": [0.07, 1500.0, 2400.0, Wave.SINE, 0.06, 0.1, 0.002, 30.0, 0.26],
+	&"duck_pop": [0.1, 700.0, 250.0, Wave.SQUARE, 0.5, 0.3, 0.001, 30.0, 0.3],
+	&"popcorn_pop": [0.06, 1300.0, 420.0, Wave.SQUARE, 0.4, 0.2, 0.001, 55.0, 0.32],
+	&"popcorn_crackle": [0.2, 2600.0, 1200.0, Wave.NOISE, 1.0, 0.1, 0.001, 14.0, 0.2],
+	&"popcorn_tick": [0.05, 1700.0, 700.0, Wave.SQUARE, 0.5, 0.1, 0.001, 70.0, 0.2],
+	&"magnet_zap": [0.18, 450.0, 1500.0, Wave.SAW, 0.15, 0.1, 0.004, 14.0, 0.3],
+	&"magnet_hum": [0.22, 130.0, 110.0, Wave.SINE, 0.05, 0.3, 0.01, 10.0, 0.3],
+	&"magnet_clack": [0.08, 2800.0, 600.0, Wave.SQUARE, 0.3, 0.1, 0.001, 45.0, 0.28],
+	&"pumpkin_thunk": [0.22, 150.0, 65.0, Wave.SINE, 0.15, 0.6, 0.003, 15.0, 0.5],
+	&"pumpkin_squelch": [0.25, 420.0, 110.0, Wave.NOISE, 0.9, 0.75, 0.003, 14.0, 0.35],
+	&"hole_warble": [0.2, 110.0, 240.0, Wave.SINE, 0.05, 0.3, 0.02, 9.0, 0.38],
+	&"hole_warble_down": [0.2, 240.0, 90.0, Wave.SINE, 0.05, 0.3, 0.01, 9.0, 0.3],
+	&"hole_whoomp": [0.34, 260.0, 38.0, Wave.SINE, 0.45, 0.8, 0.002, 8.0, 0.58],
 	&"laser": [0.08, 1800.0, 1500.0, Wave.SINE, 0.05, 0.1, 0.002, 20.0, 0.22],
 	&"swing": [0.16, 500.0, 200.0, Wave.NOISE, 1.0, 0.45, 0.02, 16.0, 0.45],
 	&"explosion": [0.7, 90.0, 30.0, Wave.SINE, 0.85, 0.85, 0.003, 5.0, 0.9],

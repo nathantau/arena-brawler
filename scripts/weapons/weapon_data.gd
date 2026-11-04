@@ -153,6 +153,10 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var fx_every: int = 1
 ## A boomerang drawn on a string from its thrower's hand (Yo-Yo).
 @export var tether: bool = false
+## While in flight, every enemy within `vortex_radius` px (with a clear line) is dragged toward the shot at `vortex_force` px/s.
+## Server-side only (Black Hole Orb); a negative `knockback` pulls a hit foe toward the shooter (Magnet Blaster).
+@export var vortex_radius: float = 0.0
+@export var vortex_force: float = 0.0
 
 @export_group("Melee")
 @export var melee_range: float = 64.0
