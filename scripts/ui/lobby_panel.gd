@@ -1,9 +1,10 @@
 class_name LobbyPanel
 extends PanelContainer
 ## The loading room, shown full screen during the lobby phase: a character select in three steps.
-## Fighter (a grid of portraits; the pick zooms in as a big animated preview), then Abilities (two specials plus the fixed ultimate, slides
-## in from the right), then Weapon (cards slide in). Defaults are pre-filled, so READY is always one tap away at the
-## bottom right, and the step tabs (or tapping the preview) go back to any earlier step.
+## Fighter (Valorant style: your pick stands large and animated in the middle with your teammates' picks in a column
+## beside it, a compact row of portraits below swaps it), then Abilities (two specials plus the fixed ultimate, slides
+## in from the right over the roster), then Weapon (cards slide in). Defaults are pre-filled, so READY is always one tap
+## away at the bottom right; the Loadout button (or tapping the big fighter) opens the abilities, the tabs switch steps.
 ## A top bar carries mode + arena, a bottom strip the roster with ready state and why the match can't start yet.
 ## Cards are rebuilt when the local character changes; highlights follow the synced state.
 
@@ -12,13 +13,22 @@ const SPACING: int = 10
 const TEAM_ALLY_COLOR: Color = Color8(110, 160, 255)
 const BAR_H: float = 52.0
 const BUTTON_MIN_SIZE: Vector2 = Vector2(150, BAR_H)
-const READY_MIN_SIZE: Vector2 = Vector2(240, 68)
-const LEAVE_MIN_SIZE: Vector2 = Vector2(120, 68)
-const CHARACTER_CARD_SIZE: Vector2 = Vector2(172, 176)
+const READY_MIN_SIZE: Vector2 = Vector2(240, UiStyle.TOUCH_MIN_H)
+const LEAVE_MIN_SIZE: Vector2 = Vector2(120, UiStyle.TOUCH_MIN_H)
+## The roster row's compact portraits.
+const CHARACTER_CARD_SIZE: Vector2 = Vector2(112, 142)
+## The portrait starts below a strip for the card's tags (hover pills left, Lv pill right), so nothing sits on a head.
+const CARD_ART_TOP: float = 34.0
 ## Fighters play their idle loop: the whole sheet cell at this scale, cropped to this window. Every character shares
 ## the cell's body box, so they all stand in the same spot.
-const FIGHTER_ART_SCALE: float = 1.75
-const FIGHTER_ART_SIZE: Vector2 = Vector2(150, 112)
+const FIGHTER_ART_SCALE: float = 1.25
+const FIGHTER_ART_SIZE: Vector2 = Vector2(96, 72)
+## The lineup column beside the big fighter: one small animated entry per teammate / opponent.
+const LINEUP_W: float = 390.0
+const LINEUP_ART_SCALE: float = 2.0
+const LINEUP_ART_SIZE: Vector2 = Vector2(168, 112)
+## Width of the name + stat block in the showcase's top left corner.
+const INFO_W: float = 190.0
 ## Specials are rows (icon, name + cooldown, one-line description) in a column; 7 (5 own + Dash + Barrier) fit.
 const SKILL_ROW_H: float = 92.0
 const SKILL_ICON_SIZE: Vector2 = Vector2(52, 52)
@@ -47,14 +57,30 @@ const TOAST_TIME: float = 2.5
 const COLOR_BG: Color = Color(0.07, 0.07, 0.13)  # opaque: the arena behind stays hidden until the match
 const COLOR_STAGE: Color = Color(0.105, 0.105, 0.19)
 ## The big preview: pixel scale is a whole number (the sheet cell times this), it zooms in over ZOOM_TIME.
-## Height the name + HP / Armor block takes at the top of the showcase.
-const PREVIEW_TOP: float = 118.0
-const PREVIEW_MAX_SCALE: int = 6
+const PREVIEW_MAX_SCALE: int = 10
+## The fighter (crown to feet, in art px) should fill about this much of the showcase's height; his feet stand on a
+## floor line this far down it.
+const FIGHTER_ART_H: float = 54.0
+const PREVIEW_FILL: float = 0.78
+const FLOOR_LINE: float = 0.85
+## Teams: your teammates stand on the same stage beside you, MATE_SLOTS of them, a little smaller (see `mate_scale`).
+const MATE_SLOTS: int = 2
+## They stand farther back (their feet MATE_RAISE of the stage height above yours), darkened toward the backdrop, with
+## your fighter overlapping their inner edge.
+const MATE_RAISE: float = 0.12
+const MATE_TINT: Color = Color(0.66, 0.69, 0.8)
+const MATE_TAG_W: float = 170.0
+## The spotlight behind him: SPOT_BANDS nested ellipses (radii in art px), each adding SPOT_COLOR.
+const SPOT_BANDS: int = 4
+const SPOT_RADIUS: Vector2 = Vector2(36.0, 50.0)
+const SPOT_COLOR: Color = Color(0.85, 0.9, 1.0, 0.06)
 const ZOOM_FROM: float = 0.72
+## A new pick also slides in from the side by this many art pixels.
+const SLIDE_FROM: float = 36.0
 const ZOOM_TIME: float = 0.25
 const SLIDE_TIME: float = 0.25
-## The detail overlay: how much of the width its sheet takes, and how dark the scrim over the grid gets.
-const SHEET_FRACTION: float = 0.87
+## The detail overlay: how much of the width its sheet takes, and how dark the scrim over the showcase gets.
+const SHEET_FRACTION: float = 0.58
 const SCRIM_ALPHA: float = 0.6
 ## Seconds between the preview's idle and a short walk / attack loop.
 const FLAIR_GAP: Vector2 = Vector2(2.5, 4.5)
@@ -70,6 +96,16 @@ var _team_button: Button
 var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
 var _fighter_scroller: HScroller
+var _lineup: BoxContainer
+var _lineup_scroller: HScroller
+## Teams stage: one fighter per teammate slot (pivot, sprite, name tag), the fighter shown in it, its entrance tween.
+var _mate_pivots: Array[Node2D] = []
+var _mate_sprites: Array[AnimatedSprite2D] = []
+var _mate_tags: Array[Label] = []
+var _mate_ids: Array[StringName] = []
+var _mate_tweens: Array[Tween] = []
+var _teams_stage: bool = false
+var _loadout_button: Button
 ## The abilities scroll in a column; the weapons sit under them in a sideways row that is always on screen.
 var _detail_scroller: HScroller
 var _weapon_scroller: HScroller
@@ -125,7 +161,9 @@ var _floor_fx: Control
 var _sprite: AnimatedSprite2D
 var _preview_id: StringName = &""
 var _preview_tween: Tween
+var _info: VBoxContainer
 var _name_label: Label
+var _ult_label: Label
 var _hp_label: Label
 var _armor_label: Label
 var _hp_fill: ColorRect
@@ -150,6 +188,7 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", SPACING)
 	_margin.add_child(box)
 	_build_top_bar(box)
+	_build_showcase(box)
 	_build_fighter_grid(box)
 	_build_footer(box)
 	_build_overlay(stack)
@@ -196,32 +235,37 @@ func _build_top_bar(box: BoxContainer) -> void:
 		arena.arena_requested.emit((arena.match_state.arena_index + 1) % ArenaLayouts.count()))
 
 
-## The main screen: big portraits, centred. Tapping one opens its overlay.
+## The main screen's middle: the lineup column (other players' picks) beside the big showcase of your fighter.
+func _build_showcase(box: BoxContainer) -> void:
+	var mid := HBoxContainer.new()
+	mid.add_theme_constant_override("separation", SPACING)
+	mid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(mid)
+	_lineup_scroller = HScroller.new(true)  # scrolls instead of pushing the footer off a short phone screen
+	_lineup_scroller.fade_color = COLOR_BG
+	_lineup_scroller.custom_minimum_size.x = LINEUP_W
+	mid.add_child(_lineup_scroller)  # (Teams hides it: the teammates stand on the stage)
+	_lineup = _lineup_scroller.content
+	_lineup.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_lineup.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_lineup.add_theme_constant_override("separation", 6)
+	_build_stage(mid)
+
+
+## The roster: a compact row of portraits under the showcase. Tapping one picks that fighter.
 func _build_fighter_grid(box: BoxContainer) -> void:
-	var p := VBoxContainer.new()
-	p.add_theme_constant_override("separation", SPACING)
-	p.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(p)
-	var head := _label(p, &"HeaderLabel")
-	head.text = "Choose your fighter"
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_fighter_scroller = HScroller.new(true)
+	_fighter_scroller = HScroller.new()
 	_fighter_scroller.fade_color = COLOR_BG
-	_fighter_scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	p.add_child(_fighter_scroller)
-	var grid := HFlowContainer.new()
-	grid.alignment = FlowContainer.ALIGNMENT_CENTER
-	grid.add_theme_constant_override("h_separation", SPACING * 2)
-	grid.add_theme_constant_override("v_separation", SPACING * 2)
-	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_fighter_scroller.content.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_fighter_scroller.content.alignment = BoxContainer.ALIGNMENT_CENTER
-	_fighter_scroller.content.add_child(grid)
-	var count: int = arena.characters.ordered.size()
-	_fighter_scroller.resized.connect(func() -> void:
-		grid.custom_minimum_size.x = grid_width(_fighter_scroller.size.x, count))
+	box.add_child(_fighter_scroller)
+	var grid: BoxContainer = _fighter_scroller.content
+	grid.alignment = BoxContainer.ALIGNMENT_CENTER
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("separation", SPACING)
 	for c: CharacterData in arena.characters.ordered:
 		var card: Button = _card(grid, CHARACTER_CARD_SIZE, _fighter_art(c), [c.display_name])
+		var card_box: BoxContainer = card.get_child(0)  # (the portrait goes under the tag strip)
+		card_box.alignment = BoxContainer.ALIGNMENT_BEGIN
+		card_box.offset_top = CARD_ART_TOP
 		var id: StringName = c.id
 		_fighter_scroller.on_tap(card, func() -> void: _on_fighter_pressed(id))
 		_character_cards[id] = card
@@ -238,34 +282,32 @@ func _build_fighter_grid(box: BoxContainer) -> void:
 		card.add_child(tags)
 		_fighter_tags[id] = tags
 		var badge: Label = _label(card, &"Label")
-		badge.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		badge.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+		badge.clip_text = true
 		badge.add_theme_font_override("font", UiStyle.body_font(true))
 		# A strip across the foot of the portrait.
 		badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, SPACING)
-		badge.offset_top = SPACING + FIGHTER_ART_SIZE.y - BADGE_H
-		badge.offset_bottom = SPACING + FIGHTER_ART_SIZE.y
+		badge.offset_top = CARD_ART_TOP + FIGHTER_ART_SIZE.y - BADGE_H
+		badge.offset_bottom = CARD_ART_TOP + FIGHTER_ART_SIZE.y
 		badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		badge.visible = false
 		_fighter_badges[id] = badge
-		var mastery: Label = _label(card, &"Label")  # mastery level, bottom right corner of the card
+		var mastery: Label = _label(card, &"Label")  # mastery level, a dark pill at the top right of the card
 		mastery.text = "Lv %d" % PlayerProfile.level_of(id)
 		mastery.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 		mastery.add_theme_font_override("font", UiStyle.bold())
 		mastery.add_theme_color_override("font_color", UiStyle.C_YELLOW)
-		mastery.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, SPACING)
+		mastery.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 6)
+		var pill := StyleBoxFlat.new()
+		pill.bg_color = Color(0.03, 0.03, 0.07, 0.85)
+		pill.set_corner_radius_all(8)
+		pill.content_margin_left = 6.0
+		pill.content_margin_right = 6.0
+		mastery.add_theme_stylebox_override("normal", pill)
 		mastery.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_mastery_badges[id] = mastery
-
-
-## Width of a grid of `count` fighter cards that wraps into evenly filled rows (4 + 3, not 6 + 1) in `avail` px.
-static func grid_width(avail: float, count: int) -> float:
-	var gap: float = SPACING * 2.0
-	var per_row: int = maxi(1, floori((avail + gap) / (CHARACTER_CARD_SIZE.x + gap)))
-	var rows: int = ceili(float(count) / per_row)
-	var cols: int = ceili(float(count) / rows)
-	return cols * (CHARACTER_CARD_SIZE.x + gap) - gap
 
 
 ## Scrim + the right-hand sheet: showcase on the left, abilities and weapons on the right, READY / back below.
@@ -301,16 +343,14 @@ func _build_overlay(stack: Control) -> void:
 	sheet_box.add_theme_constant_override("separation", SPACING)
 	_sheet.add_child(sheet_box)
 	var body := HBoxContainer.new()
-	body.add_theme_constant_override("separation", SPACING * 2)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sheet_box.add_child(body)
-	_build_stage(body)
 	_build_details(body)
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", SPACING)
 	sheet_box.add_child(bar)
 	var back: Button = _button(bar, Vector2(190, READY_MIN_SIZE.y))
-	back.text = "‹  Fighters"
+	back.text = "‹  Back"
 	back.clip_text = false
 	back.pressed.connect(_close_overlay)
 	var gap := Control.new()
@@ -319,13 +359,12 @@ func _build_overlay(stack: Control) -> void:
 	_add_ready_button(bar)
 
 
-## The showcase: a framed panel, the fighter at an integer scale under its name and stat bars, the lock state along
-## the foot.
+## The showcase: a framed panel, the fighter big at an integer scale in the middle, its name, stat bars and ultimate
+## in the top left corner, the lock state along the foot. Tapping it opens the loadout.
 func _build_stage(body: BoxContainer) -> void:
 	_stage = Panel.new()
 	_stage.clip_contents = true
 	_stage.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_stage.size_flags_stretch_ratio = 0.8
 	var style := StyleBoxFlat.new()
 	style.bg_color = COLOR_STAGE
 	style.border_color = UiStyle.C_SHADOW
@@ -341,14 +380,49 @@ func _build_stage(body: BoxContainer) -> void:
 	_floor_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_floor_fx.draw.connect(_draw_floor_fx)
 	_stage.add_child(_floor_fx)
+	for i: int in MATE_SLOTS:  # teammates, drawn under your fighter
+		var mate := Node2D.new()
+		mate.visible = false
+		_stage.add_child(mate)
+		var mate_sprite := AnimatedSprite2D.new()
+		mate_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		mate_sprite.modulate = MATE_TINT
+		mate.add_child(mate_sprite)
+		var tag := _label(_stage, &"Label")
+		tag.visible = false
+		tag.custom_minimum_size.x = MATE_TAG_W
+		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tag.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+		tag.add_theme_font_override("font", UiStyle.body_font(true))
+		var tag_box := StyleBoxFlat.new()
+		tag_box.bg_color = Color(0.03, 0.03, 0.07, 0.8)
+		tag_box.set_corner_radius_all(4)
+		tag_box.content_margin_left = 6.0
+		tag_box.content_margin_right = 6.0
+		tag.add_theme_stylebox_override("normal", tag_box)
+		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_mate_pivots.append(mate)
+		_mate_sprites.append(mate_sprite)
+		_mate_tags.append(tag)
+		_mate_ids.append(&"")
+		_mate_tweens.append(null)
 	_pivot = Node2D.new()
 	_stage.add_child(_pivot)
 	_sprite = AnimatedSprite2D.new()
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_pivot.add_child(_sprite)
 
+	var tap := Button.new()  # the whole showcase is a button to the loadout
+	tap.flat = true
+	tap.focus_mode = Control.FOCUS_NONE
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.pressed.connect(_open_loadout)
+	_stage.add_child(tap)
+
 	var info := VBoxContainer.new()
-	info.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 18)
+	_info = info
+	info.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 18)
+	info.custom_minimum_size.x = INFO_W
 	info.add_theme_constant_override("separation", 4)
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_stage.add_child(info)
@@ -360,11 +434,18 @@ func _build_stage(body: BoxContainer) -> void:
 	var armor: Array = _stat_bar(info, UiStyle.C_STEEL)
 	_armor_label = armor[0]
 	_armor_fill = armor[1]
+	_ult_label = _label(info, &"Label")
+	_ult_label.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL + 2)
+	_ult_label.add_theme_font_override("font", UiStyle.body_font(true))
+	_ult_label.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+	_ult_label.clip_text = true
+	_ult_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_ult_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	_stage_badge = _label(_stage, &"HeaderLabel")
-	_stage_badge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE, Control.PRESET_MODE_MINSIZE, 0)
-	_stage_badge.offset_top = -44.0
-	_stage_badge.offset_bottom = 0.0
+	_stage_badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 0)
+	_stage_badge.offset_top = 10.0
+	_stage_badge.offset_bottom = 54.0
 	_stage_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stage_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_stage_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -621,6 +702,11 @@ func _build_footer(box: BoxContainer) -> void:
 	_blocker.add_theme_color_override("font_color", UiStyle.C_YELLOW)
 	_blocker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_blocker.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_loadout_button = _button(footer, Vector2(210, READY_MIN_SIZE.y))
+	_loadout_button.text = "Loadout  ›"
+	_loadout_button.clip_text = false
+	_loadout_button.size_flags_vertical = Control.SIZE_SHRINK_END
+	_loadout_button.pressed.connect(_open_loadout)
 	var leave: Button = _button(footer, LEAVE_MIN_SIZE)
 	leave.text = "Leave"
 	leave.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -637,13 +723,19 @@ func _add_ready_button(parent: Node) -> void:
 	_ready_buttons.append(b)
 
 
-## A fighter card was tapped: request it (a hover in Teams, the lock comes with READY) and open its overlay.
+## A roster portrait was tapped: request that fighter (a hover in Teams, the lock comes with READY); it replaces the big one.
 func _on_fighter_pressed(id: StringName) -> void:
 	arena.character_requested.emit(id)
-	var slides_in: bool = _overlay_state.open_for(id)
-	_show_tab(_overlay_state.tab, false)  # (a fresh fighter resets it to the abilities)
 	if arena.local_player != null and arena.local_player.character.id == id:
-		_show_preview(arena.local_player.character)  # already your fighter: replay the zoom (else _refresh does it)
+		_show_preview(arena.local_player.character)  # already your fighter: replay the entrance (else _refresh does it)
+
+
+## The Loadout button / the big fighter: slide in the abilities and weapon sheet for the current pick.
+func _open_loadout() -> void:
+	if arena.local_player == null:
+		return
+	var slides_in: bool = _overlay_state.open_for(arena.local_player.character.id)
+	_show_tab(_overlay_state.tab, false)  # (a fresh fighter resets it to the abilities)
 	if slides_in:
 		_slide_overlay(true)
 
@@ -684,27 +776,71 @@ func _slide_overlay(animate: bool) -> void:
 		_overlay.visible = open
 
 
-## Integer pixel scale that fits the sprite cell under the name block of a stage this big.
+## A teammate's integer scale: about 75% of yours, never below 60% (x8 -> x6, x4 -> x3).
+static func mate_scale(mine: int) -> int:
+	return clampi(roundi(mine * 0.75), ceili(mine * 0.6), mine)
+
+
+## Integer pixel scale that makes the fighter fill PREVIEW_FILL of a stage this tall (and fit its width).
 static func preview_scale(stage: Vector2) -> int:
 	var cell: float = float(Constants.SPRITE_CELL_SIZE) * 0.9
-	var fit: float = minf((stage.x - 40.0) / cell, (stage.y - PREVIEW_TOP - 40.0) / cell)
+	var fit: float = minf((stage.x - 40.0) / cell, stage.y * PREVIEW_FILL / FIGHTER_ART_H)
 	return clampi(floori(fit), 2, PREVIEW_MAX_SCALE)
 
 
 func _layout_stage() -> void:
 	var s: int = preview_scale(_stage.size)
 	_sprite.scale = Vector2.ONE * s
-	var room: float = _stage.size.y - PREVIEW_TOP - 30.0
-	_pivot.position = Vector2(_stage.size.x * 0.5, PREVIEW_TOP + room * 0.5 + 4.0 * s)
+	# Centred, but never under the name block on a narrow stage (a crown reaches about 30 art px either side; in Teams
+	# the teammates stand beside you, so the whole lineup has to clear it).
+	var sm: int = mate_scale(s)
+	var side: float = 22.0 * s + 15.0 * sm  # (your body half-width + most of theirs: you cover the inner edge of each)
+	var half: float = side + 30.0 * sm if _teams_stage else 30.0 * s
+	var x: float = maxf(_stage.size.x * 0.5, 18.0 + INFO_W + half)
+	if x > _stage.size.x - half:
+		x = maxf(_stage.size.x * 0.5, _stage.size.x - half)
+	var feet_y: float = _stage.size.y * FLOOR_LINE
+	_pivot.position = Vector2(x, feet_y - 22.0 * s)
+	for i: int in MATE_SLOTS:  # first teammate on your left, second on your right
+		var sign: float = -1.0 if i == 0 else 1.0
+		var mate_feet: float = feet_y - _stage.size.y * MATE_RAISE
+		_mate_pivots[i].position = Vector2(x + side * sign, mate_feet - 22.0 * sm)
+		_mate_sprites[i].scale = Vector2.ONE * sm
+		# The tag sits under his raised feet (soles reach ~5 art px lower), pushed outward so it never runs under you.
+		var tag_mid: float = maxf(side, 22.0 * s + 4.0 + MATE_TAG_W * 0.5)
+		_mate_tags[i].position = Vector2(x + sign * tag_mid - MATE_TAG_W * 0.5, mate_feet + 5.0 * sm + 2.0)
 	_backdrop.art_scale = s
 	_backdrop.floor_y = _pivot.position.y + 22.0 * s
 	_floor_fx.queue_redraw()
 
 
-## A soft contact shadow under the fighter's feet.
+## A dithered spotlight behind the fighter (stepped bands with checkered edges, art-pixel cells) and a soft contact
+## shadow under his feet.
 func _draw_floor_fx() -> void:
 	var s: float = _sprite.scale.x
 	var feet: Vector2 = _pivot.position + Vector2(0.0, 22.0 * s)
+	var centre: Vector2 = feet - Vector2(0.0, FIGHTER_ART_H * 0.5 * s)
+	for band: int in SPOT_BANDS:
+		var k: float = 1.0 - float(band) / SPOT_BANDS
+		var radii := Vector2(SPOT_RADIUS.x, SPOT_RADIUS.y) * s * k
+		_floor_fx.draw_set_transform(centre, 0.0, Vector2(1.0, radii.y / radii.x))
+		_floor_fx.draw_circle(Vector2.ZERO, radii.x, SPOT_COLOR)
+		_floor_fx.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var steps: int = int(TAU * maxf(radii.x, radii.y) / s)  # one cell per art pixel round the edge, every other one lit
+		for i: int in steps:
+			if i % 2 == 0:
+				continue
+			var a: float = TAU * i / steps
+			var at: Vector2 = centre + Vector2(cos(a) * radii.x * 1.04, sin(a) * radii.y * 1.04)
+			_floor_fx.draw_rect(Rect2((at / s).floor() * s, Vector2(s, s)), SPOT_COLOR)
+	_draw_shadow(feet, s)
+	for i: int in MATE_SLOTS:
+		if _mate_pivots[i].visible:
+			var ms: float = _mate_sprites[i].scale.x
+			_draw_shadow(_mate_pivots[i].position + Vector2(0.0, 22.0 * ms), ms)
+
+
+func _draw_shadow(feet: Vector2, s: float) -> void:
 	_floor_fx.draw_set_transform(feet, 0.0, Vector2(1.0, 0.28))
 	var r: float = 18.0 * s
 	for i: int in 5:
@@ -724,7 +860,8 @@ func _show_preview(c: CharacterData) -> void:
 	_in_flair = false
 	_flair_left = FLAIR_GAP.x
 	_layout_stage()
-	UiStyle.fit_label(_name_label, c.display_name, maxf(_stage.size.x - 36.0, 120.0), UiStyle.SIZE_HEADING + 6, UiStyle.SIZE_BODY, true)
+	UiStyle.fit_label(_name_label, c.display_name, INFO_W, UiStyle.SIZE_HEADING + 6, UiStyle.SIZE_BODY, true)
+	_ult_label.text = "ULT  %s" % (c.ultimate.display_name if c.ultimate != null else "None")
 	var top_hp := 1
 	var top_armor := 1
 	for o: CharacterData in arena.characters.ordered:
@@ -738,14 +875,18 @@ func _show_preview(c: CharacterData) -> void:
 		return
 	_pivot.scale = Vector2.ONE * ZOOM_FROM
 	_pivot.modulate.a = 0.0
+	_sprite.position.x = SLIDE_FROM
+	_info.modulate.a = 0.0
 	_preview_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_preview_tween.tween_property(_pivot, "scale", Vector2.ONE, ZOOM_TIME)
 	_preview_tween.tween_property(_pivot, "modulate:a", 1.0, ZOOM_TIME * 0.8)
+	_preview_tween.tween_property(_sprite, "position:x", 0.0, ZOOM_TIME)
+	_preview_tween.tween_property(_info, "modulate:a", 1.0, ZOOM_TIME)
 
 
 ## Now and then the preview runs or swings before settling back to idle.
 func _tick_flair(delta: float) -> void:
-	if _sprite.sprite_frames == null or not _overlay.visible:
+	if _sprite.sprite_frames == null:
 		return
 	_flair_left -= delta
 	if _flair_left > 0.0:
@@ -863,14 +1004,14 @@ func _refresh() -> void:
 		my_team = MatchRules.viewer_of(shown_teams.get(me.player_id, 0))
 		order.sort_custom(func(a: Player, b: Player) -> bool:
 			return shown_teams.get(a.player_id, 3) < shown_teams.get(b.player_id, 3))
-		for t: int in [my_team, MatchRules.other_team(my_team)]:
+		for t: int in [MatchRules.other_team(my_team)]:  # (your side is the lineup column)
 			var flow: HFlowContainer = _new_row_flow()
 			flows[t] = flow
 			var head: Label = _label(flow, &"Label")
 			head.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 			head.add_theme_font_override("font", UiStyle.body_font(true))
 			head.add_theme_color_override("font_color", TEAM_ALLY_COLOR if t == my_team else UiStyle.C_RED)
-			head.text = "YOUR TEAM:" if t == my_team else "ENEMY:"
+			head.text = "ENEMY:"
 	else:
 		flows[0] = _new_row_flow()
 	for p: Player in order:
@@ -887,6 +1028,8 @@ func _refresh() -> void:
 		if p.is_bot and tag == "sits out" and not shown_teams.is_empty():
 			continue  # filler bots that don't play
 		var team: int = shown_teams.get(p.player_id, 0)
+		if not shown_teams.is_empty() and team == my_team:
+			continue  # teammates are in the lineup column
 		var row: Label = _label(flows.get(team, flows[flows.keys()[0]]), &"Label")
 		row.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 		row.add_theme_font_override("font", UiStyle.body_font())
@@ -905,6 +1048,8 @@ func _refresh() -> void:
 					else "● %s · %s · %s" % [_team_name(p), p.character.display_name, state]
 
 	_shown_crowd = _crowd()
+	_refresh_lineup(st, me, shown_teams, my_team)
+	_refresh_mates(st, me, shown_teams, my_team)
 	var teams_mode: bool = st.mode == MatchRules.Mode.TEAMS
 	var taker: int = MatchRules.lock_holder(shown_teams, _human_locks(st), me.player_id, me.character.id) \
 		if teams_mode and not _is_ready() else 0
@@ -917,6 +1062,113 @@ func _refresh() -> void:
 		b.disabled = taker != 0 or gap
 		b.theme_type_variation = &"Button" if _is_ready() else &"PrimaryButton"
 	_mark_preview(taker)
+	if gap:
+		_loadout_button.add_theme_color_override("font_color", UiStyle.C_YELLOW)
+	else:
+		_loadout_button.remove_theme_color_override("font_color")
+
+
+## The side column: everyone else's current pick as a small animated fighter with their name and state. Teams: your
+## teammates only (enemy picks stay hidden); Duel / FFA: the other players in the match.
+func _refresh_lineup(st: MatchState, me: Player, shown_teams: Dictionary, my_team: int) -> void:
+	for child: Node in _lineup.get_children():
+		child.queue_free()
+	var teams_mode: bool = st.mode == MatchRules.Mode.TEAMS
+	_lineup_scroller.visible = not teams_mode
+	if teams_mode:
+		return
+	for p: Player in arena.players:
+		if p == me or not st.is_participant(p.player_id):
+			continue
+		if teams_mode and shown_teams.get(p.player_id, 0) != my_team:
+			continue
+		var state: String = lineup_state(teams_mode, p.is_bot, st.locked.has(p.player_id), st.ready.has(p.player_id))
+		_lineup_entry(p, state, UiStyle.C_YELLOW if state in ["LOCKED", "READY"] else UiStyle.C_DIM)
+
+
+## Teams: your teammates (lowest id on your left) stand on the stage, a name tag under each; a slot with nobody shows nothing.
+func _refresh_mates(st: MatchState, me: Player, shown_teams: Dictionary, my_team: int) -> void:
+	var teams_mode: bool = st.mode == MatchRules.Mode.TEAMS
+	if teams_mode != _teams_stage:
+		_teams_stage = teams_mode
+		_layout_stage()
+	var mates: Array[Player] = []
+	if teams_mode:
+		for p: Player in arena.players:
+			if p != me and st.is_participant(p.player_id) and shown_teams.get(p.player_id, 0) == my_team:
+				mates.append(p)
+		mates.sort_custom(func(a: Player, b: Player) -> bool: return a.player_id < b.player_id)
+	for i: int in MATE_SLOTS:
+		var p: Player = mates[i] if i < mates.size() else null
+		_mate_pivots[i].visible = p != null
+		_mate_tags[i].visible = p != null
+		if p == null:
+			_mate_ids[i] = &""
+			continue
+		var locked: bool = lineup_state(true, p.is_bot, st.locked.has(p.player_id), false) == "LOCKED"
+		_mate_tags[i].text = "%s · %s" % ["Bot" if p.is_bot else "Player %d" % p.player_id, "LOCKED" if locked else "hovering"]
+		_mate_tags[i].add_theme_color_override("font_color", UiStyle.C_YELLOW if locked else UiStyle.C_WHITE)
+		if p.character.id != _mate_ids[i]:
+			_mate_ids[i] = p.character.id
+			_show_mate(i, p.character)
+	_floor_fx.queue_redraw()
+
+
+## A teammate's new pick: the same quick zoom, slide and fade in as yours.
+func _show_mate(i: int, c: CharacterData) -> void:
+	var sprite: AnimatedSprite2D = _mate_sprites[i]
+	sprite.sprite_frames = c.sprite_frames()
+	sprite.play(&"idle")
+	if _mate_tweens[i] != null:
+		_mate_tweens[i].kill()
+		_mate_tweens[i] = null
+	if not is_inside_tree():
+		return
+	var pivot: Node2D = _mate_pivots[i]
+	pivot.scale = Vector2.ONE * ZOOM_FROM
+	pivot.modulate.a = 0.0
+	sprite.position.x = SLIDE_FROM
+	var tween: Tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_mate_tweens[i] = tween
+	tween.tween_property(pivot, "scale", Vector2.ONE, ZOOM_TIME)
+	tween.tween_property(pivot, "modulate:a", 1.0, ZOOM_TIME * 0.8)
+	tween.tween_property(sprite, "position:x", 0.0, ZOOM_TIME)
+
+
+## What a lineup entry says about a player: Teams hover / lock (bots just hover), else bot / ready / picking.
+static func lineup_state(teams_mode: bool, is_bot: bool, locked: bool, ready: bool) -> String:
+	if teams_mode:
+		return "LOCKED" if locked and not is_bot else "hovering"
+	return "bot" if is_bot else "READY" if ready else "picking"
+
+
+## One lineup entry: the fighter, then its name, who picked it and the state.
+func _lineup_entry(p: Player, state: String, color: Color) -> void:
+	var card := PanelContainer.new()
+	var box := StyleBoxFlat.new()
+	box.bg_color = COLOR_STAGE
+	box.border_color = color if color == UiStyle.C_YELLOW else UiStyle.C_SHADOW
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(4)
+	box.set_content_margin_all(4)
+	card.add_theme_stylebox_override("panel", box)
+	_lineup.add_child(card)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	card.add_child(row)
+	row.add_child(_fighter_art(p.character, LINEUP_ART_SIZE, LINEUP_ART_SCALE))
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.alignment = BoxContainer.ALIGNMENT_CENTER
+	text.add_theme_constant_override("separation", 0)
+	row.add_child(text)
+	var text_w: float = LINEUP_W - LINEUP_ART_SIZE.x - 30.0
+	var lines: Array = [p.character.display_name, "Bot" if p.is_bot else "Player %d" % p.player_id, state]
+	for i: int in lines.size():
+		var l: Label = _label(text, &"Label")
+		l.add_theme_font_override("font", UiStyle.body_font(i != 1))
+		l.add_theme_color_override("font_color", color if i == 2 else UiStyle.C_WHITE if i == 0 else UiStyle.C_DIM)
+		_fit_body(l, lines[i], text_w, UiStyle.SIZE_HEADING if i == 0 else UiStyle.SIZE_BODY, i != 1)
 
 
 ## Locks held by humans (bots yield to them, so they never block a lock-in).
@@ -1353,15 +1605,15 @@ func _art(tex: Texture2D, art_scale: float) -> TextureRect:
 
 ## The fighter playing its idle loop: the sheet's whole cell, centred in a clipped window, so every character
 ## stands in the same spot.
-func _fighter_art(c: CharacterData) -> Control:
+func _fighter_art(c: CharacterData, window_size: Vector2 = FIGHTER_ART_SIZE, art_scale: float = FIGHTER_ART_SCALE) -> Control:
 	var window := Control.new()
-	window.custom_minimum_size = FIGHTER_ART_SIZE
+	window.custom_minimum_size = window_size
 	window.clip_contents = true
 	var sprite := AnimatedSprite2D.new()
 	sprite.sprite_frames = c.sprite_frames()
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	sprite.scale = Vector2.ONE * FIGHTER_ART_SCALE
-	sprite.position = FIGHTER_ART_SIZE * 0.5
+	sprite.scale = Vector2.ONE * art_scale
+	sprite.position = window_size * 0.5
 	window.add_child(sprite)
 	sprite.play(&"idle")
 	return window

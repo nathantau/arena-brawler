@@ -9,6 +9,7 @@ var shot_frames: int = 330  ## physics frames after the countdown ends (the bots
 var _carrier: Player
 var win: bool = false  ## screenshot: the local player captures the flag, shot taken during the round-end banner
 var lobby: bool = false
+var lobby_mode: MatchRules.Mode = MatchRules.Mode.TEAMS  ## screenshot with lobby=1: mode=duel|ffa for the Duel / FFA lineup
 var shared: int = 0  ## screenshot with lobby=1: 1 = P2 + P3 hover one card, 2 = P3 locked and P2 hovers that card  ## screenshot: the loading room (nobody readies up)
 var step: int = 0  ## screenshot with lobby=1: which character select step is showing (0 the fighter grid, 1 the detail overlay open)
 var toggle: bool = false  ## screenshot with lobby=1 strip=1 fly=1: first remove an equipped ability, then add one
@@ -48,6 +49,7 @@ func _initialize() -> void:
 				"dead": dead = kv[1] == "1"
 				"win": win = kv[1] == "1"
 				"lobby": lobby = kv[1] == "1"
+				"mode": lobby_mode = MatchRules.Mode.DUEL if kv[1] == "duel" else MatchRules.Mode.FFA if kv[1] == "ffa" else MatchRules.Mode.TEAMS
 				"shared": shared = int(kv[1])
 				"step": step = int(kv[1])
 				"strip": strip = kv[1] == "1"
@@ -59,7 +61,8 @@ func _initialize() -> void:
 	InputSetup.ensure_actions()
 	if lobby and shot_path != "":
 		UiStyle.install()  # Main does this in the real game
-	arena = Arena.new(Arena.Mode.OFFLINE, base_seed, MatchRules.Mode.TEAMS, round_secs)
+		UiStyle.install_scaling(root)  # (with --touch / --pixel-ratio=N after the --, like the phone)
+	arena = Arena.new(Arena.Mode.OFFLINE, base_seed, lobby_mode, round_secs)
 	arena.match_state.arena_index = arena_idx
 	root.add_child(arena)
 	physics_frame.connect(_tick)
@@ -209,7 +212,7 @@ func _shoot_lobby() -> void:
 		await process_frame
 	var ratio: float = float(root.size.x) / root.get_visible_rect().size.x
 	if sheet:
-		lp._on_fighter_pressed(&"eden")
+		arena.select_character(arena.get_player(1), &"eden")
 		lp._slide_overlay(false)
 		var cells: Array[Image] = []
 		for id: StringName in [&"eden", &"flint", &"bolt", &"flicker", &"shadow", &"sakura", &"wukong", &"twinshot", &"warden"]:
@@ -229,7 +232,8 @@ func _shoot_lobby() -> void:
 		quit(0)
 		return
 	if strip:
-		lp._on_fighter_pressed(&"bolt")
+		arena.select_character(arena.get_player(1), &"bolt")
+		lp._open_loadout()
 		var ids: Array = lp._special_cards.keys()
 		for k: int in Constants.PICKED_SLOTS:  # a fresh pick has empty slots: equip the picks to toggle
 			arena.select_special(arena.get_player(1), k, ids[k])
@@ -263,7 +267,8 @@ func _shoot_lobby() -> void:
 		quit(0)
 		return
 	if step > 0:
-		lp._on_fighter_pressed(pick)
+		arena.select_character(arena.get_player(1), pick)
+		lp._open_loadout()
 		lp._slide_overlay(false)
 		if step == 2:  # two abilities picked, the third slot still empty
 			for k: int in 2:
