@@ -63,3 +63,12 @@ func test_lobby_preview_is_a_big_whole_scale() -> void:
 	assert_true(4 * LobbyPanel.FIGHTER_ART_H <= phone.y * LobbyPanel.FLOOR_LINE, "feet on the floor line, head inside the stage")
 	assert_eq(LobbyPanel.preview_scale(Vector2(60.0, 60.0)), 2, "never below x2")
 	assert_eq(LobbyPanel.preview_scale(Vector2(4000.0, 4000.0)), LobbyPanel.PREVIEW_MAX_SCALE)
+
+
+func test_lobby_teammate_scale() -> void:
+	assert_eq(LobbyPanel.mate_scale(8), 6)
+	assert_eq(LobbyPanel.mate_scale(4), 3)
+	for mine: int in range(2, LobbyPanel.PREVIEW_MAX_SCALE + 1):
+		var mate: int = LobbyPanel.mate_scale(mine)
+		assert_lte(mate, mine, "never bigger than you (x%d)" % mine)
+		assert_gte(mate, ceili(mine * 0.6), "never below 60%% (x%d)" % mine)

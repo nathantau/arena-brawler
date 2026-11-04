@@ -62,7 +62,11 @@ const PREVIEW_MAX_SCALE: int = 10
 ## floor line this far down it.
 const FIGHTER_ART_H: float = 54.0
 const PREVIEW_FILL: float = 0.78
-const FLOOR_LINE: float = 0.9
+const FLOOR_LINE: float = 0.85
+## Teams: your teammates stand on the same stage beside you, MATE_SLOTS of them, a little smaller (see `mate_scale`).
+const MATE_SLOTS: int = 2
+const MATE_TINT: Color = Color(0.82, 0.84, 0.9)
+const MATE_TAG_W: float = 190.0
 ## The spotlight behind him: SPOT_BANDS nested ellipses (radii in art px), each adding SPOT_COLOR.
 const SPOT_BANDS: int = 4
 const SPOT_RADIUS: Vector2 = Vector2(36.0, 50.0)
@@ -90,6 +94,14 @@ var _arena_button: Button
 var _character_cards: Dictionary[StringName, Button] = {}
 var _fighter_scroller: HScroller
 var _lineup: BoxContainer
+var _lineup_scroller: HScroller
+## Teams stage: one fighter per teammate slot (pivot, sprite, name tag), the fighter shown in it, its entrance tween.
+var _mate_pivots: Array[Node2D] = []
+var _mate_sprites: Array[AnimatedSprite2D] = []
+var _mate_tags: Array[Label] = []
+var _mate_ids: Array[StringName] = []
+var _mate_tweens: Array[Tween] = []
+var _teams_stage: bool = false
 var _loadout_button: Button
 ## The abilities scroll in a column; the weapons sit under them in a sideways row that is always on screen.
 var _detail_scroller: HScroller
@@ -226,11 +238,11 @@ func _build_showcase(box: BoxContainer) -> void:
 	mid.add_theme_constant_override("separation", SPACING)
 	mid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(mid)
-	var lineup_scroller := HScroller.new(true)  # scrolls instead of pushing the footer off a short phone screen
-	lineup_scroller.fade_color = COLOR_BG
-	lineup_scroller.custom_minimum_size.x = LINEUP_W
-	mid.add_child(lineup_scroller)
-	_lineup = lineup_scroller.content
+	_lineup_scroller = HScroller.new(true)  # scrolls instead of pushing the footer off a short phone screen
+	_lineup_scroller.fade_color = COLOR_BG
+	_lineup_scroller.custom_minimum_size.x = LINEUP_W
+	mid.add_child(_lineup_scroller)  # (Teams hides it: the teammates stand on the stage)
+	_lineup = _lineup_scroller.content
 	_lineup.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_lineup.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_lineup.add_theme_constant_override("separation", 6)
@@ -365,6 +377,32 @@ func _build_stage(body: BoxContainer) -> void:
 	_floor_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_floor_fx.draw.connect(_draw_floor_fx)
 	_stage.add_child(_floor_fx)
+	for i: int in MATE_SLOTS:  # teammates, drawn under your fighter
+		var mate := Node2D.new()
+		mate.visible = false
+		_stage.add_child(mate)
+		var mate_sprite := AnimatedSprite2D.new()
+		mate_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		mate_sprite.modulate = MATE_TINT
+		mate.add_child(mate_sprite)
+		var tag := _label(_stage, &"Label")
+		tag.visible = false
+		tag.custom_minimum_size.x = MATE_TAG_W
+		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tag.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
+		tag.add_theme_font_override("font", UiStyle.body_font(true))
+		var tag_box := StyleBoxFlat.new()
+		tag_box.bg_color = Color(0.03, 0.03, 0.07, 0.8)
+		tag_box.set_corner_radius_all(4)
+		tag_box.content_margin_left = 6.0
+		tag_box.content_margin_right = 6.0
+		tag.add_theme_stylebox_override("normal", tag_box)
+		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_mate_pivots.append(mate)
+		_mate_sprites.append(mate_sprite)
+		_mate_tags.append(tag)
+		_mate_ids.append(&"")
+		_mate_tweens.append(null)
 	_pivot = Node2D.new()
 	_stage.add_child(_pivot)
 	_sprite = AnimatedSprite2D.new()
@@ -402,9 +440,9 @@ func _build_stage(body: BoxContainer) -> void:
 	_ult_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	_stage_badge = _label(_stage, &"HeaderLabel")
-	_stage_badge.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE, Control.PRESET_MODE_MINSIZE, 0)
-	_stage_badge.offset_top = -44.0
-	_stage_badge.offset_bottom = 0.0
+	_stage_badge.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 0)
+	_stage_badge.offset_top = 10.0
+	_stage_badge.offset_bottom = 54.0
 	_stage_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stage_badge.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_stage_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -735,6 +773,11 @@ func _slide_overlay(animate: bool) -> void:
 		_overlay.visible = open
 
 
+## A teammate's integer scale: about 75% of yours, never below 60% (x8 -> x6, x4 -> x3).
+static func mate_scale(mine: int) -> int:
+	return clampi(roundi(mine * 0.75), ceili(mine * 0.6), mine)
+
+
 ## Integer pixel scale that makes the fighter fill PREVIEW_FILL of a stage this tall (and fit its width).
 static func preview_scale(stage: Vector2) -> int:
 	var cell: float = float(Constants.SPRITE_CELL_SIZE) * 0.9
@@ -745,9 +788,21 @@ static func preview_scale(stage: Vector2) -> int:
 func _layout_stage() -> void:
 	var s: int = preview_scale(_stage.size)
 	_sprite.scale = Vector2.ONE * s
-	# Centred, but never under the name block on a narrow stage (his crown reaches about 30 art px either side).
-	var x: float = clampf(maxf(_stage.size.x * 0.5, 18.0 + INFO_W + 30.0 * s), 0.0, _stage.size.x - 30.0 * s)
-	_pivot.position = Vector2(x, _stage.size.y * FLOOR_LINE - 22.0 * s)
+	# Centred, but never under the name block on a narrow stage (a crown reaches about 30 art px either side; in Teams
+	# the teammates stand beside you, so the whole lineup has to clear it).
+	var sm: int = mate_scale(s)
+	var side: float = 22.0 * (s + sm)
+	var half: float = side + 30.0 * sm if _teams_stage else 30.0 * s
+	var x: float = maxf(_stage.size.x * 0.5, 18.0 + INFO_W + half)
+	if x > _stage.size.x - half:
+		x = maxf(_stage.size.x * 0.5, _stage.size.x - half)
+	var feet_y: float = _stage.size.y * FLOOR_LINE
+	_pivot.position = Vector2(x, feet_y - 22.0 * s)
+	for i: int in MATE_SLOTS:  # first teammate on your left, second on your right
+		var mx: float = x + side * (-1.0 if i == 0 else 1.0)
+		_mate_pivots[i].position = Vector2(mx, feet_y - 22.0 * sm)
+		_mate_sprites[i].scale = Vector2.ONE * sm
+		_mate_tags[i].position = Vector2(mx - MATE_TAG_W * 0.5, feet_y + 5.0 * sm + 4.0)  # (soles reach about 5 art px under the floor line)
 	_backdrop.art_scale = s
 	_backdrop.floor_y = _pivot.position.y + 22.0 * s
 	_floor_fx.queue_redraw()
@@ -772,6 +827,14 @@ func _draw_floor_fx() -> void:
 			var a: float = TAU * i / steps
 			var at: Vector2 = centre + Vector2(cos(a) * radii.x * 1.04, sin(a) * radii.y * 1.04)
 			_floor_fx.draw_rect(Rect2((at / s).floor() * s, Vector2(s, s)), SPOT_COLOR)
+	_draw_shadow(feet, s)
+	for i: int in MATE_SLOTS:
+		if _mate_pivots[i].visible:
+			var ms: float = _mate_sprites[i].scale.x
+			_draw_shadow(_mate_pivots[i].position + Vector2(0.0, 22.0 * ms), ms)
+
+
+func _draw_shadow(feet: Vector2, s: float) -> void:
 	_floor_fx.draw_set_transform(feet, 0.0, Vector2(1.0, 0.28))
 	var r: float = 18.0 * s
 	for i: int in 5:
@@ -980,6 +1043,7 @@ func _refresh() -> void:
 
 	_shown_crowd = _crowd()
 	_refresh_lineup(st, me, shown_teams, my_team)
+	_refresh_mates(st, me, shown_teams, my_team)
 	var teams_mode: bool = st.mode == MatchRules.Mode.TEAMS
 	var taker: int = MatchRules.lock_holder(shown_teams, _human_locks(st), me.player_id, me.character.id) \
 		if teams_mode and not _is_ready() else 0
@@ -1004,6 +1068,9 @@ func _refresh_lineup(st: MatchState, me: Player, shown_teams: Dictionary, my_tea
 	for child: Node in _lineup.get_children():
 		child.queue_free()
 	var teams_mode: bool = st.mode == MatchRules.Mode.TEAMS
+	_lineup_scroller.visible = not teams_mode
+	if teams_mode:
+		return
 	for p: Player in arena.players:
 		if p == me or not st.is_participant(p.player_id):
 			continue
@@ -1011,6 +1078,55 @@ func _refresh_lineup(st: MatchState, me: Player, shown_teams: Dictionary, my_tea
 			continue
 		var state: String = lineup_state(teams_mode, p.is_bot, st.locked.has(p.player_id), st.ready.has(p.player_id))
 		_lineup_entry(p, state, UiStyle.C_YELLOW if state in ["LOCKED", "READY"] else UiStyle.C_DIM)
+
+
+## Teams: your teammates (lowest id on your left) stand on the stage, a name tag under each; a slot with nobody shows nothing.
+func _refresh_mates(st: MatchState, me: Player, shown_teams: Dictionary, my_team: int) -> void:
+	var teams_mode: bool = st.mode == MatchRules.Mode.TEAMS
+	if teams_mode != _teams_stage:
+		_teams_stage = teams_mode
+		_layout_stage()
+	var mates: Array[Player] = []
+	if teams_mode:
+		for p: Player in arena.players:
+			if p != me and st.is_participant(p.player_id) and shown_teams.get(p.player_id, 0) == my_team:
+				mates.append(p)
+		mates.sort_custom(func(a: Player, b: Player) -> bool: return a.player_id < b.player_id)
+	for i: int in MATE_SLOTS:
+		var p: Player = mates[i] if i < mates.size() else null
+		_mate_pivots[i].visible = p != null
+		_mate_tags[i].visible = p != null
+		if p == null:
+			_mate_ids[i] = &""
+			continue
+		var locked: bool = lineup_state(true, p.is_bot, st.locked.has(p.player_id), false) == "LOCKED"
+		_mate_tags[i].text = "%s · %s" % ["Bot" if p.is_bot else "Player %d" % p.player_id, "LOCKED" if locked else "hovering"]
+		_mate_tags[i].add_theme_color_override("font_color", UiStyle.C_YELLOW if locked else UiStyle.C_WHITE)
+		if p.character.id != _mate_ids[i]:
+			_mate_ids[i] = p.character.id
+			_show_mate(i, p.character)
+	_floor_fx.queue_redraw()
+
+
+## A teammate's new pick: the same quick zoom, slide and fade in as yours.
+func _show_mate(i: int, c: CharacterData) -> void:
+	var sprite: AnimatedSprite2D = _mate_sprites[i]
+	sprite.sprite_frames = c.sprite_frames()
+	sprite.play(&"idle")
+	if _mate_tweens[i] != null:
+		_mate_tweens[i].kill()
+		_mate_tweens[i] = null
+	if not is_inside_tree():
+		return
+	var pivot: Node2D = _mate_pivots[i]
+	pivot.scale = Vector2.ONE * ZOOM_FROM
+	pivot.modulate.a = 0.0
+	sprite.position.x = SLIDE_FROM
+	var tween: Tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_mate_tweens[i] = tween
+	tween.tween_property(pivot, "scale", Vector2.ONE, ZOOM_TIME)
+	tween.tween_property(pivot, "modulate:a", 1.0, ZOOM_TIME * 0.8)
+	tween.tween_property(sprite, "position:x", 0.0, ZOOM_TIME)
 
 
 ## What a lineup entry says about a player: Teams hover / lock (bots just hover), else bot / ready / picking.
