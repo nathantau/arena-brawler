@@ -38,6 +38,7 @@ var _browser: LanDiscovery
 var _games_box: VBoxContainer
 var _ip_row: Control
 var _ip_toggle: Button
+var _gold: GoldChip
 
 
 func _ready() -> void:
@@ -80,18 +81,21 @@ func _ready() -> void:
 	visibility_changed.connect(_sync_browser)
 	_sync_browser()
 
-	var small: Vector2 = Vector2((PLAY_SIZE.x - SPACING * 3.0) / 4.0, ROW_H)
+	var small: Vector2 = Vector2((PLAY_SIZE.x - SPACING * 4.0) / 5.0, ROW_H)
 	_ip_toggle = _button("Enter IP", small)
 	_ip_toggle.pressed.connect(func() -> void: _ip_row.visible = not _ip_row.visible)
-	_host = _button("Host Wi-Fi", small)
+	_host = _button("Host", small)
 	_host.pressed.connect(host_pressed.emit)
 	var settings := _button("Settings", small)
 	settings.pressed.connect(func() -> void: SettingsPanel.show_on(self))
 	var profile := _button("Profile", small)
 	profile.pressed.connect(func() -> void: ProfilePanel.show_on(self))
+	var shop := _button("Shop", small)
+	shop.pressed.connect(func() -> void: ShopPanel.show_on(self, func() -> void: _gold.set_gold(PlayerProfile.gold)))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", SPACING)
-	for c: Control in [_ip_toggle, _host, profile, settings]:
+	for c: Control in [_ip_toggle, _host, shop, profile, settings]:
+		c.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)  # five buttons share the PLAY button's width
 		row.add_child(c)
 	var secondary := _centered(row)
 	box.add_child(secondary)
@@ -118,8 +122,25 @@ func _ready() -> void:
 	_ip_row = _centered(join_row)
 	_ip_row.visible = false  # manual IP is the fallback; "Enter IP" reveals it
 	box.add_child(_ip_row)
+	_add_gold_chip()
 	add_child(IntroSplash.new(backdrop, box))  # first-launch opening; skippable
 	_maybe_shoot()
+
+
+## Gold balance (coin + number) in the top right corner, clear of the notch.
+func _add_gold_chip() -> void:
+	PlayerProfile.ensure_loaded()
+	_gold = GoldChip.new()
+	var pill := PanelContainer.new()
+	pill.add_child(_gold)
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pill.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE)
+	var i: Vector4 = UiStyle.safe_insets(get_viewport())
+	pill.offset_top = i.y
+	pill.offset_right = -i.z
+	pill.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	add_child(pill)
+	_hide_while_typing.append(pill)
 
 
 ## Duel / FFA / 3v3 as a segmented row with the picked mode's rule under it; the pick is saved for next launch and

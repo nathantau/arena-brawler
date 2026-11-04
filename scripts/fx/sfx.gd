@@ -66,6 +66,11 @@ const RECIPES: Dictionary[StringName, Array] = {
 	&"summon": [0.45, 300.0, 700.0, Wave.SINE, 0.2, 0.5, 0.03, 6.0, 0.45],
 	&"eruption": [0.6, 120.0, 50.0, Wave.SAW, 0.8, 0.8, 0.005, 5.0, 0.7],
 	&"trap": [0.2, 800.0, 300.0, Wave.SQUARE, 0.5, 0.3, 0.001, 22.0, 0.4],
+	# Blind box: a dull rattle, the lid blowing off, and two rising chimes (rare / epic reveal).
+	&"box_rattle": [0.09, 260.0, 160.0, Wave.SQUARE, 0.7, 0.5, 0.001, 30.0, 0.4],
+	&"box_burst": [0.55, 160.0, 900.0, Wave.SAW, 0.6, 0.4, 0.002, 6.0, 0.6],
+	&"box_chime": [0.5, 880.0, 1760.0, Wave.SINE, 0.0, 0.0, 0.004, 5.0, 0.4],
+	&"box_chime_epic": [0.9, 660.0, 1980.0, Wave.SQUARE, 0.05, 0.1, 0.004, 3.5, 0.4],
 	&"boost": [0.5, 200.0, 1000.0, Wave.SAW, 0.3, 0.3, 0.02, 5.0, 0.4],
 	# Bolt: a rising crackle, and a low crack of thunder.
 	&"lightning": [0.45, 1500.0, 450.0, Wave.SAW, 0.6, 0.15, 0.003, 7.0, 0.4],
