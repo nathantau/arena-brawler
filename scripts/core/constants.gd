@@ -247,3 +247,5 @@ const BOOMERANG_GHOST_ALPHA: float = 0.45
 ## A returning boomerang flies this long at most; a consecutive-shot streak (Pocket Blaster) resets after this long idle.
 const BOOMERANG_RETURN_LIFE: float = 4.0
 const STREAK_RESET: float = 1.0
+## Damage multiplier by WeaponData / SkillData.rarity (common, rare, epic): better items hit slightly harder.
+const RARITY_DAMAGE_MULT: Array[float] = [1.0, 1.05, 1.10]

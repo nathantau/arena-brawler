@@ -14,6 +14,11 @@ const RARITY_WEIGHTS: Array[int] = [60, 30, 10]
 const RARITY_NAMES: Array[String] = ["Common", "Rare", "Epic"]
 const RARITY_COLORS: Array[Color] = [Color8(154, 167, 194), Color8(176, 110, 255), Color8(255, 196, 64)]  # steel, violet, gold: the box art
 
+## "+5% dmg" / "+10% dmg" for a rare / epic item (Constants.RARITY_DAMAGE_MULT), "" for common.
+static func dmg_bonus_text(rarity: int) -> String:
+	var pct: int = roundi((Constants.RARITY_DAMAGE_MULT[clampi(rarity, 0, Constants.RARITY_DAMAGE_MULT.size() - 1)] - 1.0) * 100.0)
+	return "+%d%% dmg" % pct if pct > 0 else ""
+
 static var _weapons: WeaponCatalog
 ## --unlock-all / tests: everything counts as unlocked without touching the profile.
 static var all_unlocked: bool = false

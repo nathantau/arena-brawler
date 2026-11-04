@@ -17,10 +17,31 @@ static func roll_crit(weapon: WeaponData, rng: RandomNumberGenerator) -> bool:
 	return rng.randf() < weapon.crit_chance
 
 
-static func damage_for(weapon: WeaponData, crit: bool) -> int:
-	if crit:
-		return roundi(weapon.damage * weapon.crit_multiplier)
-	return weapon.damage
+## Weapon damage after crit and the rarity bonus (`rarity` = the owning weapon's / ability's tier, `salt` see `scaled`).
+static func damage_for(weapon: WeaponData, crit: bool, rarity: int = 0, salt: int = 0) -> int:
+	return scaled(roundi(weapon.damage * weapon.crit_multiplier) if crit else weapon.damage, rarity, salt)
+
+
+## `damage` x the rarity tier's multiplier (Constants.RARITY_DAMAGE_MULT). Rounded stochastically so small hits still
+## average damage x mult (a 2-dmg epic hit is 2 or 3, mean 2.2): the fraction is compared with a deterministic hash of
+## `salt` (owner / shot seq / tick the caller has at hand), so it is reproducible. A hit that did >= 1 stays >= 1; 0 stays 0.
+static func scaled(damage: int, rarity: int, salt: int = 0) -> int:
+	if damage <= 0:
+		return damage
+	var x: float = snappedf(damage * Constants.RARITY_DAMAGE_MULT[clampi(rarity, 0, Constants.RARITY_DAMAGE_MULT.size() - 1)], 0.000001)
+	var whole: int = floori(x)
+	if x - whole > unit_hash(salt):
+		whole += 1
+	return maxi(1, whole)
+
+
+## Deterministic integer hash of `n` mapped to [0, 1).
+static func unit_hash(n: int) -> float:
+	var h: int = (n * 2654435761 + 0x9E3779B9) & 0xFFFFFFFF
+	h = ((h ^ (h >> 15)) * 2246822519) & 0xFFFFFFFF
+	h = ((h ^ (h >> 13)) * 3266489917) & 0xFFFFFFFF
+	h ^= h >> 16
+	return float(h) / 4294967296.0
 
 
 ## Directions for every pellet of one shot: an even fan across `pellet_spread_deg`
