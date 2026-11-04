@@ -240,3 +240,45 @@ func test_storm_jar_never_chains_to_an_ally() -> void:
 	await wait_physics_frames(60)
 	for h: Dictionary in hits:
 		assert_ne(h.victim, OTHER)
+
+
+func test_storm_jar_chain_skips_an_enemy_the_splash_already_hit() -> void:
+	var shooter: Player = _player(SHOOTER, Vector2(60, 300))
+	_player(TARGET, Vector2(300, 300))
+	_player(OTHER, Vector2(300, 318))  # inside the splash with the first
+	_player(4, Vector2(300, 410))  # outside the splash, inside the chain
+	await wait_physics_frames(2)
+	_fire(&"storm_jar", shooter.global_position, Vector2.RIGHT)
+	await wait_physics_frames(60)
+	var count: Dictionary = {}
+	for h: Dictionary in hits:
+		count[h.victim] = int(count.get(h.victim, 0)) + 1
+	assert_eq(count.get(OTHER, 0), 1, "the second enemy in the splash is hit once (no chain on top)")
+	assert_eq(count.get(4, 0), 1, "the chain jumps on to the one the burst missed")
+
+
+func _lobby_player(weapon: StringName) -> Player:
+	var p := Player.new()
+	p.setup(SHOOTER, 0, Color.WHITE, catalog.resolve([weapon] as Array[StringName]), null, pool, SEED,
+		characters.get_character(&"flicker"))
+	add_child_autofree(p)
+	p.set_weapon(_w(weapon))
+	return p
+
+
+func test_lobby_enforce_unlocks_asks_once_per_locked_pick() -> void:
+	var panel := LobbyPanel.new()
+	autofree(panel)
+	var arena := Arena.new()
+	autofree(arena)
+	panel.arena = arena
+	var asked: Array = []
+	arena.weapon_requested.connect(func(id: StringName) -> void: asked.append(id))
+	var locked: Player = _lobby_player(&"yoyo")
+	panel._enforce_unlocks(locked)
+	panel._enforce_unlocks(locked)
+	panel._enforce_unlocks(locked)
+	assert_eq(asked.size(), 1, "one request while the snapshot has not caught up")
+	panel._enforce_unlocks(_lobby_player(&"flicker_kunai"))  # the pick is now fine
+	panel._enforce_unlocks(locked)  # a locked pick again
+	assert_eq(asked.size(), 2, "asks again after the pick changed")

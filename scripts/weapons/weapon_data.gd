@@ -163,10 +163,16 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 
 
 const HELD_FPS: float = 8.0
+const TETHER_LOOP_PX: float = 16.0  ## yo-yo held art: columns left of the disc (loop + string stub)
 
 
+## `loop_only` draws just the left TETHER_LOOP_PX columns.
 ## Draws the held art with its grip at the transform's origin, looping `held_frames` when set.
-func draw_held(ci: CanvasItem, grip: Vector2, tint: Color) -> void:
+func draw_held(ci: CanvasItem, grip: Vector2, tint: Color, loop_only: bool = false) -> void:
+	if loop_only and held_frames == null:  # a tether weapon whose shot is out: just the finger loop and string stub
+		var keep: Vector2 = Vector2(TETHER_LOOP_PX, sprite.get_height())
+		ci.draw_texture_rect_region(sprite, Rect2(-grip, keep), Rect2(Vector2.ZERO, keep), tint)
+		return
 	if held_frames == null:
 		ci.draw_texture(sprite, -grip, tint)
 		return
