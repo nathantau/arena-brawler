@@ -77,14 +77,15 @@ static func odds_text() -> String:
 
 ## Every ability and weapon a box can ever give `c` (locked or not): [{kind, id, rarity}], abilities first.
 static func lockable(c: CharacterData) -> Array:
-	var out: Array = []
-	for s: SkillData in SkillCatalog.shared().specials_for(c):
-		if not Unlocks.is_starter_skill(c, s):
-			out.append({"kind": &"skill", "id": s.id, "rarity": s.rarity})
-	for w: WeaponData in Unlocks.weapons_for(c):
-		if w != c.signature_weapon:
-			out.append({"kind": &"weapon", "id": w.id, "rarity": w.rarity})
-	return out
+	return Unlocks.lockable(c)
+
+
+## "Duplicates refund 30 / 50 / 80 gold · new item guaranteed after 3 duplicates"
+static func dupe_text() -> String:
+	var parts: Array[String] = []
+	for g: int in Unlocks.DUPE_REFUND:
+		parts.append(str(g))
+	return "Duplicates refund %s gold · new item guaranteed after %d duplicates" % [" / ".join(parts), Unlocks.PITY_DUPES]
 
 
 ## What the reveal card and the collection show for a pool entry: {name, kind, icon, weapon, desc, rarity}. Descriptions
@@ -263,6 +264,13 @@ func _build_body() -> Control:
 	_odds.add_theme_font_size_override("font_size", UiStyle.SIZE_SMALL)
 	_odds.add_theme_color_override("font_color", UiStyle.C_STEEL)
 	side.add_child(_odds)
+	var dupes := Label.new()
+	dupes.text = dupe_text()
+	dupes.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dupes.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	dupes.add_theme_font_size_override("font_size", UiStyle.SIZE_TINY)
+	dupes.add_theme_color_override("font_color", UiStyle.C_DIM)
+	side.add_child(dupes)
 	_open_button = Button.new()
 	_open_button.theme_type_variation = &"PrimaryButton"
 	_open_button.custom_minimum_size = OPEN_SIZE
@@ -311,7 +319,7 @@ func _refresh() -> void:
 	var pool: Array = Unlocks.box_pool(_fighter)
 	var all: Array = lockable(_fighter)
 	_name_label.text = _fighter.display_name
-	_left_label.text = "%d left in the box" % pool.size() if not pool.is_empty() else "Everything unlocked"
+	_left_label.text = "%d still locked" % pool.size() if not pool.is_empty() else "Everything unlocked"
 	_collection_title.text = "COLLECTION  %d / %d" % [all.size() - pool.size(), all.size()]
 	for child: Node in _slots.get_children():
 		child.queue_free()
@@ -365,7 +373,10 @@ func _on_open() -> Dictionary:
 		_refresh()
 		return {}
 	var again: bool = open_state(PlayerProfile.gold, Unlocks.box_pool(_fighter).size()) == ""
-	_opening = BoxOpening.new(item_info(got), again, _sfx)
+	var info: Dictionary = item_info(got)
+	info["dupe"] = got["dupe"]
+	info["refund"] = got["refund"]
+	_opening = BoxOpening.new(info, again, _sfx)
 	_opening.closed.connect(_on_opening_closed)
 	add_child(_opening)
 	return got
