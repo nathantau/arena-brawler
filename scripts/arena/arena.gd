@@ -564,8 +564,16 @@ func _attach_effects() -> void:
 		sfx.play(&"laser", to))
 	projectiles.deflected.connect(effects.deflect)
 	projectiles.exploded.connect(_fx_explosion)
-	projectiles.burst_shown.connect(effects.burst_strip)
-	projectiles.fx_spawned.connect(effects.fun_impact)
+	projectiles.burst_shown.connect(func(at: Vector2, radius: float, art: Texture2D, art_radius: float) -> void:
+		effects.burst_strip(at, radius, art, art_radius)
+		var snd: StringName = Sfx.burst_sound(art)
+		if snd != &"":
+			sfx.play(snd, at))
+	projectiles.fx_spawned.connect(func(at: Vector2, w: WeaponData, seed: int) -> void:
+		effects.fun_impact(at, w, seed)
+		var snd: StringName = Sfx.impact_sound(w.id)
+		if snd != &"":
+			sfx.play(snd, at))
 	hit_landed.connect(_fx_hit)
 	match_updated.connect(_on_match_updated)
 	kill_registered.connect(_fx_kill)

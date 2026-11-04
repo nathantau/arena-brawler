@@ -10472,10 +10472,12 @@ def confetti_shot(c: Canvas, f: int) -> None:  # one paper bit per frame colour;
     m = PROJ // 2
     col = CONFETTI_COLS[f % len(CONFETTI_COLS)]
     flip = f % 2
-    c.part(P([(m - 4, m - 3 + flip), (m + 4, m - 3), (m + 4, m + 2), (m - 4, m + 2 + flip)]), col)
-    c.flat(L([(m - 3, m - 2), (m + 3, m - 2)], 1), LIGHTER[col])
-    c.dot(m - 6, m + (f % 3) - 1, col)  # a trailing speck
-    c.dot(m - 8, m + ((f + 1) % 3) - 1, DARKER[col])
+    rim = lambda g: [(m - 5 - g, m - 3 - g + flip), (m + 5 + g, m - 3 - g), (m + 5 + g, m + 2 + g), (m - 5 - g, m + 2 + g + flip)]
+    c.flat(P(rim(1)), WHITE)  # a light rim so the bit reads on dark floors (the dark outline goes round it)
+    c.flat(P(rim(0)), col)
+    c.flat(L([(m - 4, m - 2), (m + 4, m - 2)], 1), LIGHTER[col])
+    c.dot(m - 8, m + (f % 3) - 1, col)  # a trailing speck
+    c.dot(m - 8, m + ((f + 1) % 3) + 1, DARKER[col])
 
 
 def cactus_ball(c: Canvas, f: int) -> None:  # a spiky ball turning a quarter of the way round a spike gap per frame (4 frames)
@@ -10503,13 +10505,15 @@ def cactus_needle(c: Canvas, f: int) -> None:  # one spine, tip right
 
 def disc_shot(c: Canvas, f: int) -> None:  # a striped disc, the stripes turning 30 degrees a frame (4 frames = a third of a turn)
     m = PROJ // 2 - 0.5
-    c.part(E((m - 6, m - 6, m + 6, m + 6)), STEEL)
-    c.flat(E((m - 4, m - 4, m + 4, m + 4)), TEAL_L)
+    for dy in (-3, 0, 3):  # faint spin streaks trailing behind (tip is right)
+        c.flat(L([(2, int(m) + dy + f % 2), (3 + (dy == 0), int(m) + dy + f % 2)], 1), TEAL_L)
+    c.part(E((m - 7, m - 7, m + 8, m + 8)), STEEL)
+    c.flat(E((m - 5, m - 5, m + 5, m + 5)), TEAL_L)
     for k in range(3):
         a0 = math.degrees(math.tau * k / 3) + f * 30
-        c.flat(lambda d, col, a0=a0: d.pieslice((m - 4, m - 4, m + 4, m + 4), a0, a0 + 60, col), BLUE)
-    c.flat(E((m - 1, m - 1, m + 1, m + 1)), WHITE)
-    c.dot(int(m) - 4, int(m) - 5 + f % 2, WHITE)
+        c.flat(lambda d, col, a0=a0: d.pieslice((m - 5, m - 5, m + 5, m + 5), a0, a0 + 60, col), BLUE)
+    c.flat(E((m - 1.5, m - 1.5, m + 1.5, m + 1.5)), WHITE)
+    c.dot(int(m) - 5, int(m) - 5 + f % 2, WHITE)
 
 
 def yoyo_shot(c: Canvas, f: int) -> None:  # a red yo-yo face with a gold star turning (4 frames, 22.5 degrees each)

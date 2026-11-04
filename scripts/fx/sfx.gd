@@ -33,6 +33,14 @@ const SKILL_ID_SOUNDS: Dictionary[StringName, StringName] = {
 	&"hanami_tempest": &"tempest", &"thunderstorm": &"thunderstorm", &"world_tree": &"world_tree", &"eclipse": &"eclipse",
 }
 
+## A second sound that trails a first one: [sound, delay s]. (Recipes are one sweep each; this layers two.)
+const FOLLOW_UPS: Dictionary[StringName, Array] = {
+	&"confetti_pop": [&"confetti_rustle", 0.05], &"yoyo_out": [&"yoyo_back", 0.3], &"jar_shatter": [&"jar_crackle", 0.05],
+}
+## Impact sound by weapon id (played with the weapon's impact strip) and by burst strip name (splash bursts).
+const IMPACT_SOUNDS: Dictionary[StringName, StringName] = {&"confetti_popper": &"confetti_rustle"}
+const BURST_SOUNDS: Dictionary[StringName, StringName] = {&"cactus_pop": &"cactus_prickle", &"jar_shatter": &"jar_shatter"}
+
 enum Wave { SINE, SQUARE, SAW, NOISE }
 ## Recipe fields: duration s, start Hz, end Hz, wave, noise mix 0..1, noise smoothing 0..1
 ## (higher = duller), attack s, decay rate (1/s), volume 0..1.
@@ -44,6 +52,17 @@ const RECIPES: Dictionary[StringName, Array] = {
 	&"shot_sniper": [0.35, 1400.0, 120.0, Wave.SAW, 0.5, 0.2, 0.001, 10.0, 0.55],
 	&"shot_rocket": [0.4, 160.0, 90.0, Wave.SAW, 0.8, 0.8, 0.01, 6.0, 0.5],
 	&"shot_launcher": [0.16, 300.0, 140.0, Wave.SINE, 0.4, 0.7, 0.002, 18.0, 0.5],
+	# Shared weapons: party-popper pop + paper rustle, hollow lob + prickly burst, whirring zing, whoosh out / softer back, glass clink + shatter + crackle.
+	&"confetti_pop": [0.1, 1900.0, 450.0, Wave.SINE, 0.3, 0.2, 0.001, 40.0, 0.35],
+	&"confetti_rustle": [0.14, 3000.0, 1500.0, Wave.NOISE, 1.0, 0.1, 0.01, 22.0, 0.2],
+	&"cactus_thoomp": [0.2, 190.0, 70.0, Wave.SINE, 0.25, 0.7, 0.003, 16.0, 0.5],
+	&"cactus_prickle": [0.12, 2200.0, 900.0, Wave.SQUARE, 0.6, 0.1, 0.001, 35.0, 0.28],
+	&"disc_whirr": [0.14, 700.0, 1700.0, Wave.SAW, 0.3, 0.2, 0.004, 22.0, 0.25],
+	&"yoyo_out": [0.14, 300.0, 800.0, Wave.NOISE, 1.0, 0.4, 0.01, 18.0, 0.3],
+	&"yoyo_back": [0.12, 700.0, 300.0, Wave.NOISE, 1.0, 0.4, 0.01, 20.0, 0.17],
+	&"jar_clink": [0.12, 2400.0, 2000.0, Wave.SINE, 0.1, 0.1, 0.001, 30.0, 0.3],
+	&"jar_shatter": [0.25, 3200.0, 1200.0, Wave.NOISE, 0.9, 0.1, 0.001, 18.0, 0.35],
+	&"jar_crackle": [0.3, 1800.0, 400.0, Wave.SAW, 0.7, 0.15, 0.002, 10.0, 0.25],
 	&"laser": [0.08, 1800.0, 1500.0, Wave.SINE, 0.05, 0.1, 0.002, 20.0, 0.22],
 	&"swing": [0.16, 500.0, 200.0, Wave.NOISE, 1.0, 0.45, 0.02, 16.0, 0.45],
 	&"explosion": [0.7, 90.0, 30.0, Wave.SINE, 0.85, 0.85, 0.003, 5.0, 0.9],
@@ -123,6 +142,15 @@ static func skill_sound(kind: int, id: StringName = &"") -> StringName:
 	return SKILL_ID_SOUNDS.get(id, SKILL_SOUNDS.get(kind, &"dash"))
 
 
+static func impact_sound(weapon_id: StringName) -> StringName:
+	return IMPACT_SOUNDS.get(weapon_id, &"")
+
+
+## The sound for a splash burst drawn with `art` (by file name), or &"" for none.
+static func burst_sound(art: Texture2D) -> StringName:
+	return BURST_SOUNDS.get(StringName(art.resource_path.get_file().get_basename()), &"") if art != null else &""
+
+
 ## Plays `id`, quieter the farther `at` is from the listener. INF = non-positional.
 func play(id: StringName, at: Vector2 = Vector2.INF) -> void:
 	var stream: AudioStreamWAV = _streams.get(id)
@@ -143,6 +171,9 @@ func play(id: StringName, at: Vector2 = Vector2.INF) -> void:
 	v.volume_db = db
 	v.pitch_scale = 1.0 + _rng.randf_range(-PITCH_JITTER, PITCH_JITTER)
 	v.play()
+	if FOLLOW_UPS.has(id) and is_inside_tree():
+		var f: Array = FOLLOW_UPS[id]
+		get_tree().create_timer(f[1]).timeout.connect(func() -> void: play(f[0], at))
 
 
 static func synthesize(r: Array, rng: RandomNumberGenerator) -> AudioStreamWAV:
