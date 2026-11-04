@@ -10348,6 +10348,355 @@ FX.update({
 })
 
 
+# --- More fun weapons: Confetti Popper, Cactus Cannon, Disc Launcher, Yo-Yo, Storm Jar ----------------------------------
+# Same recipe as the "Fun weapons" block: 48x24 held art, 20 px bullets, impact strips. Crisp bits go through `after`.
+
+def _cone_band(c: Canvas, x0: int, x1: int, col) -> None:
+    """A stripe across the popper's cone (top edge (4,10)-(36,3), bottom edge (4,15)-(36,21))."""
+    def top(x): return round(10 - (x - 4) * 6 / 32)
+    def bot(x): return round(15 + (x - 4) * 5 / 32)
+    c.flat(P([(x0, top(x0)), (x1, top(x1)), (x1, bot(x1)), (x0, bot(x0))]), col)
+
+
+def confetti_popper(c: Canvas, t: int = 0) -> None:
+    """A party popper: a striped paper cone with a pull-string, a cream rim round the mouth and streamers bursting out."""
+    c.part(P([(4, 10), (4, 15), (36, 20), (36, 4)]), PINK)  # the cone
+    for x0, x1, col in ((10, 14, YELLOW), (18, 22, TEAL_L), (26, 30, YELLOW)):
+        _cone_band(c, x0, x1, col)
+    for x, y, col in ((7, 12, WHITE), (16, 13, WHITE), (24, 12, WHITE), (32, 12, WHITE)):  # polka dots
+        c.dot(x, y, col)
+    c.flat(L([(5, 10), (30, 5)], 1), PINK_L)  # paper sheen along the top edge
+    c.part(RR((34, 3, 41, 21), 2), CREAM)  # the rim
+    c.flat(E((37, 5, 40, 19)), NAVY)  # dark mouth
+    c.flat(L([(35, 5), (35, 19)], 1), WHITE)
+    c.part(L([(4, 13), (2, 17), (3, 20)], 1), CREAM, shade=False)  # pull-string
+    c.part(E((2, 18, 6, 21)), RED)  # and its ring
+
+    def streamers(img: Image.Image) -> None:
+        for x, y, col in ((42, 11, WHITE), (43, 9, RED), (44, 7, YELLOW), (45, 5, TEAL_L), (43, 14, PINK_L), (44, 16, GREEN_L),
+                          (46, 13, ORANGE), (45, 10, VIOLET_L), (42, 6, PINK), (46, 18, YELLOW), (44, 20, TEAL_L), (46, 8, GREEN_L),
+                          (42, 17, RED), (46, 3, PINK_L), (44, 3, ORANGE)):
+            put(img, x, y, col)
+            if (x + y) % 3 == 0 and x < 45:
+                put(img, x + 1, y, col)  # some bits are 2 px
+    after(c, streamers)
+
+
+def cactus_cannon(c: Canvas, t: int = 0) -> None:
+    """A potted cactus with a barrel for a body: terracotta pot for a grip, ribbed green barrel, an arm with a pink flower, spines."""
+    c.part(P([(5, 15), (14, 15), (12, 21), (7, 21)]), ORANGE)  # pot
+    c.flat(L([(7, 18), (12, 18)], 1), RED)
+    c.part(R((3, 12, 16, 15)), OCHRE)  # rim
+    c.part(RR((12, 7, 36, 18), 4), GREEN)  # barrel
+    for y, col in ((9, GREEN_L), (12, GREEN_D), (15, GREEN_D)):
+        c.flat(L([(15, y), (33, y)], 1), col)  # ribs
+    c.part(RR((19, 4, 25, 11), 2), GREEN)  # the arm
+    c.flat(L([(21, 6), (21, 10)], 1), GREEN_L)
+    c.part(E((18, 2, 26, 6)), PINK)  # flower
+    c.flat(R((21, 3, 22, 4)), YELLOW)
+    c.part(E((33, 6, 40, 19)), GREEN_L)  # the muzzle lip
+    c.flat(E((35, 9, 39, 16)), WALNUT_D)
+    for x, y in ((17, 11), (22, 14), (27, 11), (30, 14), (24, 17), (14, 16), (33, 11)):
+        c.dot(x, y, CREAM)  # spines
+
+    def spines(img: Image.Image) -> None:
+        for x, y, dx, dy in ((15, 6, -1, -1), (28, 6, 1, -1), (31, 6, 1, -1), (17, 19, -1, 1), (27, 19, 1, 1), (31, 19, 1, 1),
+                             (11, 10, -1, 0), (23, 3, 0, -1)):
+            put(img, x, y, CREAM)
+            put(img, x + dx, y + dy, WHITE)
+    after(c, spines)
+
+
+def disc_launcher(c: Canvas, t: int = 0) -> None:
+    """A sleek blue launcher with a striped disc standing in a slot on top, a steel barrel and a brown grip."""
+    c.part(E((12, 2, 30, 11)), STEEL)  # the disc
+    c.flat(E((14, 3, 28, 9)), TEAL_L)
+    for pts in (((21, 5), (28, 4), (28, 6)), ((21, 5), (16, 3), (18, 7)), ((21, 5), (20, 9), (24, 8))):
+        c.flat(P(list(pts)), BLUE)
+    c.flat(R((20, 4, 22, 6)), WHITE)
+    c.part(P([(5, 15), (11, 15), (10, 21), (4, 21)]), BROWN)  # grip
+    c.flat(L([(6, 18), (9, 18)], 1), MAROON)
+    c.part(RR((3, 10, 31, 18), 3), BLUE)  # body
+    c.flat(L([(5, 11), (28, 11)], 1), TEAL_L)
+    c.flat(R((7, 15, 24, 15)), NAVY)
+    c.flat(R((26, 13, 28, 16)), ORANGE)  # status light
+    c.part(R((31, 11, 40, 16)), STEEL_D)  # barrel
+    c.flat(R((33, 12, 38, 12)), STEEL)
+    c.part(R((39, 9, 43, 18)), STEEL)  # mouth
+    c.flat(R((41, 11, 42, 16)), OUTLINE)
+
+
+def yoyo(c: Canvas, t: int = 0) -> None:
+    """A red yo-yo with a gold star on a cream string from a finger loop."""
+    c.part(E((2, 9, 9, 16)), STEEL, shade=False)  # finger loop
+    c.flat(E((4, 11, 7, 14)), OUTLINE)
+    c.part(L([(8, 14), (14, 19), (22, 20), (29, 16)], 1), CREAM, shade=False)  # the string, sagging
+    c.part(E((27, 4, 44, 21)), RED)  # the yo-yo
+    c.flat(E((29, 6, 42, 19)), ORANGE)
+    c.flat(E((31, 8, 40, 17)), YELLOW)
+    star = [(round(35.5 + math.cos(math.tau * i / 10 - math.pi / 2) * (4.4 if i % 2 == 0 else 2.0)),
+             round(12.5 + math.sin(math.tau * i / 10 - math.pi / 2) * (4.4 if i % 2 == 0 else 2.0))) for i in range(10)]
+    c.flat(P(star), RED)
+    c.flat(R((35, 12, 36, 13)), WHITE)
+    c.flat(L([(30, 7), (33, 5)], 1), WHITE)  # glint on the rim
+
+
+def storm_jar(c: Canvas, t: int = 0) -> None:
+    """A glass jar with a thunderstorm in it: dark cloud, a yellow bolt, a steel lid, glints on the glass."""
+    c.part(RR((5, 3, 31, 21), 5), TEAL_L)  # the glass
+    c.flat(RR((7, 5, 29, 19), 3), NAVY)
+    c.flat(blobs([(13, 11, 4), (19, 9, 5), (25, 11, 4), (17, 13, 4), (23, 14, 3)]), STEEL_D)
+    c.flat(blobs([(18, 8, 3), (13, 10, 2)]), STEEL)  # lit top of the cloud
+    c.flat(P([(20, 10), (25, 10), (22, 13), (26, 13), (17, 18), (19, 15), (15, 15)]), YELLOW)  # bolt
+    c.flat(P([(21, 11), (23, 11), (21, 14), (18, 16), (20, 13)]), WHITE)
+    c.flat(L([(8, 8), (8, 17)], 1), WHITE)  # glints
+    c.flat(L([(10, 6), (15, 6)], 1), WHITE)
+    c.part(R((31, 8, 35, 18)), TEAL_L)  # neck
+    c.part(RR((35, 6, 42, 20), 1), STEEL)  # lid
+    for x in (37, 39, 41):
+        c.flat(L([(x, 7), (x, 19)], 1), STEEL_D)
+    c.flat(L([(36, 7), (36, 19)], 1), WHITE)
+    after(c, lambda img: (put(img, 44, 9, YELLOW), put(img, 45, 8, WHITE), put(img, 43, 16, YELLOW), put(img, 3, 7, TEAL_L)))
+
+
+WEAPONS.update({"confetti_popper": confetti_popper, "cactus_cannon": cactus_cannon, "disc_launcher": disc_launcher,
+                "yoyo": yoyo, "storm_jar": storm_jar})
+
+
+# --- bullets -----------------------------------------------------------------------------------------------------
+
+CONFETTI_COLS = (RED, ORANGE, YELLOW, GREEN_L, TEAL_L, VIOLET_L, PINK)
+
+
+def confetti_shot(c: Canvas, f: int) -> None:  # one paper bit per frame colour; pellet p shows frame p (+ time), so a volley is a rainbow
+    m = PROJ // 2
+    col = CONFETTI_COLS[f % len(CONFETTI_COLS)]
+    flip = f % 2
+    c.part(P([(m - 4, m - 3 + flip), (m + 4, m - 3), (m + 4, m + 2), (m - 4, m + 2 + flip)]), col)
+    c.flat(L([(m - 3, m - 2), (m + 3, m - 2)], 1), LIGHTER[col])
+    c.dot(m - 6, m + (f % 3) - 1, col)  # a trailing speck
+    c.dot(m - 8, m + ((f + 1) % 3) - 1, DARKER[col])
+
+
+def cactus_ball(c: Canvas, f: int) -> None:  # a spiky ball turning a quarter of the way round a spike gap per frame (4 frames)
+    m = PROJ // 2
+    c.part(E((m - 5, m - 5, m + 5, m + 5)), GREEN)
+    c.flat(E((m - 3, m - 3, m, m)), GREEN_L)
+    c.flat(L([(m + 2, m + 1), (m + 3, m + 3)], 1), GREEN_D)
+    for i in range(8):
+        a = math.tau * i / 8 + f * math.tau / 32
+        x0, y0 = m + math.cos(a) * 4.5, m + math.sin(a) * 4.5
+        x1, y1 = m + math.cos(a) * 7.0, m + math.sin(a) * 7.0
+        c.flat(L([(round(x0), round(y0)), (round(x1), round(y1))], 1), CREAM)
+    for i in range(3):  # a pink bloom on top
+        a = math.tau * i / 3 + f * math.tau / 12
+        c.dot(round(m + math.cos(a) * 1.6), round(m + math.sin(a) * 1.6), PINK)
+    c.dot(m, m, YELLOW)
+
+
+def cactus_needle(c: Canvas, f: int) -> None:  # one spine, tip right
+    m = PROJ // 2
+    c.part(P([(m - 5, m - 1), (m + 1, m - 1), (m + 5, m), (m + 1, m + 1), (m - 5, m + 1)]), CREAM, shade=False)
+    c.flat(L([(m - 5, m), (m - 1, m)], 1), GREEN if f else GREEN_D)
+    c.dot(m + 3, m, WHITE)
+
+
+def disc_shot(c: Canvas, f: int) -> None:  # a striped disc, the stripes turning 30 degrees a frame (4 frames = a third of a turn)
+    m = PROJ // 2 - 0.5
+    c.part(E((m - 6, m - 6, m + 6, m + 6)), STEEL)
+    c.flat(E((m - 4, m - 4, m + 4, m + 4)), TEAL_L)
+    for k in range(3):
+        a0 = math.degrees(math.tau * k / 3) + f * 30
+        c.flat(lambda d, col, a0=a0: d.pieslice((m - 4, m - 4, m + 4, m + 4), a0, a0 + 60, col), BLUE)
+    c.flat(E((m - 1, m - 1, m + 1, m + 1)), WHITE)
+    c.dot(int(m) - 4, int(m) - 5 + f % 2, WHITE)
+
+
+def yoyo_shot(c: Canvas, f: int) -> None:  # a red yo-yo face with a gold star turning (4 frames, 22.5 degrees each)
+    m = PROJ // 2 - 0.5
+    c.part(E((m - 5, m - 5, m + 5, m + 5)), RED)
+    c.flat(E((m - 3.5, m - 3.5, m + 3.5, m + 3.5)), YELLOW)
+    pts = []
+    for i in range(10):
+        a = math.tau * i / 10 + f * math.tau / 40
+        r = 3.4 if i % 2 == 0 else 1.6
+        pts.append((round(m + math.cos(a) * r), round(m + math.sin(a) * r)))
+    c.flat(P(pts), RED)
+    c.dot(int(m), int(m), WHITE)
+    c.dot(int(m) - 4, int(m) - 3, WHITE)
+
+
+def _rot(pts, ang: float, cx: float, cy: float):
+    ca, sa = math.cos(ang), math.sin(ang)
+    return [(round(cx + (x - cx) * ca - (y - cy) * sa), round(cy + (x - cx) * sa + (y - cy) * ca)) for x, y in pts]
+
+
+def jar_shot(c: Canvas, f: int) -> None:  # a small jar tumbling end over end (6 frames, 60 degrees each)
+    m = PROJ // 2
+    ang = f * math.tau / 6
+    c.part(P(_rot([(m - 5, m - 4), (m + 1, m - 4), (m + 3, m - 2), (m + 3, m + 2), (m + 1, m + 4), (m - 5, m + 4)], ang, m, m)), TEAL_L)
+    c.flat(P(_rot([(m - 4, m - 3), (m, m - 3), (m + 2, m - 1), (m + 2, m + 1), (m, m + 3), (m - 4, m + 3)], ang, m, m)), NAVY)
+    c.flat(P(_rot([(m - 2, m - 2), (m, m - 2), (m - 1, m), (m + 1, m), (m - 3, m + 2), (m - 2, m + 1), (m - 3, m + 1)], ang, m, m)), YELLOW)
+    c.part(P(_rot([(m + 3, m - 2), (m + 6, m - 2), (m + 6, m + 2), (m + 3, m + 2)], ang, m, m)), STEEL)
+    hx, hy = _rot([(m - 4, m - 3)], ang, m, m)[0]
+    c.dot(hx, hy, WHITE)
+
+
+PROJECTILES.update({"confetti_popper": confetti_shot, "cactus_cannon": cactus_ball, "disc_launcher": disc_shot,
+                    "yoyo": yoyo_shot, "storm_jar": jar_shot})
+PROJECTILE_FRAMES.update({"confetti_popper": 7, "cactus_cannon": 4, "disc_launcher": 4, "yoyo": 4, "storm_jar": 6})
+PROJ_EXTRA = {"cactus_needle": lambda: projectile_strip(cactus_needle, 2)}
+
+
+# --- impact strips ------------------------------------------------------------------------------------------------
+
+def confetti_puff_frame(k: int, n: int = 8) -> Image.Image:
+    """A little party-popper burst (40 px): a pop of white sparkle, then paper bits fly out and flutter down, ribbons curl."""
+    t = k / (n - 1)
+    img = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
+    m = 20
+    e = ease_out(min(1.0, t * 1.15))
+    if k < 2:
+        star4(img, m, m, 4 - 2 * k, YELLOW)
+    rng = random.Random(77)
+    for i in range(24):
+        a = math.tau * i / 24 + rng.uniform(-0.2, 0.2)
+        reach = rng.uniform(6, 16) * e
+        flutter = math.sin(t * 9 + i) * 1.5
+        x = m + math.cos(a) * reach
+        y = m + math.sin(a) * reach * 0.85 + 7 * t * t + flutter * t
+        if t > 0.6 and (i + k) % 3 == 0:
+            continue  # thins out
+        col = CONFETTI_COLS[i % len(CONFETTI_COLS)]
+        px_, py_ = round(x), round(y)
+        if i % 3 == 0:
+            for dx, dy in ((0, 0), (1, 0), (0, 1), (1, 1)) if t < 0.5 else ((0, 0), (1, 0)):
+                put(img, px_ + dx, py_ + dy, col)
+        elif i % 3 == 1:
+            for dx in range(3 if t < 0.7 else 2):
+                put(img, px_ + dx, py_, col)
+        else:
+            put(img, px_, py_, col)
+            put(img, px_, py_ + 1, DARKER[col])
+    for i in range(3):  # curling ribbons, a solid 1 px line
+        a = math.tau * i / 3 + 0.8
+        col = (PINK, TEAL_L, YELLOW)[i]
+        prev = None
+        for s in range(int(15 * e)):
+            r = 3 + s
+            aa = a + math.sin(s * 0.45 + t * 6) * 0.5
+            if t > 0.55 and s > 15 * e * (1.3 - t):
+                continue
+            cur = (round(m + math.cos(aa) * r), round(m + math.sin(aa) * r * 0.85 + 5 * t * t * s / 8))
+            if prev is not None:
+                for q in range(3):  # fill the gap between steps
+                    put(img, round(prev[0] + (cur[0] - prev[0]) * q / 3), round(prev[1] + (cur[1] - prev[1]) * q / 3), col)
+            put(img, cur[0], cur[1], col)
+            prev = cur
+    return img
+
+
+def cactus_pop_frame(k: int, n: int = 8) -> Image.Image:
+    """A prickly burst (64 px): a green puff with a lit rim, pale spines flying out with a streak, bits of cactus."""
+    t = k / (n - 1)
+    c = Canvas(64)
+    m = 32
+    e = ease_out(min(1.0, t * 1.2))
+    g = 1.0 - max(0.0, t - 0.4) / 0.6
+    puffs = []
+    for i in range(6):
+        a = math.tau * i / 6 + 0.4
+        puffs.append((m + math.cos(a) * 12 * e, m + math.sin(a) * 9 * e - 3 * t, round((6.5 - 2.5 * t) * g)))
+    if k < 3:
+        puffs.append((m, m, 10 - 2 * k))
+    for x, y, r in puffs:
+        if r >= 1:
+            c.part(blobs([(x, y, r)]), GREEN_L if k < 2 else GREEN)
+    if k >= 2:
+        for x, y, r in puffs:  # a lit core on each puff
+            if r >= 3:
+                c.flat(blobs([(x - 1, y - 1, r - 2)]), GREEN_L)
+    img = outline(c.img)
+    for i in range(10):  # spines with a streak behind
+        a = math.tau * i / 10 + 0.15
+        dist = (10 + 16 * (i % 2)) * e + 4
+        ca, sa = math.cos(a), math.sin(a)
+        if t > 0.85:
+            continue
+        for j in range(4):
+            put(img, round(m + ca * (dist - j)), round(m + sa * (dist - j) * 0.9), WHITE if j == 0 else CREAM if j < 3 else STEEL)
+            if j < 2:
+                put(img, round(m + ca * (dist - j)) + 1, round(m + sa * (dist - j) * 0.9), CREAM)
+    for i in range(5):  # green flecks that fall
+        a = math.tau * i / 5 + 0.9
+        put(img, round(m + math.cos(a) * (6 + 14 * e)), round(m + math.sin(a) * (5 + 11 * e) + 8 * t * t), GREEN if i % 2 else GREEN_L)
+    return img
+
+
+def jar_shatter_frame(k: int, n: int = 10) -> Image.Image:
+    """Glass bursting round a thunderclap (72 px): a white-blue flash, a ring of glass shards, jagged yellow arcs, a few droplets."""
+    t = k / (n - 1)
+    img = Image.new("RGBA", (72, 72), (0, 0, 0, 0))
+    m = 36
+    e = ease_out(min(1.0, t * 1.1))
+    if k < 3:  # flash: a white core in a dithered blue halo
+        r = (11, 9, 6)[k]
+        for y in range(72):
+            for x in range(72):
+                d = math.hypot(x - m, y - m)
+                if d < r:
+                    put(img, x, y, WHITE if d < r * 0.7 else TEAL_L)
+                elif d < r + 6 and (x + y) % 2 == 0:
+                    put(img, x, y, BLUE)
+    if k >= 1:  # glass shards: little triangles that tumble outward
+        for i in range(9):
+            a = math.tau * i / 9 + 0.25
+            dist = (8 + 17 * ((i * 5) % 3) / 2) * e + 6
+            x, y = m + math.cos(a) * dist, m + math.sin(a) * dist * 0.9 + 9 * t * t
+            if t > 0.75 and (i + k) % 2:
+                continue
+            sz = 4 if t < 0.35 else 3 if t < 0.7 else 2
+            for dx in range(sz):
+                for dy in range(sz - dx):
+                    put(img, round(x) + dx, round(y) + dy, TEAL_L)
+            put(img, round(x), round(y), WHITE)
+            if sz >= 3:
+                put(img, round(x) + 1, round(y) + 1, STEEL)
+    ring = 9 + 22 * e  # the thunder ring: dashes that thin out
+    for a in range(0, 360, 6):
+        if (a // 6 * 7 + k * 5) % 10 / 10 < t * 1.15:
+            continue
+        ar = math.radians(a)
+        x, y = round(m + math.cos(ar) * ring), round(m + math.sin(ar) * ring * 0.85)
+        put(img, x, y, YELLOW if (a // 6) % 2 else WHITE)
+        if t < 0.55:
+            put(img, x + 1, y, YELLOW if (a // 6) % 2 else WHITE)
+            put(img, x, y + 1, YELLOW)
+    if 1 <= k <= 6:  # jagged arcs jumping out of the burst
+        rng = random.Random(5 + k)
+        for i in range(4):
+            a = math.tau * i / 4 + rng.uniform(0, 1.2)
+            px_, py_ = float(m), float(m)
+            for s in range(5 + k):
+                a += rng.uniform(-0.7, 0.7)
+                px_ += math.cos(a) * 3
+                py_ += math.sin(a) * 3 * 0.9
+                put(img, round(px_), round(py_), WHITE if s % 3 == 0 else YELLOW)
+                put(img, round(px_) + 1, round(py_), YELLOW)
+    for i in range(7):  # droplets from the jar
+        a = math.tau * i / 7 + 0.6
+        rr = 5 + 16 * e
+        put(img, round(m + math.cos(a) * rr), round(m + math.sin(a) * rr + 6 * t * t), BLUE if i % 2 else TEAL_L)
+    return img
+
+
+FX.update({
+    "confetti_puff": lambda: strip([confetti_puff_frame(k) for k in range(8)]),
+    "cactus_pop": lambda: strip([cactus_pop_frame(k) for k in range(8)]),
+    "jar_shatter": lambda: strip([jar_shatter_frame(k) for k in range(10)]),
+})
+
+
 # --- Ultimates: Hanami Tempest (Sakura), Thunderstorm (Bolt), World Tree (Eden), Eclipse (Shadow) --------------------
 # Big, round-swinging moments. Each is a handful of 60 fps-friendly strips (anticipation -> release -> a dissipating tail).
 
@@ -11845,6 +12194,10 @@ def main() -> None:
     spark = strip([firework_spark(i) for i in range(len(SPARK_COLS))])
     check(spark, PROJ)
     spark.save(PROJ_OUT / "firework_spark.png")
+    for name, make in PROJ_EXTRA.items():
+        extra = make()
+        check(extra, PROJ)
+        extra.save(PROJ_OUT / f"{name}.png")
     print(f"wrote {len(PROJECTILES)} projectiles to {PROJ_OUT}")
     ARENA_OUT.mkdir(exist_ok=True)
     for name, parts in THEMES.items():

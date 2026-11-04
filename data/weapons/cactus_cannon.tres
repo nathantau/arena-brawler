@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/cactus_cannon.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/cactus_cannon.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/cactus_pop.png" id="10_x"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/cactus_needle.png" id="11_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"cactus_cannon"
+rarity = 0
+display_name = "Cactus Cannon"
+muzzle_x = 40.0
+burst_art = ExtResource("10_x")
+burst_art_radius = 24.0
+pickup = true
+damage = 14
+fire_interval = 0.85
+spread_deg = 3.0
+projectile_speed = 400.0
+projectile_range = 420.0
+projectile_radius = 6.0
+energy_cost = 62
+knockback = 90.0
+color = Color(0.67, 0.82, 0.41, 1)
+screen_shake = 0.1
+sfx = &"shot_launcher"
+splash_radius = 34.0
+splash_edge_scale = 0.5
+lob_height = 22.0
+split_count = 6
+split_scale = 0.5
+split_fan_deg = 360.0
+split_range = 130.0
+split_speed = 320.0
+split_sprite = ExtResource("11_x")
+hook = "Bursts into a ring of needles"

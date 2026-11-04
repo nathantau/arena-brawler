@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/confetti_popper.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/confetti_popper.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/confetti_puff.png" id="10_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"confetti_popper"
+rarity = 0
+display_name = "Confetti Popper"
+muzzle_x = 40.0
+pickup = true
+damage = 4
+fire_interval = 0.75
+pellets = 7
+pellet_spread_deg = 48.0
+spread_deg = 4.0
+projectile_speed = 460.0
+projectile_range = 190.0
+projectile_radius = 4.0
+energy_cost = 50
+knockback = 20.0
+color = Color(0.89, 0.43, 0.63, 1)
+screen_shake = 0.06
+sfx = &"shot_launcher"
+impact_art = ExtResource("10_x")
+fx_every = 3
+hook = "A wide pop of confetti"
