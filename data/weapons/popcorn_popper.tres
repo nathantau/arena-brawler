@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/popcorn_popper.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/popcorn_popper.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/popcorn_puff.png" id="10_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"popcorn_popper"
+rarity = 0
+display_name = "Popcorn Popper"
+muzzle_x = 40.0
+pickup = true
+damage = 3
+fire_interval = 0.65
+spread_deg = 5.0
+projectile_speed = 400.0
+projectile_range = 175.0
+projectile_radius = 4.0
+energy_cost = 40
+knockback = 15.0
+color = Color(0.98, 0.9, 0.55, 1)
+screen_shake = 0.06
+sfx = &"popcorn_pop"
+pellets = 8
+pellet_spread_deg = 40.0
+lob_height = 8.0
+fx_every = 2
+projectile_scale = 1.2
+impact_art = ExtResource("10_x")
+hook = "Kernels pop where they land"

@@ -67,6 +67,10 @@ const STRING_STEP: float = 1.0
 const STRING_COLORS: Array[Color] = [Color8(244, 240, 226), Color8(244, 240, 226), Color8(170, 176, 190)]
 const LOB_SHADOW: Color = Color(0, 0, 0, 0.28)
 const LOB_SHADOW_SIZE: Vector2 = Vector2(0.9, 0.4)
+## A vortex stops pulling a foe this far (px) beyond touching the orb, so the orb's own hit test still gets him.
+const VORTEX_CORE: float = 6.0
+const VORTEX_DOTS: int = 12
+const VORTEX_SPIN: float = 1.6
 const HIT_MASK: int = Constants.LAYER_WALLS | Constants.LAYER_PLAYERS | Constants.LAYER_SHIELDS | Constants.LAYER_CRATES
 
 
@@ -113,6 +117,9 @@ class Slot:
 	var backstab: float = 0.0
 	var split_count: int = 0
 	var split_scale: float = 0.0
+	## Black Hole Orb: drags enemies within `vortex_radius` toward this shot (authority only, see _vortex).
+	var vortex_radius: float = 0.0
+	var vortex_force: float = 0.0
 	## A player this shot sails past (a split shard never re-hits the player its parent burst on).
 	var skip_id: int = -1
 	## Parried: drawn in the parrier's colour so it reads as theirs now.
@@ -308,6 +315,8 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.backstab = weapon.backstab_bonus
 	slot.split_count = weapon.split_count
 	slot.split_scale = weapon.split_scale
+	slot.vortex_radius = weapon.vortex_radius
+	slot.vortex_force = weapon.vortex_force
 	slot.skip_id = -1
 	slot.reflected = false
 	slot.weapon = weapon if _is_fun(weapon) else null
@@ -325,7 +334,7 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 ## Whether a weapon uses any of the "Fun" hooks (so its slots keep a weapon reference).
 static func _is_fun(w: WeaponData) -> bool:
 	return w.lob_height > 0.0 or w.curve_deg != 0.0 or w.wobble_amp > 0.0 or w.grow_max > 0.0 or w.soak_time > 0.0 \
-		or w.trap_time > 0.0 or w.sting_delay > 0.0 or w.rainbow_trail or w.impact_art != null or w.splat_art != null or w.tether
+		or w.trap_time > 0.0 or w.sting_delay > 0.0 or w.rainbow_trail or w.impact_art != null or w.splat_art != null or w.tether or w.vortex_radius > 0.0
 
 
 func _beam(owner_id: int, seq: int, pellet: int, origin: Vector2, dir: Vector2, weapon: WeaponData,
@@ -563,6 +572,8 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 		s.vel *= exp(-s.drag * delta)
 	if s.weapon != null:
 		_step_fun(s, delta)
+	if s.vortex_radius > 0.0 and authoritative:
+		_vortex(s, delta)
 	if s.boomerang and s.returning:
 		if not _steer_home(s):
 			s.active = false
@@ -660,6 +671,25 @@ func _step_fun(s: Slot, delta: float) -> void:
 		s.radius = s.base_radius * grow
 	if w.sting_delay > 0.0:
 		_step_bee(s, delta)
+
+
+## Black Hole Orb: every enemy in reach with a clear line is dragged toward the orb a few px a tick, stopping at the orb's
+## edge. Only the authority moves anyone (clients get the new positions from snapshots, so nothing is applied twice); the
+## order is `targets` order and the step depends only on positions, so a replay of the same state pulls the same way.
+## (Moves by `move_and_collide` on the feet walls, not by velocity: the player's own steering would wipe a velocity nudge.)
+func _vortex(s: Slot, delta: float) -> void:
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	for p: Player in targets:
+		if _ally(s.attacker_id, p) or not p.can_be_hit() or p.is_hidden():
+			continue
+		var to: Vector2 = s.pos - p.global_position
+		var d: float = to.length()
+		var stop: float = Constants.PLAYER_RADIUS + s.radius + VORTEX_CORE  # (the orb must still be able to hit him: a ray starting inside his body never does)
+		if d > s.vortex_radius or d <= stop:
+			continue
+		if not AutoAim.has_line_of_sight(space, _los_query, s.pos, p.global_position):
+			continue
+		p.move_and_collide(to / d * minf(s.vortex_force * delta, d - stop))
 
 
 ## Hive Gun: a bee close to its target buzzes round it for `sting_delay` (passing through it), then dives to sting.
@@ -976,6 +1006,8 @@ func _spawn_shards(s: Slot, at: Vector2) -> void:
 		shard.burn_time = 0.0
 		shard.backstab = 0.0
 		shard.split_count = 0
+		shard.vortex_radius = 0.0
+		shard.vortex_force = 0.0
 		shard.skip_id = s.skip_id
 		shard.reflected = false
 
@@ -1088,6 +1120,18 @@ func _draw_string(s: Slot, w: WeaponData, px: float) -> void:
 		return
 
 
+## Black Hole Orb: pixel motes spiral in toward the orb across its pull radius (cosmetic, every peer).
+func _draw_vortex(s: Slot, px: float) -> void:
+	draw_set_transform(Vector2.ZERO)
+	for i: int in VORTEX_DOTS:
+		var u: float = fposmod(_time * 0.7 + float(i) / VORTEX_DOTS, 1.0)  # 1 = rim, 0 = at the orb
+		var arm: float = TAU * float(i % 3) / 3.0
+		var ang: float = arm + (1.0 - u) * 2.4 + _time * VORTEX_SPIN
+		var at: Vector2 = ((s.pos + Vector2(cos(ang), sin(ang)) * lerpf(s.radius, s.vortex_radius, u)) / px).floor() * px
+		var size: float = px * (1.0 if u < 0.5 else 2.0 if i % 2 == 0 else 1.0)
+		draw_rect(Rect2(at, Vector2(size, size)), Color(0.66, 0.5, 0.88, 1.0) if i % 2 == 0 else Color(0.98, 0.77, 0.84, 1.0))
+
+
 func _draw() -> void:
 	var pulse: float = 1.0 + sin(_time * FUSE_PULSE_SPEED) * FUSE_PULSE_SCALE
 	var px: float = Constants.SPRITE_SCALE
@@ -1121,6 +1165,8 @@ func _draw() -> void:
 			var at: Vector2 = ((s.pos + lift + back * px * 4.0 * (i + 2) * (0.5 if rainbow else 1.0) + jitter) / px).floor() * px
 			draw_rect(Rect2(at - Vector2(size, size) * 0.5, Vector2(size, size)),
 				CRIT_SPARKLE_COLOR if s.crit and (tick + i) % 2 == 0 else RAINBOW[(tick + i + s.pellet) % RAINBOW.size()] if rainbow else s.color)
+		if s.vortex_radius > 0.0:
+			_draw_vortex(s, px)
 		var h: float = s.sprite.get_height()
 		var frames: int = int(s.sprite.get_width() / h)
 		var scale_px: float = px * (CRIT_SPRITE_SCALE if s.crit else 1.0)

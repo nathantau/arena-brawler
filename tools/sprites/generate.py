@@ -10701,6 +10701,518 @@ FX.update({
 })
 
 
+# --- Even more fun weapons: Rubber Duck Lobber, Popcorn Popper, Magnet Blaster, Pumpkin Mortar, Black Hole Orb -----------
+# Same recipe as the two blocks above: 48x24 held art (art rows 2..21), 20 px bullets, impact strips. No new palette colours.
+
+def duck_lobber(c: Canvas, t: int = 0) -> None:
+    """A rubber duck that is also the cannon: a yellow body with a lit wing and tail flick, a rosy cheek, an orange beak whose
+    open tip is the muzzle."""
+    c.part(P([(5, 14), (10, 14), (9, 21), (4, 21)]), BROWN)  # grip
+    c.flat(L([(6, 17), (8, 17)], 1), MAROON)
+    c.part(P([(8, 13), (2, 7), (4, 4), (11, 10)]), YELLOW)  # tail flick
+    c.part(E((4, 9, 29, 21)), YELLOW)  # body
+    c.part(E((22, 3, 36, 16)), YELLOW)  # head
+    c.flat(R((24, 9, 31, 15)), YELLOW)  # the neck fills the seam
+    c.flat(P([(9, 14), (20, 13), (23, 16), (17, 19), (10, 18)]), ORANGE)  # wing
+    c.flat(L([(10, 14), (19, 14)], 1), YELLOW)
+    c.flat(L([(7, 11), (16, 10)], 1), WHITE)  # sheen on the back
+    c.part(RR((34, 7, 44, 13), 2), ORANGE)  # beak
+    c.flat(L([(35, 8), (41, 8)], 1), YELLOW)
+    c.flat(R((43, 8, 44, 12)), NAVY)  # the open tip
+    c.flat(R((29, 6, 30, 8)), OUTLINE)  # eye
+    c.dot(29, 6, WHITE)
+    c.flat(R((27, 10, 28, 11)), PINK)  # cheek
+    after(c, lambda img: (put(img, 40, 4, TEAL_L), put(img, 42, 3, WHITE), put(img, 45, 6, TEAL_L), put(img, 38, 2, WHITE)))
+
+
+def popcorn_popper(c: Canvas, t: int = 0) -> None:
+    """A red-and-white striped popcorn box heaped with individually shaded puffy kernels and butter bits, a steel nozzle for a
+    barrel and kernels popping off the end."""
+    for x, y, r in ((8, 6, 3), (13, 5, 3), (18, 6, 3), (23, 7, 2.5), (6, 8, 3), (11, 8, 3), (16, 8, 3), (21, 9, 3)):  # back row first
+        c.part(blobs([(x, y, r), (x - 1.5, y + 1, r - 1), (x + 1.5, y + 1, r - 1)]), CREAM)
+    for x, y in ((8, 5), (13, 4), (18, 5), (6, 7), (16, 7)):  # a lit speck on each puff
+        c.dot(x, y, WHITE)
+    for x, y in ((11, 6), (21, 7), (15, 9), (7, 9)):  # butter
+        c.dot(x, y, YELLOW)
+        c.dot(x + 1, y, ORANGE)
+    def edge(y: int, f: float) -> float:  # x across the box at row y (f 0 = left edge, 1 = right edge)
+        left = 4 + 2 * (y - 11) / 10
+        right = 25 - 2 * (y - 11) / 10
+        return left + f * (right - left)
+    c.part(P([(4, 11), (25, 11), (23, 21), (6, 21)]), WHITE)  # the box
+    for f0, f1 in ((0 / 6, 1 / 6), (2 / 6, 3 / 6), (4 / 6, 5 / 6)):  # clean stripes
+        c.flat(P([(edge(11, f0), 11), (edge(11, f1), 11), (edge(21, f1), 21), (edge(21, f0), 21)]), RED)
+    c.part(RR((3, 9, 26, 12), 1), RED)  # rim
+    c.flat(L([(5, 9), (24, 9)], 1), ORANGE)
+    c.part(R((25, 12, 36, 18)), STEEL_D)  # barrel
+    c.flat(L([(26, 13), (35, 13)], 1), STEEL)
+    c.part(RR((35, 10, 42, 20), 1), STEEL)  # nozzle
+    c.flat(R((40, 12, 41, 18)), OUTLINE)
+    c.flat(L([(36, 11), (36, 19)], 1), WHITE)
+
+    def kernels(img: Image.Image) -> None:
+        for x, y, col in ((44, 9, CREAM), (45, 8, WHITE), (44, 14, YELLOW), (46, 12, CREAM), (45, 17, ORANGE), (43, 6, YELLOW),
+                          (46, 15, WHITE), (44, 19, CREAM)):
+            put(img, x, y, col)
+            if col == CREAM:
+                put(img, x, y + 1, CREAM_D)
+    after(c, kernels)
+
+
+def magnet_blaster(c: Canvas, t: int = 0) -> None:
+    """A red horseshoe magnet with steel-capped poles for a barrel, a brown grip, and a spark of current across its poles."""
+    c.part(P([(5, 14), (10, 14), (9, 21), (4, 21)]), BROWN)  # grip
+    c.flat(L([(6, 17), (8, 17)], 1), MAROON)
+
+    def shoe(d, f):
+        d.ellipse((6, 2, 34, 21), f)
+        d.rectangle((21, 2, 41, 7), f)
+        d.rectangle((21, 16, 41, 21), f)
+        d.ellipse((13, 8, 30, 15), 0)
+        d.rectangle((22, 8, 42, 15), 0)
+    c.part(shoe, RED)
+    c.part(R((34, 2, 41, 7)), STEEL)  # pole caps
+    c.part(R((34, 16, 41, 21)), STEEL)
+    c.flat(L([(35, 3), (40, 3)], 1), WHITE)
+    c.flat(L([(35, 17), (40, 17)], 1), WHITE)
+    c.flat(L([(34, 2), (34, 7)], 1), STEEL_D)
+    c.flat(L([(34, 16), (34, 21)], 1), STEEL_D)
+    c.flat(L([(9, 8), (13, 4)], 1), ORANGE)  # sheen
+    c.flat(L([(8, 12), (8, 15)], 1), ORANGE)
+    c.flat(L([(18, 3), (24, 3)], 1), ORANGE)
+    for x in (16, 20):  # winding bands
+        c.flat(L([(x, 17), (x, 20)], 1), MAROON)
+
+    def spark(img: Image.Image) -> None:
+        for x, y, col in ((41, 8, TEAL_L), (39, 9, WHITE), (41, 10, TEAL_L), (39, 11, WHITE), (41, 12, TEAL_L), (39, 13, WHITE),
+                          (41, 14, TEAL_L), (44, 11, BLUE), (45, 12, TEAL_L)):
+            put(img, x, y, col)
+    after(c, spark)
+
+
+def pumpkin_mortar(c: Canvas, t: int = 0) -> None:
+    """A jack-o'-lantern dragging a steel mortar tube: curly green stem, two side ribs, two triangle eyes and a toothy grin
+    that glow from inside."""
+    c.part(P([(5, 15), (10, 15), (9, 21), (4, 21)]), BROWN)  # grip
+    c.part(E((3, 5, 31, 21)), ORANGE)  # the pumpkin
+    for pts in (((9, 7), (6, 13), (8, 19)), ((25, 7), (28, 13), (26, 19))):
+        c.flat(L(list(pts), 1), RED)  # ribs
+    c.flat(L([(7, 9), (11, 6)], 1), YELLOW)
+    c.part(P([(16, 2), (20, 2), (21, 6), (15, 6)]), GREEN)  # stem
+    c.flat(L([(21, 3), (24, 2), (25, 4)], 1), GREEN_L)
+    c.flat(P([(8, 14), (14, 14), (11, 9)]), RED)  # eyes: a red rim, the glow inside
+    c.flat(P([(18, 14), (24, 14), (21, 9)]), RED)
+    c.flat(P([(9, 13), (13, 13), (11, 10)]), YELLOW)
+    c.flat(P([(19, 13), (23, 13), (21, 10)]), YELLOW)
+    c.dot(11, 12, WHITE)
+    c.dot(21, 12, WHITE)
+    c.flat(R((8, 16, 24, 19)), RED)  # grin: red rim, glowing inside, teeth cut into it
+    c.flat(R((9, 17, 23, 18)), YELLOW)
+    for x in (10, 14, 18, 22):
+        c.flat(R((x, 16, x + 1, 17)), ORANGE)  # top teeth
+    for x in (12, 16, 20):
+        c.flat(R((x, 18, x + 1, 19)), ORANGE)  # bottom teeth
+    c.dot(15, 17, WHITE)
+    c.part(R((28, 9, 39, 17)), STEEL_D)  # mortar tube
+    c.flat(L([(29, 10), (38, 10)], 1), STEEL)
+    c.part(RR((38, 6, 44, 20), 1), STEEL)  # muzzle ring
+    c.flat(R((42, 9, 43, 17)), OUTLINE)
+    c.flat(L([(39, 7), (39, 19)], 1), WHITE)
+    c.flat(L([(33, 9), (33, 17)], 1), STEEL_D)
+    after(c, lambda img: (put(img, 45, 8, YELLOW), put(img, 45, 14, ORANGE), put(img, 3, 3, GREEN_L)))
+
+
+def black_hole_orb(c: Canvas, t: int = 0) -> None:
+    """A little black hole held in a steel cradle: a violet sphere with a void for a heart, a tilted accretion ring, a collar."""
+    c.part(P([(5, 14), (10, 14), (9, 21), (4, 21)]), BROWN)  # grip
+    c.part(P([(14, 4), (20, 2), (22, 5), (17, 8)]), STEEL)  # cradle claws
+    c.part(P([(14, 19), (20, 21), (22, 18), (17, 15)]), STEEL)
+    c.part(E((11, 2, 34, 21)), VIOLET)  # the sphere
+    c.flat(E((14, 5, 31, 18)), VIOLET_D)
+    c.flat(E((17, 7, 28, 16)), OUTLINE)  # the void
+    ang = math.radians(-22)
+    for i in range(48):  # tilted accretion ring: the near half bright, the far half dim
+        a = math.tau * i / 48
+        x, y = math.cos(a) * 14.5, math.sin(a) * 4.2
+        px_ = round(22.5 + x * math.cos(ang) - y * math.sin(ang))
+        py_ = round(11.5 + x * math.sin(ang) + y * math.cos(ang))
+        near = math.sin(a) > 0
+        if not near:
+            continue  # the far half is hidden behind the void
+        c.dot(px_, py_, PINK_L if i % 3 == 0 else VIOLET_L)
+    c.part(RR((34, 8, 43, 16), 1), STEEL_D)  # collar
+    c.flat(R((41, 10, 42, 14)), OUTLINE)
+    c.flat(L([(35, 9), (35, 15)], 1), STEEL)
+    c.flat(L([(38, 9), (38, 15)], 1), STEEL)
+
+    def stars(img: Image.Image) -> None:
+        put(img, 16, 8, WHITE)
+        put(img, 26, 5, PINK_L)
+        put(img, 45, 7, VIOLET_L)
+        put(img, 45, 17, PINK_L)
+        put(img, 12, 11, WHITE)
+    after(c, stars)
+
+
+WEAPONS.update({"duck_lobber": duck_lobber, "popcorn_popper": popcorn_popper, "magnet_blaster": magnet_blaster,
+                "pumpkin_mortar": pumpkin_mortar, "black_hole_orb": black_hole_orb})
+
+
+# --- bullets -----------------------------------------------------------------------------------------------------
+
+def duck_shot(c: Canvas, f: int) -> None:  # a rubber duck in side view, beak right: a clear yellow body, head, orange beak, eye (4 frames bob + wag)
+    d = (0, -1, 0, 1)[f]  # the whole duck bobs
+    w = (0, 1, 0, -1)[f]  # tail wag
+    c.flat(P([(3, 9 + d + w), (2, 5 + d + w), (6, 8 + d)]), OCHRE)  # tail
+    c.flat(P([(3, 8 + d + w), (3, 6 + d + w), (6, 8 + d)]), YELLOW)
+    c.flat(E((3, 9 + d, 14, 16 + d)), OCHRE)  # body: a darker underside under the yellow
+    c.flat(E((3, 8 + d, 14, 14 + d)), YELLOW)
+    c.flat(E((8, 3 + d, 15, 10 + d)), YELLOW)  # head
+    c.flat(R((9, 8 + d, 12, 11 + d)), YELLOW)  # neck
+    c.flat(P([(14, 5 + d), (17, 6 + d), (17, 8 + d), (14, 8 + d)]), ORANGE)  # beak
+    c.flat(L([(14, 8 + d), (17, 8 + d)], 1), RED)
+    c.dot(12, 5 + d, NAVY)
+    c.dot(11, 4 + d, WHITE)  # glint on the head
+    c.flat(L([(5, 10 + d), (9, 9 + d)], 1), WHITE)  # sheen on the back
+    c.flat(L([(6, 13 + d), (9, 14 + d), (12, 12 + d)], 1), OCHRE)  # the wing
+
+
+def popcorn_shot(c: Canvas, f: int) -> None:  # frames 0-1 an unpopped kernel, 2-3 the popped puff: it flickers popping as it flies
+    m = PROJ // 2
+    if f < 2:
+        c.part(E((m - 4, m - 3 + f, m + 3, m + 3 + f - 1)), YELLOW)
+        c.flat(P([(m + 2, m - 1), (m + 3, m), (m + 2, m + 1)]), ORANGE)
+        c.dot(m - 2, m - 2 + f, WHITE)
+    else:
+        g = f - 2
+        c.part(blobs([(m + math.cos(a + g * 0.6) * 3.6, m + math.sin(a + g * 0.6) * 3.6, 2.7) for a in (0.2, 1.5, 2.8, 4.0, 5.2)]
+                     + [(m, m, 3.4)]), CREAM)
+        c.dot(m + 3, m - 2, YELLOW)
+        c.dot(m - 1, m + 3, YELLOW)
+        c.dot(m - 3, m - 2, WHITE)
+        c.dot(m + 1, m - 4, WHITE)
+
+
+def magnet_shot(c: Canvas, f: int) -> None:  # a little horseshoe magnet, poles forward, current crackling across them (4 frames)
+    m = PROJ // 2
+
+    def shoe(d, fill):
+        d.ellipse((m - 8, m - 6, m + 2, m + 6), fill)
+        d.rectangle((m - 3, m - 6, m + 5, m - 3), fill)
+        d.rectangle((m - 3, m + 3, m + 5, m + 6), fill)
+        d.ellipse((m - 4, m - 3, m, m + 3), 0)
+        d.rectangle((m - 3, m - 2, m + 7, m + 2), 0)
+    c.part(shoe, RED)
+    c.part(R((m + 2, m - 6, m + 5, m - 3)), STEEL)
+    c.part(R((m + 2, m + 3, m + 5, m + 6)), STEEL)
+    c.flat(L([(m - 6, m - 4), (m - 4, m - 5)], 1), ORANGE)
+    for i, y in enumerate((-2, -1, 0, 1, 2)):  # the arc between the poles, jittering each frame
+        c.dot(m + 3 + (i + f) % 2, m + y, WHITE if (i + f) % 2 == 0 else TEAL_L)
+    c.dot(m - 7 + f % 2, m + 6 - 2 * (f % 2), TEAL_L)  # a stray field speck behind
+
+
+def pumpkin_ball(c: Canvas, f: int) -> None:  # a squat pumpkin tumbling: its stem goes round a quarter-turn each frame
+    m = PROJ // 2
+    c.part(E((m - 5, m - 4, m + 5, m + 4)), ORANGE)
+    c.flat(L([(m, m - 4), (m - 2, m), (m, m + 4)], 1), RED)
+    c.flat(L([(m - 4, m - 2), (m - 4, m + 1)], 1), RED)
+    c.dot(m - 3, m - 3, YELLOW)
+    c.dot(m + 3, m + 1, RED)
+    a = f * math.pi / 2 - math.pi / 2
+    sx, sy = round(m + math.cos(a) * 5.5), round(m + math.sin(a) * 4.5)
+    c.part(R((sx - 1, sy - 1, sx + 1, sy + 1)), GREEN)
+    c.dot(sx, sy, GREEN_L)
+
+
+def pumpkin_seed(c: Canvas, f: int) -> None:  # one pale pointed seed, tip right; shard i shows frame i so the three differ a little
+    m = PROJ // 2
+    ln = 4 + f % 2
+    c.part(P([(m - ln, m - 1), (m - 1, m - 3), (m + 3, m - 1), (m + 5, m), (m + 3, m + 1), (m - 1, m + 3), (m - ln, m + 1)]), CREAM, shade=False)
+    c.flat(L([(m - ln + 1, m), (m + 2, m)], 1), OCHRE)
+    c.dot(m, m - 2, WHITE)
+    c.dot(m - ln, m, OCHRE)
+
+
+def black_hole_shot(c: Canvas, f: int) -> None:  # a near-black core, a hot accretion ring brighter on one side (it turns a quarter a frame), a dark halo
+    m = PROJ / 2 - 0.5
+    rot = f * math.pi / 2
+    for y in range(PROJ):
+        for x in range(PROJ):
+            dx, dy = x - m, y - m
+            d = math.hypot(dx, dy)
+            a = math.atan2(dy, dx)
+            if d < 3.7:
+                c.dot(x, y, OUTLINE)  # the void
+            elif d < 4.6:
+                c.dot(x, y, VIOLET_D)  # lensing rim
+            elif d - 0.7 * math.sin(2 * a + rot * 2) < 6.8:
+                lit = (math.cos(a - rot) + 1) / 2  # the bright side comes round with the frame
+                col = WHITE if lit > 0.9 else PINK_L if lit > 0.72 else PINK if lit > 0.5 else VIOLET_L if lit > 0.3 else VIOLET
+                c.dot(x, y, col)
+            elif d < 7.7:
+                c.dot(x, y, VIOLET_D if (x + y) % 2 == 0 or math.cos(a - rot) < 0 else VIOLET)  # dark halo, a bit of violet on the lit side
+
+
+PROJECTILES.update({"duck_lobber": duck_shot, "popcorn_popper": popcorn_shot, "magnet_blaster": magnet_shot,
+                    "pumpkin_mortar": pumpkin_ball, "black_hole_orb": black_hole_shot})
+PROJECTILE_FRAMES.update({"duck_lobber": 4, "popcorn_popper": 4, "magnet_blaster": 4, "pumpkin_mortar": 4, "black_hole_orb": 4})
+PROJ_EXTRA.update({"pumpkin_seed": lambda: projectile_strip(pumpkin_seed, 3)})
+
+
+# --- impact strips ------------------------------------------------------------------------------------------------
+
+def _dots(img: Image.Image, cx: float, cy: float, radius: float, n: int, cols, phase: float = 0.0, dash: int = 1) -> None:
+    """A ring of `n` dots (or short dashes) of `radius` round (cx, cy), colours cycling through `cols`."""
+    for i in range(n):
+        a = math.tau * i / n + phase
+        x, y = round(cx + math.cos(a) * radius), round(cy + math.sin(a) * radius)
+        for d in range(dash):
+            put(img, x + d, y, cols[i % len(cols)])
+
+
+def duck_pop_frame(k: int, n: int = 8) -> Image.Image:
+    """A rubber-duck pop (56 px, reaches ~26 px out): a squeak flash, big soap-foam clumps and a crown of water flung out, torn
+    yellow rubber bits, droplets arcing and falling, then foam sinking and thinning."""
+    t = k / (n - 1)
+    m = 28
+    c = Canvas(56)
+    e = ease_out(min(1.0, t * 1.1))
+    shrink = 1.0 - max(0.0, t - 0.4) / 0.6
+    if k < 4:  # the yellow burst core
+        c.part(blobs([(m, m, (8, 11, 9, 6)[k]), (m - 4, m + 3, (4, 6, 5, 3)[k]), (m + 5, m - 3, (4, 5, 4, 3)[k])]), YELLOW if k else WHITE)
+    for i in range(9):  # foam clumps: bubbly white blobs that swell out and sink
+        a = math.tau * i / 9 + 0.3
+        r = round((6.5 - 1.3 * (i % 3)) * shrink)
+        if r >= 1 and k >= 1:
+            reach = 7 + 16 * e
+            c.part(blobs([(m + math.cos(a) * reach, m + math.sin(a) * reach * 0.85 + 5 * t * t, r),
+                          (m + math.cos(a) * reach + 2, m + math.sin(a) * reach * 0.85 + 5 * t * t - 2, max(0, r - 3))]),
+                   WHITE if i % 2 else CREAM)
+    for i in range(5):  # torn rubber bits
+        a = math.tau * i / 5 + 0.9
+        if k >= 1 and shrink > 0.25:
+            bx, by = m + math.cos(a) * (8 + 18 * e), m + math.sin(a) * (6 + 14 * e) + 10 * t * t
+            c.part(P([(bx - 2, by - 1), (bx + 2, by - 2), (bx + 1, by + 2)]), ORANGE if i == 0 else YELLOW)
+    img = outline(c.img)
+    for i in range(18):  # water: 2 px droplets with a glint, arcing out and falling
+        a = math.tau * i / 18 + 0.15
+        dist = (10 + 12 * (i % 3) / 2) * e + 6
+        if t > 0.7 and i % 2:
+            continue
+        x, y = round(m + math.cos(a) * dist), round(m + math.sin(a) * dist * 0.9 + 14 * t * t)
+        col = TEAL_L if i % 2 else BLUE
+        put(img, x, y, col)
+        put(img, x + 1, y, col)
+        put(img, x, y + 1, DARKER[col])
+        if t < 0.5:
+            put(img, x, y - 1, WHITE)
+    if 1 <= k <= 5:  # a ring of splash dashes under it all
+        _dots(img, m, m + 2, 12 + 12 * e, 18, (TEAL_L, WHITE), dash=2)
+    if k >= 2 and t < 0.85:  # squeak sparkles
+        star4(img, m + 16, m - 16, 1 if k > 3 else 2, YELLOW)
+        star4(img, m - 17, m - 12, 1, WHITE)
+    return img
+
+
+def popcorn_puff_frame(k: int, n: int = 8) -> Image.Image:
+    """A tiny pop (32 px): a white tick, the kernel unfurls into a fluffy cream puff that hops once, yellow flecks, then it settles and thins."""
+    t = k / (n - 1)
+    m = 16
+    c = Canvas(32)
+    hop = -5 * math.sin(min(1.0, t * 1.6) * math.pi) if t < 0.65 else 0.0
+    grow = ease_out(min(1.0, t * 2.2))
+    shrink = 1.0 - max(0.0, t - 0.65) / 0.35
+    cy = m + 4 + hop
+    if k == 0:
+        c.part(E((m - 2, cy - 2, m + 2, cy + 3)), YELLOW)
+    else:
+        r = (2.0 + 2.0 * grow) * shrink
+        pts = [(m - 3 * grow, cy + 1, r), (m + 3 * grow, cy + 1, r), (m, cy - 2 * grow, r + 0.5), (m - 1.5 * grow, cy - 1, r), (m + 2 * grow, cy - 1, r - 0.5)]
+        if r >= 1:
+            c.part(blobs(pts), CREAM)
+    img = outline(c.img)
+    if k >= 1 and shrink > 0.3:
+        put(img, round(m - 2 * grow), round(cy - 2 * grow), WHITE)
+        put(img, round(m + 2 * grow), round(cy + 2), YELLOW)
+    if 1 <= k <= 5:
+        star4(img, m, round(cy + 1), 2 if k < 3 else 1, YELLOW)
+    for i in range(5):  # flecks of kernel
+        a = math.tau * i / 5 + 0.5
+        d = (4 + 8 * ease_out(min(1.0, t * 1.5))) if k >= 1 else 0
+        if k >= 1 and t < 0.8:
+            put(img, round(m + math.cos(a) * d), round(cy + math.sin(a) * d * 0.8 + 3 * t * t), YELLOW if i % 2 else ORANGE)
+    return img
+
+
+def magnet_zap_frame(k: int, n: int = 8) -> Image.Image:
+    """A pull (40 px): red / blue field rings closing in on the hit, pole-white spokes drawn inward, a jagged spark and a bright knot."""
+    t = k / (n - 1)
+    m = 20
+    img = Image.new("RGBA", (40, 40), (0, 0, 0, 0))
+    for ring, (r0, cols) in enumerate(((15.0, (RED, BLUE)), (9.0, (BLUE, RED)))):  # two rings shrinking, the inner a beat behind
+        tt = min(1.0, max(0.0, t * 1.25 - ring * 0.12))
+        r = r0 * (1.0 - ease_out(tt)) + 2
+        if tt < 1.0 and (tt < 0.9 or k % 2 == 0):
+            _dots(img, m, m, r, 28, cols, phase=t * 1.2 * (1 if ring == 0 else -1), dash=3 if tt < 0.6 else 2)
+            _dots(img, m, m, r + 1, 28, cols, phase=t * 1.2 * (1 if ring == 0 else -1), dash=3 if tt < 0.6 else 2)
+    for i in range(8):  # spokes dragged inward
+        a = math.tau * i / 8 + math.pi / 8
+        r = 17.0 - 13.0 * t
+        for d in range(5 if t < 0.7 else 3):
+            put(img, round(m + math.cos(a) * (r + d)), round(m + math.sin(a) * (r + d)), WHITE if d == 0 else STEEL if d < 3 else STEEL_D)
+    if 1 <= k <= 5:
+        rng = random.Random(40 + k)
+        for i in range(3):
+            a = math.tau * i / 3 + rng.uniform(0, 1.5)
+            x, y = float(m), float(m)
+            for s in range(4 + k // 2):
+                a += rng.uniform(-0.8, 0.8)
+                x += math.cos(a) * 2.5
+                y += math.sin(a) * 2.5
+                put(img, round(x), round(y), WHITE if s % 2 == 0 else TEAL_L)
+    if k < 6:
+        star4(img, m, m, max(1, 4 - k // 2), TEAL_L)
+    return img
+
+
+def pumpkin_burst_frame(k: int, n: int = 10) -> Image.Image:
+    """A pumpkin bursting (64 px): an orange-yellow flash, a squelchy splat of flesh that flings lumps and strings, seeds spraying, a stem tumbling."""
+    t = k / (n - 1)
+    m = 32
+    c = Canvas(64)
+    e = ease_out(min(1.0, t * 1.2))
+    fall = 12 * t * t
+    if k < 4:  # the burst itself: a lumpy fireball of gourd
+        r = (10, 13, 12, 9)[k]
+        c.part(blobs([(m, m, r), (m - 6, m + 2, r - 4), (m + 6, m - 2, r - 4), (m + 1, m + 6, r - 5)]), YELLOW if k < 2 else ORANGE)
+        if k >= 2:
+            c.flat(blobs([(m - 1, m - 1, r - 6)]), YELLOW)
+    rng = random.Random(9)
+    for i in range(9):  # lumps of flesh
+        a = math.tau * i / 9 + rng.uniform(-0.2, 0.2)
+        reach = rng.uniform(10, 22) * e + 3
+        r = round((4.5 - 2.2 * t) * (1.0 - max(0.0, t - 0.7) / 0.3))
+        if r >= 1 and k >= 1:
+            c.part(blobs([(m + math.cos(a) * reach, m + math.sin(a) * reach * 0.9 + fall, r)]), ORANGE if i % 3 else RED)
+    if 2 <= k <= 7:  # a splat of goo where it burst, thinning
+        rr = (7 + 6 * min(1.0, (k - 2) / 3)) * (1.0 - max(0.0, t - 0.55) / 0.45)
+        c.part(blobs([(m, m + 4, rr), (m - rr * 0.7, m + 5, rr * 0.5), (m + rr * 0.8, m + 3, rr * 0.5)]), ORANGE)
+        c.flat(blobs([(m - 1, m + 3, rr * 0.45)]), YELLOW)
+    img = outline(c.img)
+    for i in range(3):  # seeds: pale, with a streak
+        a = math.tau * i / 3 + 1.2
+        d = (8 + 20 * e) + 3
+        if k >= 1 and t < 0.85:
+            sx, sy = m + math.cos(a) * d, m + math.sin(a) * d * 0.9 + fall
+            for j in range(3):
+                put(img, round(sx - math.cos(a) * j), round(sy - math.sin(a) * j * 0.9), WHITE if j == 0 else CREAM)
+            put(img, round(sx), round(sy) + 1, OCHRE)
+    for i in range(6):  # strings of pulp
+        a = math.tau * i / 6 + 0.4
+        d = 6 + 15 * e
+        if k >= 2 and t < 0.8:
+            put(img, round(m + math.cos(a) * d), round(m + math.sin(a) * d * 0.9 + fall), YELLOW if i % 2 else ORANGE)
+            put(img, round(m + math.cos(a) * (d - 2)), round(m + math.sin(a) * (d - 2) * 0.9 + fall), ORANGE)
+    if k >= 1 and t < 0.9:  # the stem tumbles off
+        a = -1.9
+        d = 6 + 20 * e
+        sx, sy = round(m + math.cos(a) * d), round(m + math.sin(a) * d - 8 * math.sin(min(1.0, t * 1.4) * math.pi) + fall)
+        for dx in range(3):
+            for dy in range(3):
+                put(img, sx + dx, sy + dy, GREEN if (dx + dy) % 2 else GREEN_L if dx + dy == 0 else GREEN_D)
+    return img
+
+
+def hole_implode_frame(k: int, n: int = 10) -> Image.Image:
+    """A black hole imploding (80 px): a dense spiral of streaks collapses into a void, a white-magenta flash, then a thick
+    dithered shock ring rolls out and fades."""
+    m = 40
+    img = Image.new("RGBA", (80, 80), (0, 0, 0, 0))
+
+    def ring(rr: float, th: float, cols, haze: bool = True) -> None:
+        """A solid ring ending at radius rr, `th` thick, colours from inner (bright) to outer, with a dithered falloff both sides."""
+        for y in range(80):
+            for x in range(80):
+                d = math.hypot(x - m, y - m)
+                if rr - th <= d <= rr:
+                    u = (d - (rr - th)) / max(th, 1)
+                    put(img, x, y, cols[min(len(cols) - 1, int(u * len(cols)))])
+                elif haze and rr < d <= rr + 4 and (x + y) % 2 == 0 and (d - rr) / 4 < 0.75:
+                    put(img, x, y, cols[-1])
+                elif haze and rr - th - 6 <= d < rr - th and (x + y) % 2 == 0 and (rr - th - d) / 6 < 0.75:
+                    put(img, x, y, cols[0] if (x // 2 + y // 2) % 2 else cols[min(1, len(cols) - 1)])
+    if k <= 5:
+        grow = (k / 5.0) ** 1.8
+        reach = 35.0 * (1.0 - grow) + 5
+        core = 3.0 + 8.0 * grow
+        for y in range(80):  # a dark dithered pool the matter falls through
+            for x in range(80):
+                d = math.hypot(x - m, y - m)
+                if core + 1 < d < reach + 3 and (x + y) % 2 == 0 and d > reach * 0.35:
+                    put(img, x, y, VIOLET_D)
+        for arm in range(7):  # the spiral: streaks winding tighter toward the core
+            base = math.tau * arm / 7 + k * 0.45
+            for s_ in range(34):
+                u = s_ / 33.0  # 0 outer .. 1 inner
+                if (s_ + k * 2 + arm) % 7 > 4:
+                    continue  # gaps make dashes that appear to run inward
+                r = reach * (1.0 - u) ** 0.8 + core + 1
+                a = base + u * 2.6
+                col = VIOLET if u < 0.3 else VIOLET_L if u < 0.55 else PINK if u < 0.78 else PINK_L if u < 0.93 else WHITE
+                x, y = round(m + math.cos(a) * r), round(m + math.sin(a) * r)
+                put(img, x, y, col)
+                put(img, x + 1, y, col)
+                put(img, x, y + 1, DARKER[col] if u < 0.9 else col)
+        c = Canvas(80)
+        c.part(E((m - core - 2, m - core - 2, m + core + 2, m + core + 2)), PINK if k >= 3 else VIOLET)
+        c.flat(E((m - core, m - core, m + core, m + core)), OUTLINE)
+        img.alpha_composite(outline(c.img))
+    elif k == 6:  # the flash
+        ring(15, 15, (WHITE, WHITE, PINK_L, PINK), haze=True)
+        star4(img, m, m, 22, PINK_L)
+        star4(img, m, m, 10, WHITE)
+        for y in range(80):
+            for x in range(80):
+                if abs(x - m) == abs(y - m) and 8 < math.hypot(x - m, y - m) < 20:
+                    put(img, x, y, WHITE if (x + y) % 4 == 0 else PINK_L)
+    else:  # the shock ring: thick, bright inside, fading and thinning as it rolls out
+        j = k - 7
+        rr = (17, 27, 35)[j]
+        th = (7, 5, 3)[j]
+        ring(rr, th, ((WHITE, PINK_L, PINK, VIOLET), (PINK_L, PINK, VIOLET_L, VIOLET), (VIOLET_L, VIOLET, VIOLET_D))[j])
+        if j < 2:
+            c = Canvas(80)
+            cr = 7 - 4 * j
+            c.part(E((m - cr, m - cr, m + cr, m + cr)), PINK if j == 0 else VIOLET)
+            c.flat(E((m - cr + 1, m - cr + 1, m + cr - 1, m + cr - 1)), OUTLINE)
+            img.alpha_composite(outline(c.img))
+        for i in range(10):  # debris sparks riding the ring
+            a = math.tau * i / 10 + j
+            put(img, round(m + math.cos(a) * (rr + 3 + i % 3)), round(m + math.sin(a) * (rr + 3 + i % 3)), WHITE if j == 0 else PINK_L if j == 1 else VIOLET_L)
+    return img
+
+
+def _edge_safe(img: Image.Image) -> Image.Image:
+    """Clears the border pixels of a frame (flung droplets and sparks may be placed past it; the sheet check wants a clear edge)."""
+    w, h = img.size
+    for x in range(w):
+        img.putpixel((x, 0), (0, 0, 0, 0))
+        img.putpixel((x, h - 1), (0, 0, 0, 0))
+    for y in range(h):
+        img.putpixel((0, y), (0, 0, 0, 0))
+        img.putpixel((w - 1, y), (0, 0, 0, 0))
+    return img
+
+
+FX.update({
+    "duck_pop": lambda: strip([_edge_safe(duck_pop_frame(k)) for k in range(8)]),
+    "popcorn_puff": lambda: strip([_edge_safe(popcorn_puff_frame(k)) for k in range(8)]),
+    "magnet_zap": lambda: strip([_edge_safe(magnet_zap_frame(k)) for k in range(8)]),
+    "pumpkin_burst": lambda: strip([_edge_safe(pumpkin_burst_frame(k)) for k in range(10)]),
+    "hole_implode": lambda: strip([_edge_safe(hole_implode_frame(k)) for k in range(10)]),
+})
+
+
 # --- Ultimates: Hanami Tempest (Sakura), Thunderstorm (Bolt), World Tree (Eden), Eclipse (Shadow) --------------------
 # Big, round-swinging moments. Each is a handful of 60 fps-friendly strips (anticipation -> release -> a dissipating tail).
 

@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://scripts/weapons/weapon_data.gd" id="1_wd"]
+[ext_resource type="Texture2D" path="res://assets/sprites/weapons/duck_lobber.png" id="2_sprite"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectiles/duck_lobber.png" id="9_proj"]
+[ext_resource type="Texture2D" path="res://assets/fx/duck_pop.png" id="10_x"]
+
+[resource]
+script = ExtResource("1_wd")
+projectile_sprite = ExtResource("9_proj")
+sprite = ExtResource("2_sprite")
+id = &"duck_lobber"
+rarity = 0
+display_name = "Rubber Duck Lobber"
+muzzle_x = 40.0
+burst_art = ExtResource("10_x")
+burst_art_radius = 17.0
+pickup = true
+damage = 12
+fire_interval = 0.75
+spread_deg = 3.0
+projectile_speed = 380.0
+projectile_range = 420.0
+projectile_radius = 6.0
+energy_cost = 50
+knockback = 110.0
+color = Color(1, 0.82, 0.25, 1)
+screen_shake = 0.08
+sfx = &"duck_squeak"
+bounces = 2
+bounce_damping = 0.8
+splash_radius = 30.0
+splash_edge_scale = 0.5
+lob_height = 16.0
+projectile_scale = 1.7
+hook = "Bounces twice, pops in a splash"

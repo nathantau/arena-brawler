@@ -58,7 +58,7 @@ func test_pool_excludes_starters_ultimates_and_unlocked() -> void:
 func test_fun_weapons_span_every_rarity() -> void:
 	var c: CharacterData = _fighters()[0]
 	var w: Array = Unlocks.box_pool(c).filter(func(e: Dictionary) -> bool: return e["kind"] == &"weapon")
-	assert_eq(w.size(), 10, "five fun weapons and five more")
+	assert_eq(w.size(), 15, "five fun weapons and ten more")
 	var tiers: Array[int] = []
 	for e: Dictionary in w:
 		if not tiers.has(e["rarity"]):

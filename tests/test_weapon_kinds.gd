@@ -79,7 +79,7 @@ func test_catalog_has_the_mvp_eight() -> void:
 	assert_false(pickups.has(&"pistol"), "sidearm isn't a pickup")
 	assert_false(pickups.has(&"bot_blaster"))
 	assert_false(pickups.has(&"rocket"), "Boomtube retired (Hopper covers explosive)")
-	assert_eq(pickups.size(), 10, "ten fun shared pickups; signature weapons and the retired shared ones are not pickups")
+	assert_eq(pickups.size(), 15, "fifteen fun shared pickups; signature weapons and the retired shared ones are not pickups")
 	for id: StringName in [&"smg", &"shotgun", &"sniper", &"grenade", &"laser", &"sword"]:
 		assert_false(pickups.has(id), "%s is hidden for now" % id)
 		assert_not_null(_w(id), "%s stays loadable" % id)
