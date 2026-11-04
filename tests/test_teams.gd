@@ -1,5 +1,5 @@
 extends GutTest
-## Teams 3v3: team balancing, no friendly fire, round flow (unlimited 10 s respawns, timeout goes to the team with more kills, first to 5,
+## Teams 3v3: team balancing, no friendly fire, round flow (unlimited 8 s respawns, timeout goes to the team with more kills, first to 5,
 ## reset between rounds) and Smoke Bomb visibility for allies.
 
 const A: int = MatchRules.TEAM_A
@@ -99,7 +99,7 @@ func test_state_roundtrip_carries_teams_and_round_score() -> void:
 
 func test_teams_respawn_waits_10_s_and_never_runs_out() -> void:
 	var c := _playing_controller()
-	assert_eq(Constants.TEAMS_RESPAWN_DELAY, 10.0)
+	assert_eq(Constants.TEAMS_RESPAWN_DELAY, 8.0)
 	for i: int in 20:
 		c.on_death(1)
 		assert_true(c.state.may_respawn(1), "death %d: still allowed back" % (i + 1))
@@ -298,7 +298,7 @@ func test_teams_spawn_on_opposite_sides_and_round_reset_restores_everyone() -> v
 		assert_ne(p.team, 0)
 		assert_eq(p.global_position.x < half, p.team == A, "team %d starts on its own side" % p.team)
 		p.stats.spawn_protect = 0.0
-	# Unlimited respawns after 10 s, on the team's side.
+	# Unlimited respawns after 8 s, on the team's side.
 	me.take_hit(9999, false, Vector2.ZERO, 11)
 	assert_true(me.dead)
 	assert_eq(me.respawn_timer, Constants.TEAMS_RESPAWN_DELAY, "the countdown the HUD shows (clients get it in the snapshot)")

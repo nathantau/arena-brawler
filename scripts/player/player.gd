@@ -693,7 +693,7 @@ func _end_abilities(swing: CharacterSkill) -> void:
 
 ## True while the other slot is in a phase that blocks this one (see CharacterSkill.blocks_other): the press is ignored.
 func skill_locked(slot: int) -> bool:
-	if flag_carrier and CARRIER_BLOCKED_KINDS.has(skills[slot].data.kind):
+	if flag_carrier and slot != Constants.ULT_SLOT and CARRIER_BLOCKED_KINDS.has(skills[slot].data.kind):  # ults stay usable
 		return true
 	for i: int in skills.size():
 		if i != slot and skills[i].blocks_other():

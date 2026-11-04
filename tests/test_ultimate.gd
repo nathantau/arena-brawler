@@ -162,3 +162,12 @@ func test_one_ability_rules_still_gate_the_ultimate() -> void:
 	p.skills[0].active_remaining = 0.0
 	_step(p, true, 3)
 	assert_false(p.skills[2].is_active(), "stunned")
+
+
+func test_a_flag_carrier_can_still_ult() -> void:
+	var p: Player = _duo(&"shadow")[0]  # Eclipse is a SMOKE kind, which carriers can't use as a normal pick
+	p.flag_carrier = true
+	p.ult_charge = 1.0
+	assert_false(p.skill_locked(Constants.ULT_SLOT))
+	_step(p, true)
+	assert_lt(p.ult_charge, 0.01, "fired")
