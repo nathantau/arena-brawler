@@ -18,17 +18,20 @@ static func roll_crit(weapon: WeaponData, rng: RandomNumberGenerator) -> bool:
 
 
 ## Weapon damage after crit and the rarity bonus (`rarity` = the owning weapon's / ability's tier, `salt` see `scaled`).
-static func damage_for(weapon: WeaponData, crit: bool, rarity: int = 0, salt: int = 0) -> int:
-	return scaled(roundi(weapon.damage * weapon.crit_multiplier) if crit else weapon.damage, rarity, salt)
+static func damage_for(weapon: WeaponData, crit: bool, rarity: int = 0, salt: int = 0, ult: bool = false) -> int:
+	return scaled(roundi(weapon.damage * weapon.crit_multiplier) if crit else weapon.damage, rarity, salt, ult)
 
 
-## `damage` x the rarity tier's multiplier (Constants.RARITY_DAMAGE_MULT). Rounded stochastically so small hits still
+## `damage` x the global Constants.DAMAGE_MULT x the rarity tier's multiplier (Constants.RARITY_DAMAGE_MULT), x Constants.ULT_DAMAGE_MULT when `ult`. Rounded stochastically so small hits still
 ## average damage x mult (a 2-dmg epic hit is 2 or 3, mean 2.2): the fraction is compared with a deterministic hash of
 ## `salt` (owner / shot seq / tick the caller has at hand), so it is reproducible. A hit that did >= 1 stays >= 1; 0 stays 0.
-static func scaled(damage: int, rarity: int, salt: int = 0) -> int:
+static func scaled(damage: int, rarity: int, salt: int = 0, ult: bool = false) -> int:
 	if damage <= 0:
 		return damage
-	var x: float = snappedf(damage * Constants.RARITY_DAMAGE_MULT[clampi(rarity, 0, Constants.RARITY_DAMAGE_MULT.size() - 1)], 0.000001)
+	var mult: float = Constants.DAMAGE_MULT * Constants.RARITY_DAMAGE_MULT[clampi(rarity, 0, Constants.RARITY_DAMAGE_MULT.size() - 1)]
+	if ult:
+		mult *= Constants.ULT_DAMAGE_MULT
+	var x: float = snappedf(damage * mult, 0.000001)
 	var whole: int = floori(x)
 	if x - whole > unit_hash(salt):
 		whole += 1

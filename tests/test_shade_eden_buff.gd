@@ -131,7 +131,7 @@ func test_kunai_rain_hurts_whoever_stands_in_it() -> void:
 	_run(p, 6)
 	assert_eq(hits.size(), 1)
 	assert_eq(hits[0][0], 2)
-	assert_between(hits[0][1], d.storm_damage, d.storm_damage + 1)
+	assert_between(hits[0][1], DmgExpect.lo(d.storm_damage, d.rarity), DmgExpect.hi(d.storm_damage, d.rarity))
 	assert_gte(foe.velocity.x, 0.0, "not pulled in")
 	_run(p, ceili(d.duration / DT))
 	assert_eq(hits.size(), int(d.duration / d.storm_interval), "a tick every interval for its whole life")

@@ -16,12 +16,12 @@ func _rng(s: int = 42) -> RandomNumberGenerator:
 
 
 func test_normal_damage() -> void:
-	assert_eq(CombatRules.damage_for(_weapon(12, 0.0), false), 12)
+	assert_between(CombatRules.damage_for(_weapon(12, 0.0), false), DmgExpect.lo(12), DmgExpect.hi(12))
 
 
 func test_crit_damage_uses_multiplier() -> void:
-	assert_eq(CombatRules.damage_for(_weapon(12, 0.0, 2.0), true), 24)
-	assert_eq(CombatRules.damage_for(_weapon(7, 0.0, 1.5), true), 11, "rounded")
+	assert_between(CombatRules.damage_for(_weapon(12, 0.0, 2.0), true), DmgExpect.lo(24), DmgExpect.hi(24))
+	assert_between(CombatRules.damage_for(_weapon(7, 0.0, 1.5), true), DmgExpect.lo(11), DmgExpect.hi(11), "rounded")
 
 
 func test_zero_crit_chance_never_crits() -> void:

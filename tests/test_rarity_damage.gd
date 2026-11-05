@@ -39,14 +39,13 @@ func _victim_world() -> Array:
 
 
 func test_rarity_multiplier_rounds_and_keeps_a_hit_at_least_one() -> void:
-	assert_eq(CombatRules.scaled(40, 0), 40)
-	assert_eq(CombatRules.scaled(40, 1), 42)
-	assert_eq(CombatRules.scaled(40, 2), 44)
-	assert_between(CombatRules.scaled(10, 1, 3), 10, 11, "10.5 rounds either way")
+	for r: int in 3:
+		assert_between(CombatRules.scaled(40, r), DmgExpect.lo(40, r), DmgExpect.hi(40, r))
+	assert_between(CombatRules.scaled(10, 1, 3), DmgExpect.lo(10, 1), DmgExpect.hi(10, 1), "a fractional product rounds either way")
 	assert_eq(CombatRules.scaled(3, 1, 7), CombatRules.scaled(3, 1, 7), "same salt, same result")
 	assert_eq(CombatRules.scaled(1, 2), 1, "min 1")
 	assert_eq(CombatRules.scaled(0, 2), 0, "no hit stays no hit")
-	assert_eq(CombatRules.scaled(40, 9), 44, "rarity clamps")
+	assert_between(CombatRules.scaled(40, 9), DmgExpect.lo(40, 2), DmgExpect.hi(40, 2), "rarity clamps")
 	assert_eq(Unlocks.dmg_bonus_text(0), "")
 	assert_eq(Unlocks.dmg_bonus_text(1), "+5% dmg")
 	assert_eq(Unlocks.dmg_bonus_text(2), "+10% dmg")
@@ -56,17 +55,17 @@ func _mean(damage: int, rarity: int) -> float:
 	var total: int = 0
 	for salt: int in 20000:
 		var v: int = CombatRules.scaled(damage, rarity, salt)
-		var x: float = damage * Constants.RARITY_DAMAGE_MULT[rarity]
+		var x: float = DmgExpect.exact(damage, rarity)
 		assert_between(v, floori(x + 0.0001), ceili(x - 0.0001))
 		total += v
 	return float(total) / 20000.0
 
 
 func test_small_hits_average_damage_times_the_multiplier() -> void:
-	assert_almost_eq(_mean(2, 2), 2.2, 0.05, "2-dmg epic")
-	assert_almost_eq(_mean(3, 1), 3.15, 0.05, "3-dmg rare")
-	assert_almost_eq(_mean(40, 1), 42.0, 0.001, "exact products never wobble")
-	assert_eq(CombatRules.scaled(40, 1, 99), 42)
+	assert_almost_eq(_mean(2, 2), DmgExpect.exact(2, 2), 0.05, "2-dmg epic")
+	assert_almost_eq(_mean(3, 1), DmgExpect.exact(3, 1), 0.05, "3-dmg rare")
+	assert_almost_eq(_mean(40, 0), DmgExpect.exact(40), 0.001, "exact products never wobble")
+	assert_eq(CombatRules.scaled(40, 0, 99), roundi(DmgExpect.exact(40)))
 	assert_eq(CombatRules.scaled(1, 2, 5) >= 1, true)
 
 
@@ -81,7 +80,9 @@ func test_weapon_damage_scales_by_its_own_rarity() -> void:
 		victim.stats.reset()
 		pool.fire_shot(1, seq, victim.global_position, Vector2.RIGHT, _blast(20, r), 1)
 		seq += 1
-	assert_eq(hits, [20, 21, 22], "common / rare x1.05 / epic x1.10")
+	assert_eq(hits.size(), 3)
+	for r: int in 3:
+		assert_between(hits[r], DmgExpect.lo(20, r), DmgExpect.hi(20, r), "rarity %d" % r)
 
 
 func test_skill_weapon_uses_the_skills_rarity_not_its_own() -> void:
@@ -90,7 +91,8 @@ func test_skill_weapon_uses_the_skills_rarity_not_its_own() -> void:
 	var pool: ProjectilePool = w[1]
 	var hits: Array = w[3]
 	pool.fire_shot(1, 0, (w[2] as Player).global_position, Vector2.RIGHT, _blast(60, 0), 1, 2)
-	assert_eq(hits, [66], "rarity 0 weapon fired by an epic ability")
+	assert_eq(hits.size(), 1)
+	assert_between(hits[0], DmgExpect.lo(60, 2), DmgExpect.hi(60, 2), "rarity 0 weapon fired by an epic ability")
 
 
 func _thunder_hit(rarity: int) -> int:
@@ -125,8 +127,8 @@ func test_epic_ability_damage_is_scaled_through_its_skilldata() -> void:
 	assert_eq(skills.get_skill(&"thunder_strike").thunder_blast.rarity, 0, "skill weapon is common itself")
 	var common: int = await _thunder_hit(0)
 	var epic: int = await _thunder_hit(2)
-	assert_eq(common, base)
-	assert_between(epic, floori(base * 1.1), floori(base * 1.1) + 1)
+	assert_between(common, DmgExpect.lo(base), DmgExpect.hi(base))
+	assert_between(epic, DmgExpect.lo(base, 2), DmgExpect.hi(base, 2))
 	assert_gt(epic, common)
 
 

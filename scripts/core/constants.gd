@@ -249,3 +249,7 @@ const BOOMERANG_RETURN_LIFE: float = 4.0
 const STREAK_RESET: float = 1.0
 ## Damage multiplier by WeaponData / SkillData.rarity (common, rare, epic): better items hit slightly harder.
 const RARITY_DAMAGE_MULT: Array[float] = [1.0, 1.05, 1.10]
+## Every attack's damage (weapons, abilities, ultimates) x this, applied by `CombatRules.scaled` with the rarity bonus.
+const DAMAGE_MULT: float = 1.15
+## Extra factor on every hit an ultimate deals (its own skill, or the weapon fired while its form runs).
+const ULT_DAMAGE_MULT: float = 1.3
