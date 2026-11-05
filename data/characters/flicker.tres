@@ -5,7 +5,7 @@
 [ext_resource type="Resource" path="res://data/weapons/flicker_kunai.tres" id="3_sig"]
 [ext_resource type="Resource" path="res://data/skills/shadow_clones.tres" id="5_skill"]
 
-[ext_resource type="Resource" path="res://data/skills/shadow_clones.tres" id="9_ult"]
+[ext_resource type="Resource" path="res://data/skills/shadow_army.tres" id="9_ult"]
 
 [resource]
 script = ExtResource("1_cd")

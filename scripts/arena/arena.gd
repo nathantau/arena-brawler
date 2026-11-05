@@ -1050,7 +1050,7 @@ func _on_player_died(victim: Player, killer_id: int) -> void:
 
 
 func _on_player_shot(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName) -> void:
-	if mode != Mode.CLIENT and match_state.phase == MatchState.Phase.PLAYING:
+	if mode != Mode.CLIENT and match_state.phase == MatchState.Phase.PLAYING and seq < Player.CLONE_SEQ_OFFSET:  # (a Shadow Army clone's copy is not a shot of hers)
 		scores.register_shot(shooter.player_id, seq)
 	shot_fired.emit(shooter.player_id, seq, origin, facing, weapon_id)
 

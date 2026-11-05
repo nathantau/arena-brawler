@@ -10,7 +10,7 @@ extends Resource
 ## (own sprite sheet, damage taken scaled, own weapon instead of the loadout, speed scaled).
 ## SMOKE (Smoke Bomb): a poof, then you are invisible to enemies for `duration` (never drawn for them, auto-aim and bots skip you; you can
 ## still be hit) and move x`smoke_speed_scale` faster; firing or using another special breaks it, with a second poof. VOLLEY: fires `volley_weapon` once (e.g. a ring of
-## kunai). CLONES: decoys run out from where you stand; harmless, but auto-aim and bots go for them.
+## kunai). CLONES: decoys run out from where you stand; harmless (unless `clone_fire_scale` > 0, which makes them copy your shots), but auto-aim and bots go for them.
 ## WARD: a ring round you that moves with you and catches enemy projectiles (not beams or melee).
 ## GRAPPLE: a kunai on a chain thrown along the aim; if it bites a wall you're pulled straight to it (`grapple_iframes` of i-frames from the bite).
 ## SWING: swing on a vine along the aim to the farthest free floor in range, over walls and crates.
@@ -134,6 +134,9 @@ enum Kind { DASH, SHIELD, TRANSFORM, SMOKE = 4, VOLLEY = 5, CLONES = 6, SWING = 
 @export var clone_reach: float = 260.0
 ## Angle between neighbouring clones' paths.
 @export var clone_spread_deg: float = 55.0
+## Shade's Shadow Army: above 0, every shot she fires is also fired from each clone (aimed at the nearest visible enemy in the
+## weapon's range, else along her facing) at this fraction of the damage. 0 = harmless decoys.
+@export var clone_fire_scale: float = 0.0
 
 @export_group("Eruption")
 ## How far ahead along the aim the spot is marked.
