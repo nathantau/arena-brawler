@@ -283,7 +283,8 @@ func test_flicker_can_pick_all_ninja_specials() -> void:
 	for sk: SkillData in skills.specials_for(flicker):
 		ids.append(sk.id)
 	assert_eq(ids.slice(0, 2), [&"dash", &"barrier"], "Dash, Barrier first")
-	assert_false(ids.has(&"shadow_clones"), "her ultimate is not pickable")
+	assert_has(ids, &"shadow_clones")
+	assert_false(ids.has(&"shadow_army"), "her ultimate is not pickable")
 	for id: StringName in [&"smoke_bomb", &"fan_of_blades", &"grapple_kunai"]:
 		assert_has(ids, id)
 	assert_false(ids.has(&"blink"), "Blink was cut from her kit")

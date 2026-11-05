@@ -170,6 +170,7 @@ var _ramps: Dictionary = {}
 ## Rarity whose damage multiplier the shot being spawned right now uses (set by fire_shot).
 var _shot_rarity: int = 0
 var _shot_ult: bool = false  # the shot being spawned is an ultimate's: Constants.ULT_DAMAGE_MULT on top
+var _shot_scale: float = 1.0  # the shot being spawned deals this fraction of its damage
 var _shot_salt: int = 0  # owner + seq of that shot: seeds the rarity bonus's rounding
 
 
@@ -191,9 +192,11 @@ func _ready() -> void:
 ## `ult` = the hit comes from an ultimate (x Constants.ULT_DAMAGE_MULT).
 ## `ult` = the hit comes from an ultimate (x Constants.ULT_DAMAGE_MULT, see CombatRules.scaled).
 ## `rarity` = the SkillData.rarity of the ability that fired a skill weapon (-1 = the weapon's own rarity).
+## `damage_scale` = fraction of the usual damage (a Shadow Army clone's copy of a shot).
 func fire_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: WeaponData, match_seed: int,
-		rarity: int = -1, ult: bool = false) -> void:
+		rarity: int = -1, ult: bool = false, damage_scale: float = 1.0) -> void:
 	_shot_ult = ult
+	_shot_scale = damage_scale
 	_shot_rarity = weapon.rarity if rarity < 0 else rarity
 	_shot_salt = owner_id * 1000003 + seq
 	if weapon.blast:
@@ -255,6 +258,8 @@ func _volley(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: 
 	if weapon.crit_every > 0 and _streak_hit(owner_id, weapon.crit_every):
 		crit = true
 	var damage: int = CombatRules.damage_for(weapon, crit, _shot_rarity, _shot_salt, _shot_ult)
+	if _shot_scale != 1.0:
+		damage = maxi(1, roundi(damage * _shot_scale))
 	var dirs: PackedVector2Array = CombatRules.shot_directions(facing, weapon, _shot_rng)
 	for i: int in dirs.size():
 		if weapon.kind == WeaponData.Kind.BEAM:

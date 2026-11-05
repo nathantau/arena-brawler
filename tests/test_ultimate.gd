@@ -136,7 +136,7 @@ func test_ultimates_are_not_pickable_by_anyone() -> void:
 func test_ultimate_assignments() -> void:
 	assert_eq(characters.get_character(&"wukong").ultimate.id, &"great_ape")
 	assert_eq(characters.get_character(&"flint").ultimate.id, &"inferno")
-	assert_eq(characters.get_character(&"flicker").ultimate.id, &"shadow_clones")
+	assert_eq(characters.get_character(&"flicker").ultimate.id, &"shadow_army")
 	assert_eq(characters.get_character(&"sakura").ultimate.id, &"hanami_tempest")
 	assert_eq(characters.get_character(&"bolt").ultimate.id, &"thunderstorm")
 	assert_eq(characters.get_character(&"eden").ultimate.id, &"world_tree")

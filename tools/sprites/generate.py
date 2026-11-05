@@ -2501,6 +2501,19 @@ ICONS = {
 }
 
 
+# Shadow Army (Shade's ultimate): a pyramid of three hooded heads with teal eye slits (the front one navy, the two
+# behind violet-dark) and a kunai rising from the gap between them. Distinct from "clones" (two plain figures).
+ICONS["shadow_army"] = lambda c: (
+    c.flat(E((0, 2, 6, 8)), VIOLET_D), c.flat(E((6, 2, 12, 8)), VIOLET_D),
+    c.flat(L([(1, 4), (2, 3), (4, 3)], 1), VIOLET), c.flat(L([(8, 3), (10, 3), (11, 4)], 1), VIOLET),
+    c.flat(R((1, 5, 4, 5)), TEAL), c.flat(R((8, 5, 11, 5)), TEAL),
+    c.flat(P([(0, 12), (2, 10), (10, 10), (12, 12)]), NAVY),
+    c.flat(E((3, 5, 9, 11)), NAVY), c.flat(P([(3, 12), (3, 9), (9, 9), (9, 12)]), NAVY),
+    c.flat(R((4, 8, 8, 8)), OUTLINE), c.flat(R((4, 8, 5, 8)), TEAL_L), c.flat(R((7, 8, 8, 8)), TEAL_L),
+    c.flat(R((3, 12, 9, 12)), SHADOW),
+    c.flat(P([(6, 0), (7, 2), (6, 4), (5, 2)]), STEEL), c.dot(6, 1, WHITE), c.dot(6, 3, STEEL_D))
+
+
 UI_SLICE_SCALE = 2  # 9-slices are saved pre-scaled (StyleBoxTexture can't scale); keep in sync with UiStyle.SLICE
 
 

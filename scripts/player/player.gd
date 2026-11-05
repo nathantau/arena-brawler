@@ -109,6 +109,8 @@ const BEAM_SEQ_OFFSET: int = 1 << 33
 ## World Tree's thorn ticks (keyed like every other relayed hit).
 const BLOOM_SEQ_OFFSET: int = 1 << 35
 const THUNDER_SEQ_OFFSET: int = 1 << 34
+## Shadow Army: clone k's copy of the shot with key `seq` is keyed `seq + (k + 1) * CLONE_SEQ_OFFSET` (clear of every offset above).
+const CLONE_SEQ_OFFSET: int = 1 << 36
 ## The Gloom Hound's body radius against the feet-level walls.
 const HOUND_RADIUS: float = 14.0
 ## Shadow clones weave side to side as they run.
@@ -1048,11 +1050,20 @@ func _break_vanish() -> void:
 		smoke.active_remaining = 0.0
 
 
+## The running clones skill; the Shadow Army wins over a Shadow Clones ability running at the same time.
+func _clone_slot() -> CharacterSkill:
+	var best: CharacterSkill = null
+	for slot: CharacterSkill in skills:
+		if slot.data.kind == SkillData.Kind.CLONES and slot.is_active() and (best == null or slot.data.clone_fire_scale > best.data.clone_fire_scale):
+			best = slot
+	return best
+
+
 ## Where this player's shadow clones are right now (empty unless cloning). A pure function of the
 ## synced special state and the walls, so every peer (and the server's bots) sees the same clones.
 func clone_points() -> PackedVector2Array:
 	var out := PackedVector2Array()
-	var clones: CharacterSkill = active_skill(SkillData.Kind.CLONES)
+	var clones: CharacterSkill = _clone_slot()
 	if dead or clones == null:
 		return out
 	var d: SkillData = clones.data
@@ -1185,6 +1196,47 @@ func _release_shot(seq: int, w: WeaponData) -> void:
 	var origin: Vector2 = shot_origin(w)
 	projectiles.fire_shot(player_id, seq, origin, facing, w, match_seed, -1, _ult(null))
 	shot_fired.emit(self, seq, origin, facing, w.id)
+	_clone_volley(seq, w)
+
+
+## Shadow Army: each clone throws a copy of her shot (projectiles only; a beam or melee swing can't be mirrored) at
+## `clone_fire_scale` x the damage. They get the ultimate's bonus and charge nothing (add_ult_damage ignores a running ult).
+func _clone_volley(seq: int, w: WeaponData) -> void:
+	var army: CharacterSkill = _clone_slot()
+	if army == null or army.data.clone_fire_scale <= 0.0 or w.kind != WeaponData.Kind.PROJECTILE or w.blast:
+		return
+	var spots: PackedVector2Array = clone_points()
+	for k: int in spots.size():
+		var dir: Vector2 = clone_aim(spots[k], w)
+		var origin: Vector2 = spots[k] + hand_offset(dir)
+		var key: int = seq + (k + 1) * CLONE_SEQ_OFFSET
+		projectiles.fire_shot(player_id, key, origin, dir, w, match_seed, -1, _ult(army.data), army.data.clone_fire_scale)
+		shot_fired.emit(self, key, origin, dir, w.id)
+
+
+## Where a clone standing at `at` shoots: at the nearest enemy within the weapon's range it can see (clones of theirs count,
+## hidden ones don't; ties go to the earlier player), else along her facing.
+func clone_aim(at: Vector2, w: WeaponData) -> Vector2:
+	var space: PhysicsDirectSpaceState2D = get_world_2d().direct_space_state
+	var best: float = w.projectile_range * w.projectile_range
+	var aim := Vector2.INF
+	for p: Player in projectiles.targets:
+		if is_ally(p) or p.dead:
+			continue
+		var spots: PackedVector2Array = p.clone_points()
+		if not p.is_hidden():
+			spots.append(p.global_position)
+		for spot: Vector2 in spots:
+			var dist: float = at.distance_squared_to(spot)
+			if dist >= best:
+				continue
+			var seen: Variant = AutoAim.visible_point(space, _sight_query, at, spot)
+			if seen != null:
+				best = dist
+				aim = seen
+	if aim == Vector2.INF:
+		return facing
+	return (aim - (at + hand_offset(aim - at))).normalized()
 
 
 ## Guns fire from the hand holding them (shots then spawn at the barrel tip, WeaponData.muzzle_distance);

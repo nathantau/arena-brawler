@@ -6,7 +6,7 @@ extends SceneTree
 ## Args: char, special (slot 1), move (stick while it runs), aim, press (extra presses at these seconds after the first
 ## after the run starts, comma separated, e.g. press=0,1.5 to start / end), fire (hold the weapon the whole time),
 ## target=x,y (the passive bot stands there, relative to the fighter), edge=1 (fighter starts near the right wall) /
-## edge=-1 (near the left wall), enemy=1 (the fighter is drawn as an enemy would see it: Smoke Bomb hides her completely), flip_at=S (the stick and aim mirror in x after S seconds: a turn-round).
+## edge=-1 (near the left wall), ult=1 (the press is the charged ultimate in slot 3 instead of `special`), enemy=1 (the fighter is drawn as an enemy would see it: Smoke Bomb hides her completely), flip_at=S (the stick and aim mirror in x after S seconds: a turn-round).
 
 const START_FRAME: int = 420  # the match countdown is over
 const PRESS_AT: int = 30  # frames after START_FRAME
@@ -23,6 +23,7 @@ class Runner extends LocalInput:
 	var move: Vector2 = Vector2.ZERO
 	var aim: Vector2 = Vector2.RIGHT
 	var press: bool = false
+	var press2: bool = false
 	var fire: bool = false
 
 	func get_input(p: Player, d: float) -> InputFrame:
@@ -31,6 +32,7 @@ class Runner extends LocalInput:
 		f.fire = fire
 		f.aim_vec = aim
 		f.special = press
+		f.special2 = press2
 		return f
 
 
@@ -97,9 +99,11 @@ func _tick() -> void:
 		me.global_position = home
 		for s: CharacterSkill in me.skills:
 			s.cooldown_remaining = 0.0
+		me.ult_charge = 1.0
 	var presses: PackedStringArray = String(args.get("press", "0")).split(",")
 	var hit: bool = false
 	for pr: String in presses:
 		if n - PRESS_AT == int(float(pr) * 60.0):
 			hit = true
-	runner.press = hit
+	runner.press = hit and args.get("ult", "0") != "1"
+	runner.press2 = hit and args.get("ult", "0") == "1"
