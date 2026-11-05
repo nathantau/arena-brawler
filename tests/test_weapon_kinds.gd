@@ -339,7 +339,7 @@ func test_projectiles_damage_and_destroy_crates() -> void:
 	await wait_physics_frames(2)
 	pool.fire_shot(SHOOTER, 1, Vector2(100, 300), Vector2.RIGHT, _w(&"pistol"), SEED)
 	await wait_physics_frames(20)
-	assert_eq(crate.hp, Constants.CRATE_HP - _w(&"pistol").damage)
+	assert_between(crate.hp, Constants.CRATE_HP - DmgExpect.hi(_w(&"pistol").damage), Constants.CRATE_HP - DmgExpect.lo(_w(&"pistol").damage))
 	assert_true(crate.take_damage(Constants.CRATE_HP))
 	assert_false(crate.is_intact())
 	await wait_physics_frames(2)

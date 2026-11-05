@@ -161,7 +161,7 @@ func test_cactus_cannon_bursts_into_a_ring_of_six_needles() -> void:
 	var dirs: Array[float] = []
 	for s: ProjectilePool.Slot in _active():
 		dirs.append(snappedf(s.vel.angle(), 0.01))
-		assert_eq(s.damage, roundi(_w(&"cactus_cannon").damage * 0.5), "needles do half")
+		assert_between(s.damage, DmgExpect.lo(_w(&"cactus_cannon").damage * 0.5), DmgExpect.hi(_w(&"cactus_cannon").damage * 0.5), "needles do half")
 	dirs.sort()
 	for i: int in dirs.size() - 1:
 		assert_almost_eq(dirs[i + 1] - dirs[i], TAU / 6.0, 0.1, "an even ring")
@@ -226,7 +226,7 @@ func test_storm_jar_splashes_and_the_lightning_jumps_to_a_second_enemy() -> void
 	assert_eq(arcs.size(), 1, "one arc (shown on every peer)")
 	for h: Dictionary in hits:
 		if h.victim == OTHER:
-			assert_eq(h.dmg, roundi(_w(&"storm_jar").damage * 0.6), "chain scale 0.6")
+			assert_between(h.dmg, DmgExpect.lo(_w(&"storm_jar").damage * 0.6), DmgExpect.hi(_w(&"storm_jar").damage * 0.6), "chain scale 0.6")
 
 
 func test_storm_jar_never_chains_to_an_ally() -> void:

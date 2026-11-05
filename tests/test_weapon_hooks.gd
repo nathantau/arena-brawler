@@ -144,7 +144,7 @@ func test_ember_palm_ignites_and_burn_damages_the_victim() -> void:
 		target.simulate(InputFrame.new(), 1.0 / 60.0)
 		total = before - (target.stats.hp + target.stats.armor)
 	assert_gte(total, 10, "burn ticks hurt (2 per 0.25 s)")
-	assert_lte(total, 12)
+	assert_lte(total, 6 * DmgExpect.hi(2), "6 ticks of the scaled burn damage")
 
 
 func test_kunai_backstab_is_a_crit_only_from_behind() -> void:
@@ -162,7 +162,7 @@ func test_kunai_backstab_is_a_crit_only_from_behind() -> void:
 	assert_gt(behind.size(), 0)
 	assert_gt(hits.size(), 0)
 	assert_true(behind[0].crit, "backstab shows as a crit")
-	assert_eq(behind[0].dmg, roundi(6 * 1.75))
+	assert_between(behind[0].dmg, roundi(DmgExpect.lo(6) * 1.75), roundi(DmgExpect.hi(6) * 1.75))
 	assert_lt(hits[0].dmg, behind[0].dmg)
 
 
@@ -184,7 +184,7 @@ func test_seed_sling_bursts_into_three_shards_on_a_wall() -> void:
 	assert_eq(shards.size(), 3)
 	for s: ProjectilePool.Slot in shards:
 		assert_eq(s.split_count, 0, "shards don't split again")
-		assert_eq(s.damage, roundi(w.damage * 0.35))
+		assert_between(s.damage, roundi(DmgExpect.lo(w.damage) * 0.35), roundi(DmgExpect.hi(w.damage) * 0.35))
 		assert_lt(s.vel.x, 0.0, "fanning back off the wall")
 
 
@@ -235,9 +235,9 @@ func test_prism_lance_ramps_on_one_target_and_resets_on_switch() -> void:
 	for i: int in 10:
 		pool.fire_shot(SHOOTER, i + 1, shooter.global_position, Vector2.RIGHT, w, SEED)
 		pool._physics_process(0.15)
-	assert_eq(hits[0].dmg, w.damage)
+	assert_between(hits[0].dmg, DmgExpect.lo(w.damage), DmgExpect.hi(w.damage))
 	assert_gt(hits[9].dmg, w.damage * 1.5)
-	assert_lte(hits[9].dmg, w.damage * 2)
+	assert_lte(hits[9].dmg, DmgExpect.hi(w.damage * 2))
 	assert_almost_eq(pool._beam_ramp(SHOOTER, OTHER, w), 1.0, 0.001, "a new target starts over")
 
 

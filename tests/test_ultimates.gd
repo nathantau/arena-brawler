@@ -4,7 +4,8 @@ extends GutTest
 
 const DT: float = 1.0 / 60.0
 ## One use on a single standing target never reaches a one-shot on an 80 hp fighter (CLAUDE.md "Ability damage rescale").
-const DAMAGE_CAP: int = 70
+## The old ~70-per-use cap, x the global and ultimate damage multipliers, x1.2 for the longer ultimates (+ rounding slack).
+var DAMAGE_CAP: int = ceili(70.0 * Constants.DAMAGE_MULT * Constants.ULT_DAMAGE_MULT * 1.2) + 6
 const IDS: Array[StringName] = [&"hanami_tempest", &"thunderstorm", &"world_tree", &"eclipse"]
 const OWNERS: Dictionary = {&"hanami_tempest": &"sakura", &"thunderstorm": &"bolt", &"world_tree": &"eden", &"eclipse": &"shadow"}
 

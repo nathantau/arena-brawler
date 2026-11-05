@@ -886,7 +886,7 @@ func test_blossom_snare_hit_damages_and_slows() -> void:
 		if b.stats.slow_remaining > 0.0:
 			break
 	assert_gt(b.stats.slow_remaining, 0.0, "the blossom landed")
-	assert_eq(hp - (b.stats.hp + b.stats.armor), w.damage)
+	assert_between(hp - (b.stats.hp + b.stats.armor), DmgExpect.lo(w.damage), DmgExpect.hi(w.damage))
 	assert_eq(b.stats.slow_factor, w.snare_factor)
 	b.global_position = Vector2(400, 300)
 	b.velocity = Vector2.ZERO
@@ -964,7 +964,8 @@ func test_staff_whirl_damages_in_range_on_ticks_only() -> void:
 	var hits: Array = _hits(w[1])
 	_press_special(p, Vector2.RIGHT)
 	assert_eq(hits.size(), 1, "first tick on the press")
-	assert_eq(hits[0], [2, d.whirl_damage])
+	assert_eq(hits[0][0], 2)
+	assert_between(hits[0][1], DmgExpect.lo(d.whirl_damage, d.rarity), DmgExpect.hi(d.whirl_damage, d.rarity))
 	assert_gt(near.velocity.x, 0.0, "pushed outward")
 	_idle(p, 5)
 	assert_eq(hits.size(), 1, "nothing between ticks")
@@ -1371,7 +1372,10 @@ func test_sky_pillar_hits_the_line_not_beside_it_or_the_caster_after_the_windup(
 	assert_eq(hits.size(), 0, "nothing before the slam")
 	_idle(p, 6)
 	assert_eq(hits.size(), 2, "the two on the line")
-	assert_true(hits.has([2, d.pillar_damage]) and hits.has([3, d.pillar_damage]))
+	var victims: Array = hits.map(func(h: Array) -> int: return h[0])
+	assert_true(victims.has(2) and victims.has(3))
+	for h: Array in hits:
+		assert_between(h[1], DmgExpect.lo(d.pillar_damage), DmgExpect.hi(d.pillar_damage))
 	assert_eq(beside.stats.hp, beside.stats.max_hp, "beside the line")
 	assert_eq(past.stats.hp, past.stats.max_hp, "past its end")
 	assert_eq(p.stats.hp, p.stats.max_hp, "not the caster")
@@ -1437,7 +1441,7 @@ func test_sky_pillar_damages_crates_on_the_line() -> void:
 	_press_special(p, Vector2.RIGHT)
 	assert_lt(p.skills[1].direction.x, 150.0, "the crate stops the line")
 	_idle(p, ceili(d.pillar_windup / DT) + 2)
-	assert_eq(on_line.hp, Constants.CRATE_HP - d.pillar_damage)
+	assert_between(on_line.hp, Constants.CRATE_HP - DmgExpect.hi(d.pillar_damage), Constants.CRATE_HP - DmgExpect.lo(d.pillar_damage))
 	assert_eq(beside.hp, Constants.CRATE_HP)
 
 
@@ -1465,7 +1469,8 @@ func test_sky_pillar_cooldown_and_replay_match() -> void:
 	assert_eq(b.skills[1].direction, a.skills[1].direction, "same line")
 	_idle(b, 60, true)
 	assert_eq(hits.size(), served, "replay damages nothing")
-	assert_eq(foe.stats.hp + foe.stats.armor, foe.stats.max_hp + foe.stats.max_armor - skills.get_skill(&"sky_pillar").pillar_damage)
+	var pillar_dmg: int = skills.get_skill(&"sky_pillar").pillar_damage
+	assert_between(foe.stats.hp + foe.stats.armor, foe.stats.max_hp + foe.stats.max_armor - DmgExpect.hi(pillar_dmg), foe.stats.max_hp + foe.stats.max_armor - DmgExpect.lo(pillar_dmg))
 	assert_almost_eq(b.skills[1].cooldown_remaining, a.skills[1].cooldown_remaining, 0.0001)
 
 
@@ -1512,7 +1517,7 @@ func test_flare_burst_waits_for_the_charge_and_roots_him() -> void:
 	_idle(p, 6)
 	assert_eq(hits.size(), 1, "bursts once")
 	assert_eq(hits[0][0], 2)
-	assert_between(hits[0][1], roundi(d.nova_blast.damage * d.nova_blast.splash_edge_scale), d.nova_blast.damage, "falls off toward the edge")
+	assert_between(hits[0][1], DmgExpect.lo(roundi(d.nova_blast.damage * d.nova_blast.splash_edge_scale)), DmgExpect.hi(d.nova_blast.damage), "falls off toward the edge")
 	_idle(p, 60)
 	assert_eq(hits.size(), 1)
 
@@ -1750,7 +1755,7 @@ func test_storm_cloud_strikes_only_enemies_in_range_with_sight_on_each_tick() ->
 	_idle(p, 6)
 	assert_eq(hits.size(), 1, "first bolt")
 	assert_eq(hits[0][0], 2)
-	assert_between(hits[0][1], d.storm_damage, d.storm_damage + 1)
+	assert_between(hits[0][1], DmgExpect.lo(d.storm_damage, d.rarity), DmgExpect.hi(d.storm_damage, d.rarity))
 	assert_lt(near.velocity.x, 0.0, "pushed away from the spot")
 	_idle(p, floori(d.storm_interval / DT))
 	assert_eq(hits.size(), 2, "a bolt every interval, one victim each")
@@ -2097,7 +2102,7 @@ func test_leaf_gust_pushes_and_hurts_only_enemies_in_the_cone() -> void:
 		q.stats.armor = 0
 	_press_special(p, Vector2.RIGHT)
 	assert_eq(hits.size(), 1, "one victim, once")
-	assert_between(hits[0][1], d.gust_damage, d.gust_damage + 1)
+	assert_between(hits[0][1], DmgExpect.lo(d.gust_damage, d.rarity), DmgExpect.hi(d.gust_damage, d.rarity))
 	assert_gt(s[3].velocity.x, d.gust_knockback * 0.9, "thrown away from her, hard")
 	assert_eq(s[4].stats.hp, s[4].stats.max_hp, "outside the angle")
 	assert_eq(s[5].stats.hp, s[5].stats.max_hp, "out of range")

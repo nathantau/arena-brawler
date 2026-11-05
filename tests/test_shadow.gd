@@ -226,7 +226,7 @@ func test_step_strike_lands_where_he_surfaces_not_inside_the_wall() -> void:
 	var d: SkillData = skills.get_skill(&"shadow_step")
 	var full: int = characters.get_character(&"flicker").max_hp + characters.get_character(&"flicker").max_armor
 	var hit: Array = await _step_to_the_end(end_x, 200.0, up + Vector2(0, -30))
-	assert_eq(hit[1], full - d.step_damage, "the foe next to where he came up is struck")
+	assert_between(hit[1], full - DmgExpect.hi(d.step_damage), full - DmgExpect.lo(d.step_damage), "the foe next to where he came up is struck")
 
 
 func test_step_strikes_where_he_emerges_only() -> void:
@@ -252,7 +252,8 @@ func test_step_strikes_where_he_emerges_only() -> void:
 	_run(p, 3, Vector2.RIGHT)
 	assert_false(p.skills[1].is_active())
 	assert_eq(hits.size(), 1, "one strike, one victim")
-	assert_eq(hits[0], [2, d.step_damage])
+	assert_eq(hits[0][0], 2)
+	assert_between(hits[0][1], DmgExpect.lo(d.step_damage, d.rarity), DmgExpect.hi(d.step_damage, d.rarity))
 	assert_eq(far.stats.hp, far.stats.max_hp, "out of reach")
 	assert_eq(p.stats.hp, p.stats.max_hp, "not himself")
 	assert_gt(near.velocity.length(), 0.0, "thrown back")
@@ -311,7 +312,7 @@ func test_hound_rises_ahead_chases_the_nearest_enemy_and_bites() -> void:
 	assert_eq(far.stats.hp, far.stats.max_hp, "only the nearest is chased")
 	for h: Array in hits:
 		assert_eq(h[0], 2)
-		assert_between(h[1], d.hound_damage, d.hound_damage + 1)
+		assert_between(h[1], DmgExpect.lo(d.hound_damage, d.rarity), DmgExpect.hi(d.hound_damage, d.rarity))
 	var bitten: int = hits.size()
 	assert_gte(bitten, 2, "bites more than once")
 	assert_lte(bitten, 1 + ceili(d.duration / d.hound_bite_interval), "with a cooldown between bites")
