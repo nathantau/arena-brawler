@@ -2501,17 +2501,20 @@ ICONS = {
 }
 
 
-# Shadow Army (Shade's ultimate): a pyramid of three hooded heads with teal eye slits (the front one navy, the two
-# behind violet-dark) and a kunai rising from the gap between them. Distinct from "clones" (two plain figures).
+# Shadow Army (Shade's ultimate): a pyramid of three hooded ninja heads (two steel-grey behind, the navy one in front with a bright
+# rim), teal eye glints on each and a kunai poised either side. Distinct from "clones" (two plain figures, no weapons).
 ICONS["shadow_army"] = lambda c: (
-    c.flat(E((0, 2, 6, 8)), VIOLET_D), c.flat(E((6, 2, 12, 8)), VIOLET_D),
-    c.flat(L([(1, 4), (2, 3), (4, 3)], 1), VIOLET), c.flat(L([(8, 3), (10, 3), (11, 4)], 1), VIOLET),
-    c.flat(R((1, 5, 4, 5)), TEAL), c.flat(R((8, 5, 11, 5)), TEAL),
-    c.flat(P([(0, 12), (2, 10), (10, 10), (12, 12)]), NAVY),
-    c.flat(E((3, 5, 9, 11)), NAVY), c.flat(P([(3, 12), (3, 9), (9, 9), (9, 12)]), NAVY),
-    c.flat(R((4, 8, 8, 8)), OUTLINE), c.flat(R((4, 8, 5, 8)), TEAL_L), c.flat(R((7, 8, 8, 8)), TEAL_L),
+    c.flat(E((0, 0, 6, 6)), STEEL_D), c.flat(E((6, 0, 12, 6)), STEEL_D),
+    c.flat(L([(1, 2), (2, 1), (4, 1)], 1), STEEL), c.flat(L([(8, 1), (10, 1), (11, 2)], 1), STEEL),
+    c.flat(R((1, 3, 5, 4)), OUTLINE), c.flat(R((7, 3, 11, 4)), OUTLINE),
+    c.flat(R((1, 3, 2, 4)), TEAL_L), c.flat(R((4, 3, 5, 4)), TEAL_L), c.flat(R((7, 3, 8, 4)), TEAL_L), c.flat(R((10, 3, 11, 4)), TEAL_L),
+    c.flat(E((2, 4, 10, 12)), OUTLINE), c.flat(E((3, 5, 9, 11)), NAVY), c.flat(P([(1, 12), (3, 10), (9, 10), (11, 12)]), OUTLINE),
+    c.flat(P([(2, 12), (3, 10), (9, 10), (10, 12)]), NAVY),
+    c.flat(L([(4, 6), (5, 5), (7, 5)], 1), BLUE), c.flat(L([(3, 7), (3, 9)], 1), BLUE),
+    c.flat(R((4, 7, 8, 8)), OUTLINE), c.flat(R((4, 7, 5, 8)), TEAL_L), c.flat(R((7, 7, 8, 8)), TEAL_L),
     c.flat(R((3, 12, 9, 12)), SHADOW),
-    c.flat(P([(6, 0), (7, 2), (6, 4), (5, 2)]), STEEL), c.dot(6, 1, WHITE), c.dot(6, 3, STEEL_D))
+    c.flat(L([(0, 8), (1, 10)], 1), STEEL), c.dot(0, 7, WHITE), c.dot(1, 11, RED),
+    c.flat(L([(12, 8), (11, 10)], 1), STEEL), c.dot(12, 7, WHITE), c.dot(11, 11, RED))
 
 
 UI_SLICE_SCALE = 2  # 9-slices are saved pre-scaled (StyleBoxTexture can't scale); keep in sync with UiStyle.SLICE

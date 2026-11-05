@@ -701,8 +701,8 @@ func skill_locked(slot: int) -> bool:
 	if flag_carrier and slot != Constants.ULT_SLOT and CARRIER_BLOCKED_KINDS.has(skills[slot].data.kind):  # ults stay usable
 		return true
 	for i: int in skills.size():
-		if i != slot and skills[i].blocks_other():
-			return true
+		if i != slot and (skills[i].blocks_other() or (skills[i].is_cloning() and skills[slot].data.kind == SkillData.Kind.CLONES)):
+			return true  # (Shadow Clones and Shadow Army never run together: two sets of clones)
 	return false
 
 

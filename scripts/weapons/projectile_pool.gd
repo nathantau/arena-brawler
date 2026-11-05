@@ -255,7 +255,7 @@ func _volley(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon: 
 		match_seed: int) -> void:
 	_shot_rng.seed = CombatRules.shot_seed(match_seed, owner_id, seq)
 	var crit: bool = CombatRules.roll_crit(weapon, _shot_rng)
-	if weapon.crit_every > 0 and _streak_hit(owner_id, weapon.crit_every):
+	if weapon.crit_every > 0 and _shot_scale == 1.0 and _streak_hit(owner_id, weapon.crit_every):
 		crit = true
 	var damage: int = CombatRules.damage_for(weapon, crit, _shot_rarity, _shot_salt, _shot_ult)
 	if _shot_scale != 1.0:

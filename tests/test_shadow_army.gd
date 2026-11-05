@@ -170,3 +170,40 @@ func test_shadow_clones_is_an_ability_and_shadow_army_the_ultimate() -> void:
 	assert_true(Unlocks.is_starter_skill(shade, clones))
 	assert_true(Unlocks.is_starter_skill(shade, army))
 	assert_true(Player.default_skills(shade).has(clones))
+
+
+func test_clone_shots_do_not_advance_a_crit_streak() -> void:
+	var w: Array = _world()
+	var pistol: WeaponData = WeaponCatalog.load_all().get_weapon(&"pistol")
+	assert_gt(pistol.crit_every, 0)
+	for i: int in 5:
+		w[1].fire_shot(1, 10 + i, Vector2(100, 300), Vector2.RIGHT, pistol, 3, -1, true, 0.5)
+	assert_false(w[1]._streaks.has(1), "scaled copies leave the streak alone")
+	w[1].fire_shot(1, 99, Vector2(100, 300), Vector2.RIGHT, pistol, 3)
+	assert_eq(int(w[1]._streaks[1].x), 1, "her own shot starts it")
+
+
+func test_clone_shots_are_not_registered_as_shots() -> void:
+	assert_gt(Player.CLONE_SEQ_OFFSET, 1 << 35, "clone keys sit above every other offset (Arena skips them in the shot stat)")
+
+
+func test_clones_and_army_refuse_each_other() -> void:
+	var w: Array = _world()
+	var p: Player = _shade(w, &"none")
+	await wait_physics_frames(2)
+	p.ult_charge = 1.0
+	_frame(p, 1, false, false, true)  # Shadow Clones
+	assert_true(p.skills[1].is_active())
+	assert_true(p.skill_locked(Constants.ULT_SLOT))
+	_frame(p, 2, false, false, false, true)
+	assert_false(p.skills[Constants.ULT_SLOT].is_active(), "the army is refused")
+	assert_eq(p.ult_charge, 1.0, "no charge spent")
+	var q: Player = _player(w, 2, Vector2(400, 300))
+	q.set_skill(1, skills.get_skill(&"shadow_clones"))
+	q.ult_charge = 1.0
+	_frame(q, 1, false, false, false, true)  # Shadow Army
+	assert_true(q.skills[Constants.ULT_SLOT].is_active())
+	assert_true(q.skill_locked(1))
+	_frame(q, 2, false, false, true)
+	assert_false(q.skills[1].is_active(), "the clones are refused")
+	assert_eq(q.skills[1].cooldown_remaining, 0.0, "no cooldown spent")
