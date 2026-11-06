@@ -31,7 +31,8 @@ func test_follow_ups_impacts_and_bursts_resolve_to_recipes() -> void:
 	assert_eq(Sfx.FOLLOW_UPS[&"yoyo_out"][0], &"yoyo_back")
 	assert_lt(Sfx.FOLLOW_UPS[&"yoyo_out"][1], 0.0, "the yo-yo's delay comes from its range / speed, not a constant")
 	var yo: WeaponData = WeaponCatalog.load_all().get_weapon(&"yoyo")
-	assert_almost_eq(yo.projectile_range / yo.projectile_speed, 0.52, 0.01)
+	assert_almost_eq(yo.turn_time(), 0.39, 0.01, "the return sound lands at the snap back: ease-out time + sleep")
+	assert_almost_eq(yo.turn_time(), yo.yoyo_out_time() + yo.yoyo_sleep, 0.0001)
 
 
 func test_new_recipes_are_short_and_not_loud() -> void:

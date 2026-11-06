@@ -153,6 +153,10 @@ enum Kind { PROJECTILE, BEAM, MELEE }
 @export var fx_every: int = 1
 ## A boomerang drawn on a string from its thrower's hand (Yo-Yo).
 @export var tether: bool = false
+## > 0 (with `boomerang` + `tether`): a real yo-yo. It eases out to `projectile_range` over 2 x range / speed (`projectile_speed` is
+## its launch speed), sleeps here this many seconds, then snaps back accelerating (Constants.YOYO_BACK_SCALE x as long) into the
+## hand. Position is a function of the shot's age only (yoyo_reach / yoyo_home), so every peer agrees.
+@export var yoyo_sleep: float = 0.0
 ## While in flight, every enemy within `vortex_radius` px (with a clear line) is dragged toward the shot at `vortex_force` px/s.
 ## Server-side only (Black Hole Orb); a negative `knockback` pulls a hit foe toward the shooter (Magnet Blaster).
 @export var vortex_radius: float = 0.0
@@ -186,6 +190,35 @@ func draw_held(ci: CanvasItem, grip: Vector2, tint: Color, loop_only: bool = fal
 	var count: int = maxi(1, int(held_frames.get_width() / size.x))
 	var frame: int = int(Time.get_ticks_msec() / 1000.0 * HELD_FPS) % count
 	ci.draw_texture_rect_region(held_frames, Rect2(-grip, size), Rect2(Vector2(frame * size.x, 0.0), size), tint)
+
+
+## Yo-Yo: seconds to reach full range (ease-out), and to come home again (ease-in).
+func yoyo_out_time() -> float:
+	return 2.0 * projectile_range / maxf(projectile_speed, 1.0)
+
+
+func yoyo_back_time() -> float:
+	return yoyo_out_time() * Constants.YOYO_BACK_SCALE
+
+
+## Yo-Yo: distance from the throw point along the aim `age` s after it left (decelerating, 0 .. projectile_range).
+func yoyo_reach(age: float) -> float:
+	var left: float = 1.0 - clampf(age / yoyo_out_time(), 0.0, 1.0)
+	return projectile_range * (1.0 - left * left)
+
+
+## Yo-Yo: how much of the way home is still to go `since` s after it reached its far point (1 while asleep, then
+## accelerating to 0 in the hand).
+func yoyo_home(since: float) -> float:
+	var u: float = clampf((since - yoyo_sleep) / yoyo_back_time(), 0.0, 1.0)
+	return 1.0 - u * u
+
+
+## Seconds after the throw when a boomerang turns round (what the return sound is timed to).
+func turn_time() -> float:
+	if yoyo_sleep > 0.0:
+		return yoyo_out_time() + yoyo_sleep
+	return projectile_range / maxf(projectile_speed, 1.0)
 
 
 ## How far along the aim shots spawn from their origin (the hand holding the gun, Player.shot_origin()).

@@ -108,6 +108,12 @@ class Slot:
 	var boomerang: bool = false
 	var returning: bool = false
 	var hit_ids: Array[int] = []
+	## Yo-Yo (WeaponData.yoyo_sleep): the throw point and aim, the far point, and the age it got there (< 0 = still going out).
+	var yoyo: bool = false
+	var anchor: Vector2 = Vector2.ZERO
+	var aim: Vector2 = Vector2.RIGHT
+	var apex: Vector2 = Vector2.ZERO
+	var turn_age: float = -1.0
 	var base_damage: int = 0
 	var bounce_gain: float = 0.0
 	var bounced: int = 0
@@ -315,6 +321,12 @@ func _spawn_pellet(owner_id: int, seq: int, pellet: int, origin: Vector2, muzzle
 	slot.returning = false
 	slot.hit_ids.clear()
 	slot.piercing = slot.piercing or weapon.boomerang
+	slot.yoyo = weapon.yoyo_sleep > 0.0
+	slot.anchor = muzzle
+	slot.aim = dir
+	slot.turn_age = -1.0
+	if slot.yoyo:  # (never runs out on its own: it is caught in the hand)
+		slot.life = weapon.yoyo_out_time() + weapon.yoyo_sleep + weapon.yoyo_back_time() + 1.0
 	slot.base_damage = damage
 	slot.bounce_gain = weapon.bounce_damage_gain
 	slot.bounced = 0
@@ -583,7 +595,10 @@ func _step_slot(s: Slot, delta: float, space: PhysicsDirectSpaceState2D) -> void
 		_step_fun(s, delta)
 	if s.vortex_radius > 0.0 and authoritative:
 		_vortex(s, delta)
-	if s.boomerang and s.returning:
+	if s.yoyo and not _step_yoyo(s, delta):
+		s.active = false
+		return
+	if s.boomerang and s.returning and not s.yoyo:
 		if not _steer_home(s):
 			s.active = false
 			return
@@ -738,9 +753,51 @@ func _nearest_enemy(s: Slot) -> Player:
 
 ## A boomerang reached the end of its outward flight (or a wall): it comes back, free to hit everyone again.
 func _turn_back(s: Slot) -> void:
+	if s.yoyo:  # a wall is its far point: it sleeps right there
+		s.apex = s.pos
+		s.turn_age = s.age
+		return
 	s.returning = true
 	s.hit_ids.clear()
 	s.life = Constants.BOOMERANG_RETURN_LIFE
+
+
+## Yo-Yo: aims the slot's velocity at where the yo-yo should be after this step, a function of its age (and the thrower's
+## hand on the way home): ease out along the throw, sleep at the far point, then accelerate into the hand.
+## False once it is caught (or the thrower is gone).
+func _step_yoyo(s: Slot, delta: float) -> bool:
+	var w: WeaponData = s.weapon
+	var target: Vector2
+	if s.turn_age < 0.0:
+		if s.age < w.yoyo_out_time():
+			target = s.anchor + s.aim * w.yoyo_reach(s.age)
+			s.vel = (target - s.pos) / delta
+			return true
+		s.turn_age = s.age
+		s.apex = s.anchor + s.aim * w.projectile_range
+	var since: float = s.age - s.turn_age
+	if since < w.yoyo_sleep:
+		target = s.apex
+	else:
+		if not s.returning:
+			s.returning = true
+			s.hit_ids.clear()
+		if since >= w.yoyo_sleep + w.yoyo_back_time():
+			return false
+		var hand: Vector2 = _hand_of(s)
+		if hand == Vector2.INF:
+			return false
+		target = hand + (s.apex - hand) * w.yoyo_home(since)
+	s.vel = (target - s.pos) / delta
+	return true
+
+
+## The hand of a slot's thrower (Vector2.INF if he is gone or dead).
+func _hand_of(s: Slot) -> Vector2:
+	for p: Player in targets:
+		if p.player_id == s.owner_id:
+			return Vector2.INF if p.dead else p.shot_origin(s.weapon)
+	return Vector2.INF
 
 
 ## Points a returning boomerang at its thrower; false once it is caught (or the thrower is gone).
@@ -1114,8 +1171,9 @@ func _add_impact(at: Vector2, radius: float, color: Color) -> void:
 	imp.color = color
 
 
-## Yo-Yo: a pixel string from the thrower's hand to the yo-yo.
-func _draw_string(s: Slot, w: WeaponData, px: float) -> void:
+## Yo-Yo: a taut pixel string from the thrower's hand to the yo-yo (it bows a hair at the turn, while the yo-yo sleeps).
+## Returns the hand it was drawn from (Vector2.INF if the thrower is gone).
+func _draw_string(s: Slot, w: WeaponData, px: float) -> Vector2:
 	draw_set_transform(Vector2.ZERO)
 	for p: Player in targets:
 		if p.player_id != s.owner_id:
@@ -1123,10 +1181,29 @@ func _draw_string(s: Slot, w: WeaponData, px: float) -> void:
 		var from: Vector2 = p.shot_origin(w)
 		var span: Vector2 = s.pos - from
 		var n: int = int(span.length() / (px * STRING_STEP))
+		var sag: float = 0.0
+		if s.yoyo and s.turn_age >= 0.0:
+			sag = px * Constants.YOYO_SAG_PX * sin(PI * clampf((s.age - s.turn_age) / (w.yoyo_sleep + 0.06), 0.0, 1.0))
 		for i: int in n:
-			var at: Vector2 = ((from + span * (float(i) / float(maxi(n, 1)))) / px).floor() * px
+			var f: float = float(i) / float(maxi(n, 1))
+			var at: Vector2 = ((from + span * f + Vector2(0.0, sag * 4.0 * f * (1.0 - f))) / px).floor() * px
 			draw_rect(Rect2(at, Vector2(px, px)), STRING_COLORS[i % STRING_COLORS.size()])
-		return
+		return from
+	return Vector2.INF
+
+
+## Yo-Yo: the string, then the disc seen from the side (axle across the string), its frames spinning with its age.
+func _draw_yoyo(s: Slot, w: WeaponData, px: float) -> void:
+	var hand: Vector2 = _draw_string(s, w, px)
+	var h: float = s.sprite.get_height()
+	var frames: int = int(s.sprite.get_width() / h)
+	var frame: int = int(s.age * Constants.YOYO_SPIN_FPS) % frames
+	var angle: float = s.aim.angle() if hand == Vector2.INF else (s.pos - hand).angle()
+	var scale_px: float = px * w.projectile_scale * (CRIT_SPRITE_SCALE if s.crit else 1.0)
+	draw_set_transform(s.pos, angle, Vector2(scale_px, scale_px))
+	draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2(frame * h, 0, h, h),
+		REFLECT_TINT if s.reflected else Color.WHITE)
+	draw_set_transform(Vector2.ZERO)
 
 
 ## Black Hole Orb: pixel motes spiral in toward the orb across its pull radius (cosmetic, every peer).
@@ -1156,6 +1233,9 @@ func _draw() -> void:
 			continue
 		var fps: float = SPRITE_FPS * (2.0 if fused else 1.0)
 		var w: WeaponData = s.weapon
+		if s.yoyo:
+			_draw_yoyo(s, w, px)
+			continue
 		if w != null and w.sting_delay > 0.0:
 			fps *= FLAP_FPS_SCALE
 		var tick: int = int(_time * fps) + s.pellet

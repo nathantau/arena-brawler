@@ -207,6 +207,58 @@ func test_yoyo_goes_out_and_back_on_a_string_and_hits_once_each_way() -> void:
 	assert_eq(hits.size(), 2, "once out, once back, not once per frame")
 
 
+func test_yoyo_position_follows_ease_out_sleep_and_snap_back() -> void:
+	var shooter: Player = _player(SHOOTER, Vector2(100, 300))
+	var w: WeaponData = _w(&"yoyo")
+	assert_between(w.projectile_range, 150.0, 175.0, "60-70% of the old 250 px throw")
+	assert_almost_eq(w.yoyo_reach(0.0), 0.0, 0.001)
+	assert_almost_eq(w.yoyo_reach(w.yoyo_out_time()), w.projectile_range, 0.001)
+	assert_almost_eq(w.yoyo_home(w.yoyo_sleep), 1.0, 0.001, "still at the far point when the sleep ends")
+	assert_almost_eq(w.yoyo_home(w.yoyo_sleep + w.yoyo_back_time()), 0.0, 0.001, "in the hand at the end")
+	await wait_physics_frames(2)
+	_fire(&"yoyo", shooter.global_position, Vector2.RIGHT)
+	var start_x: float = shooter.global_position.x + w.muzzle_distance()
+	var xs: Array[float] = []
+	for i: int in 90:
+		await get_tree().physics_frame  # one tick (wait_physics_frames(1) is two)
+		if _active().is_empty():
+			break
+		xs.append(_active()[0].pos.x)
+	var out_n: int = int(w.yoyo_out_time() * 60.0)
+	var sleep_n: int = int(w.yoyo_sleep * 60.0)
+	# out: always moving away, each step shorter than the last (ease-out), launched faster than the old 480 px/s
+	var prev: float = start_x
+	var prev_step: float = INF
+	for i: int in out_n - 1:
+		var step: float = xs[i] - prev
+		assert_gt(step, 0.0, "out frame %d moves out" % i)
+		assert_lte(step, prev_step + 0.01, "out frame %d decelerates" % i)
+		prev = xs[i]
+		prev_step = step
+	assert_gt(xs[0] - start_x, 480.0 / 60.0 * 1.5, "snaps out fast")
+	# the position is the curve of its age (give or take a frame of phase)
+	for i: int in out_n - 1:
+		var age: float = float(i + 1) / 60.0
+		assert_between(xs[i] - start_x, w.yoyo_reach(age - 2.0 / 60.0) - 0.5, w.yoyo_reach(age + 2.0 / 60.0) + 0.5, "frame %d on the curve" % i)
+	# sleep: parked at full reach for about yoyo_sleep
+	var parked: int = 0
+	for x: float in xs:
+		if absf(x - (start_x + w.projectile_range)) < 0.5:
+			parked += 1
+	assert_gte(parked, sleep_n - 2, "sleeps at the far point")
+	assert_lte(parked, sleep_n + 3)
+	# snap back: after the sleep every step toward the hand is longer than the last, until it is caught
+	var first_back: int = out_n + parked - 1
+	var last_step: float = 0.0
+	for i: int in range(first_back + 1, xs.size()):
+		var step: float = xs[i - 1] - xs[i]
+		assert_gte(step, last_step - 0.01, "return frame %d accelerates" % i)
+		last_step = step
+	assert_gt(last_step, 5.0, "arrives at speed")
+	var total: float = w.yoyo_out_time() + w.yoyo_sleep + w.yoyo_back_time()
+	assert_almost_eq(float(xs.size()) / 60.0, total, 0.1, "caught after out + sleep + back")
+
+
 func test_storm_jar_splashes_and_the_lightning_jumps_to_a_second_enemy() -> void:
 	var shooter: Player = _player(SHOOTER, Vector2(60, 300))
 	_player(TARGET, Vector2(300, 300))

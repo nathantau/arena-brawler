@@ -247,6 +247,10 @@ const BOOMERANG_GHOST_ALPHA: float = 0.45
 ## A returning boomerang flies this long at most; a consecutive-shot streak (Pocket Blaster) resets after this long idle.
 const BOOMERANG_RETURN_LIFE: float = 4.0
 const STREAK_RESET: float = 1.0
+## Yo-Yo: the way home takes this x as long as the throw out; its string bows YOYO_SAG_PX art px at the turn; frames spin at YOYO_SPIN_FPS.
+const YOYO_BACK_SCALE: float = 1.15
+const YOYO_SAG_PX: float = 2.0
+const YOYO_SPIN_FPS: float = 36.0
 ## Damage multiplier by WeaponData / SkillData.rarity (common, rare, epic): better items hit slightly harder.
 const RARITY_DAMAGE_MULT: Array[float] = [1.0, 1.05, 1.10]
 ## Every attack's damage (weapons, abilities, ultimates) x this, applied by `CombatRules.scaled` with the rarity bonus.

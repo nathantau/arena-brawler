@@ -51,8 +51,8 @@ const ROWS_NEW: Array = [
 		"focus": Vector2(60, 0), "at": [30, 48, 60, 64, 68, 76]},
 	{"label": "Disc Launcher: a fast spinning disc ricochets off the wall, harder every bounce", "zoom": 1,
 		"focus": Vector2(0, 0), "at": [6, 14, 22, 30, 40, 52, 64]},
-	{"label": "Yo-Yo: thrown out on its string, hits, comes back and hits again", "zoom": 1,
-		"focus": Vector2(-20, 0), "at": [4, 10, 16, 22, 30, 40]},
+	{"label": "Yo-Yo: snaps out and slows, sleeps spinning at the end, snaps back faster, caught in the hand", "zoom": 2,
+		"focus": Vector2(-90, 0), "at": [1, 6, 14, 20, 33, 38]},
 	{"label": "Storm Jar: lobbed jar shatters, a thunder ring and lightning jumps to the second fighter", "zoom": 1,
 		"focus": Vector2(-30, 0), "at": [20, 28, 32, 34, 38, 46]},
 ]
