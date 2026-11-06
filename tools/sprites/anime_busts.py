@@ -564,12 +564,12 @@ HAIRS = {H_EDGE, HR, H_D, H_L, H_HI}
 EYES = {
     "narrow": dict(ow=3.4, outer=-2.4, inner=-0.6, peak=0.0, lo=(0.55, 0.4, 0.8, 0.6), white=False, irx=0, iry=0, shift=0,
                    hl2=False, cy=27.8, gap=9.6, brow=0.0),
-    "almond": dict(ow=3.2, outer=-1.9, inner=-0.9, peak=0.0, lo=(0.5, 0.4, 1.2, 1.0), white=True, irx=2.2, iry=2.6,
-                   shift=0.4, hl2=False, cy=27.8, gap=9.6, brow=0.0),
+    "almond": dict(ow=3.6, outer=-2.5, inner=-1.7, peak=0.0, lo=(0.5, 0.4, 1.9, 1.7), white=True, irx=1.8, iry=2.25,
+                   shift=0.0, hl2=False, cy=27.8, gap=9.6, brow=0.7),
     "round": dict(ow=3.5, outer=-2.1, inner=-1.3, peak=1.1, lo=(0.0, 0.0, 2.7, 2.3), white=True, irx=2.7, iry=3.1,
                   shift=0.2, hl2=True, cy=28.4, gap=9.4, brow=0.7),
 }
-SDEFAULT = dict(eyes="almond", iris="rose", hair="long", cheeks=0.0, shade=1)
+SDEFAULT = dict(eyes="almond", iris="amber", hair="bob", cheeks=0.03, shade=1)       # variant 4, plumper
 SCFG = dict(SDEFAULT)
 
 
@@ -610,8 +610,8 @@ def ellipse_pts(cx, cy, rx, ry, n=24):
 
 
 # face: Flint's polygon, narrowed about 1.4 units at the jaw with a softer chin (cheeks widen / narrow it a bit)
-SFACE0 = [(13.4, 17), (34.6, 17), (35.4, 27.5), (34.0, 33), (30.2, 38.4), (26.6, 41.8), (24, 42.8), (21.4, 41.8),
-          (17.8, 38.4), (14.0, 33), (12.6, 27.5)]
+SFACE0 = [(13.4, 17), (34.6, 17), (35.6, 27.5), (35.6, 31.5), (34.6, 35.2), (31.8, 39.4), (28.0, 42.2), (24, 43.0),
+          (20.0, 42.2), (16.2, 39.4), (13.4, 35.2), (12.4, 31.5), (12.4, 27.5)]
 
 
 def s_face_pts():
@@ -620,9 +620,9 @@ def s_face_pts():
 
 
 STOFF = 0.8                    # Flint's 3.5 less 2.7: a shorter neck
-SNECK = [(20.6, 35), (27.4, 35), (28.0, 45), (20.0, 45)]
-STORSO = [(0, 64), (0, 53.5), (5, 48.5), (14, 45.0), (20.4, 43.0), (23.45, 52.0), (27.6, 43.0), (34, 45.0), (43, 48.5),
-          (48, 53.5), (48, 64)]
+SNECK = [(20.2, 35), (27.8, 35), (28.6, 45), (19.4, 45)]
+STORSO = [(0, 64), (0, 54), (3.5, 49.8), (9, 46.9), (15, 45.0), (20.4, 43.2), (23.45, 52.0), (27.6, 43.2), (33, 45.0), (39, 46.9),
+          (44.5, 49.8), (48, 54), (48, 64)]
 
 
 def s_eye(img, d, cx, cy, side, o, wide=1.0):
@@ -652,11 +652,11 @@ def s_eye(img, d, cx, cy, side, o, wide=1.0):
     if E["white"]:
         d.polygon([P(*p) for p in pts], fill=CREAM)
         ic = cx - side * E["shift"]
-        iris = both(poly_mask(ellipse_pts(ic, cy + 0.3, E["irx"], E["iry"], 24)), am)
+        iris = both(poly_mask(ellipse_pts(ic, cy + 0.45, E["irx"], E["iry"], 24)), am)
         paste_mask(img, mid, iris)
         paste_mask(img, dark, both(iris, box_mask(0, 0, 48, cy - 0.3)))
         d = ImageDraw.Draw(img)
-        d.rectangle(((ic - 0.4) * K, (cy + 0.0) * K, (ic + 0.4) * K, (cy + 1.0) * K), fill=INK)
+        d.rectangle(((ic - 0.35) * K, (cy + 0.2) * K, (ic + 0.35) * K, (cy + 1.1) * K), fill=INK)
         hx, hy = ic - 0.75, cy - 0.7
         if E["hl2"]:
             d.rectangle(((ic + 0.9) * K - 4, (cy + 1.7) * K - 4, (ic + 0.9) * K + 4, (cy + 1.7) * K + 4), fill=WHITE)
@@ -666,9 +666,9 @@ def s_eye(img, d, cx, cy, side, o, wide=1.0):
         paste_mask(img, dark, both(am, lm))
         d = ImageDraw.Draw(img)
         hx, hy = cx + side * 0.5, cy - 0.7
-    d.line([P(*p) for p in lo], fill=MAROON, width=6)
+    d.line([P(*p) for p in lo[len(lo) // 2:]], fill=SK_D if E["white"] else MAROON, width=5 if E["white"] else 6)
     d.rectangle((hx * K - 7, hy * K - 7, hx * K + 7, hy * K + 7), fill=WHITE)
-    d.line([P(*p) for p in up], fill=INK, width=11)
+    d.line([P(*p) for p in up], fill=INK, width=11 if not E["white"] else 9)
     d.line([P(*outer), P(outer[0] + side * 1.3, outer[1] - 0.8)], fill=INK, width=8)
     return d
 
@@ -752,7 +752,7 @@ def s_draw_face(img, neckm, torm, expr):
     paste_mask(img, SK_L, both(facem, poly_mask([(15.4, 22.5), (21, 22.5), (20.5, 24.5), (15.2, 25)])))
     paste_mask(img, SK_S, both(facem, inv(shift(facem, int((-22 if strong else -12) * F), 0))))
     if strong:
-        paste_mask(img, SK_S, both(facem, poly_mask([(26.0, 34.0), (35.2, 30.5), (33.6, 36.0), (27.4, 41.8), (24.5, 41.4)])))
+        paste_mask(img, SK_S, both(facem, poly_mask([(26.0, 34.0), (35.8, 30.5), (34.4, 36.5), (28.6, 42.2), (24.5, 41.8)])))
         chin = both(facem, inv(shift(facem, 0, int(-14 * F))))
         paste_mask(img, SK_S, both(chin, shift(facem, int(-30 * F), 0)))
     paste_mask(img, SK_D, both(both(facem, inv(shift(facem, int(-9 * F), 0))), box_mask(0, 25, 48, 40)))
@@ -810,7 +810,7 @@ def s_back_hair(img, s, left, k=0.8):
 
 BACKS = {
     "long": [(24, 9.8), (16.5, 10.8), (11.2, 15.5), (8.4, 23), (7.0, 33), (5.6, 43), (4.6, 52), (6.0, 59)],
-    "bob": [(24, 9.8), (16.5, 10.8), (11.0, 15.5), (8.0, 23), (6.6, 31), (6.2, 38), (7.4, 44), (10.0, 49)],
+    "bob": [(24, 9.8), (16.5, 10.8), (11.0, 15.5), (7.6, 22), (5.6, 30), (5.0, 37), (5.8, 43), (8.4, 47.5), (12.0, 51)],
     "head": [(24, 9.8), (16.5, 10.8), (11.4, 15.5), (9.8, 23), (10.4, 29), (12.4, 33.5)],
 }
 
@@ -878,7 +878,7 @@ def s_hair_under(img, s):
         locks(hd, s, [((17.5, 13.5), (5.4, 44.0), 8.0, 2.0), ((19.0, 14.5), (11.4, 44.0), 6.4, -1.6)])
         bun(hl, hd, 24.0, 8.6, 4.4)
     elif st == "bob":
-        locks(hd, s, [((17.5, 13.5), (8.4, 44.0), 9.0, 1.8), ((19.0, 14.5), (13.0, 43.0), 6.5, -1.4)])
+        locks(hd, s, [((16.5, 13.5), (5.4, 45.0), 8.4, 2.6), ((18.0, 14.0), (10.4, 46.0), 7.4, -2.2), ((19.5, 14.5), (15.4, 43.5), 5.6, 2.0)], n=40)
     elif st == "pony":
         hair(hd, (31.0, 12.0), (45.0, 42.0), 12.0, -2.4, sway=s * 1.6, ph=0.3 + s * 0.2, n=36, wave=0.2, bands=LOCK_BANDS)
         hair(hd, (30.0, 12.5), (41.0, 48.0), 8.0, 2.6, sway=s * 2.0, ph=0.9 + s * 0.2, n=36, wave=0.2, bands=LOCK_BANDS)
@@ -1024,7 +1024,7 @@ def make_sakura_frame(sway, expr, cfg=None):
     px = out.load()
     prot = {(x, y) for y in range(44, 66) for x in range(26, 72) if px[x, y] == WHITE + (255,)}
     out = cleanup(out, prot)
-    out = s_recolor_interior(out, (38, 66, 60, 82) if expr == "shout" else None)
+    out = s_recolor_interior(out, (40, 68, 56, 80) if expr == "shout" else None)
     add_obi_motif(out)
     add_petals(out, sway)
     return out
