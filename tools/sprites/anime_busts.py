@@ -149,8 +149,10 @@ def flame_col(t):
     return RED
 
 
-def tongue(d, root, tip, w0, bend, sway=0.0, shade_side=1, ph=0.0, wave=0.24, n=28, ow=6):
-    """Flame tongue: S-curved centre line, wavy asymmetric edges, deep-red edge line, colour by heat."""
+def tongue(d, root, tip, w0, bend, sway=0.0, shade_side=1, ph=0.0, wave=0.24, n=28, ow=6, cols=None):
+    """Flame tongue: S-curved centre line, wavy asymmetric edges, deep-red edge line, colour by heat.
+    cols = (edge, colour fn of t, shade band, lit band) restyles it (Sakura's hair)."""
+    edge_col, col_fn, shade_col, lit_col = cols or (DEEP_RED, flame_col, RED, YELLOW)
     cs, nr = centreline(root, tip, bend, sway, n)
     hs = [[], []]
     for k in (0, 1):
@@ -169,12 +171,12 @@ def tongue(d, root, tip, w0, bend, sway=0.0, shade_side=1, ph=0.0, wave=0.24, n=
         A, B = edge(0.35, side, f0), edge(0.35, side, f1)
         for i in range(int(t0 * n), int(t1 * n)):
             poly(d, [A[i], A[i + 1], B[i + 1], B[i]], col)
-    outline(d, edge(0, -1) + edge(0, 1)[::-1], w=ow, closed=False, col=DEEP_RED)
+    outline(d, edge(0, -1) + edge(0, 1)[::-1], w=ow, closed=False, col=edge_col)
     a0, a1 = edge(0.35, -1), edge(0.35, 1)
     for i in range(n):
-        poly(d, [a0[i], a0[i + 1], a1[i + 1], a1[i]], flame_col((i + 0.5) / n))
-    band(shade_side, 0.35, 1.0, 0.24, 0.72, RED)
-    band(-shade_side, 0.55, 1.0, 0.06, 0.36, YELLOW)
+        poly(d, [a0[i], a0[i + 1], a1[i + 1], a1[i]], col_fn((i + 0.5) / n))
+    band(shade_side, 0.35, 1.0, 0.24, 0.72, shade_col)
+    band(-shade_side, 0.55, 1.0, 0.06, 0.36, lit_col)
     return cs, nr
 
 
@@ -537,374 +539,273 @@ def flint_main():
     x1.convert("RGB").save(os.path.join(review, "flint_bust_x1.png"))
 
 
-# ================================================================ Sakura (female / cute anime bust)
-# Same pipeline as Flint (vector -> pixelize -> snap), own palette. Hair is not elemental, so it gets a thin
-# outline in deep magenta. Colours drawn in the source as "line" colours are brightened by 1/0.6 because
-# pixelize() darkens line pixels by 0.6 (see lc()).
-S_INK = INK
-S_SKIN_OUT = MAROON
-SKIN_L = (252, 222, 198); SKIN = (240, 193, 154); SKIN_S = (222, 156, 126); SKIN_SS = (200, 128, 108)
-BLUSH = (244, 148, 156); LIP = (190, 66, 88)
-HAIR = (226, 110, 160); HAIR_L = (240, 150, 190); HAIR_HI = (252, 210, 228)
-HAIR_D = (186, 66, 122); HAIR_DD = (148, 46, 102); HAIR_OUT = (100, 28, 78)
-IRIS_D = (22, 50, 96); IRIS_M = (56, 142, 226); IRIS_B = (122, 214, 226); WHITE = (255, 252, 250)
-LAV = (212, 210, 234); LAV_D = (172, 168, 210); LAV_OUT = (100, 94, 146)
-BROW = (126, 58, 74); EYEW = (236, 234, 248); LASH = (58, 20, 52)
-RED_L = (240, 112, 108); MOUTH_D = (104, 30, 70)
-SAKURA_PALETTE = [S_INK, MAROON, SKIN_L, SKIN, SKIN_S, SKIN_SS, BLUSH, LIP, HAIR, HAIR_L, HAIR_HI, HAIR_D, HAIR_DD, HAIR_OUT,
-                  IRIS_D, IRIS_M, IRIS_B, MOUTH_D, EYEW, LASH, BROW, WHITE, CREAM, LAV, LAV_D, LAV_OUT, RED, RED_L, DEEP_RED, YELLOW, ORANGE]
-SBG = BG
+# ================================================================ Sakura
+# Built from Flint's own code (same FACE construction, eye / brow / mouth drawing, torso layout, tongue() hair
+# rendering, snap / cleanup / recolor_interior), with her palette mapped role for role:
+#   skin  ORANGE -> SK, LIGHT_OR -> SK_L, RED -> SK_S, DEEP_RED -> SK_D      cloth  NAVY -> KIM, BLUE -> KIM_S,
+#   NAVY_L -> CREAM, NAVY_D -> KIM_D      hair (replaces the flame ramp) H_HI / H_L / H / H_D, edge H_EDGE.
+# Output: assets/title/anime/sakura_bust.png (calm A, calm B, determined, shout).
+SK = (240, 193, 154); SK_L = (252, 222, 198); SK_S = (222, 150, 130); SK_D = (176, 96, 100)
+BLUSH = (240, 150, 150)
+ROSE = (200, 62, 124); H_EDGE = (104, 30, 78)
+HR = (226, 110, 160); H_D = (190, 72, 126); H_L = (244, 160, 196); H_HI = (252, 214, 230)
+KIM = (232, 230, 244); KIM_S = (200, 198, 226); KIM_D = (150, 146, 190)
+RED_L = (236, 110, 104); WHITE = (255, 255, 255)
+SAKURA_PALETTE = [INK, MAROON, SK, SK_L, SK_S, SK_D, BLUSH, CREAM, WHITE, ROSE, H_EDGE, HR, H_D, H_L, H_HI, KIM, KIM_S,
+                  KIM_D, RED, DEEP_RED, RED_L, YELLOW]
+KIMS = {KIM, KIM_S, KIM_D, CREAM}
+HAIRS = {H_EDGE, HR, H_D, H_L, H_HI}
+EYE_COLS = {ROSE, WHITE}
 
 
 def lc(c):
-    """Source colour that comes out as c after pixelize's 0.6 line darkening."""
+    """Source colour that comes out as c after pixelize's 0.6 line darkening (hair edge, brows)."""
     return tuple(min(255, round(v / 0.6)) for v in c)
 
 
-def mirror(pts):
-    return [(48 - x, y) for x, y in pts]
+def hair_col(t):
+    """Light at the root, rose in the body, deeper towards the tip."""
+    if t < 0.12:
+        return H_HI
+    if t < 0.3:
+        return H_L
+    if t < 0.66:
+        return HR
+    return H_D
 
 
-def ellipse_pts(cx, cy, rx, ry, n=24, a0=0.0, a1=2 * math.pi):
-    return [(cx + rx * math.cos(a0 + (a1 - a0) * i / n), cy + ry * math.sin(a0 + (a1 - a0) * i / n)) for i in range(n + 1)]
+def hair(d, root, tip, w0, bend, sway=0.0, shade_side=1, ph=0.0, wave=0.14, n=28, ow=6):
+    return tongue(d, root, tip, w0, bend, sway=sway, shade_side=shade_side, ph=ph, wave=wave, n=n, ow=ow,
+                  cols=(lc(H_EDGE), hair_col, H_D, H_HI))
 
 
-def ribbon(ctrl, w0, w1, n=10, taper=0.22):
-    """Edges of a tapering lock along a smooth centre line. edge(f): f=+1 normal side (lit), -1 other side."""
-    cs = smooth(ctrl, n)
-    m = len(cs)
-    nr, ws = [], []
-    for i in range(m):
-        a, b = cs[max(i - 1, 0)], cs[min(i + 1, m - 1)]
-        tx, ty = b[0] - a[0], b[1] - a[1]
-        L = math.hypot(tx, ty) or 1
-        nr.append((-ty / L, tx / L))
-        t = i / (m - 1)
-        w = w0 + (w1 - w0) * t
-        if t < 0.16:
-            w *= 0.55 + 0.45 * t / 0.16
-        if t > 1 - taper:
-            w *= max(0.0, (1 - t) / taper) ** 0.8
-        ws.append(w)
-
-    def edge(f, t0=0.0, t1=1.0):
-        return [(cs[i][0] + nr[i][0] * f * ws[i] / 2, cs[i][1] + nr[i][1] * f * ws[i] / 2)
-                for i in range(m) if t0 <= i / (m - 1) <= t1]
-    return cs, edge
+# face: Flint's polygon, narrowed about 1.4 units at the jaw with a softer chin
+SFACE = [(13.4, 17), (34.6, 17), (35.4, 27.5), (34.0, 33), (30.2, 38.4), (26.6, 41.8), (24, 42.8), (21.4, 41.8),
+         (17.8, 38.4), (14.0, 33), (12.6, 27.5)]
+SNECK = [(20.6, 35), (27.4, 35), (28.0, 45), (20.0, 45)]
+STORSO = [(0, 64), (0, 53.5), (5, 48.5), (14, 45.0), (20.4, 43.0), (23.45, 52.0), (27.6, 43.0), (34, 45.0), (43, 48.5),
+          (48, 53.5), (48, 64)]
 
 
-
-def lock(d, ctrl, w0, w1, base=HAIR, lit=True, taper=0.22, clumps=(), n=10, ow=6, streak=False, mode="both"):
-    """mode 'outline' draws only the thick outline, 'fill' only the cel shapes: drawing every outline first and
-    every fill after leaves a line round the whole hair mass but none between overlapping locks."""
-    cs, edge = ribbon(ctrl, w0, w1, n, taper)
-    poly_pts = edge(1) + edge(-1)[::-1]
-    if mode == "outline":
-        outline(d, poly_pts, w=ow, col=lc(HAIR_OUT))
-        return cs, edge
-    poly(d, poly_pts, base)
-    if base == HAIR:
-        a, b = edge(-0.2, 0.08), edge(-1.0, 0.08)
-        poly(d, a + b[::-1], HAIR_D)
-        if lit:
-            a, b = edge(0.95, 0.04, 0.75), edge(0.25, 0.04, 0.75)
-            poly(d, a + b[::-1], HAIR_L)
-        if streak:
-            a, b = edge(0.82, 0.08, 0.5), edge(0.55, 0.08, 0.5)
-            poly(d, a + b[::-1], HAIR_HI)
-        for (f, t0, t1) in clumps:
-            pts = [P(*p) for p in edge(f, t0, t1)]
-            d.line(pts, fill=HAIR_D, width=4, joint="curve")
-    if ow and mode == "both":
-        outline(d, poly_pts, w=ow, col=lc(HAIR_OUT))
-    return cs, edge
-
-
-def wob(ctrl, s, k, t0=0.3):
-    """Sway: shift the lower control points sideways, more towards the tip."""
-    n = len(ctrl)
-    return [(x + s * k * max(0.0, i / (n - 1) - t0) / (1 - t0), y) for i, (x, y) in enumerate(ctrl)]
-
-
-SFACE = [(13.6, 17), (24, 16.2), (34.4, 17), (35.4, 24), (35.0, 31), (33.2, 37), (30.0, 41.2), (26.6, 43.2), (24, 43.8),
-         (21.4, 43.2), (18.0, 41.2), (14.8, 37), (13.0, 31), (12.6, 24)]
-SFACE_S = smooth(SFACE + [SFACE[0]], 6)
-SNECK = [(21.2, 35), (26.8, 35), (27.2, 47.5), (20.8, 47.5)]
-STORSO = [(0, 64), (0, 55), (4, 50.4), (12, 47.8), (20.2, 45.9), (24, 48.0), (27.8, 45.9), (36, 47.8), (44, 50.4),
-          (48, 55), (48, 64)]
-BACKMASS = smooth([(24, 10.0), (17.8, 10.9), (13.0, 14.4), (10.6, 20), (9.6, 28), (9.4, 37), (9.8, 46), (10.8, 54)], 8)
-BACKMASS = BACKMASS + [(24, 58)] + mirror(BACKMASS[::-1])
-SCAP_TOP = smooth([(11.6, 27), (11.3, 21), (13.6, 15.4), (18.4, 12.2), (24, 11.2), (29.6, 12.2), (34.4, 15.4), (36.7, 21),
-                  (36.4, 27)], 8)
-NOTCHES = [30.4, 26.2, 21.8, 17.6]
-
-
-def bang_y(x):
-    return 23.9 + 0.8 * ((x - 24) / 10.5) ** 2
-
-
-def bangs_bottom():
-    pts = [(36.4, 27), (35.0, bang_y(35.0) + 0.4), (34.6, bang_y(34.6))]
-    for nx in NOTCHES:
-        pts += [(nx + 0.2, bang_y(nx + 0.2)), (nx, bang_y(nx) - 1.0), (nx - 0.2, bang_y(nx - 0.2))]
-    pts += [(13.4, bang_y(13.4)), (12.6, bang_y(12.6) + 0.4), (11.6, 27)]
-    return pts
-
-
-
-
-def s_eye(img, cx, cy, side, expr):
-    """Human almond eye (about 5 x 4 units): upper lid an arch peaking toward the inner third, flatter lower lid,
-    outer corner level / slightly up, eye-white on both sides of a round mid-blue iris (top tucked under the lid)
-    with a small dark pupil and one highlight; a 1 px plum lid line, thicker at the outer corner with a tiny flick,
-    and a faint lower lid on the outer half."""
-    h = {"shout": 1.12, "determined": 0.85}.get(expr, 1.0)
-    hw, Ht, Hb = 2.5, 2.4 * h, 1.5 * h
-    N = 24
-    top, bot = [], []
-    for k in range(N + 1):
-        t = k / N
-        x = cx - side * hw + side * 2 * hw * t
-        top.append((x, cy - Ht * math.sin(math.pi * t ** 0.7) ** 0.8 - 0.35 * t + 0.1))
-        bot.append((x, cy + Hb * math.sin(math.pi * t) ** 1.3 - 0.35 * t + 0.1))
-    almond = top + bot[::-1]
-    am = poly_mask(almond)
+def s_eye(img, d, cx, cy, side, o, wide=1.0):
+    """Flint's almond with a straight heavy upper lid, iris ~1.3x taller, rose iris with a darker top, a cream
+    highlight and one tiny lash flick at the outer corner."""
+    ow = 3.2 * wide
+    outer = (cx + side * ow, cy - 1.9)
+    inner = (cx - side * ow, cy - 0.9)
+    up = [(outer[0] + (inner[0] - outer[0]) * k / 6, outer[1] + (inner[1] - outer[1]) * k / 6) for k in range(7)]
+    lo = smooth([inner, (cx - side * 1.0, cy + 0.5 * o + 1.2), (cx + side * 1.2, cy + 0.4 * o + 1.0), outer])
+    pts = up + lo
+    d.polygon([P(*p) for p in pts], fill=ROSE)
+    lm = mask_of(lambda m: m.line([P(*p) for p in up], fill=255, width=30))
+    paste_mask(img, H_EDGE, both(poly_mask(pts), lm))
     d = ImageDraw.Draw(img)
-    poly(d, almond, EYEW)
-    iris = both(poly_mask(ellipse_pts(cx + side * 0.15, cy + 0.3, 1.65, 1.95 * h, 24)), am)
-    paste_mask(img, IRIS_B, iris)
-    paste_mask(img, IRIS_M, both(iris, box_mask(0, 0, 48, cy + 0.35)))
-    d = ImageDraw.Draw(img)
-    d.ellipse(((cx + side * 0.15 - 0.4) * K, (cy + 0.15) * K, (cx + side * 0.15 + 0.4) * K, (cy + 1.1) * K), fill=IRIS_D)
-    m = len(top) - 1
-    for i in range(m):
-        t = i / m
-        w = 6 + 4 * t ** 1.5
-        d.line([P(*top[i]), P(*top[i + 1])], fill=lc(LASH), width=int(w))
-        x, y = P(*top[i + 1])
-        d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=lc(LASH))
-    ox, oy = top[-1]
-    d.line([P(ox, oy), P(ox + side * 0.6, oy - 0.3)], fill=lc(LASH), width=5)
-    d.line([P(*p) for p in bot[int(N * 0.5):]], fill=lc(S_SKIN_OUT), width=4, joint="curve")
-    hx, hy = cx - 0.5, cy - 0.35
-    d.ellipse(((hx - 0.5) * K, (hy - 0.5) * K, (hx + 0.5) * K, (hy + 0.5) * K), fill=WHITE)
+    d.line([P(*p) for p in lo], fill=MAROON, width=6)
+    hx, hy = cx + side * 0.5, cy - 0.7
+    d.rectangle((hx * K - 7, hy * K - 7, hx * K + 7, hy * K + 7), fill=WHITE)
+    d.line([P(*p) for p in up], fill=INK, width=11)
+    d.line([P(*outer), P(outer[0] + side * 1.3, outer[1] - 0.8)], fill=INK, width=8)
+    return d
 
 
-def s_brow(d, cx, cy, side, expr):
-    if expr == "determined":
-        a, b = (cx + side * 3.6, cy - 0.4), (cx - side * 2.6, cy + 1.0)
-    elif expr == "shout":
-        a, b = (cx + side * 3.2, cy - 1.0), (cx - side * 2.6, cy - 0.7)
+def s_brow(d, cx, cy, side, lift=0.0, tilt=1.0):
+    """Thinner than Flint's, softly arched when calm, angled down for determined."""
+    outer = (cx + side * 4.0, cy - 3.6 - lift - 0.5 * (tilt - 1))
+    inner = (cx - side * 2.7, cy - 2.6 - lift + 0.5 * (tilt - 1))
+    mid = ((outer[0] + inner[0]) / 2 + side * 0.2, (outer[1] + inner[1]) / 2 - 0.5 / tilt)
+    d.line([P(*p) for p in smooth([inner, mid, outer], 6)], fill=lc(MAROON), width=8, joint="curve")
+
+
+def s_mouth(d, kind):
+    YOFF[0] = -2.7
+    if kind == "shout":
+        pts = [(21.9, 38.0), (26.1, 37.8), (25.6, 40.6), (24.0, 41.8), (22.4, 40.6)]
+        poly(d, pts, INK)
+        rect(d, 22.3, 38.2, 25.7, 39.4, CREAM)
+        outline(d, pts, 5, col=MAROON)
+    elif kind == "determined":
+        d.line([P(22.8, 39.2), P(25.2, 39.1)], fill=MAROON, width=8)
     else:
-        a, b = (cx + side * 3.4, cy - 0.1), (cx - side * 2.6, cy - 0.2)
-    mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 0.35)
-    d.line([P(*p) for p in smooth([b, mid, a], 6)], fill=lc(BROW), width=8, joint="curve")
-
-
-def s_mouth(d, expr):
-    if expr == "shout":
-        pts = ellipse_pts(24, 39.2, 1.4, 1.6, 16)
-        poly(d, pts, MOUTH_D)
-        d.ellipse((23.0 * K, 39.8 * K, 25.0 * K, 40.5 * K), fill=RED_L)
-        outline(d, pts, 5, col=lc(MAROON))
-    elif expr == "determined":
-        d.line([P(22.7, 38.9), P(25.3, 38.9)], fill=lc(MAROON), width=7)
-    else:
-        d.line([P(*p) for p in smooth([(22.7, 38.5), (23.4, 39.1), (24.6, 39.1), (25.3, 38.5)], 6)], fill=lc(MAROON), width=7,
+        d.line([P(*p) for p in smooth([(22.7, 38.9), (23.5, 39.3), (24.6, 39.3), (25.4, 38.8)], 6)], fill=MAROON, width=8,
                joint="curve")
+    YOFF[0] = 0.0
 
 
-def s_draw_torso(img):
+def s_draw_torso(img, d):
+    YOFF[0] = TOFF
+    shape(d, SNECK, SK)
+    shape(d, STORSO, KIM)
+    neckm, torm = poly_mask(SNECK), poly_mask(STORSO)
+    poly(d, [(28, 43.8), (34, 45.2), (43, 48.7), (47.6, 54), (47.6, 64), (40, 64), (36.5, 52)], KIM_S)
+    paste_mask(img, CREAM, both(both(torm, inv(shift(torm, 0, int(9 * F)))), box_mask(0, 0, 19, 80)))
+    paste_mask(img, H_HI, both(both(torm, inv(shift(torm, int(-6 * F), int(5 * F)))), box_mask(34, 0, 48, 56)))
+    d = ImageDraw.Draw(img)
+    for (a, b, dark, lit) in [((5.5, 49), (8.5, 55), KIM_D, CREAM), ((2.5, 52), (4.5, 56), KIM_D, CREAM),
+                              ((37.5, 49.5), (36, 55), KIM_D, KIM_S), ((41.5, 51), (40.5, 56), KIM_D, KIM_S)]:
+        d.line([P(*a), P(*b)], fill=dark, width=7)
+        d.line([P(a[0] + 0.9, a[1] - 0.3), P(b[0] + 0.9, b[1] - 0.3)], fill=lit, width=4)
+    # chest in the neckline, collar crossing left over right (our right flap on top), red trim
+    poly(d, [(20.4, 43.0), (27.6, 43.0), (23.45, 52.0)], SK_S)
+    d.line([P(*p) for p in [(20.4, 43.2), (23.45, 52.0)]], fill=DEEP_RED, width=22)
+    d.line([P(*p) for p in [(20.4, 43.2), (23.45, 52.0)]], fill=RED, width=14)
+    top = [(27.7, 43.2), (24.4, 50.0), (21.0, 57.6)]
+    d.line([P(*p) for p in top], fill=DEEP_RED, width=24)
+    d.line([P(*p) for p in top], fill=RED, width=16)
+    d.line([P(*p) for p in [(27.0, 44.0), (24.0, 50.6)]], fill=RED_L, width=5)
+    d.line([P(*p) for p in [(29.4, 44.4), (26.0, 51.6), (22.6, 58.0)]], fill=KIM_D, width=6)
+    paste_mask(img, SK_S, both(neckm, box_mask(0, 41.5, 48, 80)))
+    d = ImageDraw.Draw(img)
+    # obi across the bottom with a darker fold
+    poly(d, [(0, 56.4), (48, 56.4), (48, 64), (0, 64)], RED)
+    d.line([P(0, 56.4), P(48, 56.4)], fill=DEEP_RED, width=8)
+    d.line([P(0, 57.2), P(48, 57.2)], fill=RED_L, width=5)
+    for (a, b) in (((12.6, 57.8), (10.6, 64)), ((35.8, 57.8), (38.2, 64))):
+        d.line([P(*a), P(*b)], fill=DEEP_RED, width=7)
+        d.line([P(a[0] + 0.9, a[1]), P(b[0] + 0.9, b[1])], fill=RED_L, width=4)
     YOFF[0] = 0.0
-    d = ImageDraw.Draw(img)
-    shape(d, SNECK, SKIN, col=lc(S_SKIN_OUT))
-    shape(d, STORSO, CREAM, col=lc(LAV_OUT))
-    torm, neckm = poly_mask(STORSO), poly_mask(SNECK)
-    d = ImageDraw.Draw(img)
-    # shadow on the right and under the shoulders, folds in the sleeves
-    paste_mask(img, LAV, both(torm, poly_mask([(33.5, 46), (36, 47.8), (44, 50.4), (48, 55), (48, 64), (37.5, 64), (35.5, 56)])))
-    paste_mask(img, LAV, both(torm, poly_mask([(11, 49), (17, 48), (18.5, 62), (14, 61)])))
-    paste_mask(img, LAV_D, both(torm, poly_mask([(31.5, 48), (37, 48.5), (36, 61), (32, 62)])))
-    paste_mask(img, LAV_D, both(torm, poly_mask([(41, 51), (44.4, 50.6), (48, 55), (48, 64), (43, 64), (42, 56)])))
-    d = ImageDraw.Draw(img)
-    for a, b, col in (((5.2, 52.4), (8.2, 62.0), LAV_D), ((39.6, 52.6), (37.4, 61.6), LAV_D), ((11.5, 49.6), (13.4, 55.4), LAV), ((17.5, 54), (16.5, 61), LAV)):
-        d.line([P(*a), P(*b)], fill=col, width=7)
-    # lavender shadow under the hair, then folds: dark crease with a lit lip on its light side
-    paste_mask(img, LAV, both(torm, poly_mask([(8, 49), (15, 48), (16, 58), (10, 57)])))
-    paste_mask(img, LAV, both(torm, poly_mask([(33, 48), (40, 49), (39, 58), (32, 58)])))
-    d = ImageDraw.Draw(img)
-    for pts in (((3.0, 51.5), (5.0, 56), (4.0, 62)), ((22.0, 55), (20.5, 59), (21.5, 63)), ((43.5, 52), (41.5, 57), (42.5, 62)),
-                ((30.0, 51), (31.4, 56), (30.4, 62))):
-        d.line([P(*p) for p in pts], fill=LAV_D, width=7, joint="curve")
-        d.line([P(p[0] - 0.8, p[1]) for p in pts], fill=WHITE, width=5, joint="curve")
-    # chest V, collar crossing left over right (the flap from the wearer's left, our right, lies on top)
-    V = [(19.8, 45.0), (28.2, 45.0), (22.6, 54.0)]
-    poly(d, V, SKIN)
-    poly(d, [(19.8, 45.0), (28.2, 45.0), (26.4, 46.8), (23.4, 48.4), (21.6, 46.8)], SKIN_S)
-    under = [(19.4, 44.4), (22.7, 54.4)]
-    d.line([P(*p) for p in under], fill=lc(DEEP_RED), width=26)
-    d.line([P(*p) for p in under], fill=RED, width=17)
-    top = [(29.0, 44.4), (25.6, 50.6), (21.0, 58.6)]
-    d.line([P(*p) for p in top], fill=lc(DEEP_RED), width=29)
-    d.line([P(*p) for p in top], fill=RED, width=20)
-    d.line([P(*p) for p in [(28.0, 45.2), (24.7, 51.0)]], fill=RED_L, width=5)
-    d.line([P(*p) for p in [(30.9, 45.6), (27.2, 52.6), (23.0, 59.4)]], fill=LAV, width=7)
-    # red obi, only its top band fits in the crop
-    YOFF[0] = 0.0
-    d.rectangle((0, 59.7 * K, SW, SH), fill=DEEP_RED)
-    d.rectangle((0, 60.7 * K, SW, SH), fill=RED)
-    d.rectangle((0, 60.7 * K, SW, 61.3 * K), fill=RED_L)
-    d.rectangle((0, 62.8 * K, SW, SH), fill=DEEP_RED)
     return neckm, torm
 
 
-
-
 def s_draw_face(img, neckm, torm, expr):
-    facem = poly_mask(SFACE_S)
-    jaw = both(both(shift(facem, int(1 * F), int(13 * F)), neckm), inv(facem))
-    paste_mask(img, SKIN_S, both(jaw, inv(torm)))
-    jaw2 = both(both(shift(facem, int(1 * F), int(5 * F)), neckm), inv(facem))
-    paste_mask(img, SKIN_SS, both(jaw2, inv(torm)))
+    facem = poly_mask(SFACE)
+    jaw = both(both(shift(facem, int(4 * F), int(20 * F)), neckm), inv(facem))
+    paste_mask(img, SK_S, both(jaw, inv(torm)))
+    jaw2 = both(both(shift(facem, int(4 * F), int(8 * F)), neckm), inv(facem))
+    paste_mask(img, SK_D, both(jaw2, inv(torm)))
     d = ImageDraw.Draw(img)
-    poly(d, SFACE_S, SKIN)
-    # light from the top left: lit cheek, shadow down the right side, under the chin and under the bangs
-    paste_mask(img, SKIN_L, both(facem, poly_mask([(13, 24), (22, 24), (21, 29), (17, 35.5), (13.4, 33)])))
-    paste_mask(img, SKIN_S, both(facem, poly_mask([(29.5, 22), (36, 22), (36, 31), (33.6, 38), (29.5, 42.6), (26, 44.4), (29.2, 38.5),
-                                                  (31.4, 31)])))
-    paste_mask(img, SKIN_S, both(both(facem, inv(shift(facem, 0, int(-3.0 * F)))), box_mask(0, 38, 48, 48)))
-    paste_mask(img, SKIN_S, both(facem, poly_mask([(14, 21), (34, 21), (34, 24.4), (14, 24.4)])))      # under the bangs
+    # ears as Flint's: small C shapes tucked behind the face, lit left, shadowed right, deep inner fold
+    shape(d, EAR_L, SK)
+    shape(d, EAR_R, SK_S)
+    d.line([P(11.9, 26.9), P(11.0, 28.4), P(11.1, 30.4)], fill=SK_L, width=4, joint="curve")
+    d.line([P(48 - 11.9, 26.9), P(48 - 11.0, 28.4), P(48 - 11.1, 30.4)], fill=SK_D, width=4, joint="curve")
+    d.line([P(13.0, 27.8), P(12.1, 29.2), P(12.5, 31.0), P(13.5, 31.7)], fill=SK_D, width=4, joint="curve")
+    d.line([P(48 - 13.0, 27.8), P(48 - 12.1, 29.2), P(48 - 12.5, 31.0), P(48 - 13.5, 31.7)], fill=SK_D, width=4, joint="curve")
+    shape(d, SFACE, SK)
+    paste_mask(img, SK_L, both(facem, poly_mask([(15.0, 29.0), (21.0, 30.0), (20.2, 34.0), (17.6, 34.2), (15.4, 32.5)])))
+    paste_mask(img, SK_L, both(facem, poly_mask([(15.4, 22.5), (21, 22.5), (20.5, 24.5), (15.2, 25)])))
+    paste_mask(img, SK_S, both(facem, inv(shift(facem, int(-22 * F), 0))))
+    paste_mask(img, SK_S, both(facem, poly_mask([(26.0, 34.0), (35.2, 30.5), (33.6, 36.0), (27.4, 41.8), (24.5, 41.4)])))
+    chin = both(facem, inv(shift(facem, 0, int(-14 * F))))
+    paste_mask(img, SK_S, both(chin, shift(facem, int(-30 * F), 0)))
+    paste_mask(img, SK_D, both(both(facem, inv(shift(facem, int(-9 * F), 0))), box_mask(0, 25, 48, 40)))
+    paste_mask(img, SK_L, both(both(facem, inv(shift(facem, int(-4 * F), 0))), box_mask(0, 26, 48, 36)))
     d = ImageDraw.Draw(img)
-    for bx in (17.6, 30.4):
-        d.ellipse(((bx - 2.0) * K, 34.0 * K, (bx + 2.0) * K, 35.8 * K), fill=BLUSH)
-    d.rectangle((23.7 * K, 36.4 * K, 24.5 * K, 37.0 * K), fill=SKIN_S)
+    for bx in (16.6, 31.4):
+        d.ellipse(((bx - 1.8) * K, 32.3 * K, (bx + 1.8) * K, 33.9 * K), fill=BLUSH)
+    d.line([P(25.0, 31.6), P(25.3, 32.8)], fill=SK_D, width=7)       # nose: one shade stroke
     s_mouth(d, expr)
-    outline(d, SFACE_S[24:73], w=11, closed=False, col=lc(S_SKIN_OUT))
-    cy = 30.2
-    s_eye(img, 19.25, cy, -1, expr)
-    s_eye(img, 28.75, cy, 1, expr)
+    outline(d, SFACE[1:] + SFACE[:1], w=9, closed=False)
+    if expr == "shout":
+        o, wd, lift, tilt = 2.2, 1.12, 0.6, 1.0
+    elif expr == "determined":
+        o, wd, lift, tilt = 1.2, 1.05, -0.1, 1.5
+    else:
+        o, wd, lift, tilt = 1.6, 1.1, 0.0, 1.0
+    cy = 27.8
+    s_eye(img, d, 19.2, cy, -1, o, wd)
+    s_eye(img, d, 28.8, cy, 1, o, wd)
+    d = ImageDraw.Draw(img)
+    s_brow(d, 19.2, cy + 0.2, -1, lift, tilt)
+    s_brow(d, 28.8, cy + 0.2, 1, lift, tilt)
     return facem
 
 
-def s_draw_hair(img, facem, s, expr):
-    d = ImageDraw.Draw(img)
-    # back mass in a deep shade: shows between the locks
-    shape(d, BACKMASS, HAIR_DD, col=lc(HAIR_OUT))
-    return d
+SCAP_TOP = [(11.2, 23), (12.0, 16.4), (16.5, 12.2), (24, 10.4), (31.5, 12.2), (36.0, 16.4), (36.8, 23)]
+SHAIRLINE = [(13.4, 23.5), (14.5, 21.8), (17, 20.4), (20.5, 20.8), (24, 20.2), (27.5, 20.8), (31, 20.4), (33.5, 21.8),
+             (34.6, 23.5)]
+# bangs: short wide tongues across the forehead ending above the brows (root, tip, width, bend)
+SBANGS = [((15.0, 17.5), (14.4, 23.2), 6.0, 0.8), ((18.4, 17.0), (17.6, 23.8), 6.0, 0.7),
+          ((21.8, 16.8), (21.4, 24.0), 6.0, 0.5), ((25.4, 16.8), (26.0, 23.8), 6.0, -0.5),
+          ((28.9, 17.0), (30.0, 23.6), 6.0, -0.7), ((32.4, 17.5), (33.6, 23.0), 6.0, -0.8)]
+# long locks over the shoulders: root, tip, width, bend (left side; the right side mirrors it)
+SLOCKS = [((11.4, 18.5), (6.0, 52.0), 5.2, 3.6), ((12.4, 20.0), (13.6, 47.0), 3.8, -2.8)]
+# long locks behind the head and shoulders
+SBACK = [((14.0, 21.0), (5.0, 60.0), 9.0, 2.4), ((15.5, 22.0), (9.5, 63.0), 8.0, -2.0), ((17.0, 23.0), (15.0, 63.0), 7.0, 1.6)]
 
 
-LOCKS_L = [
-    ([(11.0, 21), (9.2, 29), (8.4, 38), (10.0, 46), (8.2, 53), (9.0, 59.5)], 4.8, 0.85),
-    ([(12.4, 21), (11.0, 29), (11.4, 37), (13.2, 44), (11.4, 51), (12.6, 58)], 4.6, 0.7),
-    ([(13.8, 22), (13.6, 30), (14.6, 37), (16.6, 43), (15.2, 49), (17.6, 53.5)], 3.8, 0.55),
-]
-STRANDS_L = [([(9.6, 40), (7.6, 45), (7.2, 50), (8.4, 53)], 1.2, 0.9), ([(11.6, 46), (10.4, 52), (11.8, 58)], 1.1, 0.7)]
+def mir(p):
+    return (48 - p[0], p[1])
 
 
-
-LOCKS_L = [
-    ([(11.6, 18.5), (9.0, 27), (7.8, 36), (9.4, 46), (7.6, 53), (8.6, 59.5)], 5.6, 0.85),
-    ([(12.6, 20), (10.6, 28), (10.8, 38), (12.8, 45), (11.0, 52), (12.4, 58.5)], 5.4, 0.7),
-    ([(13.4, 22), (12.6, 30), (13.8, 38), (15.8, 44), (14.4, 50), (16.8, 54.5)], 4.4, 0.55),
-]
-STRANDS_L = [([(9.6, 40), (7.6, 45), (7.2, 50), (8.4, 53)], 1.2, 0.9)]
+BACK_COLS = (lc(H_EDGE), lambda t: H_D if t < 0.7 else H_EDGE, H_EDGE, H)      # behind her: deeper tones
 
 
-def s_front_hair(img, s, expr):
-    d = ImageDraw.Draw(img)
-    for mode in ("outline", "fill"):
-        for side in (1, -1):
-            for ctrl, w, k in LOCKS_L:
-                c = wob(ctrl, s, k, 0.35)
-                lock(d, mirror(c) if side < 0 else c, w, w + 0.4, taper=0.34, ow=9, mode=mode)
-            c = wob(STRANDS_L[0][0], s, 1.1, 0.3)
-            lock(d, mirror(c) if side < 0 else c, 1.1, 1.1, base=HAIR_L, taper=0.5, ow=5, n=6, mode=mode)
-    return d
+def s_back_hair(img, s):
+    hl = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    hd = ImageDraw.Draw(hl)
+    poly(hd, [(11.0, 22.0), (37.0, 22.0), (40.0, 50.0), (8.0, 50.0)], H_EDGE)
+    for i, (r, t, w, b) in enumerate(SBACK):
+        sw = s * (1.2 + 0.25 * i)
+        tongue(hd, r, t, w, b, sway=sw, ph=i * 0.4 + s * 0.2, wave=0.14, cols=BACK_COLS)
+        tongue(hd, mir(r), mir(t), w, -b, sway=sw, shade_side=-1, ph=i * 0.4 + 0.2 + s * 0.2, wave=0.14, cols=BACK_COLS)
+    img.paste(hl, (0, 0), hl.split()[3])
 
 
-BANG_CLUMPS = [(15.6, 13.8, 26.6, 4.6), (32.6, 34.0, 26.4, 4.6), (18.8, 17.4, 25.6, 4.4), (29.4, 30.4, 25.8, 4.6),
-               (21.6, 20.6, 24.8, 3.8), (26.2, 27.2, 25.2, 3.8)]
-
-
-def s_cap(img, s, expr):
-    d = ImageDraw.Draw(img)
-    cap_pts = SCAP_TOP + [(36.4, 22.5), (11.6, 22.5)]
-    poly(d, cap_pts, HAIR)
-    capm = poly_mask(cap_pts)
-    paste_mask(img, HAIR_D, both(capm, poly_mask([(31.5, 11), (36.8, 16), (37, 28), (33, 26), (32.2, 19)])))
-    paste_mask(img, HAIR_L, both(capm, poly_mask([(11, 20), (13.4, 14.6), (17, 12), (18.4, 12.6), (14.6, 16.6), (13.6, 22)])))
-    d = ImageDraw.Draw(img)
-    # angel ring: glossy band across the crown, brightest on the left
-    ring_top = smooth([(14.0, 19.2), (17.6, 16.0), (23.6, 14.4), (30.2, 16.0), (33.6, 19.0)], 8)
-    ring_bot = [(x, y + 2.2 - 1.0 * abs(x - 24) / 10) for x, y in ring_top]
-    poly(d, ring_top + ring_bot[::-1], HAIR_L)
-    core_t = smooth([(15.2, 18.6), (18.6, 15.8), (23.0, 14.8)], 8)
-    core_b = [(x, y + 1.5) for x, y in core_t]
-    poly(d, core_t + core_b[::-1], HAIR_HI)
-    outline(d, SCAP_TOP[6:-6], w=6, closed=False, col=lc(HAIR_OUT))
-    for mode in ("outline", "fill"):
-        for (xr, xt, yt, w) in BANG_CLUMPS:
-            sw = s * 0.25
-            lock(d, [(xr, 18.5), ((xr + xt) / 2, (18.5 + yt) / 2), (xt + sw, yt)], w, w * 0.9, taper=0.5, ow=9, n=8, mode=mode)
-    return d
-
-
-
-def s_inner_locks(img, s, expr):
-    d = ImageDraw.Draw(img)
-    # locks start at the temples and fall in front of the ears, outside the face edge
-    li = [(12.2, 21.0), (11.6, 28), (12.0, 35.5), (13.4, 41.5)]
-    lock(d, wob(li, s, 0.6, 0.4), 3.0, 2.6, taper=0.34, ow=5)
-    lock(d, wob(mirror(li), s, 0.6, 0.4), 3.0, 2.6, taper=0.34, ow=5)
-    lock(d, wob([(23.4, 11.0), (22.4, 8.2), (24.0, 6.2), (26.4, 7.0)], s, 0.8, 0.3), 1.3, 1.1, base=HAIR_L, taper=0.5, ow=4, n=6)
-    lock(d, wob([(27.6, 11.6), (29.4, 9.2), (31.6, 9.0)], s, 0.8, 0.3), 1.2, 1.0, base=HAIR_L, taper=0.5, ow=4, n=6)
-    return d
-
-
-def s_blossom(img):
-    d = ImageDraw.Draw(img)
-    cx, cy = 15.0, 15.6
-    petal_out = lc((176, 58, 116))
+def s_draw_hair(img, facem, s):
+    hl = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    hd = ImageDraw.Draw(hl)
+    cap_pts = SCAP_TOP + SHAIRLINE[::-1]
+    # long locks over the shoulders (under the cap, which hides their roots)
+    for i, (r, t, w, b) in enumerate(SLOCKS):
+        sw = s * (1.4 + 0.3 * i)
+        hair(hd, r, t, w, b, sway=sw, ph=i * 0.37 + s * 0.2, n=36)
+        hair(hd, mir(r), mir(t), w, -b, sway=sw, shade_side=-1, ph=i * 0.37 + 0.3 + s * 0.2, n=36)
+    poly(hd, cap_pts, HR)
+    outline(hd, SCAP_TOP[1:-1], w=6, closed=False, col=lc(H_EDGE))
+    cap = poly_mask(cap_pts)
+    hl.paste(H_D + (255,), (0, 0), both(cap, poly_mask([(31.4, 11), (37, 16), (37, 24), (33.4, 22), (32.2, 15)])))
+    # glossy band across the crown (angel ring): pale pink, brightest on the left
+    ring_t = smooth([(14.4, 19.4), (18, 16.2), (24, 14.6), (30, 16.2), (33.4, 19.2)], 8)
+    ring_b = [(x, y + 2.2 - 0.8 * abs(x - 24) / 10) for x, y in ring_t]
+    poly(hd, ring_t + ring_b[::-1], H_L)
+    core_t = smooth([(15.4, 18.6), (18.8, 15.9), (23.4, 14.9)], 8)
+    poly(hd, core_t + [(x, y + 1.3) for x, y in core_t][::-1], H_HI)
+    shd = both(both(shift(cap, 0, int(15 * F)), facem), inv(cap))
+    img.paste(SK_S, (0, 0), shd)
+    shd2 = both(both(shift(cap, 0, int(6 * F)), facem), inv(cap))
+    img.paste(SK_D, (0, 0), shd2)
+    for i, (r, t, w, b) in enumerate(SBANGS):
+        hair(hd, r, t, w, b, sway=s * 0.5, shade_side=1 if i < 3 else -1, ow=5, ph=i * 0.6 + s * 0.2, n=16)
+    # side locks over the top half of each ear, like Flint's
+    for side, (r, t) in ((-1, ((13.4, 21.0), (10.4, 36.0))), (1, ((34.6, 21.0), (37.6, 36.0)))):
+        hair(hd, r, t, 4.8, 1.6 * side, sway=s * 0.6, shade_side=-side, ph=0.5 + s * 0.2 * side, ow=5, n=20)
+    # cherry blossom clip on her left
+    cx, cy = 14.6, 15.4
     for k in range(5):
         a = math.radians(-100 + 72 * k)
-        px, py = cx + 1.95 * math.cos(a), cy + 1.95 * math.sin(a)
+        px_, py_ = cx + 1.9 * math.cos(a), cy + 1.9 * math.sin(a)
         pts = []
-        for j in range(16):
-            t = 2 * math.pi * j / 16
-            ex, ey = 1.85 * math.cos(t), 1.4 * math.sin(t)
-            pts.append((px + ex * math.cos(a) - ey * math.sin(a), py + ex * math.sin(a) + ey * math.cos(a)))
-        poly(d, pts, HAIR_HI)
-        outline(d, pts, w=4, col=petal_out)
-    d.ellipse(((cx - 1.05) * K, (cy - 1.05) * K, (cx + 1.05) * K, (cy + 1.05) * K), fill=YELLOW)
-    d.ellipse(((cx - 0.4) * K, (cy - 0.4) * K, (cx + 0.2) * K, (cy + 0.2) * K), fill=ORANGE)
+        for j in range(14):
+            tt = 2 * math.pi * j / 14
+            ex, ey = 1.8 * math.cos(tt), 1.4 * math.sin(tt)
+            pts.append((px_ + ex * math.cos(a) - ey * math.sin(a), py_ + ex * math.sin(a) + ey * math.cos(a)))
+        poly(hd, pts, H_HI)
+        outline(hd, pts, w=4, col=lc(H_D))
+    hd.ellipse(((cx - 1.0) * K, (cy - 1.0) * K, (cx + 1.0) * K, (cy + 1.0) * K), fill=YELLOW)
+    img.paste(hl, (0, 0), hl.split()[3])
 
 
-def s_draw_frame(sway, expr):
-    img = Image.new("RGB", (SW, SH), SBG)
+def s_draw_frame(sway=0.0, expr="calm"):
+    img = Image.new("RGB", (SW, SH), BG)
     d = ImageDraw.Draw(img)
-    s_draw_hair(img, None, sway, expr)
-    neckm, torm = s_draw_torso(img)
+    s_back_hair(img, sway)
+    d = ImageDraw.Draw(img)
+    neckm, torm = s_draw_torso(img, d)
     facem = s_draw_face(img, neckm, torm, expr)
-    s_front_hair(img, sway, expr)
-    s_cap(img, sway, expr)
-    s_inner_locks(img, sway, expr)
-    s_blossom(img)
-    d = ImageDraw.Draw(img)
-    s_brow(d, 19.25, 26.6, -1, expr)
-    s_brow(d, 28.75, 26.6, 1, expr)
+    s_draw_hair(img, facem, sway)
     return img
 
 
-# drifting cherry petals (placed on the finished pixel art): (x, y, per-step drift)
-PETALS = [((5, 14), (-3, 5)), ((88, 22), (3, 4)), ((84, 70), (3, 4))]
-PETAL_PX = [((1, 0), HAIR_HI), ((2, 0), HAIR_L), ((0, 1), HAIR_HI), ((1, 1), HAIR_L), ((2, 1), HAIR), ((1, 2), HAIR_D)]
+# drifting cherry petals in place of Flint's sparks
+PETALS = [((6, 14), (-2, 4)), ((88, 20), (2, 4)), ((84, 62), (2, 3)), ((4, 66), (-2, 3))]
+PETAL_PX = [((1, 0), H_HI), ((0, 1), H_HI), ((1, 1), H_L), ((2, 1), HR), ((1, 2), H_D)]
 
 
 def add_petals(out, sway):
     px = out.load()
+    step = 1 if sway >= 0 else 0
     for k, ((x, y), (dx, dy)) in enumerate(PETALS):
-        step = 0 if sway < 0 else 1
-        X, Y = x + dx * step * (1 if sway >= 0 else 0), y + dy * step
+        X, Y = x + dx * step, y + dy * step
         flip = (k + step) % 2
         for (ax, ay), col in PETAL_PX:
             X2, Y2 = X + (ax if not flip else 2 - ax), Y + ay
@@ -912,43 +813,62 @@ def add_petals(out, sway):
                 px[X2, Y2] = col + (255,)
 
 
+def s_recolor_interior(im, keep=None):
+    """Near-black ink stays on the silhouette (and the lids); interior ink becomes deep rose on skin, lavender on
+    the kimono, dark red on the obi, as Flint's does."""
+    o = im.load()
+    w, h = im.size
+
+    def get(x, y):
+        return o[x, y] if 0 <= x < w and 0 <= y < h else (0, 0, 0, 0)
+    ch = []
+    for y in range(h):
+        for x in range(w):
+            if o[x, y][:3] != INK or o[x, y][3] == 0 or (keep and keep[0] <= x <= keep[2] and keep[1] <= y <= keep[3]):
+                continue
+            ring = [get(x + dx, y + dy)[:3] if get(x + dx, y + dy)[3] else None
+                    for dx in range(-2, 3) for dy in range(-2, 3)]
+            if None in ring or any(c in EYE_COLS for c in ring):
+                continue
+            km = sum(c in KIMS for c in ring)
+            rd = sum(c in (RED, RED_L, DEEP_RED) for c in ring)
+            hr = sum(c in HAIRS for c in ring)
+            col = KIM_D if km >= max(rd, hr, len(ring) - km - rd - hr) and km > 0 else \
+                DEEP_RED if rd > len(ring) / 3 else H_EDGE if hr > len(ring) / 3 else SK_D
+            ch.append((x, y, col + (255,)))
+    for x, y, c in ch:
+        o[x, y] = c
+    return im
+
+
 def add_obi_motif(out):
-    """Tiny blossoms and dashes on the obi band (placed on the finished pixel art)."""
+    """Tiny blossoms and dashes on the obi band (on the finished pixel art)."""
     px = out.load()
     for x in (12, 36, 60, 84):
-        for dx, dy, col in ((0, -1, HAIR_L), (-1, 0, HAIR_L), (1, 0, HAIR_L), (0, 1, HAIR_L), (0, 0, YELLOW)):
-            if px[x + dx, 123 + dy][:3] in (RED, RED_L, DEEP_RED):
-                px[x + dx, 123 + dy] = col + (255,)
+        for dx, dy, col in ((0, -1, H_L), (-1, 0, H_L), (1, 0, H_L), (0, 1, H_L), (0, 0, YELLOW)):
+            if px[x + dx, 122 + dy][:3] in (RED, RED_L, DEEP_RED):
+                px[x + dx, 122 + dy] = col + (255,)
     for x in (24, 48, 72):
         for dx in (-1, 0, 1):
-            if px[x + dx, 123][:3] == RED:
-                px[x + dx, 123] = DEEP_RED + (255,)
-
-
-def fix_eyes(out):
-    """Blended eye pixels land on the lavender kimono tones; push them to the iris blues / eye-white."""
-    px = out.load()
-    remap = {LAV_OUT: IRIS_M, LAV_D: IRIS_B, LAV: EYEW}
-    for y in range(50, 72):
-        for x in range(26, 72):
-            c = px[x, y]
-            if c[3] and c[:3] in remap:
-                px[x, y] = remap[c[:3]] + (255,)
+            if px[x + dx, 122][:3] == RED:
+                px[x + dx, 122] = DEEP_RED + (255,)
 
 
 def make_sakura_frame(sway, expr):
     src = s_draw_frame(sway, expr)
-    diff = ImageChops.difference(src, Image.new("RGB", src.size, SBG)).convert("L").point(lambda v: 255 if v > 0 else 0)
+    diff = ImageChops.difference(src, Image.new("RGB", src.size, BG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
     out = snap(pixelize(src, W, 40), mask, SAKURA_PALETTE)
-    out = cleanup(out)
-    fix_eyes(out)
-    add_petals(out, sway)
+    px = out.load()
+    prot = {(x, y) for y in range(44, 66) for x in range(26, 72) if px[x, y] == WHITE + (255,)}
+    out = cleanup(out, prot)
+    out = s_recolor_interior(out, (38, 66, 60, 82) if expr == "shout" else None)
     add_obi_motif(out)
+    add_petals(out, sway)
     return out
 
 
-SAKURA_FRAMES = [(-1, "calm"), (1, "calm"), (0.0, "determined"), (0.4, "shout")]
+SAKURA_FRAMES = [(-1, "calm"), (1, "calm"), (0.2, "determined"), (0.5, "shout")]
 
 
 def sakura_main(review=None, flint_frame=None):
@@ -971,25 +891,18 @@ def sakura_main(review=None, flint_frame=None):
     for i, f in enumerate(big):
         clean.paste(f, (8 + i * cw, 8), f)
     clean.convert("RGB").save(os.path.join(review, "sakura_bust_clean.png"))
-    sheet = Image.new("RGBA", (cw * 6 + 8, H * S + 16), bg)
-    sheet.paste(clean, (0, 0))
-    if flint_frame is not None:
+    sheet = Image.new("RGBA", (cw * 5 + 8, H * S + 16), bg)
+    if flint_frame is not None:        # Flint calm first, her four frames after it
         fb = flint_frame.resize((W * S, H * S), Image.NEAREST)
-        sheet.paste(fb, (8 + 4 * cw, 8), fb)
-    ref_path = os.path.join(review, "ref96.png")      # study only (pixelized female ref), never committed
-    if os.path.exists(ref_path):
-        ref = Image.open(ref_path).convert("RGBA")
-        sc = 0.85
-        ref = ref.resize((round(ref.width * sc), round(ref.height * sc)), Image.NEAREST)
-        lay = Image.new("RGBA", (W, H), (255, 255, 255, 255))
-        lay.alpha_composite(ref, (7, 61 - round(70.5 * sc)))
-        mine = Image.new("RGBA", (W, H), (255, 255, 255, 255))
-        mine.alpha_composite(frames[0])
-        ov = Image.blend(lay, mine, 0.5).resize((W * S, H * S), Image.NEAREST)
-        sheet.paste(ov, (8 + 5 * cw, 8))
+        sheet.paste(fb, (8, 8), fb)
+    for i, f in enumerate(big):
+        sheet.paste(f, (8 + (i + 1) * cw, 8), f)
     sheet.convert("RGB").save(os.path.join(review, "sakura_bust_review.png"))
-    x1 = Image.new("RGBA", strip.size, bg)
-    x1.alpha_composite(strip)
+    x1 = Image.new("RGBA", (W * 5, H), bg)
+    if flint_frame is not None:
+        x1.alpha_composite(flint_frame, (0, 0))
+    for i, f in enumerate(frames):
+        x1.alpha_composite(f, ((i + 1) * W, 0))
     x1.convert("RGB").save(os.path.join(review, "sakura_bust_x1.png"))
 
 
