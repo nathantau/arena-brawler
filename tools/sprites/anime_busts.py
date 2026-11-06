@@ -192,8 +192,10 @@ def lick(d, parent, t0, side, length, w, s, shade_side=1, ph=0.0):
 
 
 # ---------------------------------------------------------------- the bust
-FACE = [(13.4, 17), (34.6, 17), (35.2, 28), (33.8, 35), (27.2, 40.4), (24, 43.0), (20.8, 40.4),
-        (14.2, 35), (12.8, 28)]
+FACE = [(13.4, 17), (34.6, 17), (35.6, 27.5), (35.0, 33), (31.6, 38.6), (27.6, 41.6), (24, 42.4), (20.4, 41.6),
+        (16.4, 38.6), (13.0, 33), (12.4, 27.5)]
+EAR_L = [(14.2, 23.4), (11.8, 24.0), (10.4, 26.4), (10.6, 29.6), (12.0, 31.8), (14.4, 32.2)]
+EAR_R = [(48 - x, y) for x, y in EAR_L]
 NECK = [(19.6, 35), (28.4, 35), (29.2, 45), (18.8, 45)]
 TORSO = [(0, 64), (0, 53), (5, 47.5), (14, 44.2), (20.2, 42.6), (24, 47.8), (27.8, 42.6), (34, 44.2), (43, 47.5),
          (48, 53), (48, 64)]
@@ -201,12 +203,12 @@ TORSO = [(0, 64), (0, 53), (5, 47.5), (14, 44.2), (20.2, 42.6), (24, 47.8), (27.
 # One flame in a wind, mostly swept up and left, with two tongues rising on the right.
 # root, tip, width, bend. Drawn back to front.
 TONGUES = [
-    ((34.5, 18.5), (41.5, 8.0), 7, -3.0),
-    ((31.5, 16.5), (34.5, 4.8), 7.5, -2.6),
-    ((30, 17.5), (23.5, 4.2), 8, 3.4),
-    ((25, 16), (15, 4.6), 8, 3.6),
-    ((20, 17), (6.5, 6.0), 8, 3.4),
-    ((16, 20.5), (2.2, 13.5), 8, 3.0),
+    ((34.5, 18.5), (41.5, 6.0), 7, -3.0),
+    ((31.5, 16.5), (34.5, 3.2), 7.5, -2.6),
+    ((30, 17.5), (23.5, 2.4), 8, 3.4),
+    ((25, 16), (15, 2.8), 8, 3.6),
+    ((20, 17), (6.5, 4.4), 8, 3.4),
+    ((16, 20.5), (2.2, 12.0), 8, 3.0),
 ]
 # lick: parent index, t along the parent, side, length, width
 LICKS = [(0, 0.45, 1, 3.4, 3.4), (1, 0.5, 1, 3.0, 3.2), (2, 0.5, -1, 3.6, 3.6), (2, 0.7, 1, 2.6, 3.0),
@@ -227,22 +229,22 @@ def eye(d, cx, cy, side, o, wide=1.0):
     """side -1 = left eye (outer corner on the left). Narrow, outer corner angled up, straight heavy
     upper lid, clean almond iris with a maroon rim, cream highlight."""
     ow = 3.2 * wide
-    outer = (cx + side * ow, cy - 1.9)
-    inner = (cx - side * ow, cy - 0.1)
+    outer = (cx + side * ow, cy - 2.4)
+    inner = (cx - side * ow, cy - 0.6)
     up = [(outer[0] + (inner[0] - outer[0]) * k / 6, outer[1] + (inner[1] - outer[1]) * k / 6) for k in range(7)]
     lo = smooth([inner, (cx - side * 0.9, cy + 0.55 * o + 0.3), (cx + side * 1.2, cy + 0.4 * o + 0.1), outer])
     pts = up + lo
     d.polygon([P(*p) for p in pts], fill=YELLOW)
     d.line([P(*p) for p in lo], fill=MAROON, width=6)
-    hx, hy = cx + side * 0.5, cy - 0.7
+    hx, hy = cx + side * 0.5, cy - 1.0
     d.rectangle((hx * K - 6, hy * K - 6, hx * K + 6, hy * K + 6), fill=CREAM)
     d.line([P(*p) for p in up], fill=INK, width=11)
 
 
 def brow(d, cx, cy, side, lift=0.0, tilt=1.0):
     """Short thick V stroke sitting right on the lid, inner end lower."""
-    outer = (cx + side * 4.2, cy - 3.3 - lift - 0.5 * (tilt - 1))
-    inner = (cx - side * 2.7, cy - 1.9 - lift + 0.4 * (tilt - 1))
+    outer = (cx + side * 4.2, cy - 3.8 - lift - 0.5 * (tilt - 1))
+    inner = (cx - side * 2.7, cy - 2.4 - lift + 0.4 * (tilt - 1))
     d.line([P(*outer), P(*inner)], fill=MAROON, width=11)
 
 
@@ -317,11 +319,18 @@ def draw_face(img, neckm, torm, expr):
     jaw2 = both(both(shift(facem, int(4 * F), int(8 * F)), neckm), inv(facem))
     paste_mask(img, MAROON, both(jaw2, inv(torm)))
     d = ImageDraw.Draw(img)
+    # ears: small C shapes tucked behind the face, lit left, shadowed right, maroon inner fold
+    shape(d, EAR_L, ORANGE)
+    shape(d, EAR_R, RED)
+    d.line([P(11.9, 24.9), P(10.9, 26.6), P(11.0, 29.2)], fill=LIGHT_OR, width=4, joint="curve")
+    d.line([P(48 - 11.9, 24.9), P(48 - 10.9, 26.6), P(48 - 11.0, 29.2)], fill=DEEP_RED, width=4, joint="curve")
+    d.line([P(13.0, 25.6), P(12.0, 27.2), P(12.3, 29.8), P(13.4, 30.8)], fill=MAROON, width=4, joint="curve")
+    d.line([P(48 - 13.0, 25.6), P(48 - 12.0, 27.2), P(48 - 12.3, 29.8), P(48 - 13.4, 30.8)], fill=MAROON, width=4, joint="curve")
     shape(d, FACE, ORANGE)
     paste_mask(img, LIGHT_OR, both(facem, poly_mask([(15.0, 29.0), (21.0, 30.0), (20.2, 34.0), (17.6, 34.2), (15.4, 32.5)])))
     paste_mask(img, LIGHT_OR, both(facem, poly_mask([(15.4, 22.5), (21, 22.5), (20.5, 24.5), (15.2, 25)])))
     paste_mask(img, RED, both(facem, inv(shift(facem, int(-22 * F), 0))))
-    paste_mask(img, RED, both(facem, poly_mask([(26.0, 34.0), (34.8, 30.5), (33.6, 35.5), (27.0, 40.8), (24.5, 40)])))
+    paste_mask(img, RED, both(facem, poly_mask([(26.0, 34.0), (35.4, 30.5), (34.4, 35.5), (28.0, 41.4), (24.5, 41)])))
     chin = both(facem, inv(shift(facem, 0, int(-14 * F))))
     paste_mask(img, RED, both(chin, shift(facem, int(-30 * F), 0)))
     paste_mask(img, DEEP_RED, both(both(facem, inv(shift(facem, int(-9 * F), 0))), box_mask(0, 25, 48, 40)))
@@ -352,10 +361,7 @@ def draw_hair(img, facem, s):
     poly(hd, cap_pts, ORANGE)
     outline(hd, CAP_TOP[1:-1], w=6, closed=False, col=DEEP_RED)
     cap = poly_mask(cap_pts)
-    # wisps floating above the tips, then back-to-front tongues with their licks
-    for k, (r, t, w) in enumerate(WISPS):
-        flick = 0.5 * s * (1 if k % 2 else -1)
-        tongue(hd, (r[0] + flick, r[1]), (t[0] + flick * 1.6, t[1] + 0.6 * s * (-1) ** k), w, 0.6, ph=k, wave=0.1, n=12, ow=4)
+    # back-to-front tongues with their licks
     params = []
     for i, (r, t, w, b) in enumerate(TONGUES):
         sw = s * (2.2 + 0.3 * (i % 2)) * (-1 if i < 2 else 1)
@@ -389,22 +395,27 @@ def draw_frame(sway=0.0, expr="calm"):
     return img
 
 
-EMBERS = [((44.5, 12.0), YELLOW), ((45.5, 6.0), LIGHT_OR), ((39.0, 1.6), YELLOW), ((29.0, 1.4), LIGHT_OR),
-          ((10.0, 1.6), YELLOW), ((1.2, 8.5), LIGHT_OR)]
+# Sparks rising off the tips, hottest first: yellow 2x2, orange 1x1, red 1x1, drifting up and away.
+SPARKS = [  # first spark position (design units), per-step drift
+    ((5.0, 3.4), (-1.5, -1.5)), ((13.6, 1.8), (-1.4, -1.3)), ((22.0, 1.2), (-1.3, -1.1)),
+    ((36.0, 2.0), (1.0, -1.4)), ((42.6, 4.8), (1.1, -1.6)), ((0.9, 10.6), (-0.6, -1.8)),
+]
+SPARK_STEPS = [(YELLOW, 2), (LIGHT_OR, 1), (RED, 1)]
 
 
 def add_embers(out, sway, expr):
-    """Little 2x2 embers drifting off the flame, placed on the finished pixel art."""
+    """1-2 px sparks that rise and cool (yellow, orange, red), placed on the finished pixel art."""
     px = out.load()
     u = OW / 48
-    for k, ((x, y), col) in enumerate(EMBERS):
-        x += sway * (0.8 + 0.3 * k) * (1 if k < 3 else -1)
-        y += -sway * 0.8 * (1 if k % 2 else -1) + (0.8 if expr == "shout" else 0)
-        for dx in range(2):
-            for dy in range(2):
-                X, Y = int(x * u) + dx, int(y * u) + dy
-                if 0 <= X < out.width and 0 <= Y < out.height and px[X, Y][3] == 0:
-                    px[X, Y] = col + (255,)
+    for k, ((x, y), (dx, dy)) in enumerate(SPARKS):
+        for j, (col, size) in enumerate(SPARK_STEPS):
+            fl = sway * (0.7 + 0.3 * j) * (1 if k % 2 else -1)
+            X = int((x + dx * j * 1.3 + fl) * u)
+            Y = int((y + dy * j * 1.3 - abs(sway) * 0.4 * j) * u)
+            for ax in range(size):
+                for ay in range(size):
+                    if 0 <= X + ax < out.width and 0 <= Y + ay < out.height and px[X + ax, Y + ay][3] == 0:
+                        px[X + ax, Y + ay] = col + (255,)
 
 
 def snap(art, mask):
