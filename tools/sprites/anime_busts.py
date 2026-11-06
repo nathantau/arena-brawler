@@ -194,7 +194,7 @@ def lick(d, parent, t0, side, length, w, s, shade_side=1, ph=0.0):
 # ---------------------------------------------------------------- the bust
 FACE = [(13.4, 17), (34.6, 17), (35.6, 27.5), (35.0, 33), (31.6, 38.6), (27.6, 41.6), (24, 42.4), (20.4, 41.6),
         (16.4, 38.6), (13.0, 33), (12.4, 27.5)]
-EAR_L = [(14.2, 23.4), (11.8, 24.0), (10.4, 26.4), (10.6, 29.6), (12.0, 31.8), (14.4, 32.2)]
+EAR_L = [(14.2, 25.6), (11.8, 26.2), (10.6, 28.2), (10.8, 30.6), (12.2, 32.4), (14.4, 32.6)]
 EAR_R = [(48 - x, y) for x, y in EAR_L]
 NECK = [(19.6, 35), (28.4, 35), (29.2, 45), (18.8, 45)]
 TORSO = [(0, 64), (0, 53), (5, 47.5), (14, 44.2), (20.2, 42.6), (24, 47.8), (27.8, 42.6), (34, 44.2), (43, 47.5),
@@ -232,7 +232,7 @@ def eye(d, cx, cy, side, o, wide=1.0):
     outer = (cx + side * ow, cy - 2.4)
     inner = (cx - side * ow, cy - 0.6)
     up = [(outer[0] + (inner[0] - outer[0]) * k / 6, outer[1] + (inner[1] - outer[1]) * k / 6) for k in range(7)]
-    lo = smooth([inner, (cx - side * 0.9, cy + 0.55 * o + 0.3), (cx + side * 1.2, cy + 0.4 * o + 0.1), outer])
+    lo = smooth([inner, (cx - side * 0.9, cy + 0.55 * o + 0.8), (cx + side * 1.2, cy + 0.4 * o + 0.6), outer])
     pts = up + lo
     d.polygon([P(*p) for p in pts], fill=YELLOW)
     d.line([P(*p) for p in lo], fill=MAROON, width=6)
@@ -322,10 +322,10 @@ def draw_face(img, neckm, torm, expr):
     # ears: small C shapes tucked behind the face, lit left, shadowed right, maroon inner fold
     shape(d, EAR_L, ORANGE)
     shape(d, EAR_R, RED)
-    d.line([P(11.9, 24.9), P(10.9, 26.6), P(11.0, 29.2)], fill=LIGHT_OR, width=4, joint="curve")
-    d.line([P(48 - 11.9, 24.9), P(48 - 10.9, 26.6), P(48 - 11.0, 29.2)], fill=DEEP_RED, width=4, joint="curve")
-    d.line([P(13.0, 25.6), P(12.0, 27.2), P(12.3, 29.8), P(13.4, 30.8)], fill=MAROON, width=4, joint="curve")
-    d.line([P(48 - 13.0, 25.6), P(48 - 12.0, 27.2), P(48 - 12.3, 29.8), P(48 - 13.4, 30.8)], fill=MAROON, width=4, joint="curve")
+    d.line([P(11.9, 26.9), P(11.0, 28.4), P(11.1, 30.4)], fill=LIGHT_OR, width=4, joint="curve")
+    d.line([P(48 - 11.9, 26.9), P(48 - 11.0, 28.4), P(48 - 11.1, 30.4)], fill=DEEP_RED, width=4, joint="curve")
+    d.line([P(13.0, 27.8), P(12.1, 29.2), P(12.5, 31.0), P(13.5, 31.7)], fill=MAROON, width=4, joint="curve")
+    d.line([P(48 - 13.0, 27.8), P(48 - 12.1, 29.2), P(48 - 12.5, 31.0), P(48 - 13.5, 31.7)], fill=MAROON, width=4, joint="curve")
     shape(d, FACE, ORANGE)
     paste_mask(img, LIGHT_OR, both(facem, poly_mask([(15.0, 29.0), (21.0, 30.0), (20.2, 34.0), (17.6, 34.2), (15.4, 32.5)])))
     paste_mask(img, LIGHT_OR, both(facem, poly_mask([(15.4, 22.5), (21, 22.5), (20.5, 24.5), (15.2, 25)])))
@@ -370,6 +370,9 @@ def draw_hair(img, facem, s):
         lick(hd, params[pi_], t0 + 0.05 * s * side, side, ln, w, s, shade_side=-side, ph=pi_ * 0.3 + s * 0.4)
     for i, (r, t, w, b) in enumerate(TONGUES):
         tongue(hd, r, t, w, b, sway=params[i][4], ph=i * 0.37 + s * 0.45)
+    # flame side locks over the top half of each ear, licking outward and back; they flicker
+    for side, (r, t) in ((-1, ((13.4, 21.0), (9.6, 31.0))), (1, ((34.6, 21.0), (38.4, 31.0)))):
+        tongue(hd, r, t, 4.8, 1.6 * side, sway=s * 0.9 * -side, shade_side=-side, ph=0.5 + s * 0.4 * side, wave=0.2, n=20, ow=5)
     # glowing root band: yellow at the hairline, light orange above it
     band = both(both(cap, inv(shift(cap, 0, int(-12 * F)))), box_mask(0, 17, 48, 27))
     band2 = both(both(both(cap, inv(shift(cap, 0, int(-24 * F)))), shift(cap, 0, int(-12 * F))), box_mask(0, 17, 48, 27))
