@@ -9940,11 +9940,11 @@ def splash_soaker(c: Canvas, t: int = 0) -> None:
 
 def bubble_wand(c: Canvas, t: int = 1) -> None:
     """A candy-striped wand with a ring; a soap film swells in the ring, bulges into a bubble and lets go (t 0..3)."""
-    c.part(L([(5, 17), (29, 14)], 4), PINK_L)  # handle
+    c.part(L([(5, 12), (29, 12)], 4), PINK_L)  # handle: starts under the hand at the grip pixel
     for i in range(4):
-        x = 5 + 6 * i
-        c.flat(L([(x, 17 - (x - 5) // 9), (x + 2, 14 - (x - 5) // 9)], 1), RED)
-    c.part(E((2, 15, 7, 20)), PINK)  # end knob
+        x = 7 + 6 * i
+        c.flat(L([(x, 13), (x + 2, 10)], 1), RED)
+    c.part(E((2, 9, 7, 15)), PINK)  # end knob
     c.part(E((27, 3, 44, 20)), PINK)  # ring
     clear_disc(c, 35.5, 11.5, 5.4)
     c.flat(L([(30, 6), (33, 4)], 1), WHITE)  # ring glint
@@ -9979,6 +9979,7 @@ def bubble_wand(c: Canvas, t: int = 1) -> None:
 def snowball_cannon(c: Canvas, t: int = 0) -> None:
     """A stubby ice-blue cannon with snow piled on top, icicles underneath and a packed snowball in the mouth."""
     c.part(P([(5, 15), (11, 15), (10, 21), (4, 21)]), BROWN)  # grip
+    c.part(R((3, 9, 9, 16)), BROWN)  # handle top, under the hand
     c.part(RR((6, 6, 35, 17), 3), BLUE)  # barrel
     c.flat(L([(8, 7), (30, 7)], 1), TEAL_L)
     for x in (13, 26):
@@ -10402,7 +10403,7 @@ def cactus_cannon(c: Canvas, t: int = 0) -> None:
     """A potted cactus with a barrel for a body: terracotta pot for a grip, ribbed green barrel, an arm with a pink flower, spines."""
     c.part(P([(5, 15), (14, 15), (12, 21), (7, 21)]), ORANGE)  # pot
     c.flat(L([(7, 18), (12, 18)], 1), RED)
-    c.part(R((3, 12, 16, 15)), OCHRE)  # rim
+    c.part(R((3, 10, 16, 15)), OCHRE)  # rim, tall enough to sit under the hand
     c.part(RR((12, 7, 36, 18), 4), GREEN)  # barrel
     for y, col in ((9, GREEN_L), (12, GREEN_D), (15, GREEN_D)):
         c.flat(L([(15, y), (33, y)], 1), col)  # ribs
@@ -10791,6 +10792,7 @@ def magnet_blaster(c: Canvas, t: int = 0) -> None:
     """A red horseshoe magnet with steel-capped poles for a barrel, a brown grip, and a spark of current across its poles."""
     c.part(P([(5, 14), (10, 14), (9, 21), (4, 21)]), BROWN)  # grip
     c.flat(L([(6, 17), (8, 17)], 1), MAROON)
+    c.part(R((3, 9, 9, 15)), BROWN)  # handle top, under the hand
 
     def shoe(d, f):
         d.ellipse((6, 2, 34, 21), f)
@@ -10853,6 +10855,7 @@ def pumpkin_mortar(c: Canvas, t: int = 0) -> None:
 def black_hole_orb(c: Canvas, t: int = 0) -> None:
     """A little black hole held in a steel cradle: a violet sphere with a void for a heart, a tilted accretion ring, a collar."""
     c.part(P([(5, 14), (10, 14), (9, 21), (4, 21)]), BROWN)  # grip
+    c.part(R((3, 9, 14, 15)), BROWN)  # handle running into the cradle, under the hand
     c.part(P([(14, 4), (20, 2), (22, 5), (17, 8)]), STEEL)  # cradle claws
     c.part(P([(14, 19), (20, 21), (22, 18), (17, 15)]), STEEL)
     c.part(E((11, 2, 34, 21)), VIOLET)  # the sphere
