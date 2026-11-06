@@ -2,7 +2,7 @@
 
 Pipeline (see .claude/skills/anime-pixel-art): smooth vector illustration drawn in code at 8x
 -> pixelize(src, 48, 20) -> snap to Flint's gameplay palette -> stray-pixel cleanup.
-Output: assets/title/anime/flint_bust.png, 4 frames of 64 x 86
+Output: assets/title/anime/flint_bust.png, 4 frames of 96 x 128
 (calm sway A, calm sway B, shout, determined squint).
 
 Run: tools/sprites/.venv/bin/python tools/sprites/anime_busts.py [review_dir]
@@ -16,15 +16,21 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pixelize import pixelize
 
-OW, OH = 64, 86           # output size (px)
-K = 8 * OW / 48           # source px per design unit (design grid is 48 x 64.5 units)
+OW, OH = 96, 128          # output size (px)
+K = 8 * OW / 48           # source px per design unit (design grid is 48 x 64 units)
 SW, SH = OW * 8, OH * 8   # source size: 8 source px per output px
 F = K / 8                 # scale for pixel offsets written for the 48 px grid
 W, H = OW, OH
 INK = (27, 26, 46); MAROON = (122, 46, 56); RED = (217, 71, 75); ORANGE = (240, 138, 62)
 YELLOW = (245, 210, 86); CREAM = (242, 240, 230); NAVY = (58, 58, 92); BLUE = (43, 58, 107)
 BROWN = (184, 117, 79)
-PALETTE = [INK, MAROON, RED, ORANGE, YELLOW, CREAM, NAVY, BLUE, BROWN]
+# in-between ramp colours (same hue families as the gameplay palette)
+LIGHT_OR = (250, 172, 84); DEEP_RED = (168, 54, 66)
+NAVY_L = (86, 88, 130); NAVY_D = (34, 40, 76)
+BROWN_L = (214, 152, 104); BROWN_D = (132, 80, 62)
+PALETTE = [INK, MAROON, RED, ORANGE, YELLOW, CREAM, NAVY, BLUE, BROWN,
+           LIGHT_OR, DEEP_RED, NAVY_L, NAVY_D, BROWN_L, BROWN_D]
+TOFF = 3.5                # torso / neck-base offset (longer neck)
 BG = (236, 236, 236)
 LINE = 7                  # outline thickness in source px
 
@@ -92,16 +98,16 @@ def inv(a):
 
 # ---------------------------------------------------------------- flame tongue
 def tongue(d, root, tip, w0, bend, sway=0.0, shade_side=1, tipcol=RED, rootcol=ORANGE, hot_root=0.0, n=28):
-    """Flame tongue: S-curved centre line tapering to a sharp tip. Outline first, then flat
-    colours: body, one hard shadow half, a thin lit streak, tip colour."""
+    """Flame tongue: S-curved centre line tapering to a sharp tip. Maroon inner outline, then flat cel
+    colours: base, red shadow half with a maroon fold, light-orange and yellow lit edge, red tip."""
     x0, y0 = root
-    x1, y1 = tip[0] + sway, tip[1] + abs(sway) * 0.15
+    x1, y1 = tip[0] + sway, tip[1] + abs(sway) * 0.2
     dx, dy = x1 - x0, y1 - y0
     L = math.hypot(dx, dy)
-    bend *= 1.35
+    bend = (bend - sway * 0.55) * 1.35
     nx, ny = -dy / L, dx / L
-    c1 = (x0 + dx * 0.33 + nx * bend, y0 + dy * 0.33 + ny * bend)
-    c2 = (x0 + dx * 0.68 - nx * bend * 0.95 + sway * 0.5, y0 + dy * 0.68 - ny * bend * 0.95)
+    c1 = (x0 + dx * 0.33 + nx * bend + sway * 0.2, y0 + dy * 0.33 + ny * bend)
+    c2 = (x0 + dx * 0.68 - nx * bend * 0.95 + sway * 0.6, y0 + dy * 0.68 - ny * bend * 0.95)
     cs, hs = [], []
     for i in range(n + 1):
         t = i / n
@@ -119,27 +125,28 @@ def tongue(d, root, tip, w0, bend, sway=0.0, shade_side=1, tipcol=RED, rootcol=O
     def edge(inset, side, frac=1.0):
         return [(cs[i][0] + nrm[i][0] * max(hs[i] - inset, 0) * side * frac,
                  cs[i][1] + nrm[i][1] * max(hs[i] - inset, 0) * side * frac) for i in range(n + 1)]
+
+    def band(side, f0, f1, t0, t1, col):
+        A, B = edge(0.5, side, f0), edge(0.5, side, f1)
+        for i in range(int(t0 * n), int(t1 * n)):
+            poly(d, [A[i], A[i + 1], B[i + 1], B[i]], col)
     outline(d, edge(0, -1) + edge(0, 1)[::-1], w=5, col=MAROON)
-    ins = 0.5
-    a0, a1 = edge(ins, -1), edge(ins, 1)
+    a0, a1 = edge(0.5, -1), edge(0.5, 1)
     for i in range(n):
         t = (i + 0.5) / n
         col = YELLOW if t < hot_root else (rootcol if t < 0.68 else tipcol)
         poly(d, [a0[i], a0[i + 1], a1[i + 1], a1[i]], col)
-    sh, sh0 = edge(ins, shade_side), edge(ins, shade_side, 0.5)
-    for i in range(int(0.10 * n), int(0.70 * n)):
-        poly(d, [sh0[i], sh0[i + 1], sh[i + 1], sh[i]], RED)
-    e = edge(ins, -shade_side, 0.5)
-    e2 = edge(ins, -shade_side, 0.12)
-    for i in range(int(0.12 * n), int(0.5 * n)):
-        poly(d, [e[i], e[i + 1], e2[i + 1], e2[i]], YELLOW)
+    band(shade_side, 0.30, 1.0, 0.08, 0.72, RED)
+    band(shade_side, 0.74, 1.0, 0.10, 0.52, MAROON)
+    band(-shade_side, 0.22, 0.62, 0.06, 0.66, LIGHT_OR)
+    band(-shade_side, 0.62, 1.0, 0.10, 0.52, YELLOW)
     return cs
 
 
 # ---------------------------------------------------------------- the bust
-FACE = [(13.4, 17), (34.6, 17), (35.0, 28.5), (33.0, 34.2), (28.2, 39), (24, 41.4), (19.8, 39),
-        (15.0, 34.2), (13.0, 28.5)]
-NECK = [(19.6, 37), (28.4, 37), (29.2, 47), (18.8, 47)]
+FACE = [(13.4, 17), (34.6, 17), (35.2, 29.5), (32.0, 36.6), (28.0, 40.2), (24, 42.4), (20.0, 40.2),
+        (16.0, 36.6), (12.8, 29.5)]
+NECK = [(19.6, 35), (28.4, 35), (29.2, 45), (18.8, 45)]
 TORSO = [(0, 64), (0, 53), (5, 47.5), (14, 44.2), (20.2, 42.6), (24, 47.8), (27.8, 42.6), (34, 44.2), (43, 47.5),
          (48, 53), (48, 64)]
 
@@ -153,8 +160,8 @@ TONGUES = [
     ((16, 20.5), (1.5, 12), 8, 3.0),
 ]
 BANGS = [  # thin wisps over the forehead
-    ((19.4, 19.0), (18.4, 22.8), 4.2, 0.8),
-    ((29.6, 19.0), (30.6, 22.6), 4.0, 0.7),
+    ((19.8, 19.0), (18.4, 22.6), 5.0, 0.9),
+    ((29.2, 19.0), (30.6, 22.4), 4.8, 0.8),
 ]
 HAIRLINE = [(13.4, 23), (14.5, 21.6), (17, 19.8), (20.5, 20.4), (24, 20), (27.5, 20.4), (31, 19.8),
             (33.5, 21.6), (34.6, 23)]
@@ -162,22 +169,19 @@ CAP_TOP = [(12.8, 22), (13.4, 17), (17, 14.5), (24, 12.8), (31, 14.5), (34.6, 17
 
 
 def eye(d, cx, cy, side, o, wide=1.0):
-    """side -1 = left eye (outer corner on the left). o = openness."""
+    """side -1 = left eye (outer corner on the left). o = openness. Straight heavy upper line."""
     ow = 3.4 * wide
-    outer = (cx + side * ow, cy - 0.9 - 0.3 * (o - 1))
-    inner = (cx - side * ow, cy + 0.5)
-    up = smooth([outer, (cx + side * 1.6, cy - 1.45 * o - 0.2), (cx - side * 1.2, cy - 1.25 * o), inner])
+    outer = (cx + side * ow, cy - 1.1 - 0.3 * (o - 1))
+    inner = (cx - side * ow, cy - 0.2)
+    up = [(outer[0] + (inner[0] - outer[0]) * k / 6, outer[1] + (inner[1] - outer[1]) * k / 6) for k in range(7)]
     lo = smooth([inner, (cx - side * 0.2, cy + 0.85 * o + 0.3), (cx + side * 1.8, cy + 0.55 * o), outer])
     d.polygon([P(*p) for p in up + lo], fill=YELLOW)
-    d.line([P(x, y + 0.75) for x, y in up], fill=ORANGE, width=9)
+    d.line([P(x, y + 0.7) for x, y in up], fill=ORANGE, width=9)
     if o > 1.0:
         d.line([P(*p) for p in lo], fill=MAROON, width=4)
-    hx, hy = cx + side * 0.9, cy - 0.35 * o + 0.1
+    hx, hy = cx + side * 0.9, cy - 0.15 * o + 0.1
     d.rectangle((hx * K - 5, hy * K - 5, hx * K + 5, hy * K + 5), fill=CREAM)
-    flick = (outer[0] + side * 1.2, outer[1] - 0.7)
-    d.line([P(*p) for p in [flick] + up], fill=INK, width=7, joint="curve")
-    for p in [flick, up[-1]]:
-        d.ellipse((p[0] * K - 4, p[1] * K - 4, p[0] * K + 4, p[1] * K + 4), fill=INK)
+    d.line([P(*p) for p in up], fill=INK, width=9)
 
 
 def brow(d, cx, cy, side, lift=0.0, tilt=1.0):
@@ -206,68 +210,164 @@ def _mouth(d, kind):
         d.line([P(22.2, 39.0), P(26.6, 39.1)], fill=INK, width=8)
 
 
-def draw_frame(sway=0.0, expr="calm"):
-    img = Image.new("RGB", (SW, SH), BG)
-    d = ImageDraw.Draw(img)
-    s = sway
-    YOFF[0] = 2.0
+def paste_mask(img, col, m):
+    img.paste(col, (0, 0), m)
+
+
+def poly_mask(pts):
+    return mask_of(lambda m: m.polygon([P(*p) for p in pts], fill=255))
+
+
+def box_mask(x0, y0, x1, y1):
+    return mask_of(lambda m: m.rectangle((x0 * K, (y0 + YOFF[0]) * K, x1 * K, (y1 + YOFF[0]) * K), fill=255))
+
+
+STRAP = [(9.5, 47.2), (14.5, 44.6), (42, 64), (31, 64)]
+LFLAP = [(12.5, 45), (19.2, 40.2), (21.8, 40.6), (24.6, 48.4), (19.8, 46.4)]
+RFLAP = [(35.5, 45), (28.8, 40.2), (26.2, 40.6), (23.4, 48.4), (28.2, 46.4)]
+
+
+def lerp(a, b, t):
+    return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+
+
+def draw_torso(img, d):
+    YOFF[0] = TOFF
     shape(d, NECK, ORANGE)
     shape(d, TORSO, NAVY)
+    neckm, torm = poly_mask(NECK), poly_mask(TORSO)
+    # shadow side + shoulder light + warm rim from the fire behind
     poly(d, [(28, 42.8), (34, 44.4), (43, 47.7), (47.6, 53), (47.6, 64), (40, 64), (36.5, 52)], BLUE)
-    shape(d, [(9.5, 47.2), (14.5, 44.6), (42, 64), (31, 64)], BROWN)
-    poly(d, [(31, 64), (42, 64), (40.5, 62.8), (32, 62.5)], MAROON)
-    rect(d, 25.3, 55.2, 28.8, 58.4, INK)
-    rect(d, 25.9, 55.8, 28.2, 57.8, YELLOW)
-    shape(d, [(13, 44.6), (20, 41.2), (24, 47.8), (19.4, 46)], NAVY)
-    shape(d, [(35, 44.6), (28, 41.2), (24, 47.8), (28.6, 46)], BLUE)
-    YOFF[0] = 2.0
-    facem = mask_of(lambda m: m.polygon([P(*p) for p in FACE], fill=255))
-    neckm = mask_of(lambda m: m.polygon([P(*p) for p in NECK], fill=255))
-    torm = mask_of(lambda m: m.polygon([P(*p) for p in TORSO], fill=255))
+    paste_mask(img, NAVY_L, both(both(torm, inv(shift(torm, 0, int(9 * F)))), box_mask(0, 0, 19, 80)))
+    paste_mask(img, ORANGE, both(both(torm, inv(shift(torm, int(-6 * F), int(5 * F)))), box_mask(34, 0, 48, 56)))
+    d = ImageDraw.Draw(img)
+    # jacket folds: a dark crease with a lit lip beside it
+    for (a, b, dark, lit) in [((6.5, 52), (10.5, 60.5), NAVY_D, NAVY_L), ((2.5, 57.5), (5.5, 64.5), NAVY_D, NAVY_L),
+                              ((36.5, 51.5), (34.5, 60), NAVY_D, BLUE), ((41.5, 55.5), (39.5, 64.5), NAVY_D, BLUE)]:
+        d.line([P(*a), P(*b)], fill=dark, width=7)
+        d.line([P(a[0] + 0.9, a[1] - 0.3), P(b[0] + 0.9, b[1] - 0.3)], fill=lit, width=4)
+    # strap: lit top edge, shadow bottom edge, stitching, buckle
+    shape(d, STRAP, BROWN)
+    d.line([P(15.0, 45.6), P(41, 63.4)], fill=BROWN_L, width=6)
+    d.line([P(10.4, 48.2), P(31.5, 63.5)], fill=BROWN_D, width=6)
+    for row in (0.3, 0.7):
+        for k in range(9):
+            t0, t1 = 0.06 + k * 0.1, 0.06 + k * 0.1 + 0.05
+            pts = []
+            for t in (t0, t1):
+                up = (14.5 + 27.5 * t, 44.6 + 19.4 * t)
+                lo = (9.5 + 21.5 * t, 47.2 + 16.8 * t)
+                pts.append(P(*lerp(lo, up, row)))
+            d.line(pts, fill=BROWN_D, width=3)
+    rect(d, 24.6, 54.2, 29.8, 59.4, INK)
+    rect(d, 25.4, 55.0, 29.0, 58.6, YELLOW)
+    rect(d, 26.2, 55.8, 28.2, 57.8, BROWN_D)
+    rect(d, 25.4, 55.0, 26.4, 56.0, CREAM)
+    # collar: shadow it casts, shaded neck inside, then the two flaps with a light edge
+    flapm = ImageChops.lighter(poly_mask(LFLAP), poly_mask(RFLAP))
+    paste_mask(img, NAVY_D, both(both(shift(flapm, 0, int(10 * F)), torm), inv(flapm)))
+    paste_mask(img, RED, both(neckm, box_mask(0, 41.5, 48, 80)))
+    d = ImageDraw.Draw(img)
+    shape(d, LFLAP, NAVY)
+    shape(d, RFLAP, BLUE)
+    d.line([P(*p) for p in (LFLAP[0], LFLAP[1], LFLAP[2])], fill=NAVY_L, width=5)
+    d.line([P(*p) for p in (RFLAP[0], RFLAP[1], RFLAP[2])], fill=NAVY, width=5)
+    d.line([P(*LFLAP[2]), P(*LFLAP[3]), P(*LFLAP[4])], fill=NAVY_D, width=4)
+    d.line([P(*RFLAP[2]), P(*RFLAP[3]), P(*RFLAP[4])], fill=NAVY_D, width=4)
     YOFF[0] = 0.0
-    facem = mask_of(lambda m: m.polygon([P(*p) for p in FACE], fill=255))
+    return neckm, torm
+
+
+def draw_face(img, neckm, torm, expr):
+    facem = poly_mask(FACE)
+    # hard shadow under the jaw on the neck: red, with a deep band right under the chin
     jaw = both(both(shift(facem, int(4 * F), int(20 * F)), neckm), inv(facem))
-    img.paste(RED, (0, 0), both(jaw, inv(torm)))
-    # face
+    paste_mask(img, RED, both(jaw, inv(torm)))
+    jaw2 = both(both(shift(facem, int(4 * F), int(8 * F)), neckm), inv(facem))
+    paste_mask(img, MAROON, both(jaw2, inv(torm)))
     d = ImageDraw.Draw(img)
     shape(d, FACE, ORANGE)
-    img.paste(RED, (0, 0), both(facem, inv(shift(facem, int(-20 * F), 0))))
+    # key light top-left: lit cheek / brow / nose bridge; shadow right side, under the cheekbone, chin
+    paste_mask(img, LIGHT_OR, both(facem, poly_mask([(15.2, 28.8), (21.4, 29.6), (20.6, 33.4), (18.0, 33.8), (15.8, 32)])))
+    paste_mask(img, LIGHT_OR, both(facem, poly_mask([(15.4, 22.5), (21, 22.5), (20.5, 24.5), (15.2, 25)])))
+    paste_mask(img, RED, both(facem, inv(shift(facem, int(-22 * F), 0))))
+    paste_mask(img, RED, both(facem, poly_mask([(26.5, 33.4), (34.2, 30.4), (33.2, 35.5), (28.6, 39.4), (25.5, 38)])))
     chin = both(facem, inv(shift(facem, 0, int(-14 * F))))
-    img.paste(RED, (0, 0), both(chin, shift(facem, int(-30 * F), 0)))
+    paste_mask(img, RED, both(chin, shift(facem, int(-30 * F), 0)))
+    paste_mask(img, DEEP_RED, both(both(facem, inv(shift(facem, int(-9 * F), 0))), box_mask(0, 25, 48, 40)))
+    paste_mask(img, LIGHT_OR, both(both(facem, inv(shift(facem, int(-4 * F), 0))), box_mask(0, 26, 48, 36)))
     d = ImageDraw.Draw(img)
-    d.line([P(25.4, 31.6), P(25.8, 33.0)], fill=RED, width=7)
+    d.line([P(24.5, 25.2), P(24.5, 30.0)], fill=LIGHT_OR, width=7)
+    d.line([P(25.4, 31.2), P(25.9, 32.8)], fill=DEEP_RED, width=7)
     mouth(d, expr)
     if expr == "shout":
-        o, wd, lift, tilt = 1.8, 1.1, 0.6, 1.0
+        o, wd, lift, tilt = 2.5, 1.2, 0.6, 1.0
     elif expr == "squint":
-        o, wd, lift, tilt = 0.85, 1.0, -0.1, 1.5
+        o, wd, lift, tilt = 1.2, 1.1, -0.1, 1.5
     else:
-        o, wd, lift, tilt = 1.3, 1.0, 0.0, 1.0
+        o, wd, lift, tilt = 1.9, 1.12, 0.0, 1.0
     cy = 27.6
     eye(d, 19.6, cy, -1, o, wd)
     eye(d, 28.4, cy, 1, o, wd)
     brow(d, 19.6, cy + 0.2, -1, lift, tilt)
     brow(d, 28.4, cy + 0.2, 1, lift, tilt)
-    # hair layer: tongues, cap, hairline band, bangs; one ink ring round the whole silhouette
+    return facem
+
+
+def draw_hair(img, facem, s):
     hl = Image.new("RGBA", img.size, (0, 0, 0, 0))
     hd = ImageDraw.Draw(hl)
     for i, (r, t, w, b) in enumerate(TONGUES):
-        tongue(hd, r, t, w, b, sway=s * (2.2 + 0.25 * (i % 2)))
+        tongue(hd, r, t, w, b, sway=s * (2.2 + 0.3 * (i % 2)))
     cap_pts = CAP_TOP + HAIRLINE[::-1]
     poly(hd, cap_pts, ORANGE)
-    cap = mask_of(lambda m: m.polygon([P(*p) for p in cap_pts], fill=255))
-    band = both(cap, inv(shift(cap, 0, int(-17 * F))))
-    band = both(band, mask_of(lambda m: m.rectangle((0, 17 * K, SW, 27 * K), fill=255)))
+    cap = poly_mask(cap_pts)
+    # cap cel shading: lit left, red right, strand creases sweeping up-left, glowing root band
+    hl.paste(LIGHT_OR + (255,), (0, 0), both(both(cap, inv(shift(cap, int(14 * F), 0))), box_mask(0, 0, 48, 20)))
+    hl.paste(RED + (255,), (0, 0), both(both(cap, inv(shift(cap, int(-24 * F), 0))), box_mask(0, 15, 48, 30)))
+    for a, b in [((17.5, 20.8), (14.2, 15.4)), ((23.5, 20.2), (19.8, 14.2)), ((29.5, 20.6), (26.6, 14.8))]:
+        hd.line([P(*a), P(*b)], fill=MAROON, width=5)
+        hd.line([P(a[0] - 0.7, a[1] - 0.2), P(b[0] - 0.7, b[1] - 0.2)], fill=YELLOW, width=3)
+    band = both(both(cap, inv(shift(cap, 0, int(-14 * F)))), box_mask(0, 17, 48, 27))
+    band2 = both(both(both(cap, inv(shift(cap, 0, int(-28 * F)))), shift(cap, 0, int(-14 * F))), box_mask(0, 17, 48, 27))
+    hl.paste(LIGHT_OR + (255,), (0, 0), band2)
     hl.paste(YELLOW + (255,), (0, 0), band)
     shd = both(both(shift(cap, 0, int(15 * F)), facem), inv(cap))
     img.paste(RED, (0, 0), shd)
+    shd2 = both(both(shift(cap, 0, int(6 * F)), facem), inv(cap))
+    img.paste(MAROON, (0, 0), shd2)
     for i, (r, t, w, b) in enumerate(BANGS):
         tongue(hd, r, t, w, b, sway=s * 0.7, shade_side=1 if i % 2 == 0 else -1, hot_root=0.3)
     hm = hl.split()[3]
     ring = both(hm.filter(ImageFilter.MaxFilter(11)), inv(hm))
     img.paste(INK, (0, 0), ring)
     img.paste(hl, (0, 0), hm)
+
+
+def draw_frame(sway=0.0, expr="calm"):
+    img = Image.new("RGB", (SW, SH), BG)
+    d = ImageDraw.Draw(img)
+    neckm, torm = draw_torso(img, d)
+    facem = draw_face(img, neckm, torm, expr)
+    draw_hair(img, facem, sway)
     return img
+
+
+EMBERS = [((39.5, 9.0), YELLOW), ((43.0, 14.5), LIGHT_OR), ((36.5, 3.5), LIGHT_OR), ((2.5, 22.5), YELLOW)]
+
+
+def add_embers(out, sway, expr):
+    """Little 2x2 embers drifting off the flame, placed on the finished pixel art."""
+    px = out.load()
+    u = OW / 48
+    for k, ((x, y), col) in enumerate(EMBERS):
+        x += sway * (1.0 + 0.4 * k) * (1 if k < 3 else -1)
+        y += -sway * 0.8 * (1 if k % 2 else -1) + (0.8 if expr == "shout" else 0)
+        for dx in range(2):
+            for dy in range(2):
+                X, Y = int(x * u) + dx, int(y * u) + dy
+                if 0 <= X < out.width and 0 <= Y < out.height and px[X, Y][3] == 0:
+                    px[X, Y] = col + (255,)
 
 
 def snap(art, mask):
@@ -313,10 +413,12 @@ def make_frame(sway, expr):
     src = draw_frame(sway, expr)
     diff = ImageChops.difference(src, Image.new("RGB", src.size, BG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
-    out = snap(pixelize(src, W, 24), mask)
+    out = snap(pixelize(src, W, 40), mask)
     px = out.load()
-    prot = {(x, y) for y in range(30, 42) for x in range(18, 47) if px[x, y] == CREAM + (255,)}
-    return cleanup(out, prot)
+    prot = {(x, y) for y in range(45, 63) for x in range(27, 70) if px[x, y] == CREAM + (255,)}
+    out = cleanup(out, prot)
+    add_embers(out, sway, expr)
+    return out
 
 
 FRAMES = [(-1, "calm"), (1, "calm"), (0.3, "shout"), (-0.4, "squint")]
@@ -335,7 +437,7 @@ def main():
     if not review:
         return
     os.makedirs(review, exist_ok=True)
-    S = 6
+    S = 4
     bg = (92, 112, 134, 255)
     big = [f.resize((W * S, H * S), Image.NEAREST) for f in frames]
     cw = W * S + 8
@@ -343,7 +445,7 @@ def main():
     for i, f in enumerate(big):
         clean.paste(f, (8 + i * cw, 8), f)
     clean.convert("RGB").save(os.path.join(review, "flint_bust_clean.png"))
-    sheet = Image.new("RGBA", (cw * 5 + 8, 96 * S + 16), bg)
+    sheet = Image.new("RGBA", (cw * 5 + 8, 144 * S + 16), bg)
     sheet.paste(clean, (0, 0))
     mock_path = os.path.join(review, "..", "poc", "flint_mock2.png")
     if os.path.exists(mock_path):
