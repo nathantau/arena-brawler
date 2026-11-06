@@ -102,6 +102,31 @@ const MARKER_POOL: int = 8
 const MARKER_TIME: float = 0.18
 const MARKER_SIZE: float = 20.0
 const MARKER_GAP: float = 14.0
+## Premium hit confirmation for hits the LOCAL player deals. Ticks are stair-stepped art-pixel squares along each diagonal:
+## [gap steps from the centre, length steps, thickness in art px]. Crits are gold and bigger, a kill is a red X joined at
+## the centre with a skull flashing over it.
+const MARKER_CRIT_TIME: float = 0.26
+const MARKER_KILL_TIME: float = 0.45
+const MARKER_POP_SCALE: float = 1.5  ## ticks start this much bigger and settle over MARKER_POP_SHARE of the run
+const MARKER_POP_SHARE: float = 0.25
+const MARKER_TICK_HIT: Vector3 = Vector3(3.0, 5.0, 2.0)
+const MARKER_TICK_CRIT: Vector3 = Vector3(4.0, 7.0, 3.0)
+const MARKER_TICK_KILL: Vector3 = Vector3(1.0, 9.0, 4.0)
+const MARKER_SPOKES: int = 8  ## impact spark rays in the first MARKER_SPOKE_SHARE of the run
+const MARKER_SPOKE_SHARE: float = 0.45
+const MARKER_SPOKE_REACH: float = 34.0
+const MARKER_SPOKE_LEN_STEPS: float = 4.0
+## A second hit near a live marker younger than this merges into it (popcorn / SMG don't spam), upgrading its kind.
+const MARKER_MERGE_TIME: float = 0.07
+const MARKER_MERGE_DIST: float = 30.0
+const COLOR_MARKER_KILL: Color = UiStyle.C_RED
+const SKULL_CELL: float = 2.0  ## art px per skull bitmap cell
+const SKULL_LIFT: float = 30.0
+const SKULL_RISE: float = 16.0
+const SKULL: PackedStringArray = [".XXXXX.", "XXXXXXX", "XooXooX", "XooXooX", "XXXoXXX", ".XXXXX.", ".XXXXX.", ".X.X.X."]
+## Damage numbers the local player deals: bigger, bolder (faux-bold pass), a harder pop.
+const NUMBER_LOCAL_BONUS: int = 6
+const NUMBER_LOCAL_POP_SCALE: float = 1.8
 ## Auto-aim reticle: four corner brackets that ease in and tighten around the locked target, then pulse gently.
 const AIM_HALF: float = 24.0  ## half side of the bracket box around a normal-sized fighter
 const AIM_LEG: float = 8.0
@@ -147,6 +172,7 @@ class Particle:
 
 
 class DamageNumber:
+	var local: bool = false
 	var life: float = 0.0
 	var pos: Vector2 = Vector2.ZERO
 	var text: String = ""
@@ -158,8 +184,10 @@ class DamageNumber:
 
 class Marker:
 	var life: float = 0.0
+	var duration: float = 0.18
 	var pos: Vector2 = Vector2.ZERO
 	var strong: bool = false
+	var kill: bool = false
 
 
 class Wisp:
@@ -329,21 +357,36 @@ func clear() -> void:
 	_held.clear()
 
 
-func hit_marker(at: Vector2, strong: bool) -> void:
+## True when a marker was started or a live one was upgraded to a kill (the caller then plays the sound / sparks); a hit
+## landing within MARKER_MERGE_TIME of a marker near it just merges into it.
+func hit_marker(at: Vector2, strong: bool, kill: bool = false) -> bool:
+	for old: Marker in _markers:
+		if old.life > 0.0 and old.duration - old.life < MARKER_MERGE_TIME and old.pos.distance_to(at) < MARKER_MERGE_DIST:
+			var upgraded: bool = kill and not old.kill
+			old.strong = old.strong or strong or kill
+			if upgraded:
+				old.kill = true
+				old.duration = MARKER_KILL_TIME
+				old.life = MARKER_KILL_TIME
+			return upgraded
 	var m: Marker = _markers[_mc]
 	_mc = (_mc + 1) % _markers.size()
-	m.life = MARKER_TIME
+	m.duration = MARKER_KILL_TIME if kill else MARKER_CRIT_TIME if strong else MARKER_TIME
+	m.life = m.duration
 	m.pos = at
-	m.strong = strong
+	m.strong = strong or kill
+	m.kill = kill
+	return true
 
 
-func damage_number(at: Vector2, amount: int, crit: bool) -> void:
+func damage_number(at: Vector2, amount: int, crit: bool, local: bool = false) -> void:
 	var n: DamageNumber = _numbers[_nc]
 	_nc = (_nc + 1) % _numbers.size()
 	n.life = NUMBER_TIME
 	n.pos = at + Vector2(_rng.randf_range(-NUMBER_SPREAD_PX, NUMBER_SPREAD_PX), -NUMBER_SPREAD_PX)
 	n.text = str(amount)
 	n.crit = crit
+	n.local = local
 	n.heal = false
 	n.tinted = false
 
@@ -631,11 +674,17 @@ func _draw() -> void:
 		var nc: Color = n.color if n.tinted else COLOR_NUMBER_HEAL if n.heal else COLOR_NUMBER_CRIT if n.crit else COLOR_NUMBER
 		nc.a = clampf(n.life / NUMBER_TIME * 2.0, 0.0, 1.0)
 		var font_size: int = NUMBER_CRIT_FONT_SIZE if n.crit else NUMBER_FONT_SIZE
+		var pop: float = NUMBER_LOCAL_POP_SCALE if n.local else NUMBER_POP_SCALE
+		if n.local:
+			font_size += NUMBER_LOCAL_BONUS
 		var age: float = NUMBER_TIME - n.life
 		if age < NUMBER_POP_TIME:  # punch in: starts big and settles
-			font_size = roundi(font_size * lerpf(NUMBER_POP_SCALE, 1.0, age / NUMBER_POP_TIME))
+			font_size = roundi(font_size * lerpf(pop, 1.0, age / NUMBER_POP_TIME))
 		var w: float = UiStyle.text_width(n.text, font_size, true)
-		UiStyle.draw_text(self, n.pos - Vector2(w * 0.5, 0.0), n.text, font_size, nc, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
+		var at: Vector2 = n.pos - Vector2(w * 0.5, 0.0)
+		if n.local:  # faux bold: the same glyphs one art px to the right
+			UiStyle.draw_text(self, at + Vector2(px, 0.0), n.text, font_size, nc, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
+		UiStyle.draw_text(self, at, n.text, font_size, nc, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
 
 
 func _draw_slams() -> void:
@@ -989,15 +1038,70 @@ func _draw_markers(px: float) -> void:
 	for m: Marker in _markers:
 		if m.life <= 0.0:
 			continue
-		var k: float = 1.0 - m.life / MARKER_TIME  # 0 -> 1
-		var gap: float = MARKER_GAP * (1.0 + 0.6 * k) * (1.3 if m.strong else 1.0)
-		var len_px: float = snappedf(MARKER_SIZE * (1.0 - 0.5 * k) * (1.3 if m.strong else 1.0), px)
-		var color: Color = UiStyle.C_YELLOW if m.strong else UiStyle.C_WHITE
-		var w: float = px * 2.0 if m.strong else px
+		var k: float = 1.0 - m.life / m.duration  # 0 -> 1
+		var spec: Vector3 = MARKER_TICK_KILL if m.kill else MARKER_TICK_CRIT if m.strong else MARKER_TICK_HIT
+		var color: Color = COLOR_MARKER_KILL if m.kill else UiStyle.C_YELLOW if m.strong else UiStyle.C_WHITE
+		var pop: float = lerpf(MARKER_POP_SCALE, 1.0, clampf(k / MARKER_POP_SHARE, 0.0, 1.0))
+		var fade: float = clampf((1.0 - k) / 0.35, 0.0, 1.0)  # ticks shrink away over the last 35%
+		var c: Vector2 = m.pos.snapped(Vector2(px, px))
+		var steps: int = int(spec.y * fade)
+		if steps < 2:  # a single leftover square just reads as a dot
+			steps = 0
+		var gap: int = roundi(spec.x * pop + k * 2.0)
+		var hot: Color = UiStyle.C_WHITE if k < 0.2 else color  # white-hot flash on the first frames
 		for d: Vector2 in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
-			var a: Vector2 = m.pos + d.normalized() * gap
-			draw_line(a, a + d.normalized() * len_px, UiStyle.C_OUTLINE, w + px * 2.0)
-			draw_line(a, a + d.normalized() * len_px, color, w)
+			_pixel_diag(c, d, gap, steps, spec.z, px, UiStyle.C_OUTLINE, 1.0)  # outline pass
+		for d: Vector2 in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+			_pixel_diag(c, d, gap, steps, spec.z, px, hot, 0.0)
+		if m.kill and steps > 0:  # a white 1 px core down each arm of the red X
+			for d: Vector2 in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+				_pixel_diag(c, d, gap, steps, 1.0, px, UiStyle.C_WHITE if k < 0.5 else UiStyle.C_ORANGE, 0.0)
+		if k < MARKER_SPOKE_SHARE:  # impact spark: short rays racing outward, thinning as they go
+			var sk: float = k / MARKER_SPOKE_SHARE
+			var len_steps: int = roundi(MARKER_SPOKE_LEN_STEPS * (1.0 - sk))
+			var reach: float = MARKER_SPOKE_REACH * (0.35 + 0.65 * sk) * (1.3 if m.strong else 1.0)
+			for i: int in MARKER_SPOKES:
+				var dir: Vector2 = Vector2.RIGHT.rotated(TAU * float(i) / MARKER_SPOKES + PI / MARKER_SPOKES)
+				var spoke_col: Color = UiStyle.C_WHITE if i % 2 == 0 else (UiStyle.C_ORANGE if m.kill else UiStyle.C_YELLOW)
+				for j: int in len_steps:
+					var q: Vector2 = (c + dir * (reach + j * px)).snapped(Vector2(px, px))
+					draw_rect(Rect2(q - Vector2(px, px) * 1.0, Vector2(px, px) * 2.0), UiStyle.C_OUTLINE)
+				for j: int in len_steps:
+					var q2: Vector2 = (c + dir * (reach + j * px)).snapped(Vector2(px, px))
+					draw_rect(Rect2(q2 - Vector2(px, px) * 0.5, Vector2(px, px)), spoke_col)
+		if m.kill:
+			_draw_skull(c, k, px)
+
+
+## One arm of an X: `steps` art-pixel squares (`thick` px wide) starting `gap` steps from `from` along diagonal `d`;
+## `grow` > 0 draws the outline version (every square bigger by that many px each side).
+func _pixel_diag(from: Vector2, d: Vector2, gap: int, steps: int, thick: float, px: float, color: Color, grow: float) -> void:
+	var sz: float = px * (thick + grow * 2.0)
+	for i: int in steps:
+		var q: Vector2 = from + d * px * float(gap + i)
+		draw_rect(Rect2(q - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), color)
+
+
+## The kill skull: a 7x8 bitmap that pops over the victim, rises, blinks white / red and is gone with the marker.
+func _draw_skull(c: Vector2, k: float, px: float) -> void:
+	if k > 0.8 or (k > 0.55 and int(k * 40.0) % 2 == 0):  # blink out
+		return
+	var cell: float = px * SKULL_CELL
+	var w: float = SKULL[0].length() * cell
+	var origin: Vector2 = (c + Vector2(-w * 0.5, -SKULL_LIFT - SKULL_RISE * k)).snapped(Vector2(px, px))
+	var bone: Color = UiStyle.C_WHITE if k < 0.3 else UiStyle.C_RED.lerp(UiStyle.C_WHITE, 0.35)
+	for pass_i: int in 2:  # pass 0: dark outline (cells nudged 4 ways), pass 1: the skull
+		for y: int in SKULL.size():
+			for x: int in SKULL[y].length():
+				var ch: String = SKULL[y][x]
+				if ch == ".":
+					continue
+				var r := Rect2(origin + Vector2(x, y) * cell, Vector2(cell, cell))
+				if pass_i == 0:
+					for o: Vector2 in [Vector2(px, 0), Vector2(-px, 0), Vector2(0, px), Vector2(0, -px)]:
+						draw_rect(Rect2(r.position + o, r.size), UiStyle.C_OUTLINE)
+				else:
+					draw_rect(r, UiStyle.C_OUTLINE if ch == "o" else bone)
 
 
 func _draw_aim_marker(px: float) -> void:

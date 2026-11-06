@@ -212,3 +212,29 @@ static func mvp(results: Array) -> int:
 			best_dmg = dmg
 			best_cap = cap
 	return best
+
+
+## Duel / FFA lobby: the fighter each bot should hold. `pool` = in-rotation ids, `humans` = what humans hold, `bots` = what
+## the bots hold now (in seat order). A bot keeps its fighter unless a human or an earlier bot has it; then it takes the
+## next free one in pool order, else the next one no human has, else (more players than fighters) it keeps it.
+static func distinct_bot_picks(pool: Array[StringName], humans: Array[StringName], bots: Array[StringName]) -> Array[StringName]:
+	var out: Array[StringName] = []
+	var used: Array[StringName] = humans.duplicate()
+	for cur: StringName in bots:
+		var pick: StringName = cur
+		if used.has(cur) and not pool.is_empty():
+			var start: int = pool.find(cur)
+			var fallback: StringName = &""  # first one no human has
+			for step: int in range(1, pool.size() + 1):
+				var c: StringName = pool[(start + step) % pool.size()]
+				if not used.has(c):
+					pick = c
+					fallback = &""
+					break
+				if fallback == &"" and not humans.has(c):
+					fallback = c
+			if pick == cur and humans.has(cur) and fallback != &"":  # nothing fully free: at least not the human's
+				pick = fallback
+		out.append(pick)
+		used.append(pick)
+	return out

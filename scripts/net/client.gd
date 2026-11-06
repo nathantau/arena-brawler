@@ -198,7 +198,7 @@ func on_hit(owner_id: int, shot_seq: int, pellet: int, victim_id: int, damage: i
 	var victim: Player = arena.get_player(victim_id)
 	if victim != null:
 		victim.flash()
-	arena.report_hit(victim_id, damage, crit, at)
+	arena.report_hit(victim_id, damage, crit, at, owner_id)
 
 
 # --- per frame --------------------------------------------------------------
