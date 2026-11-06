@@ -81,6 +81,10 @@ const BURST_PICKUP_SPREAD: float = 1.6
 const SHAKE_EXPLOSION: float = 0.6
 const SHAKE_EXPLOSION_RANGE: float = 500.0
 const HAPTIC_EXPLOSION_RANGE: float = 200.0
+## Extra spark burst at the impact of a hit the local player dealt.
+const HIT_SPARK_COUNT: int = 8
+const HIT_SPARK_SPEED: float = 320.0
+const HIT_SPARK_LIFE: float = 0.2
 const BURST_HIT_COUNT: int = 6
 const BURST_HIT_SPEED: float = 220.0
 const BURST_DEATH_COUNT: int = 28
@@ -441,8 +445,10 @@ func apply_match_state(a: Array) -> void:
 
 
 ## Client: the server reported damage (cosmetic only).
-func report_hit(victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
+func report_hit(victim_id: int, damage: int, crit: bool, at: Vector2, owner_id: int = 0) -> void:
+	_hit_owner = owner_id  # so the local player's own hits get their confirmation FX on clients too
 	hit_landed.emit(victim_id, damage, crit, at)
+	_hit_owner = 0
 
 
 ## Client: the server reported a kill.
@@ -651,21 +657,30 @@ func _fx_explosion(at: Vector2, radius: float, color: Color, slam: bool, art: bo
 func _fx_hit(victim_id: int, damage: int, crit: bool, at: Vector2) -> void:
 	var victim: Player = get_player(victim_id)
 	var color: Color = victim.display_color if victim != null else Color.WHITE
+	var dealt: bool = is_local_dealt(_hit_owner) and victim != null and victim != local_player
 	effects.burst(at, color, BURST_HIT_COUNT, BURST_HIT_SPEED, PARTICLE_SIZE, PARTICLE_LIFE)
-	effects.damage_number(at, damage, crit)
+	effects.damage_number(at, damage, crit, dealt)
 	if victim != null and victim == local_player:
 		sfx.play(&"hurt")
 		add_shake(maxf(SHAKE_HURT_MIN, SHAKE_HURT_PER_DAMAGE * damage))
 		hud.hurt_pulse()
 	else:
 		sfx.play(&"crit" if crit else &"hit", at)
-		if local_player != null and _hit_owner == local_player.player_id and victim != null:
+		if dealt:
 			# Hit marker on whoever you hit, so a connecting shot reads even in a crowd of bullets.
 			var dead: bool = victim.dead or victim.stats.hp <= 0
-			effects.hit_marker(victim.global_position + victim.visual_offset, crit or dead)
-			sfx.play(&"marker_kill" if dead else &"marker")
+			if effects.hit_marker(victim.global_position + victim.visual_offset, crit or dead, dead):
+				# (a rapid hit merged into a live marker adds nothing: no second spark, no second ding)
+				effects.burst(at, UiStyle.C_YELLOW if crit or dead else UiStyle.C_WHITE, HIT_SPARK_COUNT, HIT_SPARK_SPEED,
+					PARTICLE_SIZE * 0.8, HIT_SPARK_LIFE)
+				sfx.play(&"marker_kill" if dead else &"marker")
 			if crit or dead:
 				GameSettings.vibrate(Constants.HAPTIC_DEALT_MS)
+
+
+## True when `owner_id` is the local player (the one whose hits get the confirmation effects).
+func is_local_dealt(owner_id: int) -> bool:
+	return local_player != null and owner_id == local_player.player_id
 
 
 func _fx_kill(killer_id: int, victim_id: int) -> void:
@@ -676,6 +691,9 @@ func _fx_kill(killer_id: int, victim_id: int) -> void:
 		sfx.play(&"death", victim.global_position)
 	hud.add_kill_feed(player_name(killer_id) if killer_id > 0 else "", player_color(killer_id),
 		player_name(victim_id), player_color(victim_id), killer_id == local_player_id(), victim_id == local_player_id())
+	if victim != null and victim_id != killer_id and is_local_dealt(killer_id) \
+			and effects.hit_marker(victim.global_position + victim.visual_offset, true, true):
+		sfx.play(&"marker_kill")  # (when the hit event already knew it was a kill this merged and stays quiet)
 	if local_player != null and killer_id == local_player.player_id and victim_id != killer_id:
 		GameSettings.vibrate(Constants.HAPTIC_KILL_MS)
 		_streak += 1
@@ -869,6 +887,8 @@ func _resolve_bot_fighters() -> void:
 	if st.phase != MatchState.Phase.LOBBY:
 		return
 	var now: Dictionary[int, StringName] = {}
+	if st.mode != MatchRules.Mode.TEAMS:
+		_dedupe_bot_fighters()
 	if st.mode == MatchRules.Mode.TEAMS:
 		var teams: Dictionary[int, int] = referee.lobby_teams()
 		for id: int in st.locked:  # humans keep their lock while they stay ready
@@ -890,6 +910,31 @@ func _resolve_bot_fighters() -> void:
 	if now != st.locked:
 		st.locked = now
 		referee.changed.emit()
+		match_updated.emit()
+
+
+## Duel / FFA lobby (authoritative): a bot never shares a fighter with a human (or another bot) while there are
+## enough fighters; it moves to a free one, with its abilities and weapon following like a fresh pick.
+func _dedupe_bot_fighters() -> void:
+	var pool: Array[StringName] = []
+	for c: CharacterData in characters.ordered:
+		pool.append(c.id)
+	var humans: Array[StringName] = []
+	for id: int in _human_ids:
+		humans.append(get_player(id).character.id)
+	var bots: Array[Player] = []
+	var held: Array[StringName] = []
+	for id: int in _bot_ids:
+		var b: Player = get_player(id)
+		bots.append(b)
+		held.append(b.character.id)
+	var want: Array[StringName] = MatchRules.distinct_bot_picks(pool, humans, held)
+	var changed: bool = false
+	for i: int in bots.size():
+		if want[i] != held[i]:
+			bots[i].set_character(characters.get_character(want[i]))
+			changed = true
+	if changed:
 		match_updated.emit()
 
 
