@@ -547,11 +547,12 @@ SKIN_L = (252, 222, 198); SKIN = (240, 193, 154); SKIN_S = (222, 156, 126); SKIN
 BLUSH = (244, 148, 156); LIP = (190, 66, 88)
 HAIR = (226, 110, 160); HAIR_L = (240, 150, 190); HAIR_HI = (252, 210, 228)
 HAIR_D = (186, 66, 122); HAIR_DD = (148, 46, 102); HAIR_OUT = (100, 28, 78)
-IRIS_D = (22, 50, 96); IRIS_M = (40, 124, 176); IRIS_B = (122, 214, 226); WHITE = (255, 252, 250)
+IRIS_D = (22, 50, 96); IRIS_M = (56, 142, 226); IRIS_B = (122, 214, 226); WHITE = (255, 252, 250)
 LAV = (212, 210, 234); LAV_D = (172, 168, 210); LAV_OUT = (100, 94, 146)
+BROW = (126, 58, 74); EYEW = (236, 234, 248); LASH = (58, 20, 52)
 RED_L = (240, 112, 108); MOUTH_D = (104, 30, 70)
 SAKURA_PALETTE = [S_INK, MAROON, SKIN_L, SKIN, SKIN_S, SKIN_SS, BLUSH, LIP, HAIR, HAIR_L, HAIR_HI, HAIR_D, HAIR_DD, HAIR_OUT,
-                  IRIS_D, IRIS_M, IRIS_B, MOUTH_D, WHITE, CREAM, LAV, LAV_D, LAV_OUT, RED, RED_L, DEEP_RED, YELLOW, ORANGE]
+                  IRIS_D, IRIS_M, IRIS_B, MOUTH_D, EYEW, LASH, BROW, WHITE, CREAM, LAV, LAV_D, LAV_OUT, RED, RED_L, DEEP_RED, YELLOW, ORANGE]
 SBG = BG
 
 
@@ -653,46 +654,40 @@ def bangs_bottom():
 
 
 def s_eye(img, cx, cy, side, expr):
-    """Anime eye matched to the study ref: nearly as tall as wide, outer corner a little raised, iris fills most
-    of it (teal: navy top -> bright bottom, contrasts with pink hair), dark upper lash with a small outer flick,
-    a thin lower lash hint, one big highlight and a small second one."""
-    h = {"shout": 1.12, "determined": 0.88}.get(expr, 1.0)
-    hw, hh = 3.1, 3.1 * h
-    N = 20
+    """Human almond eye (about 5 x 4 units): upper lid an arch peaking toward the inner third, flatter lower lid,
+    outer corner level / slightly up, eye-white on both sides of a round mid-blue iris (top tucked under the lid)
+    with a small dark pupil and one highlight; a 1 px plum lid line, thicker at the outer corner with a tiny flick,
+    and a faint lower lid on the outer half."""
+    h = {"shout": 1.12, "determined": 0.85}.get(expr, 1.0)
+    hw, Ht, Hb = 2.5, 2.4 * h, 1.5 * h
+    N = 24
     top, bot = [], []
     for k in range(N + 1):
         t = k / N
-        u = 2 * t - 1
         x = cx - side * hw + side * 2 * hw * t
-        sq = math.sqrt(max(0.0, 1 - u * u))
-        top.append((x, cy - hh * sq - 0.5 * t + 0.1))
-        bot.append((x, cy + hh * 0.72 * sq - 0.45 * t + 0.1))
+        top.append((x, cy - Ht * math.sin(math.pi * t ** 0.7) ** 0.8 - 0.35 * t + 0.1))
+        bot.append((x, cy + Hb * math.sin(math.pi * t) ** 1.3 - 0.35 * t + 0.1))
     almond = top + bot[::-1]
     am = poly_mask(almond)
     d = ImageDraw.Draw(img)
-    poly(d, almond, CREAM)
-    iris = both(poly_mask(ellipse_pts(cx + side * 0.1, cy + 0.2, 2.45, hh * 1.0, 24)), am)
+    poly(d, almond, EYEW)
+    iris = both(poly_mask(ellipse_pts(cx + side * 0.15, cy + 0.3, 1.65, 1.95 * h, 24)), am)
     paste_mask(img, IRIS_B, iris)
-    paste_mask(img, IRIS_M, both(iris, box_mask(0, 0, 48, cy + hh * 0.3)))
-    paste_mask(img, IRIS_D, both(iris, box_mask(0, 0, 48, cy - hh * 0.28)))
+    paste_mask(img, IRIS_M, both(iris, box_mask(0, 0, 48, cy + 0.35)))
     d = ImageDraw.Draw(img)
+    d.ellipse(((cx + side * 0.15 - 0.4) * K, (cy + 0.15) * K, (cx + side * 0.15 + 0.4) * K, (cy + 1.1) * K), fill=IRIS_D)
     m = len(top) - 1
     for i in range(m):
         t = i / m
-        w = 8 + 7 * t ** 1.3
-        d.line([P(*top[i]), P(*top[i + 1])], fill=S_INK, width=int(w))
+        w = 6 + 4 * t ** 1.5
+        d.line([P(*top[i]), P(*top[i + 1])], fill=lc(LASH), width=int(w))
         x, y = P(*top[i + 1])
-        d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=S_INK)
+        d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=lc(LASH))
     ox, oy = top[-1]
-    f1 = (ox + side * 0.8, oy - 0.1)
-    f2 = (ox + side * 1.4, oy - 0.45)
-    for (a, b, w) in ((top[-1], f1, 10), (f1, f2, 6)):
-        d.line([P(*a), P(*b)], fill=S_INK, width=w)
-    lo = bot[int(N * 0.62):]
-    d.line([P(*p) for p in lo], fill=S_INK, width=4, joint="curve")
-    hx, hy = cx - 0.55, cy - hh * 0.3
-    d.ellipse(((hx - 0.9) * K, (hy - 0.95) * K, (hx + 0.9) * K, (hy + 0.95) * K), fill=WHITE)
-    d.ellipse(((cx + 1.0 - 0.45) * K, (cy + hh * 0.5 - 0.45) * K, (cx + 1.0 + 0.45) * K, (cy + hh * 0.5 + 0.45) * K), fill=WHITE)
+    d.line([P(ox, oy), P(ox + side * 0.6, oy - 0.3)], fill=lc(LASH), width=5)
+    d.line([P(*p) for p in bot[int(N * 0.5):]], fill=lc(S_SKIN_OUT), width=4, joint="curve")
+    hx, hy = cx - 0.5, cy - 0.35
+    d.ellipse(((hx - 0.5) * K, (hy - 0.5) * K, (hx + 0.5) * K, (hy + 0.5) * K), fill=WHITE)
 
 
 def s_brow(d, cx, cy, side, expr):
@@ -703,7 +698,7 @@ def s_brow(d, cx, cy, side, expr):
     else:
         a, b = (cx + side * 3.4, cy - 0.1), (cx - side * 2.6, cy - 0.2)
     mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 0.35)
-    d.line([P(*p) for p in smooth([b, mid, a], 6)], fill=lc(HAIR_OUT), width=12, joint="curve")
+    d.line([P(*p) for p in smooth([b, mid, a], 6)], fill=lc(BROW), width=8, joint="curve")
 
 
 def s_mouth(d, expr):
@@ -780,14 +775,14 @@ def s_draw_face(img, neckm, torm, expr):
     paste_mask(img, SKIN_S, both(both(facem, inv(shift(facem, 0, int(-3.0 * F)))), box_mask(0, 38, 48, 48)))
     paste_mask(img, SKIN_S, both(facem, poly_mask([(14, 21), (34, 21), (34, 24.4), (14, 24.4)])))      # under the bangs
     d = ImageDraw.Draw(img)
-    for bx in (16.9, 31.1):
+    for bx in (17.6, 30.4):
         d.ellipse(((bx - 2.0) * K, 34.0 * K, (bx + 2.0) * K, 35.8 * K), fill=BLUSH)
     d.rectangle((23.7 * K, 36.4 * K, 24.5 * K, 37.0 * K), fill=SKIN_S)
     s_mouth(d, expr)
     outline(d, SFACE_S[24:73], w=11, closed=False, col=lc(S_SKIN_OUT))
-    cy = 30.4
-    s_eye(img, 17.4, cy, -1, expr)
-    s_eye(img, 30.6, cy, 1, expr)
+    cy = 30.2
+    s_eye(img, 19.25, cy, -1, expr)
+    s_eye(img, 28.75, cy, 1, expr)
     return facem
 
 
@@ -895,9 +890,8 @@ def s_draw_frame(sway, expr):
     s_inner_locks(img, sway, expr)
     s_blossom(img)
     d = ImageDraw.Draw(img)
-    if expr != 'calm':
-        s_brow(d, 17.4, 25.4, -1, expr)
-        s_brow(d, 30.6, 25.4, 1, expr)
+    s_brow(d, 19.25, 26.6, -1, expr)
+    s_brow(d, 28.75, 26.6, 1, expr)
     return img
 
 
@@ -931,12 +925,24 @@ def add_obi_motif(out):
                 px[x + dx, 123] = DEEP_RED + (255,)
 
 
+def fix_eyes(out):
+    """Blended eye pixels land on the lavender kimono tones; push them to the iris blues / eye-white."""
+    px = out.load()
+    remap = {LAV_OUT: IRIS_M, LAV_D: IRIS_B, LAV: EYEW}
+    for y in range(50, 72):
+        for x in range(26, 72):
+            c = px[x, y]
+            if c[3] and c[:3] in remap:
+                px[x, y] = remap[c[:3]] + (255,)
+
+
 def make_sakura_frame(sway, expr):
     src = s_draw_frame(sway, expr)
     diff = ImageChops.difference(src, Image.new("RGB", src.size, SBG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
     out = snap(pixelize(src, W, 40), mask, SAKURA_PALETTE)
     out = cleanup(out)
+    fix_eyes(out)
     add_petals(out, sway)
     add_obi_motif(out)
     return out
