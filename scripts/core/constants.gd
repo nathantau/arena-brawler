@@ -251,6 +251,12 @@ const STREAK_RESET: float = 1.0
 const YOYO_BACK_SCALE: float = 1.15
 const YOYO_SAG_PX: float = 2.0
 const YOYO_SPIN_FPS: float = 36.0
+## While it sleeps (and a moment after) YOYO_BLUR_ARCS faint arcs of YOYO_BLUR_SPAN rad race round its rim (x YOYO_BLUR_RADIUS of the art radius).
+const YOYO_BLUR_ARCS: int = 3
+const YOYO_BLUR_SPAN: float = 0.9
+const YOYO_BLUR_SPEED: float = 30.0
+const YOYO_BLUR_RADIUS: float = 0.88
+const YOYO_BLUR_LINGER: float = 0.06
 ## Damage multiplier by WeaponData / SkillData.rarity (common, rare, epic): better items hit slightly harder.
 const RARITY_DAMAGE_MULT: Array[float] = [1.0, 1.05, 1.10]
 ## Every attack's damage (weapons, abilities, ultimates) x this, applied by `CombatRules.scaled` with the rarity bonus.

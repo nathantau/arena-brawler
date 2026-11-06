@@ -10442,25 +10442,41 @@ def disc_launcher(c: Canvas, t: int = 0) -> None:
     c.flat(R((41, 11, 42, 16)), OUTLINE)
 
 
-def yoyo_side(c: Canvas, x0: int, y0: int, shift: int = 0) -> None:
-    """A yo-yo seen from the side: two flat red discs (pills) with a steel axle in the gap between them, gold bands on the
-    rim that slide along it as `shift` grows (the spin). Top-left of the top disc at (x0, y0), 16 x 12 px."""
-    for top in (y0, y0 + 8):
-        c.part(RR((x0, top, x0 + 15, top + 5), 2), RED)
-        for k in (0, 1):  # two bands on the rim, wrapping round
-            bx = x0 + 3 + (shift + k * 7) % 10
-            c.flat(R((bx, top + 1, bx + 1, top + 4)), YELLOW)
-        c.flat(L([(x0 + 3 + (shift * 2) % 10, top + 1), (x0 + 4 + (shift * 2) % 10, top + 1)], 1), WHITE)  # a glint skating along
-    c.part(R((x0 + 6, y0 + 5, x0 + 9, y0 + 8)), STEEL)  # axle in the gap
-    c.flat(L([(x0 + 6, y0 + 6), (x0 + 6, y0 + 7)], 1), CREAM)  # wound string at the axle
+def yoyo_face(c: Canvas, cx: float, cy: float, r: float, f: int = 0) -> None:
+    """A glossy face-on yo-yo, painted pixel by pixel (cx, cy are pixel-index coordinates): a gold rim band (lower right in
+    shade), a red / dark-red pinwheel on the face with three bold swirl arms that turn 20 degrees a frame (`f`; 6 frames = one
+    arm step), a cream hub cap in a navy ring, and white specular highlights that stay top-left."""
+    face_r, hub_r, cap_r = r * 0.74, r * 0.36, r * 0.2
+    for y in range(int(cy - r) - 1, int(cy + r) + 2):
+        for x in range(int(cx - r) - 1, int(cx + r) + 2):
+            dx, dy = x - cx, y - cy
+            d = math.hypot(dx, dy)
+            if d > r:
+                continue
+            if d <= cap_r:
+                col = CREAM
+            elif d <= hub_r:
+                col = NAVY
+            elif d <= face_r:  # the pinwheel: the swirl twists with the radius, so the arms curve
+                twist = (math.degrees(math.atan2(dy, dx)) + d * (150 / r) - f * 20) % 120
+                col = RED if twist < 62 else MAROON
+            else:
+                col = ORANGE if dx + dy > r * 0.5 else YELLOW
+            c.dot(x, y, col)
+    for i in range(5):  # specular arc on the rim, top-left
+        ang = math.radians(205 + i * 11)
+        c.dot(int(round(cx + math.cos(ang) * r * 0.88)), int(round(cy + math.sin(ang) * r * 0.88)), WHITE)
+    c.dot(int(round(cx - face_r * 0.55)), int(round(cy - face_r * 0.5)), WHITE)  # gloss spot on the face
+    c.dot(int(round(cx - face_r * 0.55 + 1)), int(round(cy - face_r * 0.5 + 1)), CREAM)
 
 
 def yoyo(c: Canvas, t: int = 0) -> None:
-    """A side-view yo-yo hanging on a cream string from a finger loop."""
-    c.part(E((2, 9, 9, 16)), STEEL, shade=False)  # finger loop
-    c.flat(E((4, 11, 7, 14)), OUTLINE)
-    c.part(L([(8, 13), (14, 18), (22, 19), (34, 12)], 1), CREAM, shade=False)  # the string, sagging, into the gap between the discs
-    yoyo_side(c, 29, 6)
+    """A glossy yo-yo on a cream string from a ring on the finger."""
+    c.part(lambda d, f: d.ellipse((2, 8, 11, 17), outline=f, width=1), STEEL, shade=False, line=False)  # hollow finger ring
+    c.flat(L([(4, 9), (6, 9)], 1), WHITE)  # highlight on the ring
+    c.dot(3, 11, WHITE)
+    c.part(L([(10, 14), (15, 19), (22, 20), (29, 14)], 1), CREAM, shade=False)  # the string, sagging, into the hub
+    yoyo_face(c, 36.5, 11.5, 8.2)
 
 
 def storm_jar(c: Canvas, t: int = 0) -> None:
@@ -10538,8 +10554,8 @@ def disc_shot(c: Canvas, f: int) -> None:  # a striped disc, the stripes turning
     c.dot(int(m) - 5, int(m) - 5 + f % 2, WHITE)
 
 
-def yoyo_shot(c: Canvas, f: int) -> None:  # the side-view yo-yo spinning: its bands slide along the rim (6 frames), axle across the string (string is on the left)
-    yoyo_side(c, 2, 3, (f * 5) // 3)
+def yoyo_shot(c: Canvas, f: int) -> None:  # the face-on yo-yo spinning: three spiral arms turn 20 degrees a frame (6 frames)
+    yoyo_face(c, 9.5, 9.5, 7.6, f)
 
 
 def _rot(pts, ang: float, cx: float, cy: float):

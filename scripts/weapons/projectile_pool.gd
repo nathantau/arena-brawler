@@ -64,6 +64,7 @@ const RAINBOW: Array[Color] = [Color8(217, 71, 75), Color8(245, 210, 86), Color8
 	Color8(172, 210, 104), Color8(240, 138, 62)]
 const FLAP_FPS_SCALE: float = 2.5
 const STRING_STEP: float = 1.0
+const YOYO_BLUR_COLOR: Color = Color(1.0, 0.96, 0.84, 0.45)
 const STRING_COLORS: Array[Color] = [Color8(244, 240, 226), Color8(244, 240, 226), Color8(170, 176, 190)]
 const LOB_SHADOW: Color = Color(0, 0, 0, 0.28)
 const LOB_SHADOW_SIZE: Vector2 = Vector2(0.9, 0.4)
@@ -1192,18 +1193,22 @@ func _draw_string(s: Slot, w: WeaponData, px: float) -> Vector2:
 	return Vector2.INF
 
 
-## Yo-Yo: the string, then the disc seen from the side (axle across the string), its frames spinning with its age.
+## Yo-Yo: the string (ending at the hub), then the face-on disc, its frames spinning with its age.
 func _draw_yoyo(s: Slot, w: WeaponData, px: float) -> void:
-	var hand: Vector2 = _draw_string(s, w, px)
+	_draw_string(s, w, px)
 	var h: float = s.sprite.get_height()
 	var frames: int = int(s.sprite.get_width() / h)
 	var frame: int = int(s.age * Constants.YOYO_SPIN_FPS) % frames
-	var angle: float = s.aim.angle() if hand == Vector2.INF else (s.pos - hand).angle()
 	var scale_px: float = px * w.projectile_scale * (CRIT_SPRITE_SCALE if s.crit else 1.0)
-	draw_set_transform(s.pos, angle, Vector2(scale_px, scale_px))
+	draw_set_transform(s.pos, 0.0, Vector2(scale_px, scale_px))  # (never turned: the spin is in the frames, the gloss stays top-left)
 	draw_texture_rect_region(s.sprite, Rect2(-h * 0.5, -h * 0.5, h, h), Rect2(frame * h, 0, h, h),
 		REFLECT_TINT if s.reflected else Color.WHITE)
 	draw_set_transform(Vector2.ZERO)
+	if s.turn_age >= 0.0 and s.age - s.turn_age < w.yoyo_sleep + Constants.YOYO_BLUR_LINGER:  # asleep: spinning fast, faint arcs round the rim
+		var ring: float = h * 0.5 * scale_px * Constants.YOYO_BLUR_RADIUS
+		for k: int in Constants.YOYO_BLUR_ARCS:
+			var start: float = s.age * Constants.YOYO_BLUR_SPEED + TAU * k / Constants.YOYO_BLUR_ARCS
+			draw_arc(s.pos, ring, start, start + Constants.YOYO_BLUR_SPAN, 8, YOYO_BLUR_COLOR, px)
 
 
 ## Black Hole Orb: pixel motes spiral in toward the orb across its pull radius (cosmetic, every peer).

@@ -19,6 +19,7 @@ spread_deg = 1.0
 projectile_speed = 1370.0
 projectile_range = 165.0
 projectile_radius = 6.0
+projectile_scale = 1.5
 energy_cost = 42
 knockback = 40.0
 color = Color(0.85, 0.28, 0.29, 1)
