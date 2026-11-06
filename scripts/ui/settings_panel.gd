@@ -14,8 +14,8 @@ const REDEEM_BUTTON_SIZE: Vector2 = Vector2(150, UiStyle.TOUCH_MIN_H)
 const COLOR_VEIL: Color = Color(0.05, 0.05, 0.1, 0.8)
 const HOWTO: Array[String] = [
 	"MOVE   drag anywhere on the left side",
-	"SHOOT   hold the big button (auto-aims; drag it to aim yourself)",
-	"SPECIALS   the two round buttons, each with a cooldown",
+	"SHOOT   hold the big button (auto-aims) or drag it to aim",
+	"SPECIALS   the round buttons, each with a cooldown; tap to auto-aim, or drag and release to aim it",
 	"WIN   score kills before the timer ends; armor regenerates, HP does not",
 	"Desktop: WASD move, mouse aim, J / click fire, Space and E specials, Esc pause",
 ]
@@ -94,6 +94,12 @@ func _build_settings() -> Control:
 		GameSettings.haptics = on
 		GameSettings.vibrate(Constants.HAPTIC_KILL_MS))
 	box.add_child(haptics)
+	var assist := CheckButton.new()
+	assist.text = "Aim assist"
+	assist.button_pressed = GameSettings.aim_assist
+	assist.focus_mode = Control.FOCUS_NONE
+	assist.toggled.connect(func(on: bool) -> void: GameSettings.aim_assist = on)
+	box.add_child(assist)
 	_code_row(box)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER

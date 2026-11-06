@@ -2,8 +2,9 @@ class_name TouchControls
 extends Control
 ## Multi-touch mobile controls inside the safe area, drawn with the pixel UI kit:
 ## - fixed joystick bottom-left (a touch anywhere on the left part of the screen steers the knob)
-## - attack button (hold = fire with auto-aim; drag off-centre = manual aim)
-## - three skill buttons, one per equipped special (skill icon, cooldown sweep + seconds)
+## - attack button (hold = fire with auto-aim; drag off-centre = manual aim, a knob follows the thumb)
+## - three skill buttons, one per equipped special (skill icon, cooldown sweep + seconds). A skill casts when the finger lifts:
+##   a tap is auto-aimed, a drag past the deadzone casts that way (dragging back inside it cancels to auto-aim)
 ## Touches that start on a visible `blockers` control (e.g. lobby buttons) are left to the GUI.
 
 const JOYSTICK_ZONE_FRACTION: float = 0.45
@@ -28,11 +29,15 @@ const SPECIAL2_SCALE: float = 3.0
 const SPECIAL2_OFFSET: Vector2 = Vector2(0, -152)
 const HIT_SLOP: float = 1.25
 const PRESS_DROP: float = 4.0
-const AIM_LINE_WIDTH: float = 4.0
+## The aim knob (joy_knob art) on a dragged button, at these whole-number scales.
+const ATTACK_KNOB_SCALE: float = 3.0
+const SKILL_KNOB_SCALE: float = 2.0
+## A released skill button holds its flag this many physics frames so the sim sees one press edge.
+const CAST_PULSE_FRAMES: int = 2
+const SLOT_RADII: Array[float] = [SKILL_RADIUS, SPECIAL_RADIUS, SPECIAL2_RADIUS]
 const SEGMENTS: int = 32
 const IDLE_ALPHA: float = 0.75
 const COLOR_COOLDOWN: Color = Color(0.1, 0.1, 0.18, 0.7)
-const COLOR_AIM: Color = Color(1, 0.45, 0.4, 0.85)
 const NO_FINGER: int = -1
 ## A special coming off cooldown pulses a ring that grows this far past the button for this long.
 const READY_PULSE_TIME: float = 0.45
@@ -54,9 +59,13 @@ var move_vec: Vector2 = Vector2.ZERO
 var attack_held: bool = false
 ## Zero unless the attack finger has been dragged past the deadzone.
 var attack_aim: Vector2 = Vector2.ZERO
+## Skill flags are one-shot casts: set when the finger lifts (a tap, or a drag released with `cast_aim`), cleared a couple of frames later.
 var skill_held: bool = false
 var special_held: bool = false
 var special2_held: bool = false
+## Per skill slot: the drag while its finger is down (zero inside the deadzone), and the aim the last cast carries (zero = auto-aim).
+var skill_aim: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+var cast_aim: Vector2 = Vector2.ZERO
 
 ## Called when a special comes off cooldown (Arena plays the sound).
 var ready_sfx: Callable
@@ -66,9 +75,9 @@ var _joy_pos: Vector2 = Vector2.ZERO
 var _attack_finger: int = NO_FINGER
 ## Where the attack finger landed: drag-aim is measured from here, so pressing off-centre doesn't aim.
 var _attack_origin: Vector2 = Vector2.ZERO
-var _skill_finger: int = NO_FINGER
-var _special_finger: int = NO_FINGER
-var _special2_finger: int = NO_FINGER
+var _slot_fingers: Array[int] = [NO_FINGER, NO_FINGER, NO_FINGER]
+var _slot_origins: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+var _pulse_left: Array[int] = [0, 0, 0]
 ## Per special button: was it on cooldown last frame, and how long the "ready" pulse has left.
 var _was_cooling: Array[bool] = [false, false, false]
 var _pulse: Array[float] = [0.0, 0.0, 0.0]
@@ -87,9 +96,10 @@ func _ready() -> void:
 func release_all() -> void:
 	_joy_finger = NO_FINGER
 	_attack_finger = NO_FINGER
-	_skill_finger = NO_FINGER
-	_special_finger = NO_FINGER
-	_special2_finger = NO_FINGER
+	_slot_fingers = [NO_FINGER, NO_FINGER, NO_FINGER]
+	_pulse_left = [0, 0, 0]
+	skill_aim = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+	cast_aim = Vector2.ZERO
 	move_vec = Vector2.ZERO
 	attack_held = false
 	attack_aim = Vector2.ZERO
@@ -175,6 +185,21 @@ func _blocked(p: Vector2) -> bool:
 	return false
 
 
+## The skill slot whose free button is under `p`, else -1.
+func _slot_at(p: Vector2) -> int:
+	for i: int in Constants.SKILL_SLOTS:
+		if _slot_fingers[i] == NO_FINGER and _hits(p, _slot_center(i), SLOT_RADII[i]):
+			return i
+	return -1
+
+
+func _set_slot_held(slot: int, on: bool) -> void:
+	match slot:
+		0: skill_held = on
+		1: special_held = on
+		_: special2_held = on
+
+
 func _on_press(finger: int, p: Vector2) -> void:
 	if _blocked(p):
 		return
@@ -183,15 +208,11 @@ func _on_press(finger: int, p: Vector2) -> void:
 		_attack_origin = p
 		attack_held = true
 		attack_aim = Vector2.ZERO
-	elif _skill_finger == NO_FINGER and _hits(p, _skill_center(), SKILL_RADIUS):
-		_skill_finger = finger
-		skill_held = true
-	elif _special_finger == NO_FINGER and _hits(p, _special_center(), SPECIAL_RADIUS):
-		_special_finger = finger
-		special_held = true
-	elif _special2_finger == NO_FINGER and _hits(p, _special2_center(), SPECIAL2_RADIUS):
-		_special2_finger = finger
-		special2_held = true
+	elif _slot_at(p) >= 0:
+		var slot: int = _slot_at(p)
+		_slot_fingers[slot] = finger
+		_slot_origins[slot] = p
+		skill_aim[slot] = Vector2.ZERO
 	elif _joy_finger == NO_FINGER and p.x < size.x * JOYSTICK_ZONE_FRACTION:
 		_joy_finger = finger
 		_on_drag(finger, p)
@@ -206,6 +227,10 @@ func _on_drag(finger: int, p: Vector2) -> void:
 	elif finger == _attack_finger:
 		var drag: Vector2 = p - _attack_origin
 		attack_aim = drag if drag.length() > Constants.DRAG_AIM_DEADZONE_PX else Vector2.ZERO
+	elif _slot_fingers.has(finger):
+		var slot: int = _slot_fingers.find(finger)
+		var drag: Vector2 = p - _slot_origins[slot]
+		skill_aim[slot] = drag if drag.length() > Constants.DRAG_AIM_DEADZONE_PX else Vector2.ZERO
 	queue_redraw()
 
 
@@ -217,16 +242,24 @@ func _on_release(finger: int) -> void:
 		_attack_finger = NO_FINGER
 		attack_held = false
 		attack_aim = Vector2.ZERO
-	elif finger == _skill_finger:
-		_skill_finger = NO_FINGER
-		skill_held = false
-	elif finger == _special_finger:
-		_special_finger = NO_FINGER
-		special_held = false
-	elif finger == _special2_finger:
-		_special2_finger = NO_FINGER
-		special2_held = false
+	elif _slot_fingers.has(finger):  # the cast: a tap (zero aim) is auto-aimed, a drag goes where it was dragged
+		var slot: int = _slot_fingers.find(finger)
+		_slot_fingers[slot] = NO_FINGER
+		cast_aim = skill_aim[slot]
+		skill_aim[slot] = Vector2.ZERO
+		_set_slot_held(slot, true)
+		_pulse_left[slot] = CAST_PULSE_FRAMES
 	queue_redraw()
+
+
+func _physics_process(_delta: float) -> void:
+	for i: int in Constants.SKILL_SLOTS:
+		if _pulse_left[i] > 0:
+			_pulse_left[i] -= 1
+			if _pulse_left[i] == 0:
+				_set_slot_held(i, false)
+	if cast_aim != Vector2.ZERO and _pulse_left == [0, 0, 0]:
+		cast_aim = Vector2.ZERO
 
 
 func _process(delta: float) -> void:
@@ -261,17 +294,19 @@ func _draw() -> void:
 
 	# Attack
 	var ac: Vector2 = _attack_center()
-	if attack_aim != Vector2.ZERO:
-		draw_line(ac, ac + attack_aim.limit_length(ATTACK_RADIUS * 2.0), COLOR_AIM, AIM_LINE_WIDTH)
 	_round(ac, "round_fire", ATTACK_SCALE, attack_held)
 	UiStyle.draw_icon(self, UiStyle.tex("icon_fire"), ac + _drop(attack_held), ATTACK_SCALE)
+	if attack_aim != Vector2.ZERO:
+		_knob(ac, attack_aim, ATTACK_RADIUS, ATTACK_KNOB_SCALE)
 
 	# The three specials, with cooldown sweeps
 	if player != null and is_instance_valid(player):
-		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.skills[0], skill_held, player.skill_locked(0))
-		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.skills[1], special_held, player.skill_locked(1))
-		_ult_button(_special2_center(), SPECIAL2_RADIUS, SPECIAL2_SCALE, special2_held)
+		_skill_button(_skill_center(), SKILL_RADIUS, SKILL_SCALE, player.skills[0], _down(0), player.skill_locked(0))
+		_skill_button(_special_center(), SPECIAL_RADIUS, SPECIAL_SCALE, player.skills[1], _down(1), player.skill_locked(1))
+		_ult_button(_special2_center(), SPECIAL2_RADIUS, SPECIAL2_SCALE, _down(2))
 		for i: int in Constants.SKILL_SLOTS:
+			if skill_aim[i] != Vector2.ZERO:
+				_knob(_slot_center(i), skill_aim[i], SLOT_RADII[i], SKILL_KNOB_SCALE)
 			if _pulse[i] > 0.0:
 				var k: float = 1.0 - _pulse[i] / READY_PULSE_TIME
 				var c: Vector2 = _slot_center(i)
@@ -317,6 +352,16 @@ func _ult_button(c: Vector2, radius: float, scale_px: float, held: bool) -> void
 		var w: float = UiStyle.text_width(pct, UiStyle.SIZE_SMALL, true)
 		UiStyle.draw_text(self, c + Vector2(-w * 0.5, UiStyle.SIZE_SMALL * 0.35), pct, UiStyle.SIZE_SMALL,
 			UiStyle.C_WHITE, HORIZONTAL_ALIGNMENT_LEFT, -1.0, true)
+
+
+## A finger is on skill slot `i`'s button.
+func _down(i: int) -> bool:
+	return _slot_fingers[i] != NO_FINGER
+
+
+## The aim knob: follows the thumb, held inside the button's radius like the move stick's.
+func _knob(center: Vector2, drag: Vector2, radius: float, scale_px: float) -> void:
+	UiStyle.draw_icon(self, UiStyle.tex("joy_knob"), center + drag.limit_length(radius), scale_px)
 
 
 func _round(center: Vector2, art: String, scale_px: float, pressed: bool) -> void:

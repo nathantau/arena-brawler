@@ -513,6 +513,11 @@ func attach_local_view(p: Player, input: LocalInput) -> void:
 	hud.input = input
 	touch.ready_sfx = func() -> void: sfx.play(&"ready")
 	_attach_effects()
+	var guide := AimGuide.new()
+	guide.name = "AimGuide"
+	guide.input = input
+	guide.player = p
+	add_child(guide)
 	flags = FlagField.new()
 	flags.name = "Flags"
 	flags.arena = self

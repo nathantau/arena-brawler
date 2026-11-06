@@ -9,6 +9,8 @@ const SILENT_DB: float = -80.0
 static var music: float = 0.7
 static var sfx: float = 1.0
 static var haptics: bool = true
+## Auto-aim at the nearest enemy when not dragging. Off = shoot along the last manual aim / facing (the skill-based option).
+static var aim_assist: bool = true
 static var howto_seen: bool = false
 ## The first-launch Training match was finished or skipped (Play then goes straight to a normal match).
 static var tutorial_done: bool = false
@@ -31,6 +33,7 @@ static func load_from(path: String) -> void:
 	music = clampf(float(cfg.get_value("audio", "music", music)), 0.0, 1.0)
 	sfx = clampf(float(cfg.get_value("audio", "sfx", sfx)), 0.0, 1.0)
 	haptics = bool(cfg.get_value("input", "haptics", haptics))
+	aim_assist = bool(cfg.get_value("input", "aim_assist", aim_assist))
 	howto_seen = bool(cfg.get_value("ui", "howto_seen", howto_seen))
 	tutorial_done = bool(cfg.get_value("ui", "tutorial_done", tutorial_done))
 	mode = clampi(int(cfg.get_value("ui", "mode", mode)), 0, MatchRules.Mode.size() - 1) as MatchRules.Mode
@@ -41,6 +44,7 @@ static func save_to(path: String) -> Error:
 	cfg.set_value("audio", "music", music)
 	cfg.set_value("audio", "sfx", sfx)
 	cfg.set_value("input", "haptics", haptics)
+	cfg.set_value("input", "aim_assist", aim_assist)
 	cfg.set_value("ui", "howto_seen", howto_seen)
 	cfg.set_value("ui", "tutorial_done", tutorial_done)
 	cfg.set_value("ui", "mode", mode)
