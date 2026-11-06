@@ -153,6 +153,7 @@ func _dashes(a: Vector2, b: Vector2, width: float, color: Color = COLOR_LINE) ->
 
 
 func _circle(c: Vector2, r: float) -> void:
-	draw_circle(c, r, COLOR_FILL)
-	draw_arc(c, r, 0.0, TAU, CIRCLE_SEGMENTS, COLOR_EDGE, DASH_WIDTH * 0.75)
-	draw_circle(c, DASH_WIDTH, COLOR_END)
+	var px: float = Constants.SPRITE_SCALE
+	PixelShapes.disc(self, c, r, r, COLOR_FILL, px)
+	PixelShapes.ring(self, c, r, r, DASH_WIDTH * 0.75, COLOR_EDGE, px)
+	PixelShapes.disc(self, c, DASH_WIDTH, DASH_WIDTH, COLOR_END, px)

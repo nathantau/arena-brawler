@@ -704,12 +704,11 @@ func _draw_slams() -> void:
 			var c: Color = r.color
 			c.a = (1.0 - k) * 0.9
 			var rad: float = r.radius * (1.0 - pow(1.0 - k, 2.0))
-			_ground.draw_set_transform(r.pos, 0.0, Vector2(1.0, SPAWN_RING_SQUASH))
-			_ground.draw_arc(Vector2.ZERO, rad, 0.0, TAU, 40, c, 4.0 * (1.0 - k) + 1.0)
+			var gpx: float = Constants.SPRITE_SCALE
+			PixelShapes.ring(_ground, r.pos, rad, rad * SPAWN_RING_SQUASH, 4.0 * (1.0 - k) + 1.0, c, gpx)
 			c = Color.WHITE
 			c.a = (1.0 - k) * 0.5
-			_ground.draw_arc(Vector2.ZERO, rad * 0.65, 0.0, TAU, 40, c, 2.0)
-			_ground.draw_set_transform(Vector2.ZERO)
+			PixelShapes.ring(_ground, r.pos, rad * 0.65, rad * 0.65 * SPAWN_RING_SQUASH, 2.0, c, gpx)
 	for r: Ring in _rings:
 		if r.life > 0.0 and r.art == SLAM_ART:
 			_draw_strip(_ground, r.art, 1.0 - r.life / r.duration, r.pos, 0.0, r.radius / r.art_radius, Color.WHITE)
