@@ -7,6 +7,8 @@ extends CharacterBody2D
 signal died(victim: Player, killer_id: int)
 signal shot_fired(shooter: Player, seq: int, origin: Vector2, facing: Vector2, weapon_id: StringName)
 ## Predicted/authoritative skill activation (not emitted during replay). For effects/SFX.
+## Shadow Army: clone `k` just threw along `dir` (cosmetic: SpecialFx poses it; emitted by the sim and for relayed shots).
+signal clone_threw(k: int, dir: Vector2)
 signal skill_used(user: Player, skill: SkillData)
 ## Verdant Bloom healed this player by `amount` (seen from the synced hp, so on every peer).
 signal healed(user: Player, amount: int)
@@ -1214,6 +1216,7 @@ func _clone_volley(seq: int, w: WeaponData) -> void:
 		var key: int = seq + (k + 1) * CLONE_SEQ_OFFSET
 		projectiles.fire_shot(player_id, key, origin, dir, w, match_seed, -1, _ult(army.data), army.data.clone_fire_scale)
 		shot_fired.emit(self, key, origin, dir, w.id)
+		clone_threw.emit(k, dir)
 
 
 ## Where a clone standing at `at` shoots: at the nearest enemy within the weapon's range it can see (clones of theirs count,

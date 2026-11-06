@@ -95,6 +95,10 @@ const FADE_TIME: float = 0.4
 const APPEAR_DELAY: float = 0.08
 const APPEAR_TIME: float = 0.2
 const CLONE_POOF_TIME: float = 0.7
+## A Shadow Army clone holds its weapon on the shot line for this long after it throws (then relaxes back to its run
+## direction), kicking the weapon back `CLONE_KICK_PX` at the throw.
+const CLONE_THROW_TIME: float = 0.3
+const CLONE_KICK_PX: float = 7.0
 const MORPH_TIME: float = 1.0
 const ZIP_ART: Texture2D = preload(FX_DIR + "flicker_zip.png")
 const SPARK_ART: Texture2D = preload(FX_DIR + "grapple_spark.png")
@@ -467,6 +471,9 @@ var _blocks: Array[ArtBlock] = []
 var _clone_blocks: Array[ArtBlock] = []
 var _cur: CanvasItem = self
 var _points := PackedVector2Array()
+## Per clone: seconds since it last threw (INF = not throwing) and the shot direction it threw along.
+var _throw_age: Array[float] = []
+var _throw_dir: Array[Vector2] = []
 var _owner: Player
 var _was_vanished: bool = false
 var _poofs: Array[Poof] = []
@@ -622,6 +629,8 @@ func _init() -> void:
 
 
 func sync(p: Player) -> void:
+	if _owner != p:
+		p.clone_threw.connect(_on_clone_threw)
 	_owner = p
 	_points = p.clone_points()
 	var clones: CharacterSkill = _slot(p, SkillData.Kind.CLONES)
@@ -638,6 +647,7 @@ func sync(p: Player) -> void:
 	_eclipse_t = smoke.elapsed() if vanished and smoke != null and smoke.data.id == &"eclipse" else -1.0
 	var cloning: bool = clones != null and clones.is_cloning()
 	if cloning and not _was_cloning:
+		_throw_age.fill(INF)
 		for at: Vector2 in _points:
 			_poof(at, POOF_BIG, CLONE_POOF_TIME)
 	elif _was_cloning and not cloning:
@@ -737,6 +747,8 @@ func sync(p: Player) -> void:
 		block.add_child(c)
 		_clone_blocks.append(block)
 		_clones.append(c)
+		_throw_age.append(INF)
+		_throw_dir.append(Vector2.RIGHT)
 	var alpha: float = 0.0
 	if cloning:
 		alpha = minf(clampf(clones.active_remaining / FADE_TIME, 0.0, 1.0),
@@ -749,11 +761,12 @@ func sync(p: Player) -> void:
 			continue
 		if c.sprite_frames != frames:
 			c.sprite_frames = frames
-		if c.animation != &"walk" or not c.is_playing():
+		_throw_age[i] += get_process_delta_time()
+		if _throw_age[i] >= CLONE_THROW_TIME and (c.animation != &"walk" or not c.is_playing()):
 			c.play(&"walk")
 		_clone_blocks[i].place(Rect2(), _points[i].y + Player.FOOT_RING_Y, _draw_clone.bind(i))
 		c.position = _points[i] - _clone_blocks[i].global_position
-		c.flip_h = _points[i].x < clones.anchor.x
+		c.flip_h = (_throw_dir[i].x < 0.0) if _throw_age[i] < CLONE_THROW_TIME else _points[i].x < clones.anchor.x
 		c.modulate.a = alpha
 	_sync_grapple(p)
 	_sync_blaze(p)
@@ -1543,9 +1556,34 @@ func _draw_clone(ci: CanvasItem, i: int) -> void:
 	_cur = ci
 	var ring: Color = _owner.team_ring_color()  # decoys wear the owner's ground marker
 	if ring.a > 0.0:
-		_owner.draw_team_ring(ci, ring, _points[i] + Vector2(0.0, Player.FOOT_RING_Y), _clones[i].modulate.a)
-	_draw_clone_weapon(_points[i], Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT, _clones[i].modulate.a)
+		_owner.draw_team_ring(ci, ring, _clone_ring_at(ci, i), _clones[i].modulate.a)
+	var dir: Vector2 = clone_weapon_dir(i)
+	var kick: float = CLONE_KICK_PX * pow(clampf(1.0 - _throw_age[i] / CLONE_THROW_TIME, 0.0, 1.0), 2.0)
+	_draw_clone_weapon(_points[i] - dir * kick, dir, _clones[i].modulate.a)
 	_cur = self
+
+
+## Clone `i`'s foot ring centre in `ci`'s own space (draw_team_ring replaces the block's world-space transform, so
+## world coordinates put the rings a block-height away from the clones: empty gold circles).
+func _clone_ring_at(ci: CanvasItem, i: int) -> Vector2:
+	return _points[i] + Vector2(0.0, Player.FOOT_RING_Y) - ci.global_position
+
+
+## Where clone `i`'s held weapon points: along its shot for a moment after it throws, else the way it runs.
+func clone_weapon_dir(i: int) -> Vector2:
+	if _throw_age[i] < CLONE_THROW_TIME:
+		return _throw_dir[i]
+	return Vector2.LEFT if _clones[i].flip_h else Vector2.RIGHT
+
+
+func _on_clone_threw(k: int, dir: Vector2) -> void:
+	if k < 0 or k >= _clones.size() or dir == Vector2.ZERO:
+		return
+	_throw_age[k] = 0.0
+	_throw_dir[k] = dir.normalized()
+	var c: AnimatedSprite2D = _clones[k]
+	if c.sprite_frames != null and c.sprite_frames.has_animation(&"attack"):
+		c.play(&"attack")
 
 
 func _free_blocks() -> void:

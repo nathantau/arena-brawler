@@ -5,7 +5,7 @@ extends SceneTree
 ##     char=sakura special=petal_drift move=1,0 hold=0 press=1 aim=1,0
 ## Args: char, special (slot 1), move (stick while it runs), aim, press (extra presses at these seconds after the first
 ## after the run starts, comma separated, e.g. press=0,1.5 to start / end), fire (hold the weapon the whole time),
-## target=x,y (the passive bot stands there, relative to the fighter), edge=1 (fighter starts near the right wall) /
+## team=1 (Teams rings under clones), target=x,y (the passive bot stands there, relative to the fighter), edge=1 (fighter starts near the right wall) /
 ## edge=-1 (near the left wall), ult=1 (the press is the charged ultimate in slot 3 instead of `special`), enemy=1 (the fighter is drawn as an enemy would see it: Smoke Bomb hides her completely), flip_at=S (the stick and aim mirror in x after S seconds: a turn-round).
 
 const START_FRAME: int = 420  # the match countdown is over
@@ -86,6 +86,9 @@ func _tick() -> void:
 		bot.stats.tick(1.0 / 60.0)  # nothing simulates it, so let its stun / slow run down here
 		bot.global_position = home + (Vector2(float(String(args["target"]).split(",")[0]), float(String(args["target"]).split(",")[1]))
 			if args.has("target") else Vector2(2000.0, 2000.0))
+	if args.get("team", "0") == "1":  # Teams marker rings (gold for me)
+		me.team = MatchRules.TEAM_A
+		bot.team = MatchRules.TEAM_B
 	var runner: Runner = me.controller as Runner
 	var n: int = frames - START_FRAME
 	runner.aim = _vec("aim", Vector2.RIGHT)
