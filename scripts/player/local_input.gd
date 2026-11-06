@@ -16,6 +16,10 @@ var special_every: int = 0
 static var passive_test: bool = false
 ## True while the player is holding fire (touch, mouse or key); the HUD uses it for the "out of energy" flash.
 var fire_held: bool = false
+## Which skill slot the aim guide follows (-1 = the attack button); see `guide_aim`.
+var guide_slot: int = -1
+## The last aim set by hand (drag / mouse): with Aim assist off, holding fire without dragging keeps shooting this way.
+var last_manual_aim: Vector2 = Vector2.ZERO
 
 var _frame := InputFrame.new()
 var _query := PhysicsRayQueryParameters2D.new()
@@ -47,12 +51,19 @@ func get_input(player: Player, _delta: float) -> InputFrame:
 	if autopilot:
 		_drive_autopilot(player)
 	var aim := Vector2.ZERO
-	if fire_mouse:
+	var cast: bool = touch_on and (touch.skill_held or touch.special_held or touch.special2_held)
+	if cast and touch.cast_aim != Vector2.ZERO:  # a dragged skill released this frame goes the way it was dragged
+		aim = touch.cast_aim
+	elif fire_mouse:
 		aim = player.aim_at(player.get_global_mouse_position())
+		last_manual_aim = aim
 	elif touch_on and touch.attack_aim != Vector2.ZERO:
 		aim = touch.attack_aim
-	elif auto_target != null:
+		last_manual_aim = aim
+	elif auto_target != null and (GameSettings.aim_assist or autopilot):
 		aim = player.aim_at(auto_aim_point)
+	elif not GameSettings.aim_assist and not autopilot:
+		aim = last_manual_aim  # (zero = the player's facing)
 	_frame.aim_vec = aim.normalized() if aim != Vector2.ZERO else Vector2.ZERO
 
 	return _frame
@@ -63,7 +74,19 @@ func shows_aim_marker() -> bool:
 	if auto_target == null or auto_target.dead:
 		return false
 	var manual: bool = touch != null and touch.visible and touch.attack_aim != Vector2.ZERO
-	return not manual and not Input.is_action_pressed(&"fire_mouse")
+	return GameSettings.aim_assist and not manual and not Input.is_action_pressed(&"fire_mouse")
+
+
+## The drag the aim guide shows: a skill button's, else the attack button's (sets `guide_slot`). Zero = no guide.
+func guide_aim() -> Vector2:
+	if touch == null or not touch.visible:
+		return Vector2.ZERO
+	for i: int in Constants.SKILL_SLOTS:
+		if touch.skill_aim[i] != Vector2.ZERO:
+			guide_slot = i
+			return touch.skill_aim[i]
+	guide_slot = -1
+	return touch.attack_aim
 
 
 ## Enemies hidden in their smoke are skipped (walls don't hide anyone); shadow clones count as targets (that's the trick).
