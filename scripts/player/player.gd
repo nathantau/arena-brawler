@@ -33,6 +33,8 @@ enum StateField {
 
 ## Weapon art (WeaponData.sprite) is drawn at the character's pixel scale, pivoting on its grip.
 const WEAPON_GRIP: Vector2 = Vector2(6, 12)
+## Aimed up past this (facing.y below it), the held gun is drawn over the head instead of tucked behind it.
+const GUN_OVER_HEAD_Y: float = -0.8
 ## The front hand (generate.py arm() at ARM_X[1]) in local px, mirrored when facing left: weapon grips sit on it.
 const WEAPON_HAND: Vector2 = Vector2(20, 22)
 const AIM_SEARCH_STEPS: int = 72
@@ -1560,7 +1562,8 @@ func draw_team_ring(ci: CanvasItem, color: Color, at: Vector2, alpha: float = 1.
 func _draw_overlay() -> void:
 	if _gun_fade > 0.0 and held_weapon().data.sprite != null and held_weapon().data.held_art:
 		_draw_guns(_overlay)
-		_draw_head_over_weapon()
+		if facing.y > GUN_OVER_HEAD_Y:  # (aimed nearly straight up it stays in front: behind the hood only a stub showed)
+			_draw_head_over_weapon()
 	_overlay.draw_set_transform(visual_offset)
 	if stats.burn_remaining > 0.0 and not dead and not is_concealed():
 		_draw_burn(_overlay)

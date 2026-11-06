@@ -10442,19 +10442,41 @@ def disc_launcher(c: Canvas, t: int = 0) -> None:
     c.flat(R((41, 11, 42, 16)), OUTLINE)
 
 
+def yoyo_face(c: Canvas, cx: float, cy: float, r: float, f: int = 0) -> None:
+    """A glossy face-on yo-yo, painted pixel by pixel (cx, cy are pixel-index coordinates): a gold rim band (lower right in
+    shade), a red / dark-red pinwheel on the face with three bold swirl arms that turn 20 degrees a frame (`f`; 6 frames = one
+    arm step), a cream hub cap in a navy ring, and white specular highlights that stay top-left."""
+    face_r, hub_r, cap_r = r * 0.74, r * 0.36, r * 0.2
+    for y in range(int(cy - r) - 1, int(cy + r) + 2):
+        for x in range(int(cx - r) - 1, int(cx + r) + 2):
+            dx, dy = x - cx, y - cy
+            d = math.hypot(dx, dy)
+            if d > r:
+                continue
+            if d <= cap_r:
+                col = CREAM
+            elif d <= hub_r:
+                col = NAVY
+            elif d <= face_r:  # the pinwheel: the swirl twists with the radius, so the arms curve
+                twist = (math.degrees(math.atan2(dy, dx)) + d * (150 / r) - f * 20) % 120
+                col = RED if twist < 62 else MAROON
+            else:
+                col = ORANGE if dx + dy > r * 0.5 else YELLOW
+            c.dot(x, y, col)
+    for i in range(5):  # specular arc on the rim, top-left
+        ang = math.radians(205 + i * 11)
+        c.dot(int(round(cx + math.cos(ang) * r * 0.88)), int(round(cy + math.sin(ang) * r * 0.88)), WHITE)
+    c.dot(int(round(cx - face_r * 0.55)), int(round(cy - face_r * 0.5)), WHITE)  # gloss spot on the face
+    c.dot(int(round(cx - face_r * 0.55 + 1)), int(round(cy - face_r * 0.5 + 1)), CREAM)
+
+
 def yoyo(c: Canvas, t: int = 0) -> None:
-    """A red yo-yo with a gold star on a cream string from a finger loop."""
-    c.part(E((2, 9, 9, 16)), STEEL, shade=False)  # finger loop
-    c.flat(E((4, 11, 7, 14)), OUTLINE)
-    c.part(L([(8, 14), (14, 19), (22, 20), (29, 16)], 1), CREAM, shade=False)  # the string, sagging
-    c.part(E((27, 4, 44, 21)), RED)  # the yo-yo
-    c.flat(E((29, 6, 42, 19)), ORANGE)
-    c.flat(E((31, 8, 40, 17)), YELLOW)
-    star = [(round(35.5 + math.cos(math.tau * i / 10 - math.pi / 2) * (4.4 if i % 2 == 0 else 2.0)),
-             round(12.5 + math.sin(math.tau * i / 10 - math.pi / 2) * (4.4 if i % 2 == 0 else 2.0))) for i in range(10)]
-    c.flat(P(star), RED)
-    c.flat(R((35, 12, 36, 13)), WHITE)
-    c.flat(L([(30, 7), (33, 5)], 1), WHITE)  # glint on the rim
+    """A glossy yo-yo on a cream string from a ring on the finger."""
+    c.part(lambda d, f: d.ellipse((2, 8, 11, 17), outline=f, width=1), STEEL, shade=False, line=False)  # hollow finger ring
+    c.flat(L([(4, 9), (6, 9)], 1), WHITE)  # highlight on the ring
+    c.dot(3, 11, WHITE)
+    c.part(L([(10, 14), (15, 19), (22, 20), (29, 14)], 1), CREAM, shade=False)  # the string, sagging, into the hub
+    yoyo_face(c, 36.5, 11.5, 8.2)
 
 
 def storm_jar(c: Canvas, t: int = 0) -> None:
@@ -10532,18 +10554,8 @@ def disc_shot(c: Canvas, f: int) -> None:  # a striped disc, the stripes turning
     c.dot(int(m) - 5, int(m) - 5 + f % 2, WHITE)
 
 
-def yoyo_shot(c: Canvas, f: int) -> None:  # a red yo-yo face with a gold star turning (4 frames, 22.5 degrees each)
-    m = PROJ // 2 - 0.5
-    c.part(E((m - 5, m - 5, m + 5, m + 5)), RED)
-    c.flat(E((m - 3.5, m - 3.5, m + 3.5, m + 3.5)), YELLOW)
-    pts = []
-    for i in range(10):
-        a = math.tau * i / 10 + f * math.tau / 40
-        r = 3.4 if i % 2 == 0 else 1.6
-        pts.append((round(m + math.cos(a) * r), round(m + math.sin(a) * r)))
-    c.flat(P(pts), RED)
-    c.dot(int(m), int(m), WHITE)
-    c.dot(int(m) - 4, int(m) - 3, WHITE)
+def yoyo_shot(c: Canvas, f: int) -> None:  # the face-on yo-yo spinning: three spiral arms turn 20 degrees a frame (6 frames)
+    yoyo_face(c, 9.5, 9.5, 7.6, f)
 
 
 def _rot(pts, ang: float, cx: float, cy: float):
@@ -10564,7 +10576,7 @@ def jar_shot(c: Canvas, f: int) -> None:  # a small jar tumbling end over end (6
 
 PROJECTILES.update({"confetti_popper": confetti_shot, "cactus_cannon": cactus_ball, "disc_launcher": disc_shot,
                     "yoyo": yoyo_shot, "storm_jar": jar_shot})
-PROJECTILE_FRAMES.update({"confetti_popper": 7, "cactus_cannon": 4, "disc_launcher": 4, "yoyo": 4, "storm_jar": 6})
+PROJECTILE_FRAMES.update({"confetti_popper": 7, "cactus_cannon": 4, "disc_launcher": 4, "yoyo": 6, "storm_jar": 6})
 PROJ_EXTRA = {"cactus_needle": lambda: projectile_strip(cactus_needle, 2)}
 
 
@@ -10722,23 +10734,23 @@ FX.update({
 
 def duck_lobber(c: Canvas, t: int = 0) -> None:
     """A rubber duck that is also the cannon: a yellow body with a lit wing and tail flick, a rosy cheek, an orange beak whose
-    open tip is the muzzle."""
+    open tip is the muzzle. Sized like the other guns (about 36 px long, it used to fill the whole 48)."""
     c.part(P([(5, 14), (10, 14), (9, 21), (4, 21)]), BROWN)  # grip
     c.flat(L([(6, 17), (8, 17)], 1), MAROON)
-    c.part(P([(8, 13), (2, 7), (4, 4), (11, 10)]), YELLOW)  # tail flick
-    c.part(E((4, 9, 29, 21)), YELLOW)  # body
-    c.part(E((22, 3, 36, 16)), YELLOW)  # head
-    c.flat(R((24, 9, 31, 15)), YELLOW)  # the neck fills the seam
-    c.flat(P([(9, 14), (20, 13), (23, 16), (17, 19), (10, 18)]), ORANGE)  # wing
-    c.flat(L([(10, 14), (19, 14)], 1), YELLOW)
-    c.flat(L([(7, 11), (16, 10)], 1), WHITE)  # sheen on the back
-    c.part(RR((34, 7, 44, 13), 2), ORANGE)  # beak
-    c.flat(L([(35, 8), (41, 8)], 1), YELLOW)
-    c.flat(R((43, 8, 44, 12)), NAVY)  # the open tip
-    c.flat(R((29, 6, 30, 8)), OUTLINE)  # eye
-    c.dot(29, 6, WHITE)
-    c.flat(R((27, 10, 28, 11)), PINK)  # cheek
-    after(c, lambda img: (put(img, 40, 4, TEAL_L), put(img, 42, 3, WHITE), put(img, 45, 6, TEAL_L), put(img, 38, 2, WHITE)))
+    c.part(P([(7, 13), (2, 8), (4, 5), (10, 10)]), YELLOW)  # tail flick
+    c.part(E((4, 10, 22, 21)), YELLOW)  # body
+    c.part(E((17, 4, 28, 15)), YELLOW)  # head
+    c.flat(R((19, 9, 24, 14)), YELLOW)  # the neck fills the seam
+    c.flat(P([(8, 13), (16, 12), (19, 15), (14, 18), (9, 17)]), ORANGE)  # wing
+    c.flat(L([(9, 13), (15, 13)], 1), YELLOW)
+    c.flat(L([(7, 11), (14, 10)], 1), WHITE)  # sheen on the back
+    c.part(RR((27, 7, 35, 12), 2), ORANGE)  # beak
+    c.flat(L([(28, 8), (33, 8)], 1), YELLOW)
+    c.flat(R((34, 8, 35, 11)), NAVY)  # the open tip
+    c.flat(R((23, 6, 24, 7)), OUTLINE)  # eye
+    c.dot(23, 6, WHITE)
+    c.flat(R((21, 9, 22, 10)), PINK)  # cheek
+    after(c, lambda img: (put(img, 33, 4, TEAL_L), put(img, 35, 3, WHITE), put(img, 38, 6, TEAL_L), put(img, 31, 2, WHITE)))
 
 
 def popcorn_popper(c: Canvas, t: int = 0) -> None:

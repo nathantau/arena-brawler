@@ -626,7 +626,7 @@ func _fx_shot(owner_id: int, origin: Vector2, facing: Vector2, w: WeaponData) ->
 	var muzzle: Vector2 = origin + facing * w.muzzle_distance()
 	effects.burst(muzzle, w.color, BURST_MUZZLE_COUNT, BURST_MUZZLE_SPEED, PARTICLE_SIZE * 0.6, PARTICLE_LIFE * 0.4,
 		facing, BURST_MUZZLE_SPREAD)
-	sfx.play(w.sfx, origin, w.projectile_range / maxf(w.projectile_speed, 1.0) if w.boomerang else -1.0)  # a boomerang turns round at range / speed
+	sfx.play(w.sfx, origin, w.turn_time() if w.boomerang else -1.0)  # a boomerang turns round at range / speed (a yo-yo: out + sleep)
 	if local_player != null and owner_id == local_player.player_id:
 		add_shake(w.screen_shake)
 		# Recoil: nudge the view back against the shot, a touch on top of the random shake.
