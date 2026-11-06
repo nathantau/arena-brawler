@@ -135,9 +135,10 @@ func _draw() -> void:
 			var pulse: float = 0.5 + 0.5 * sin(t * TAU * 1.2 + i)
 			var glow: Color = GLOW_COLOR
 			glow.a = 0.10 + 0.10 * pulse
-			draw_circle(pad_at, RING_RADIUS * (1.0 + 0.2 * pulse), glow)
+			var gr: float = RING_RADIUS * (1.0 + 0.2 * pulse)
+			PixelShapes.disc(self, pad_at, gr, gr, glow, px)
 			glow.a = 0.18 + 0.12 * pulse
-			draw_circle(pad_at, RING_RADIUS * 0.6, glow)
+			PixelShapes.disc(self, pad_at, RING_RADIUS * 0.6, RING_RADIUS * 0.6, glow, px)
 			var bob: float = sin(t * TAU * BOB_HZ + i * 1.7) * BOB_PX
 			var c_size: Vector2 = CRYSTAL_ART.get_size() * px
 			draw_texture_rect(CRYSTAL_ART, Rect2(at + Vector2(-c_size.x * 0.5, -c_size.y * 0.5 - 8.0 + bob), c_size), false)
@@ -145,12 +146,12 @@ func _draw() -> void:
 				var k: float = 1.0 - _flash[i] / READY_FLASH_TIME
 				var flash: Color = Color.WHITE
 				flash.a = 1.0 - k
-				draw_arc(pad_at, RING_RADIUS * (1.0 + k), 0.0, TAU, 32, flash, 3.0)
+				PixelShapes.ring(self, pad_at, RING_RADIUS * (1.0 + k), RING_RADIUS * (1.0 + k), 3.0, flash, px)
 		else:
-			draw_arc(pad_at, RING_RADIUS, 0.0, TAU, 32, RING_BACK, RING_WIDTH)
+			PixelShapes.ring(self, pad_at, RING_RADIUS, RING_RADIUS, RING_WIDTH, RING_BACK, px)
 			var f: float = fill_fraction(i)
 			if f > 0.0:
-				draw_arc(pad_at, RING_RADIUS, -PI * 0.5, -PI * 0.5 + TAU * f, 32, RING_COLOR, RING_WIDTH)
+				PixelShapes.ring_arc(self, pad_at, RING_RADIUS, RING_RADIUS, RING_WIDTH, RING_COLOR, px, -PI * 0.5, -PI * 0.5 + TAU * f)
 			var label: String = str(ceili(timers[i]))
 			var w: float = UiStyle.text_width(label, TIMER_FONT_SIZE, true)
 			UiStyle.draw_text(self, pad_at + Vector2(-w * 0.5, TIMER_FONT_SIZE * 0.35), label, TIMER_FONT_SIZE,

@@ -1686,8 +1686,8 @@ func _draw_floor() -> void:
 			_draw_frame(STORM_FLOOR_ART, int(t * STORM_FPS) % STORM_LOOP_COUNT, STORM_SIZE, centre, px, 1.0, _floor)
 	if _ward_t >= 0.0 or _ward_out >= 0.0:  # a soft pool of petal light on the floor so the ward's reach reads under the players
 		var glow: float = clampf(_ward_t / WARD_OPEN_TIME, 0.0, 1.0) if _ward_t >= 0.0 else _ward_out / WARD_GLOW_FADE
-		_floor.draw_circle(_ward_at, _ward_radius, Color(WARD_GLOW, WARD_GLOW_ALPHA * glow))
-		_floor.draw_arc(_ward_at, _ward_radius, 0.0, TAU, 48, Color(WARD_GLOW, WARD_RING_ALPHA * glow), 2.0)
+		PixelShapes.disc(_floor, _ward_at, _ward_radius, _ward_radius, Color(WARD_GLOW, WARD_GLOW_ALPHA * glow), Constants.SPRITE_SCALE)
+		PixelShapes.ring(_floor, _ward_at, _ward_radius, _ward_radius, 2.0, Color(WARD_GLOW, WARD_RING_ALPHA * glow), Constants.SPRITE_SCALE)
 	_draw_overdrive_floor()
 	_draw_moss()
 	_draw_wtree_floor()
@@ -2276,9 +2276,8 @@ func _draw_hound_floor() -> void:
 	var k: float = clampf((_hound.elapsed() / maxf(d.hound_rise_time, 0.01) - 0.5) * 2.0, 0.0, 1.0) \
 		* clampf((_hound.active_remaining / HOUND_MELT_TIME - 0.5) * 2.0, 0.0, 1.0)
 	var feet: Vector2 = _hound_pos + Vector2(0.0, Player.FOOT_RING_Y)
-	_floor.draw_set_transform(feet, 0.0, Vector2(1.0, Player.FOOT_RING_SQUASH))
-	_floor.draw_circle(Vector2.ZERO, HOUND_SHADOW_RADIUS, Color(Player.SHADOW_COLOR, Player.SHADOW_COLOR.a * k))
-	_floor.draw_set_transform(Vector2.ZERO)
+	PixelShapes.disc(_floor, feet, HOUND_SHADOW_RADIUS, HOUND_SHADOW_RADIUS * Player.FOOT_RING_SQUASH,
+		Color(Player.SHADOW_COLOR, Player.SHADOW_COLOR.a * k), Constants.SPRITE_SCALE)
 
 
 func _draw_hound() -> void:

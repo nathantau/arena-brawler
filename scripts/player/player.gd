@@ -1518,17 +1518,18 @@ func ghost_info() -> Dictionary:
 func _draw() -> void:
 	if is_concealed():  # invisible to this viewer: no shadow either
 		return
-	draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
-	draw_circle(Vector2.ZERO, Constants.PLAYER_RADIUS, SHADOW_COLOR)
+	var foot: Vector2 = visual_offset + Vector2(0.0, FOOT_RING_Y)
+	var px: float = Constants.SPRITE_SCALE
+	PixelShapes.disc(self, foot, Constants.PLAYER_RADIUS, Constants.PLAYER_RADIUS * FOOT_RING_SQUASH, SHADOW_COLOR, px)
 	var ring: Color = team_ring_color()
 	if ring.a > 0.0:
-		draw_team_ring(self, ring, visual_offset + Vector2(0.0, FOOT_RING_Y))
-		draw_set_transform(visual_offset + Vector2(0.0, FOOT_RING_Y), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
+		draw_team_ring(self, ring, foot)
 	if stats.spawn_protect > 0.0:  # a pulsing ring on the floor round the protected player
 		var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.001 * TAU * SPAWN_SHIMMER_HZ)
 		var ring_color: Color = SPAWN_RING_COLOR
 		ring_color.a = 0.5 + 0.4 * pulse
-		draw_arc(Vector2.ZERO, Constants.PLAYER_RADIUS * (1.35 + 0.15 * pulse), 0.0, TAU, 32, ring_color, 3.0)
+		var rr: float = Constants.PLAYER_RADIUS * (1.35 + 0.15 * pulse)
+		PixelShapes.ring(self, foot, rr, rr * FOOT_RING_SQUASH, 3.0, ring_color, px)
 
 
 ## Teams ground marker colour from the viewer's side: gold for me, blue ally, red enemy. Alpha 0 = no ring (no teams,
@@ -1555,11 +1556,10 @@ func draw_team_ring(ci: CanvasItem, color: Color, at: Vector2, alpha: float = 1.
 	c.a *= alpha
 	var fill: Color = c
 	fill.a = TEAM_RING_FILL * alpha
-	ci.draw_set_transform(at.round(), 0.0, Vector2(1.0, FOOT_RING_SQUASH))
 	var r: float = Constants.PLAYER_RADIUS * TEAM_RING_SCALE
-	ci.draw_circle(Vector2.ZERO, r, fill)
-	ci.draw_arc(Vector2.ZERO, r, 0.0, TAU, 40, c, TEAM_RING_WIDTH)
-	ci.draw_set_transform(Vector2.ZERO)
+	var px: float = Constants.SPRITE_SCALE
+	PixelShapes.disc(ci, at, r, r * FOOT_RING_SQUASH, fill, px)
+	PixelShapes.ring(ci, at, r, r * FOOT_RING_SQUASH, TEAM_RING_WIDTH, c, px)
 
 
 func _draw_overlay() -> void:
