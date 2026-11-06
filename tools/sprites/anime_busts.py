@@ -2,7 +2,7 @@
 
 Pipeline (see .claude/skills/anime-pixel-art): smooth vector illustration drawn in code at 8x
 -> pixelize(src, 48, 20) -> snap to Flint's gameplay palette -> stray-pixel cleanup.
-Output: assets/title/anime/flint_bust.png, 4 frames of 48 x 64
+Output: assets/title/anime/flint_bust.png, 4 frames of 64 x 86
 (calm sway A, calm sway B, shout, determined squint).
 
 Run: tools/sprites/.venv/bin/python tools/sprites/anime_busts.py [review_dir]
@@ -11,13 +11,16 @@ Run: tools/sprites/.venv/bin/python tools/sprites/anime_busts.py [review_dir]
 import math
 import os
 import sys
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pixelize import pixelize
 
-K = 8                     # source px per art px
-W, H = 48, 64
+OW, OH = 64, 86           # output size (px)
+K = 8 * OW / 48           # source px per design unit (design grid is 48 x 64.5 units)
+SW, SH = OW * 8, OH * 8   # source size: 8 source px per output px
+F = K / 8                 # scale for pixel offsets written for the 48 px grid
+W, H = OW, OH
 INK = (27, 26, 46); MAROON = (122, 46, 56); RED = (217, 71, 75); ORANGE = (240, 138, 62)
 YELLOW = (245, 210, 86); CREAM = (242, 240, 230); NAVY = (58, 58, 92); BLUE = (43, 58, 107)
 BROWN = (184, 117, 79)
@@ -37,13 +40,13 @@ def poly(d, pts, fill):
     d.polygon([P(*p) for p in pts], fill=fill)
 
 
-def outline(d, pts, w=LINE, closed=True):
+def outline(d, pts, w=LINE, closed=True, col=INK):
     q = [P(*p) for p in pts]
     if closed:
         q.append(q[0])
-    d.line(q, fill=INK, width=w, joint="curve")
+    d.line(q, fill=col, width=w, joint="curve")
     for x, y in q:  # round the joints
-        d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=INK)
+        d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=col)
 
 
 def shape(d, pts, fill, w=LINE):
@@ -70,7 +73,7 @@ def smooth(pts, n=8):
 
 
 def mask_of(fn):
-    m = Image.new("L", (W * K, H * K), 0)
+    m = Image.new("L", (SW, SH), 0)
     fn(ImageDraw.Draw(m))
     return m
 
@@ -116,7 +119,7 @@ def tongue(d, root, tip, w0, bend, sway=0.0, shade_side=1, tipcol=RED, rootcol=O
     def edge(inset, side, frac=1.0):
         return [(cs[i][0] + nrm[i][0] * max(hs[i] - inset, 0) * side * frac,
                  cs[i][1] + nrm[i][1] * max(hs[i] - inset, 0) * side * frac) for i in range(n + 1)]
-    outline(d, edge(0, -1) + edge(0, 1)[::-1])
+    outline(d, edge(0, -1) + edge(0, 1)[::-1], w=5, col=MAROON)
     ins = 0.5
     a0, a1 = edge(ins, -1), edge(ins, 1)
     for i in range(n):
@@ -134,49 +137,41 @@ def tongue(d, root, tip, w0, bend, sway=0.0, shade_side=1, tipcol=RED, rootcol=O
 
 
 # ---------------------------------------------------------------- the bust
-FACE = [(14.2, 19), (33.8, 19), (34.2, 29.5), (32.2, 36), (27.6, 41.6), (24, 44), (20.4, 41.6),
-        (15.8, 36), (13.8, 29.5)]
+FACE = [(13.4, 17), (34.6, 17), (35.0, 28.5), (33.0, 34.2), (28.2, 39), (24, 41.4), (19.8, 39),
+        (15.0, 34.2), (13.0, 28.5)]
 NECK = [(19.6, 37), (28.4, 37), (29.2, 47), (18.8, 47)]
 TORSO = [(0, 64), (0, 53), (5, 47.5), (14, 44.2), (20.2, 42.6), (24, 47.8), (27.8, 42.6), (34, 44.2), (43, 47.5),
          (48, 53), (48, 64)]
 
-BACK = [  # root, tip, width, bend  (far layer, swept up and to the left)
-    ((11.5, 24), (1.5, 15), 7, -3.5),
-    ((13.5, 19), (0.8, 5), 9, 4.0),
-    ((18, 15), (5, 0.8), 10, -4.0),
-    ((25, 13.5), (14.5, 0.8), 11, 4.0),
-    ((31, 14.5), (26, 0.8), 10, -3.5),
-    ((35, 18), (40.5, 3.5), 9, 3.4),
-    ((36, 23), (46, 15), 7, -2.6),
+# One flame in a wind: every tongue leans up and to the left, wide base, long curling tip.
+# root, tip, width, bend. Drawn right to left so the left ones overlap the right ones slightly.
+TONGUES = [
+    ((34, 20), (31.5, 6), 7, 3.0),
+    ((30, 17.5), (23, 0.8), 8, 3.4),
+    ((25, 16), (14.5, 1.2), 8, 3.6),
+    ((20, 17), (6, 3.5), 8, 3.4),
+    ((16, 20.5), (1.5, 12), 8, 3.0),
 ]
-FRONT = [
-    ((17, 20), (7, 10), 7, 3.0),
-    ((23, 17), (12, 5.5), 8, -3.0),
-    ((30, 16), (21, 4), 8, 3.0),
+BANGS = [  # thin wisps over the forehead
+    ((19.4, 19.0), (18.4, 22.8), 4.2, 0.8),
+    ((29.6, 19.0), (30.6, 22.6), 4.0, 0.7),
 ]
-SIDES = [  # temple locks hanging beside the face
-    ((13, 23), (7.5, 34), 5.0, 1.4, 1),
-    ((35, 23), (40.5, 33), 5.0, -1.4, -1),
-]
-BANGS = [  # wisps over the forehead
-    ((17.4, 20.0), (16.2, 23.4), 4.6, 1.0),
-    ((30.2, 20.0), (31.8, 23.2), 4.4, 0.9),
-]
-HAIRLINE = [(13.4, 26.5), (14.2, 23), (17, 20.8), (20.5, 21.4), (24, 21.0), (27.5, 21.4), (31, 20.8),
-            (33.8, 23), (34.6, 26.5)]
-CAP_TOP = [(12.8, 24), (13.4, 18), (17, 15), (24, 13.2), (31, 15), (34.6, 18), (35.2, 24)]
+HAIRLINE = [(13.4, 23), (14.5, 21.6), (17, 19.8), (20.5, 20.4), (24, 20), (27.5, 20.4), (31, 19.8),
+            (33.5, 21.6), (34.6, 23)]
+CAP_TOP = [(12.8, 22), (13.4, 17), (17, 14.5), (24, 12.8), (31, 14.5), (34.6, 17), (35.2, 22)]
 
 
 def eye(d, cx, cy, side, o, wide=1.0):
     """side -1 = left eye (outer corner on the left). o = openness."""
-    ow = 4.5 * wide
+    ow = 3.4 * wide
     outer = (cx + side * ow, cy - 0.9 - 0.3 * (o - 1))
     inner = (cx - side * ow, cy + 0.5)
     up = smooth([outer, (cx + side * 1.6, cy - 1.45 * o - 0.2), (cx - side * 1.2, cy - 1.25 * o), inner])
     lo = smooth([inner, (cx - side * 0.2, cy + 0.85 * o + 0.3), (cx + side * 1.8, cy + 0.55 * o), outer])
     d.polygon([P(*p) for p in up + lo], fill=YELLOW)
     d.line([P(x, y + 0.75) for x, y in up], fill=ORANGE, width=9)
-    d.line([P(*p) for p in lo], fill=MAROON, width=5)
+    if o > 1.0:
+        d.line([P(*p) for p in lo], fill=MAROON, width=4)
     hx, hy = cx + side * 0.9, cy - 0.35 * o + 0.1
     d.rectangle((hx * K - 5, hy * K - 5, hx * K + 5, hy * K + 5), fill=CREAM)
     flick = (outer[0] + side * 1.2, outer[1] - 0.7)
@@ -186,12 +181,19 @@ def eye(d, cx, cy, side, o, wide=1.0):
 
 
 def brow(d, cx, cy, side, lift=0.0, tilt=1.0):
-    outer = (cx + side * 4.6, cy - 4.9 - lift - 0.6 * (tilt - 1))
-    inner = (cx - side * 2.6, cy - 3.5 - lift + 0.5 * (tilt - 1))
-    d.line([P(*outer), P(*inner)], fill=INK, width=7)
+    """Short thick V stroke sitting right on the lid, inner end lower."""
+    outer = (cx + side * 3.9, cy - 2.7 - lift - 0.5 * (tilt - 1))
+    inner = (cx - side * 2.3, cy - 1.7 - lift + 0.4 * (tilt - 1))
+    d.line([P(*outer), P(*inner)], fill=INK, width=10)
 
 
 def mouth(d, kind):
+    YOFF[0] = -2.7
+    _mouth(d, kind)
+    YOFF[0] = 0.0
+
+
+def _mouth(d, kind):
     if kind == "shout":
         pts = [(21.3, 37.9), (27.7, 37.7), (27.0, 40.5), (24.4, 41.5), (21.9, 40.5)]
         poly(d, pts, INK)
@@ -201,17 +203,13 @@ def mouth(d, kind):
     elif kind == "squint":
         d.line([P(22.0, 39.0), P(26.8, 38.8)], fill=INK, width=7)
     else:
-        d.line([P(21.8, 39.0), P(27.0, 39.2)], fill=INK, width=4)
+        d.line([P(22.2, 39.0), P(26.6, 39.1)], fill=INK, width=8)
 
 
 def draw_frame(sway=0.0, expr="calm"):
-    img = Image.new("RGB", (W * K, H * K), BG)
+    img = Image.new("RGB", (SW, SH), BG)
     d = ImageDraw.Draw(img)
     s = sway
-    for i, (r, t, w, b) in enumerate(BACK):
-        tongue(d, r, t, w, b, sway=s * (1.7 + 0.35 * (i % 3)))
-    for r, t, w, b, side in SIDES:
-        tongue(d, r, t, w, b, sway=s * 0.5, shade_side=side)
     YOFF[0] = 2.0
     shape(d, NECK, ORANGE)
     shape(d, TORSO, NAVY)
@@ -228,44 +226,47 @@ def draw_frame(sway=0.0, expr="calm"):
     torm = mask_of(lambda m: m.polygon([P(*p) for p in TORSO], fill=255))
     YOFF[0] = 0.0
     facem = mask_of(lambda m: m.polygon([P(*p) for p in FACE], fill=255))
-    jaw = both(both(shift(facem, 4, 20), neckm), inv(facem))
+    jaw = both(both(shift(facem, int(4 * F), int(20 * F)), neckm), inv(facem))
     img.paste(RED, (0, 0), both(jaw, inv(torm)))
     # face
     d = ImageDraw.Draw(img)
     shape(d, FACE, ORANGE)
-    img.paste(RED, (0, 0), both(facem, inv(shift(facem, -20, 0))))
-    chin = both(facem, inv(shift(facem, 0, -14)))
-    img.paste(RED, (0, 0), both(chin, shift(facem, -30, 0)))
+    img.paste(RED, (0, 0), both(facem, inv(shift(facem, int(-20 * F), 0))))
+    chin = both(facem, inv(shift(facem, 0, int(-14 * F))))
+    img.paste(RED, (0, 0), both(chin, shift(facem, int(-30 * F), 0)))
     d = ImageDraw.Draw(img)
-    d.line([P(25.4, 33.4), P(25.8, 34.8)], fill=RED, width=7)
+    d.line([P(25.4, 31.6), P(25.8, 33.0)], fill=RED, width=7)
     mouth(d, expr)
     if expr == "shout":
-        o, wd, lift, tilt = 2.2, 1.1, 0.6, 1.0
+        o, wd, lift, tilt = 1.8, 1.1, 0.6, 1.0
     elif expr == "squint":
-        o, wd, lift, tilt = 1.15, 1.0, -0.1, 1.5
+        o, wd, lift, tilt = 0.85, 1.0, -0.1, 1.5
     else:
-        o, wd, lift, tilt = 1.7, 1.0, 0.0, 1.0
-    cy = 30.6
+        o, wd, lift, tilt = 1.3, 1.0, 0.0, 1.0
+    cy = 27.6
     eye(d, 19.6, cy, -1, o, wd)
     eye(d, 28.4, cy, 1, o, wd)
     brow(d, 19.6, cy + 0.2, -1, lift, tilt)
     brow(d, 28.4, cy + 0.2, 1, lift, tilt)
-    # front tongues + cap
-    for i, (r, t, w, b) in enumerate(FRONT):
-        tongue(d, r, t, w, b, sway=s * (2.0 + 0.4 * i))
+    # hair layer: tongues, cap, hairline band, bangs; one ink ring round the whole silhouette
+    hl = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    hd = ImageDraw.Draw(hl)
+    for i, (r, t, w, b) in enumerate(TONGUES):
+        tongue(hd, r, t, w, b, sway=s * (2.2 + 0.25 * (i % 2)))
     cap_pts = CAP_TOP + HAIRLINE[::-1]
-    poly(d, cap_pts, ORANGE)
+    poly(hd, cap_pts, ORANGE)
     cap = mask_of(lambda m: m.polygon([P(*p) for p in cap_pts], fill=255))
-    band = both(cap, inv(shift(cap, 0, -22)))
-    band = both(band, mask_of(lambda m: m.rectangle((0, 21 * K, W * K, 30 * K), fill=255)))
-    img.paste(YELLOW, (0, 0), band)
-    d = ImageDraw.Draw(img)
-    d.line([P(*p) for p in HAIRLINE], fill=INK, width=5, joint="curve")
-    shd = both(both(shift(cap, 0, 15), facem), inv(cap))
+    band = both(cap, inv(shift(cap, 0, int(-17 * F))))
+    band = both(band, mask_of(lambda m: m.rectangle((0, 17 * K, SW, 27 * K), fill=255)))
+    hl.paste(YELLOW + (255,), (0, 0), band)
+    shd = both(both(shift(cap, 0, int(15 * F)), facem), inv(cap))
     img.paste(RED, (0, 0), shd)
-    d = ImageDraw.Draw(img)
     for i, (r, t, w, b) in enumerate(BANGS):
-        tongue(d, r, t, w, b, sway=s * 0.6, shade_side=1 if i % 2 == 0 else -1, hot_root=0.3)
+        tongue(hd, r, t, w, b, sway=s * 0.7, shade_side=1 if i % 2 == 0 else -1, hot_root=0.3)
+    hm = hl.split()[3]
+    ring = both(hm.filter(ImageFilter.MaxFilter(11)), inv(hm))
+    img.paste(INK, (0, 0), ring)
+    img.paste(hl, (0, 0), hm)
     return img
 
 
@@ -312,9 +313,9 @@ def make_frame(sway, expr):
     src = draw_frame(sway, expr)
     diff = ImageChops.difference(src, Image.new("RGB", src.size, BG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
-    out = snap(pixelize(src, W, 20), mask)
+    out = snap(pixelize(src, W, 24), mask)
     px = out.load()
-    prot = {(x, y) for y in range(24, 31) for x in range(14, 35) if px[x, y] == CREAM + (255,)}
+    prot = {(x, y) for y in range(30, 42) for x in range(18, 47) if px[x, y] == CREAM + (255,)}
     return cleanup(out, prot)
 
 
@@ -334,7 +335,7 @@ def main():
     if not review:
         return
     os.makedirs(review, exist_ok=True)
-    S = 8
+    S = 6
     bg = (92, 112, 134, 255)
     big = [f.resize((W * S, H * S), Image.NEAREST) for f in frames]
     cw = W * S + 8
@@ -342,7 +343,7 @@ def main():
     for i, f in enumerate(big):
         clean.paste(f, (8 + i * cw, 8), f)
     clean.convert("RGB").save(os.path.join(review, "flint_bust_clean.png"))
-    sheet = Image.new("RGBA", (cw * 5 + 8, 72 * S + 16), bg)
+    sheet = Image.new("RGBA", (cw * 5 + 8, 96 * S + 16), bg)
     sheet.paste(clean, (0, 0))
     mock_path = os.path.join(review, "..", "poc", "flint_mock2.png")
     if os.path.exists(mock_path):
