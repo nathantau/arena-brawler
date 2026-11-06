@@ -187,7 +187,9 @@ func on_shot(owner_id: int, seq: int, origin: Vector2, facing: Vector2, weapon_i
 	if weapon == null or shooter == null:
 		return
 	arena.projectiles.fire_shot(owner_id, seq, origin, facing, weapon, arena.match_seed)
-	if not weapon.blast:  # a skill's blast somewhere else: the shooter's hands don't move
+	if seq >= Player.CLONE_SEQ_OFFSET:  # a Shadow Army clone's throw, not the shooter's own
+		shooter.clone_threw.emit(seq / Player.CLONE_SEQ_OFFSET - 1, facing)
+	elif not weapon.blast:  # a skill's blast somewhere else: the shooter's hands don't move
 		shooter.play_recoil(weapon.windup)
 
 
