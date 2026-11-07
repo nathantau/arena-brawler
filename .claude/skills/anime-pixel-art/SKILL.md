@@ -84,15 +84,15 @@ Reference: `assets/title/anime/sakura_bust.png`, code = the Sakura section of `t
 (-1.5, -1.4) units, only below y 29) in SK_S, never a diagonal cheek plane. Keep ink outline, lit left, deep strip + rim right,
 chin shadow on the neck. Neck short (`STOFF` 0.8 vs Flint's 3.5), shoulders softly sloped.
 
-**Female chin: rounded jaw ending in a small pointed corner; cheeks are separate (APPROVED 2026-11-06, Shade)**: user feedback went "a tad
+**Female chin: rounded jaw ending in a softly rounded point; cheeks are separate (APPROVED 2026-11-06, Shade)**: user feedback went "a tad
 pointier" -> "dont change cheek size" -> "like the bottom of a heart" -> "I want the left side [the fuller, rounder lower cheeks / jaw],
-but the chin a corner like the right side". So: keep Sakura's rounded jaw exactly, and only the very bottom changes: the two jaw curves
-meet in ONE defined point at the chin centre (no flat chin, no rounded U bottom). Cheek width is its own number (`cheek0`: Sakura
+but the chin a corner like the right side", then "point is too sharp, round it out a bit". So: keep Sakura's rounded jaw exactly, and only the very bottom changes: the two jaw curves
+meet in ONE small, softly rounded point at the chin centre (a tiny arc, no sharp corner, no flat chin, no rounded U bottom). Cheek width is its own number (`cheek0`: Sakura
 +0.03, Shade -0.03, scales x of every point below y 27 as `s_face_pts` does); narrowing the cheeks exposes dark ear notches, don't. Points
 (`f_face_pts` in `tools/sprites/anime_flicker.py`, patched over `ab.s_face_pts` at runtime, anime_busts.py untouched): `SFACE0` down to
-(31.8, 39.4) unchanged, then (28.0 + (cw - 8) * 0.5 - 0.3, 42.34), then the tip (24, tip_y), mirrored. Shade ships **cw 6.5, tip_y 44.4**
-(tip about 1.4 below Sakura's chin level 43.0; a 1-2 px point at x1; the jaw shadow band follows it). Steps `F_CHIN_STEPS` (cw, tip_y): A
-(8.0, 43.0) round like Sakura, B (6.5, 43.8), C (6.5, 44.4) shipped, D (6.5, 45.0) sharper. A pure heart-shaped taper (jaw curves
+(31.8, 39.4) unchanged, then (28.0 + (cw - 8) * 0.5 - 0.3, 42.34), then a 3-point arc (24.75, tip_y - 0.35), (24, tip_y), mirrored (1.5 units wide). Shade ships **cw 6.5, tip_y 44.0**
+(tip 1.0 below Sakura's chin level 43.0; a small soft point at x1; the jaw shadow band follows it; tip_y 44.4 with a single corner was too sharp). Steps `F_CHIN_STEPS` (cw, tip_y): A
+(8.0, 43.0) round like Sakura, B (6.5, 43.6), C (6.5, 44.0) shipped, D (6.5, 44.4) sharper. A pure heart-shaped taper (jaw curves
 convex from the cheek point down to the tip, `x = 24 + 11.6 * (1 - t^1.5)`) was tried and rejected: too narrow in the lower cheeks. Render
 `female_chins.png` (Shade + Sakura at the steps) to compare before changing a face.
 

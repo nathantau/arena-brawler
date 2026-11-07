@@ -55,10 +55,10 @@ FBASE = dict(mouth="smirk", hair="long", eyes="animeB", mask="side", scarf="tail
 # ---------------------------------------------------------------- female face shape (explicit, per character)
 # Cheek width and chin are SEPARATE: cheek0 scales the face width below y 27 exactly as Sakura's does (Shade -0.03). Approved female
 # chin: Sakura's rounded jaw (SFACE0 down to the jaw corner (31.8, 39.4), then one soft point at (26.95, 42.34)) that ends in a small
-# POINTED CORNER: the two jaw curves meet at a single tip (24, tip_y), no flat or U-shaped chin. cw sets the lower jaw point's width
+# softly ROUNDED POINT: the two jaw curves meet in a tiny arc (3 points, 1.5 units wide, apex (24, tip_y)), no flat or U-shaped chin. cw sets the lower jaw point's width
 # (8.0 = Sakura's 28.0 at 42.2), tip_y the tip level (43.0 = Sakura's chin level).
-F_CHIN_STEPS = [(8.0, 43.0), (6.5, 43.8), (6.5, 44.4), (6.5, 45.0)]      # (cw, tip_y): A round .. D sharper
-F_CHIN_SHIP = (6.5, 44.4)
+F_CHIN_STEPS = [(8.0, 43.0), (6.5, 43.6), (6.5, 44.0), (6.5, 44.4)]      # (cw, tip_y): A round .. D sharper
+F_CHIN_SHIP = (6.5, 44.0)
 F_FACE = {"chin": F_CHIN_SHIP, "cheek0": -0.03}
 
 
@@ -66,7 +66,7 @@ def f_face_pts():
     cw, tip_y = F_FACE["chin"]
     f = F_FACE["cheek0"]
     base = ab.SFACE0[:6]                      # ... (31.8, 39.4): cheeks and jaw unchanged
-    right_low = [(28.0 + (cw - 8.0) * 0.5 - 0.3, 42.34), (24.0, tip_y)]
+    right_low = [(28.0 + (cw - 8.0) * 0.5 - 0.3, 42.34), (24.75, tip_y - 0.35), (24.0, tip_y)]   # a tiny arc (1.5 wide) as the tip
     left_low = [(48 - x, y) for x, y in right_low[::-1]][1:]
     pts = base + right_low + left_low + ab.SFACE0[9:]
     return [(24 + (x - 24) * (1 + f), y) if y > 27 else (x, y) for x, y in pts]
