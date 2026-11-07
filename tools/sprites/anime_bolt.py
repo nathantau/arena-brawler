@@ -608,7 +608,7 @@ BT_CHARGE = [
     (-0.8, "determined", dict(arcs=5, rim=6, flare=1.10, yel=0.75, pupil=0.65, glow=1, side=4)),
     (1.0, "determined", dict(arcs=6, rim=8, flare=1.14, yel=1.1, pupil=0.55, glow=2, arcyel=1, side=5)),
     (-0.9, "determined", dict(arcs=8, rim=10, flare=1.2, yel=1.1, pupil=0.5, glow=2, arcyel=1, side=6)),
-    (0.4, "grin", dict(arcs=5, rim=7, flare=1.14, yel=1.1, pupil=0.55, glow=2, arcyel=1, side=4)),
+    (0.5, "shout", dict(arcs=5, rim=7, flare=1.14, yel=1.1, pupil=0.55, glow=2, arcyel=1, side=4)),
 ]
 BT_CHARGE_MS = [500, 110, 110, 110, 110, 110, 110, 900]
 
