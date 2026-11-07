@@ -55,11 +55,11 @@ pixelizing someone else's character for shipped art (study only, never commit re
 
 ## Adding a fighter
 
-Copy Flint's section of `anime_busts.py` into `<id>` functions: reuse `FACE`/`NECK`/`TORSO` as
-the starting proportions (female / cute faces: rounder cheeks, bigger eyes ~1/3 face height with
-2 highlights, blush, tiny mouth, bangs ending at the eyes), swap the hair for the fighter's own
-(hair that is not elemental keeps a thin dark outline but in a dark hair tone), sample the
-palette from the gameplay sheet, and write `assets/title/anime/<id>_bust.png`.
+Build on Flint's functions in `anime_busts.py` (see the Sakura section below for how: `cols=`/`bands=`,
+`snap(palette)`, a config dict, prefixed globals): reuse `FACE`/`NECK`/`TORSO` as the starting
+proportions, swap the hair for the fighter's own (hair that is not elemental keeps a thin dark outline
+but in a dark hair tone), sample the palette from the gameplay sheet, and write
+`assets/title/anime/<id>_bust.png`. Female / cute faces: follow "Female characters" below.
 
 ## Female characters (Sakura, approved 2026-11-06)
 
