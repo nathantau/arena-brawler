@@ -84,15 +84,15 @@ Reference: `assets/title/anime/sakura_bust.png`, code = the Sakura section of `t
 (-1.5, -1.4) units, only below y 29) in SK_S, never a diagonal cheek plane. Keep ink outline, lit left, deep strip + rim right,
 chin shadow on the neck. Neck short (`STOFF` 0.8 vs Flint's 3.5), shoulders softly sloped.
 
-**Face shape is per character (2026-11-06, Shade feedback)**: Sakura's round plump `SFACE0` (chin 8 wide at y 43, cheeks puffed) is the
-"cute / young" end of the range, NOT the default. User feedback on Shade: "make her chin a tad pointier ... we may need to revise how we
-draw females". Default for a new female fighter = a soft tapered V: narrower lower face, cheeks a little lower / less puffed, a gentle small
-point (never a sharp angle). `tools/sprites/anime_flicker.py` makes the shape explicit (`F_FACE_STEPS`, `f_face_pts`, patched over
-`ab.s_face_pts` at runtime, anime_busts.py untouched) with four numbers (chin width, chin tip drop below 43.0, jaw taper exponent
-(2 = round, 1 = straight V), cheek delta on the 11.6 half width): Sakura-like A (8.0, 0, 2.0, 0), B (6.6, 0.7, 1.7, -0.01), C (5.4, 1.4, 1.4, -0.02),
-D (4.2, 2.3, 1.1, -0.04). Default to **(5.8, 1.1, 1.55, -0.02) = between B and C** with base cheek -0.03 (Shade's shipped face); D is clearly
-V-shaped / sharp. Pick per character (young / cute = A, adult / cool = B-C). The jaw shadow band follows the polygon automatically.
-Render `female_chins.png` (Shade + Sakura at the four steps) to compare before changing a face.
+**Chin is separate from cheek width (2026-11-06, Shade feedback)**: "a tad pointier" / "revise how we draw females" means the CHIN TIP ONLY.
+The first attempt tapered the whole lower face (narrower cheeks) and was rejected: "dont change cheek size". Rules: cheek width is its own
+number (`cheek0`: Sakura +0.03, Shade -0.03, scales x of every point below y 27 as `s_face_pts` does) and the jaw corners / cheek points
+(`SFACE0` down to (31.8, 39.4)) never move; the chin only replaces the last points of the polygon (below y ~40): chin width 8.0 and tip at
+y 43.0 is Sakura's round chin, Shade ships **chin 6.5 wide, tip 0.8 below 43.0** (soft small point, never sharp). Steps for comparing
+(`F_CHIN_STEPS` in `tools/sprites/anime_flicker.py`, `f_face_pts` patched over `ab.s_face_pts` at runtime, anime_busts.py untouched):
+A (8.0, 0), B (7.2, 0.4), C (6.5, 0.8), D (5.4, 1.6). Young / cute = A, adult / cool = C-D. Keep the cheeks wide enough that the ears stay
+hidden (narrowing the cheeks exposed dark ear notches). The jaw shadow band follows the polygon automatically. Render `female_chins.png`
+(Shade + Sakura at the four steps) to compare before changing a face.
 
 **Eyes** (option B = `EYES["animeB"]`, drawn by `s_eye_anime`): ~6.6 wide x 5.2 tall (never bigger; chibi / hearts / "alien"
 came from big dark irises and a V lower lid), centres 24 +- 4.8, cy 27.8. Upper lash = thick ARCH peaking at t 0.62 (outward of

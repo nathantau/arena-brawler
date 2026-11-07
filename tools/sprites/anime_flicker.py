@@ -53,24 +53,24 @@ FBASE = dict(mouth="smirk", hair="long", eyes="animeB", mask="side", scarf="tail
 
 
 # ---------------------------------------------------------------- female face shape (explicit, per character)
-# chin_w: full width of the chin (units), chin_drop: how far the chin tip sits below Sakura's (43.0), taper: jaw curve exponent
-# (2 = round cheek-to-chin like Sakura, 1 = a straight V), cheek: change of the cheekbone half width (11.6) on the base cheek
-F_FACE_STEPS = [(8.0, 0.0, 2.0, 0.0), (6.6, 0.7, 1.7, -0.01), (5.4, 1.4, 1.4, -0.02), (4.2, 2.3, 1.1, -0.04)]
-F_FACE_SHIP = (5.8, 1.1, 1.55, -0.02)          # "a tad pointier": between B and C
-F_FACE = {"p": F_FACE_SHIP, "cheek0": -0.03}
+# Cheek width and chin are SEPARATE: cheek0 scales the face width below y 27 exactly as Sakura's does (Shade -0.03); the chin
+# only replaces the last two points of her polygon (below y ~40): chin_w = width of the chin, chin_drop = how far the tip sits
+# below y 43.0. "Pointier" means the chin tip only; the jaw corners and cheek points never move.
+F_CHIN_STEPS = [(8.0, 0.0), (7.2, 0.4), (6.5, 0.8), (5.4, 1.6)]
+F_CHIN_SHIP = (6.5, 0.8)
+F_FACE = {"chin": F_CHIN_SHIP, "cheek0": -0.03}
 
 
 def f_face_pts():
-    chin_w, drop, taper, dch = (tuple(F_FACE["p"]) + (0.0,))[:4]
-    hw0 = 11.6 * (1 + F_FACE["cheek0"] + dch)
-    cy = 43.0 + drop
-    R = [(24 + hw0, 27.5), (24 + hw0, 31.5)]
-    for t in (0.3, 0.55, 0.78):
-        y = 31.5 + t * (cy - 31.5)
-        R.append((24 + chin_w / 2 + (hw0 - chin_w / 2) * (1 - t ** taper), y))
-    R += [(24 + chin_w / 2 * 0.8, cy - 0.7), (24, cy)]
-    Lf = [(48 - x, y) for x, y in R[::-1]][1:]
-    return [(13.4, 17), (34.6, 17)] + R + Lf + [(24 - hw0, 27.5)]
+    cw, drop = F_FACE["chin"]
+    f = F_FACE["cheek0"]
+    base = ab.SFACE0[:6]          # ... (31.8, 39.4): everything down to the jaw corner, unchanged
+    right_low = [(28.0 + (cw - 8.0) * 0.5 - 0.3, 41.9 + drop * 0.55), (24 + cw / 2 * 0.62, 42.9 + drop * 0.9), (24, 43.0 + drop)]
+    left_low = [(48 - x, y) for x, y in right_low[::-1]][1:]
+    left_hi = ab.SFACE0[9:]      # (20.0, 42.2) is replaced by the chin points; keep (16.2, 39.4) .. (12.4, 27.5)
+    left_hi = [pt for pt in left_hi if pt[1] < 41]
+    pts = base + right_low + left_low + left_hi
+    return [(24 + (x - 24) * (1 + f), y) if y > 27 else (x, y) for x, y in pts]
 
 
 ab.s_face_pts = f_face_pts
@@ -457,7 +457,7 @@ def make_frame(sway, expr, cfg=None, extra=None):
                    cheeks=cfg["cheeks"], shade=1)
     F_MOUTH[0] = cfg["mouth"]
     F_FACE["cheek0"] = cfg["cheeks"]
-    F_FACE["p"] = cfg.get("face", F_FACE_SHIP)
+    F_FACE["chin"] = cfg.get("chin", F_CHIN_SHIP)
     src = f_draw_frame(sway, expr, cfg)
     diff = ImageChops.difference(src, Image.new("RGB", src.size, BG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
@@ -636,7 +636,7 @@ def f_chin_sheet(review):
     tmp = tempfile.mkdtemp(prefix="sakura_chins_")
     env = dict(os.environ, F_PLAIN="1")
     subprocess.run([sys.executable, os.path.abspath(__file__), "--sakura-chins", tmp], check=True, env=env)
-    rows = [[make_frame(-1, "calm", dict(F_SHIP, face=st[:3], cheeks=-0.03 + st[3])) for st in F_FACE_STEPS],
+    rows = [[make_frame(-1, "calm", dict(F_SHIP, chin=st)) for st in F_CHIN_STEPS],
             [Image.open(os.path.join(tmp, "s%d.png" % i)).convert("RGBA") for i in range(4)]]
     S = 4
     bg = (92, 112, 134, 255)
@@ -658,16 +658,16 @@ def f_chin_sheet(review):
         d.text((8 + i * cw + (W * S - tw) / 2, rh * 2 + 8), lab, fill=(255, 255, 255, 255), font=font)
     sheet.convert("RGB").save(os.path.join(review, "female_chins.png"))
     with open(os.path.join(review, "female_chins_key.txt"), "w") as fh:
-        fh.write("Top row Shade, second row Sakura (same chin steps, review only). (chin width, tip drop, jaw taper exponent, cheek delta)\n")
-        for lab, st in zip("ABCD", F_FACE_STEPS):
+        fh.write("Top row Shade, second row Sakura (same chin steps, review only). (chin width, tip drop); cheeks never change\n")
+        for lab, st in zip("ABCD", F_CHIN_STEPS):
             fh.write("%s: %s\n" % (lab, st))
-        fh.write("shipped for Shade: %s (between B and C)\n" % (F_FACE_SHIP,))
+        fh.write("shipped for Shade: %s (chin only)\n" % (F_CHIN_SHIP,))
 
 
 def f_sakura_chins(out_dir):
     """Subprocess (F_PLAIN=1, her own colours): Sakura's calm frame with each chin step."""
-    for i, st in enumerate(F_FACE_STEPS):
-        F_FACE["p"] = st
+    for i, st in enumerate(F_CHIN_STEPS):
+        F_FACE["chin"] = st
         F_FACE["cheek0"] = 0.03
         ab.make_sakura_frame(-1, "calm").save(os.path.join(out_dir, "s%d.png" % i))
 
