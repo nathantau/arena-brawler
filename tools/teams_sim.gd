@@ -15,6 +15,8 @@ var step: int = 0  ## screenshot with lobby=1: which character select step is sh
 var toggle: bool = false  ## screenshot with lobby=1 strip=1 fly=1: first remove an equipped ability, then add one
 var tab: int = 0  ## screenshot with lobby=1 step>=1: 1 = the Weapon tab
 var sheet: bool = false  ## screenshot with lobby=1: a contact sheet of the showcase backdrop of all nine fighters
+var wait: int = 10  ## screenshot with lobby=1: frames to let the room settle before the shot (the Apex rise takes ~60)
+var pick_set: bool = false  ## char= given: select that fighter on the fighter grid step too
 var pick: StringName = &"eden"  ## screenshot with lobby=1 step=1: the fighter the overlay opens on
 var fly: bool = false  ## screenshot with lobby=1 strip=1: capture an ability flying into a slot instead of the slide-in
 var strip: bool = false  ## screenshot with lobby=1: instead a strip of 6 frames of the overlay sliding in
@@ -54,7 +56,10 @@ func _initialize() -> void:
 				"step": step = int(kv[1])
 				"strip": strip = kv[1] == "1"
 				"fly": fly = kv[1] == "1"
-				"char": pick = StringName(kv[1])
+				"char":
+					pick = StringName(kv[1])
+					pick_set = true
+				"wait": wait = int(kv[1])
 				"backdrops": sheet = kv[1] == "1"
 				"tab": tab = int(kv[1])
 				"toggle": toggle = kv[1] == "1"
@@ -275,7 +280,9 @@ func _shoot_lobby() -> void:
 				lp._on_special_pressed(lp._special_cards.keys()[k])
 		if tab == 1:
 			lp._show_tab(LobbyOverlay.Tab.WEAPON, false)
-	for i: int in 10:
+	elif pick_set:
+		arena.select_character(arena.get_player(1), pick)
+	for i: int in wait:
 		await process_frame
 	var img: Image = root.get_texture().get_image()
 	print("[teams_sim] lobby screenshot ", shot_path, " ", img.get_size(), " ", img.save_png(shot_path))

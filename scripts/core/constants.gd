@@ -115,6 +115,14 @@ const SPRITE_ATTACK_FPS: float = 10.0
 const SPRITE_IDLE_FRAMES: int = 4
 const SPRITE_HIT_FRAMES: int = 2
 const SPRITE_IDLE_FPS: float = 6.0
+## Anime bust art (CharacterData.bust_sheet / rise_sheet): 96x128 frames. Idle sways between the calm frames every
+## BUST_IDLE_SECS; the rise plays once at BUST_RISE_FPS and holds its last frame.
+const BUST_SIZE: Vector2i = Vector2i(96, 128)
+const BUST_IDLE_FRAMES: int = 2
+const BUST_IDLE_SECS: float = 0.7
+const BUST_RISE_FPS: float = 8.5
+const BUST_RISE_HOLD: float = 0.6  ## the last rise frame stays this long before the idle bob starts
+const BUST_BOB_SECS: float = 2.4  ## idle: one art pixel up and down, stepped (stays crisp)
 const SPRITE_WALK_FRAMES: int = 8
 const SPRITE_WALK_FPS: float = SPRITE_IDLE_FPS  # same pace as idle, so the walk frames read clearly
 ## Below this speed (px/s) a player shows the idle bob instead of the walk cycle.

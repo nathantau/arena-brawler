@@ -84,6 +84,12 @@ const SLIDE_TIME: float = 0.25
 const SHEET_FRACTION: float = 0.58
 const SCRIM_ALPHA: float = 0.6
 ## Seconds between the preview's idle and a short walk / attack loop.
+## The anime bust (CharacterData.bust_sheet) on the loadout step: fills BUST_FILL of the overlay height at a whole
+## scale, in the strip left of the sheet, centred at BUST_CENTER of it (clear of the footer text on the far left).
+const BUST_FILL: float = 0.8
+const BUST_CENTER: float = 0.68
+const BUST_MAX_SCALE: int = 8
+const BUST_PAD: float = 14.0
 const FLAIR_GAP: Vector2 = Vector2(2.5, 4.5)
 const FLAIR_WALK_LOOPS: int = 2
 
@@ -140,6 +146,10 @@ var _margin: MarginContainer
 var _overlay: Control
 var _scrim: ColorRect
 var _sheet: PanelContainer
+var _bust_holder: Control
+var _bust: AnimatedSprite2D
+var _bust_frame: Panel
+var _bust_t: float = 0.0
 var _slide_tween: Tween
 ## The loadout pane: the three ability slot cards, then the weapon slot card.
 var _slot_cards: Array[Button] = []
@@ -330,6 +340,25 @@ func _build_overlay(stack: Control) -> void:
 	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	tap.pressed.connect(_close_overlay)
 	_overlay.add_child(tap)
+
+	_bust_holder = Control.new()  # the fighter's bust cut-in, between the scrim and the sheet
+	_bust_holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_bust_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE  # a tap on it still closes the overlay
+	_overlay.add_child(_bust_holder)
+	_bust_frame = Panel.new()  # a dark cut-in behind it, so the dimmed stage doesn't clutter the art
+	_bust_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var frame_style := StyleBoxFlat.new()
+	frame_style.bg_color = Color(COLOR_BG, 0.92)
+	frame_style.border_color = UiStyle.C_SHADOW
+	frame_style.set_border_width_all(2)
+	_bust_frame.add_theme_stylebox_override("panel", frame_style)
+	_bust_holder.add_child(_bust_frame)
+	_bust = AnimatedSprite2D.new()
+	_bust.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_bust.centered = false
+	_bust.offset = Vector2(-Constants.BUST_SIZE.x * 0.5, -Constants.BUST_SIZE.y)  # origin = bottom middle
+	_bust.visible = false
+	_bust_holder.add_child(_bust)
 
 	_sheet = PanelContainer.new()
 	var style := StyleBoxFlat.new()
@@ -737,8 +766,47 @@ func _open_loadout() -> void:
 		return
 	var slides_in: bool = _overlay_state.open_for(arena.local_player.character.id)
 	_show_tab(_overlay_state.tab, false)  # (a fresh fighter resets it to the abilities)
+	_start_bust(arena.local_player.character, slides_in)
 	if slides_in:
 		_slide_overlay(true)
+
+
+## The loadout opened for `c`: its bust (if it has one) plays the rise and then holds the last frame.
+func _start_bust(c: CharacterData, rise: bool) -> void:
+	_bust.visible = c.has_bust()
+	_bust_frame.visible = c.has_bust()
+	if not c.has_bust():
+		return
+	_bust.sprite_frames = c.bust_frames()
+	if rise:
+		_bust_t = 0.0
+		_bust.play(&"rise")
+
+
+## Integer scale that makes the bust fill BUST_FILL of an overlay this tall (and fit the strip beside the sheet).
+static func bust_scale(overlay_h: float, strip_w: float) -> int:
+	var fit: float = minf(overlay_h * BUST_FILL / Constants.BUST_SIZE.y, (strip_w - 40.0) / Constants.BUST_SIZE.x)
+	return clampi(floori(fit), 1, BUST_MAX_SCALE)
+
+
+func _layout_bust(w: float, h: float, sheet_w: float) -> void:
+	var strip: float = w - sheet_w
+	var bs: int = bust_scale(h, strip)
+	_bust.scale = Vector2.ONE * bs
+	var art: Vector2 = Vector2(Constants.BUST_SIZE) * bs
+	var cx: float = minf(strip * BUST_CENTER, strip - art.x * 0.5 - BUST_PAD - 8.0)  # never under the sheet
+	_bust.position = Vector2(roundf(cx), h)  # bottom edge on the overlay's bottom edge
+	_bust_frame.position = Vector2(_bust.position.x - art.x * 0.5 - BUST_PAD, h - art.y - BUST_PAD)
+	_bust_frame.size = Vector2(art.x + BUST_PAD * 2.0, art.y + BUST_PAD + 2.0)  # (runs off the bottom edge)
+
+
+## Idle once the rise is over: one art pixel up for half of every BUST_BOB_SECS.
+func _tick_bust(delta: float) -> void:
+	if not _bust.visible or _bust.is_playing():
+		return
+	_bust_t += delta
+	var up: bool = fmod(_bust_t, Constants.BUST_BOB_SECS) < Constants.BUST_BOB_SECS * 0.5
+	_bust.offset.y = -Constants.BUST_SIZE.y - (1.0 if up else 0.0)
 
 
 func _close_overlay() -> void:
@@ -760,12 +828,14 @@ func _slide_overlay(animate: bool) -> void:
 	var alpha: float = SCRIM_ALPHA if open else 0.0
 	_sheet.size = Vector2(sheet_w, h)
 	_sheet.position.y = 0.0
+	_layout_bust(w, h, sheet_w)
 	if animate and is_inside_tree() and w > 0.0:
 		_overlay.visible = true
 		var tween: Tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		_slide_tween = tween
 		tween.tween_property(_sheet, "position:x", x, SLIDE_TIME)
 		tween.tween_property(_scrim, "color:a", alpha, SLIDE_TIME)
+		tween.tween_property(_bust_holder, "modulate:a", 1.0 if open else 0.0, SLIDE_TIME)
 		tween.finished.connect(func() -> void:
 			_slide_tween = null
 			_overlay.visible = _overlay_state.is_open
@@ -774,6 +844,7 @@ func _slide_overlay(animate: bool) -> void:
 	else:
 		_sheet.position.x = x
 		_scrim.color.a = alpha
+		_bust_holder.modulate.a = 1.0 if open else 0.0
 		_overlay.visible = open
 
 
@@ -923,6 +994,7 @@ func _process(delta: float) -> void:
 	if _pick() != _shown_pick or _crowd() != _shown_crowd:
 		_refresh()
 	_tick_flair(delta)
+	_tick_bust(delta)
 
 
 ## Every player's current fighter + whether it is locked, for change detection.
