@@ -31,6 +31,7 @@ BT_PALETTE = [(58, 24, 44), INK, MAROON, SK, SK_L, SK_S, SK_D, WHITE, BT_TEAL, B
 BT_SUITS = {BT_SUIT, BT_SUIT_L, BT_SUIT_D, RED}
 BT_HAIRS = {BT_HY, BT_HY_L, BT_HY_D, BT_HY_E}
 BT_EYECOLS = {WHITE, BT_TEAL, BT_TEAL_D, BT_TEAL_L}
+BT_EYECOLS_YEL = BT_EYECOLS | {YELLOW, BT_HY_L, ORANGE}
 
 # ---------------------------------------------------------------- the look (variant = a dict)
 # Hair takes: three depth layers (back = deep orange mass, mid, front) of irregular spikes. Each layer is
@@ -44,6 +45,7 @@ BT_TAKES = {
 }
 BT_BASE = dict(take="explode", eyes="narrow", acc="none", mouth="smirk")
 BT_TIPS = []
+BT_ST = {}      # per-frame state of the charge strip (empty = the normal bust)
 
 
 def bt_layers(take, flare=1.0):
@@ -164,10 +166,27 @@ def bt_eye(img, d, cx, cy, side, o, kind, wide=1.0):
     paste_mask(img, BT_TEAL_D, both(ell(irx, iry), m))
     paste_mask(img, BT_TEAL, both(both(ell(irx - 0.35, iry - 0.5, 0, 0.35), m), inv(box_mask(0, 0, 48, icy - 0.9))))
     paste_mask(img, BT_TEAL_L, both(both(ell(irx - 0.7, iry - 1.2, 0, 1.1), m), box_mask(0, icy + 0.8, 48, 64)))
+    st = BT_ST
+    yr = st.get("yel", 0.0)
+    if yr > 0:      # yellow spreads from the pupil outward: dark orange top, yellow, light lower glow
+        yl = both(ell(irx * yr * 1.1, iry * yr * 1.1), both(ell(irx, iry), m))
+        paste_mask(img, BT_HY_D, yl)
+        paste_mask(img, YELLOW, both(yl, box_mask(0, icy - 0.9, 48, 64)))
+        paste_mask(img, BT_HY_L, both(yl, box_mask(0, icy + 1.5, 48, 64)))
+    if yr >= 1.0:   # white-yellow core round the pupil
+        paste_mask(img, BT_HY_L, both(ell(0.95, 1.15, 0, 0.1), m))
+    if st.get("flash"):    # white spark in the iris
+        def spark(m_):
+            m_.ellipse(((icx - 0.95) * K, (icy - 0.95) * K, (icx + 0.95) * K, (icy + 0.95) * K), fill=255)
+            m_.line([P(icx - 2.3, icy), P(icx + 2.3, icy)], fill=255, width=16)
+            m_.line([P(icx, icy - 2.5), P(icx, icy + 2.5)], fill=255, width=16)
+        paste_mask(img, WHITE, both(ab.mask_of(spark), m))
     d = ImageDraw.Draw(img)
-    d.ellipse(((icx - 0.55) * K, (icy - 0.5) * K, (icx + 0.55) * K, (icy + 0.7) * K), fill=INK)      # pupil
+    pw = max(0.42, 0.55 * st.get("pupil", 1.0))
+    d.ellipse(((icx - pw) * K, (icy - 0.5) * K, (icx + pw) * K, (icy + 0.7) * K), fill=INK)      # pupil
     hx, hy = icx - side * 0.75, icy - 1.0
-    d.rectangle(((hx - 0.55) * K, (hy - 0.55) * K, (hx + 0.55) * K, (hy + 0.55) * K), fill=WHITE)
+    hs = 0.7 if yr >= 1.0 else 0.55
+    d.rectangle(((hx - hs) * K, (hy - hs) * K, (hx + hs) * K, (hy + hs) * K), fill=WHITE)
     d.line([P(*p) for p in up], fill=INK, width=14, joint="curve")
     if kind == "sharp":   # lid tail flick outwards
         d.line([P(outer[0], outer[1]), P(outer[0] + side * 0.9, outer[1] - 0.5)], fill=INK, width=12)
@@ -178,6 +197,10 @@ def bt_mouth(d, kind, expr):
     YOFF[0] = -2.7
     if expr == "shout":
         pass   # exact pixels after the pixel art (bt_shout)
+    elif expr == "grin":
+        pts = [(21.0, 38.5), (24.0, 39.4), (27.2, 38.3), (26.4, 40.3), (24.0, 41.3), (21.8, 40.3)]
+        poly(d, pts, MAROON)
+        rect(d, 21.8, 38.9, 26.4, 39.9, WHITE)
     elif expr == "determined":
         d.line([P(22.0, 39.2), P(24.4, 39.3), P(26.8, 38.7)], fill=MAROON, width=8, joint="curve")
     elif kind == "grin":
@@ -219,7 +242,7 @@ def bt_face(img, neckm, torm, expr):
     outline(d, FACE[1:] + FACE[:1], w=9, closed=False)
     if expr == "shout":
         o, wd = 2.2, 1.12
-    elif expr == "determined":
+    elif expr in ("determined", "grin"):
         o, wd = 1.0, 1.05
     else:
         o, wd = 1.6, 1.1
@@ -261,14 +284,14 @@ def bt_hair(img, facem, s, expr="calm"):
     hd = ImageDraw.Draw(hl)
     cap_pts = BT_CAP + BT_HAIRLINE[::-1]
     cap = poly_mask(cap_pts)
-    flare = 1.14 if expr == "shout" else 1.0
+    flare = BT_ST.get("flare", 1.14 if expr == "shout" else 1.0)
     layers = bt_layers(BT_CFG["take"], flare)
     for depth, layer in enumerate(layers):
         if depth == 2:
             poly(hd, cap_pts, BT_HY)
         for i, (r, t, w, b, a) in enumerate(layer):
             h = ((i * 7 + depth * 3) % 5 - 2) / 2.0           # -1 .. 1, fixed per spike
-            sw = s * 3.2 * h + (0.8 * flare if expr == "shout" else 0) * h
+            sw = s * 3.2 * h + (0.8 * flare if expr == "shout" else 0) * h + (flare - 1.0) * 4 * h * (0 if expr == "shout" else 1)
             cs, _ = bt_spike(hd, r, t, w * (1.06 if expr == "shout" else 1.0), b, sw, i * 0.37 + s * 0.3 + depth,
                              shade=1 if a < 0 else -1, depth=depth)
             if depth < 2 or i % 2 == 0:
@@ -341,7 +364,7 @@ def bt_recolor_interior(im, keep=None):
                 continue
             ring = [get(x + dx, y + dy)[:3] if get(x + dx, y + dy)[3] else None
                     for dx in range(-2, 3) for dy in range(-2, 3)]
-            if None in ring or any(c in BT_EYECOLS for c in ring):
+            if None in ring or any(c in (BT_EYECOLS_YEL if BT_ST.get("yel") else BT_EYECOLS) for c in ring):
                 continue
             su = sum(c in BT_SUITS for c in ring)
             hr = sum(c in BT_HAIRS for c in ring)
@@ -375,8 +398,12 @@ def bt_line(px, w, h, a, b, col):
 BT_PLUM = (58, 24, 44)
 
 
-def bt_zig(px, w, h, a, b, ph, amp=2):
-    """Zig-zag bolt from a to b: dark teal under, light teal / white over, only on empty pixels."""
+BT_ARC_TEAL = (BT_TEAL_D, BT_TEAL_L, WHITE)
+BT_ARC_YEL = (BT_HY_D, YELLOW, BT_HY_L)
+
+
+def bt_zig(px, w, h, a, b, ph, amp=2, cols=BT_ARC_TEAL):
+    """Zig-zag bolt from a to b: dark under, light over (alternating with white), only on empty pixels."""
     import math as m
     dx, dy = b[0] - a[0], b[1] - a[1]
     L = max(m.hypot(dx, dy), 1)
@@ -389,20 +416,29 @@ def bt_zig(px, w, h, a, b, ph, amp=2):
         pts.append((round(a[0] + dx * t + nx * o), round(a[1] + dy * t + ny * o)))
     pts.append(b)
     for j in range(len(pts) - 1):
-        bt_line(px, w, h, (pts[j][0] + 1, pts[j][1]), (pts[j + 1][0] + 1, pts[j + 1][1]), BT_TEAL_D)
+        bt_line(px, w, h, (pts[j][0] + 1, pts[j][1]), (pts[j + 1][0] + 1, pts[j + 1][1]), cols[0])
     for j in range(len(pts) - 1):
-        bt_line(px, w, h, pts[j], pts[j + 1], BT_TEAL_L if j % 2 == 0 else WHITE)
+        bt_line(px, w, h, pts[j], pts[j + 1], cols[1] if j % 2 == 0 else cols[2])
 
 
 def bt_arcs(out, sway, frame):
-    """Electric rim on some spike tips, bolts jumping between tips and off the outer ones."""
+    """Electric rim on some spike tips, bolts jumping between tips and off the outer ones.
+    Charge strip: BT_ST arcs = how many bolts, rim = how many tips flicker white, arcyel = bolts / rims yellow-white."""
     px = out.load()
+    st = BT_ST
     tips = sorted(((round(x), round(y), d) for x, y, d in BT_TIPS), key=lambda t: t[0])
     W_, H_ = out.width, out.height
-    # rim: tip pixel white, the 2 px below it light teal when hair is there
+    yel = st.get("arcyel", 0)
+    cols = BT_ARC_YEL if yel else BT_ARC_TEAL
+    rim_cols = (WHITE, BT_HY_L, BT_HY_L) if yel else (WHITE, BT_TEAL_L, BT_TEAL_L)
+    if "rim" in st:
+        order = sorted(range(len(tips)), key=lambda k: (k * 7 + frame * 3) % max(len(tips), 1))
+        rim_set = set(order[:st["rim"]])
+    else:
+        rim_set = {k for k in range(len(tips)) if (k + frame) % 3 == 0}
     for k, (x, y, d) in enumerate(tips):
-        if (k + frame) % 3 == 0:
-            for j, col in enumerate((WHITE, BT_TEAL_L, BT_TEAL_L)):
+        if k in rim_set:
+            for j, col in enumerate(rim_cols):
                 yy = y + j
                 if 0 <= x < W_ and 0 <= yy < H_ and (px[x, yy][3] > 0 or j == 0):
                     px[x, yy] = col + (255,)
@@ -413,13 +449,27 @@ def bt_arcs(out, sway, frame):
         dist = abs(a[0] - b[0]) + abs(a[1] - b[1])
         if 8 <= dist <= 26:
             pairs.append((a, b))
+    if "arcs" in st:
+        order = sorted(range(len(pairs)), key=lambda k: (k * 5 + frame * 3) % max(len(pairs), 1))
+        chosen = set(order[:st["arcs"]])
+    else:
+        chosen = {k for k in range(len(pairs)) if (k + frame) % 3 == 1}
     for k, (a, b) in enumerate(pairs):
-        if (k + frame) % 3 == 1:
-            bt_zig(px, W_, H_, (a[0], a[1]), (b[0], b[1]), frame)
-    if top:   # off the outermost tips
+        if k in chosen:
+            bt_zig(px, W_, H_, (a[0], a[1]), (b[0], b[1]), frame, cols=cols)
+    for k in range(st.get("side", 0)):      # bolts jumping off the sides of the head into the empty space
+        y = (36, 46, 28, 54, 40, 32)[k % 6] + (frame % 2) * 2
+        xs = [x for x in range(W_) if px[x, y][3] > 0]
+        if xs:
+            l, r = xs[0], xs[-1]
+            if k % 2 == 0:
+                bt_zig(px, W_, H_, (l, y), (max(1, l - 9), y - 5 - frame % 2), frame + k, 1, cols)
+            else:
+                bt_zig(px, W_, H_, (r, y), (min(W_ - 2, r + 9), y - 5 - frame % 2), frame + k, 1, cols)
+    if top and st.get("arcs", 1) >= 1:   # off the outermost tips
         l, r = top[0], top[-1]
-        bt_zig(px, W_, H_, (l[0], l[1]), (max(1, l[0] - 6 - frame % 2), max(1, l[1] - 7 + frame % 2)), frame, 1)
-        bt_zig(px, W_, H_, (r[0], r[1]), (min(W_ - 2, r[0] + 6 + frame % 2), max(1, r[1] - 7 + frame % 2)), frame + 1, 1)
+        bt_zig(px, W_, H_, (l[0], l[1]), (max(1, l[0] - 6 - frame % 2), max(1, l[1] - 7 + frame % 2)), frame, 1, cols)
+        bt_zig(px, W_, H_, (r[0], r[1]), (min(W_ - 2, r[0] + 6 + frame % 2), max(1, r[1] - 7 + frame % 2)), frame + 1, 1, cols)
 
 
 def bt_cheek_rim(out):
@@ -450,14 +500,14 @@ def bt_shout(out):
 def bt_brows(out, expr):
     """Exact pixels after the pixel art: short brows sitting just above the lids, V-tilted when determined."""
     px = out.load()
-    tilt = 1 if expr == "determined" else 0
+    tilt = 1 if expr in ("determined", "grin") else 0
     lift = 1 if expr == "shout" else 0
     kind = BT_CFG["eyes"]
     for side in (-1, 1):
         cx = 24 + side * 4.8
         x_out = int(cx * 2 + side * (6 if kind != "sharp" else 7))
         x_in = int(cx * 2 - side * 4)
-        y0 = 49 - lift - (1 if kind == "round" else 0)
+        y0 = 49 + BT_ST.get("browdrop", 0) - lift - (1 if kind == "round" else 0)
         pts = []
         n = abs(x_out - x_in)
         for i in range(n + 1):
@@ -469,8 +519,9 @@ def bt_brows(out, expr):
         px[x_in, y0 + 1 + tilt] = BT_BROW + (255,)
 
 
-def bt_frame(sway, expr, cfg=None, frame=0):
-    global BT_CFG
+def bt_frame(sway, expr, cfg=None, frame=0, st=None):
+    global BT_CFG, BT_ST
+    BT_ST = dict(st or {})
     BT_CFG = dict(BT_BASE, **(cfg or {}))
     src = bt_draw_frame(sway, expr)
     from PIL import ImageChops
@@ -483,6 +534,14 @@ def bt_frame(sway, expr, cfg=None, frame=0):
         for y in range(int(24.5 * 2), int(31.4 * 2) + 1):
             for x in range(int((ex - 4.6) * 2), int((ex + 4.6) * 2) + 1):
                 out.putpixel((x, y), nn.getpixel((x, y)))
+    if BT_ST.get("glow"):     # 1 px yellow glow just outside the lash line
+        pxg = out.load()
+        for sgn in (-1, 1):
+            ex = 24 + sgn * 4.8
+            for x in range(int((ex - 4.2) * 2), int((ex + 4.2) * 2) + 1):
+                ys = [y for y in range(44, 66) if pxg[x, y][:3] == INK and pxg[x, y][3]]
+                if ys and pxg[x, ys[0] - 1][:3] in (SK, SK_L, SK_S, SK_D):
+                    pxg[x, ys[0] - 1] = (YELLOW if BT_ST["glow"] > 1 else BT_HY_L) + (255,)
     px = out.load()
     prot = {(x, y) for y in range(44, 66) for x in range(26, 72) if px[x, y] == WHITE + (255,)}
     out = cleanup(out, prot)
@@ -537,6 +596,50 @@ def bt_variants_sheet(review, flint):
         fh.write("Shipped: %s\n" % BT_SHIP)
 
 
+# ---------------------------------------------------------------- charge strip (calm -> eyes turn electric yellow)
+# per frame: sway, expr, state. yel = how far the yellow has spread from the pupil, flash = white spark in the iris,
+# pupil = pupil width scale, glow = yellow line above the lashes, flare = hair size, arcs / rim = bolts between tips /
+# tips flickering white, arcyel = bolts and rims turned yellow-white, browdrop = brows pushed down 1 px.
+BT_CHARGE = [
+    (-1.0, "calm", dict()),
+    (0.6, "calm", dict(arcs=2, rim=3, flare=1.02, browdrop=1, side=1)),
+    (-0.5, "determined", dict(arcs=3, rim=4, flare=1.04, flash=True, pupil=0.8, side=2)),
+    (0.9, "determined", dict(arcs=4, rim=5, flare=1.07, yel=0.4, pupil=0.7, side=3)),
+    (-0.8, "determined", dict(arcs=5, rim=6, flare=1.10, yel=0.75, pupil=0.65, glow=1, side=4)),
+    (1.0, "determined", dict(arcs=6, rim=8, flare=1.14, yel=1.1, pupil=0.55, glow=2, arcyel=1, side=5)),
+    (-0.9, "determined", dict(arcs=8, rim=10, flare=1.2, yel=1.1, pupil=0.5, glow=2, arcyel=1, side=6)),
+    (0.4, "grin", dict(arcs=5, rim=7, flare=1.14, yel=1.1, pupil=0.55, glow=2, arcyel=1, side=4)),
+]
+BT_CHARGE_MS = [500, 110, 110, 110, 110, 110, 110, 900]
+
+
+def bolt_charge(anime, review):
+    cfg = dict(next(c for k, c, _ in BT_VARIANTS if k == BT_SHIP))
+    frames = [bt_frame(sw, ex, cfg, k, dict(st)) for k, (sw, ex, st) in enumerate(BT_CHARGE)]
+    strip = Image.new("RGBA", (W * len(frames), H), (0, 0, 0, 0))
+    for i, f in enumerate(frames):
+        strip.paste(f, (i * W, 0))
+    strip.save(os.path.join(anime, "bolt_charge.png"))
+    if not review:
+        return
+    S = 4
+    bg = (92, 112, 134, 255)
+    big = []
+    for f in frames:
+        b = Image.new("RGBA", (W * S, H * S), bg)
+        b.alpha_composite(f.resize((W * S, H * S), Image.NEAREST))
+        big.append(b.convert("RGB"))
+    big[0].save(os.path.join(review, "bolt_charge.gif"), save_all=True, append_images=big[1:], duration=BT_CHARGE_MS, loop=0)
+    cw = W * S + 8
+    sheet = Image.new("RGB", (cw * 4 + 8, (H * S + 8) * 2 + 8), bg[:3])
+    for i, b in enumerate(big):
+        sheet.paste(b, (8 + (i % 4) * cw, 8 + (i // 4) * (H * S + 8)))
+    sheet.save(os.path.join(review, "bolt_charge_sheet.png"))
+    x1 = Image.new("RGBA", strip.size, bg)
+    x1.alpha_composite(strip)
+    x1.convert("RGB").save(os.path.join(review, "bolt_charge_x1.png"))
+
+
 def bolt_main():
     root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     anime = os.path.join(root, "assets", "title", "anime")
@@ -548,9 +651,11 @@ def bolt_main():
         strip.paste(f, (i * W, 0))
     strip.save(os.path.join(anime, "bolt_bust.png"))
     review = sys.argv[1] if len(sys.argv) > 1 else None
+    if review:
+        os.makedirs(review, exist_ok=True)
+    bolt_charge(anime, review)
     if not review:
         return
-    os.makedirs(review, exist_ok=True)
     bt_variants_sheet(review, flint)
     S = 4
     bg = (92, 112, 134, 255)
