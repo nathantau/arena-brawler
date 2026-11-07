@@ -26,40 +26,78 @@ BT_SUIT = MAROON; BT_SUIT_L = (178, 62, 72); BT_SUIT_D = (78, 30, 46)
 BT_STEEL = (93, 107, 138); BT_STEEL_L = (154, 167, 194)
 BT_BROW = (150, 84, 40)
 BT_RIM = (255, 238, 150)
-BT_PALETTE = [INK, MAROON, SK, SK_L, SK_S, SK_D, WHITE, BT_TEAL, BT_TEAL_D, BT_TEAL_L, BT_HY, BT_HY_L, BT_HY_D, BT_HY_E,
+BT_PALETTE = [(58, 24, 44), INK, MAROON, SK, SK_L, SK_S, SK_D, WHITE, BT_TEAL, BT_TEAL_D, BT_TEAL_L, BT_HY, BT_HY_L, BT_HY_D, BT_HY_E,
               BT_SUIT_L, BT_SUIT_D, BT_STEEL, BT_STEEL_L, BT_BROW, RED]
 BT_SUITS = {BT_SUIT, BT_SUIT_L, BT_SUIT_D, RED}
 BT_HAIRS = {BT_HY, BT_HY_L, BT_HY_D, BT_HY_E}
 BT_EYECOLS = {WHITE, BT_TEAL, BT_TEAL_D, BT_TEAL_L}
 
 # ---------------------------------------------------------------- the look (variant = a dict)
-BT_SPIKES = {
-    # root, tip, width, bend  (design units; head top y 12.8, tips may reach y 0.5)
-    "up": [((34.5, 18.5), (45.0, 11.0), 6.5, -2.0), ((32.0, 16.0), (39.5, 3.0), 7.5, 2.2), ((28.0, 14.5), (31.0, 6.4), 6.5, -1.4),
-           ((25.0, 14.0), (26.5, 0.8), 8, 2.2), ((20.5, 14.5), (13.5, 3.0), 8.5, -2.4), ((17.5, 16.0), (17.0, 6.0), 6, 1.2),
-           ((15.5, 18.5), (3.0, 7.5), 8, 2.0), ((13.5, 22.0), (0.8, 18.0), 7, -1.4)],
-    "swept": [((34.0, 19.0), (40.0, 9.0), 6.5, -1.2), ((31.0, 16.5), (31.0, 3.0), 7, 1.6), ((26.5, 15.0), (18.0, 1.2), 7.5, -2.0),
-              ((21.5, 15.5), (7.0, 2.4), 8, 1.8), ((17.5, 18.0), (1.5, 9.0), 8, -1.8), ((14.5, 21.5), (0.8, 18.0), 7, 1.2)],
-    "fringe": [((34.0, 19.0), (41.0, 11.0), 7, -1.0), ((30.5, 16.0), (35.5, 6.0), 7.5, 1.2), ((26.0, 14.5), (27.0, 3.6), 7.5, -1.2),
-               ((21.5, 14.5), (19.0, 3.8), 7.5, 1.2), ((17.0, 16.0), (10.5, 5.5), 8, -1.2), ((14.0, 20.0), (4.5, 12.0), 8, 1.0)],
-    "mohawk": [((27.5, 15.0), (34.0, 3.0), 7.5, -1.4), ((24.0, 14.0), (26.0, 0.6), 8, 1.4), ((20.5, 14.5), (17.0, 1.2), 8, -1.4),
-               ((17.0, 16.0), (8.0, 3.2), 7.5, 1.2), ((31.0, 16.5), (41.0, 5.0), 7, 1.2), ((14.0, 20.0), (3.0, 12.0), 7, -1.0),
-               ((34.5, 19.5), (45.0, 13.0), 6.5, -1.0)],
+# Hair takes: three depth layers (back = deep orange mass, mid, front) of irregular spikes. Each layer is
+# (count, angle from, angle to (deg from vertical, + = right), tip length base); `lean` rotates the whole crown,
+# `seed` jitters angles / lengths so nothing is evenly spaced. Tips are clamped inside the frame.
+BT_TAKES = {
+    "explode": dict(back=(10, -58, 58, 26), mid=(9, -52, 54, 21), front=(8, -38, 40, 12), lean=0, seed=3, bang=3),
+    "swept": dict(back=(10, -80, 32, 27), mid=(9, -74, 30, 22), front=(8, -62, 24, 13), lean=-6, seed=11, bang=3),
+    "clumps": dict(back=(9, -60, 62, 27), mid=(10, -56, 58, 22), front=(8, -42, 46, 13), lean=4, seed=7, bang=4, clump=True),
+    "pomp": dict(back=(9, -50, 54, 25), mid=(8, -26, 62, 25), front=(7, -16, 52, 19), lean=8, seed=5, bang=3),
 }
-BT_BANGS = {
-    "up": [((19.6, 19.0), (18.0, 22.4), 5.0), ((24.0, 19.0), (24.0, 22.8), 4.6), ((28.6, 19.0), (30.2, 22.4), 5.0)],
-    "swept": [((20.4, 19.0), (17.0, 22.4), 5.0), ((26.0, 19.0), (23.6, 22.8), 4.8), ((30.0, 19.0), (28.8, 22.2), 4.4)],
-    "fringe": [((17.5, 19.0), (16.0, 22.8), 5.2), ((21.5, 19.0), (20.4, 23.2), 5.0), ((25.5, 19.0), (25.4, 23.0), 5.0),
-               ((29.5, 19.0), (30.4, 22.8), 5.0), ((33.0, 19.4), (34.2, 22.4), 4.4)],
-    "mohawk": [((22.0, 19.0), (21.0, 22.0), 4.4), ((27.0, 19.0), (28.0, 22.0), 4.4)],
-}
-BT_BASE = dict(spikes="up", eyes="narrow", acc="none", mouth="smirk")
+BT_BASE = dict(take="explode", eyes="narrow", acc="none", mouth="smirk")
+BT_TIPS = []
+
+
+def bt_layers(take, flare=1.0):
+    import random
+    import math as m
+    T = BT_TAKES[take]
+    rng = random.Random(T["seed"])
+    out = []
+    # tip height ranges per depth (design y): back reaches the frame top, front stays on the crown
+    heights = {0: (0.9, 11.0), 1: (3.0, 12.0), 2: (7.0, 14.5)}
+    for name, depth in (("back", 0), ("mid", 1), ("front", 2)):
+        n, a0, a1, L0 = T[name]
+        layer = []
+        for i in range(n):
+            u = i / (n - 1)
+            a = a0 + (a1 - a0) * u + rng.uniform(-6, 6) + T["lean"]
+            if T.get("clump") and i % 3 == 1:
+                a = layer[-1][4] + rng.uniform(5, 9)
+            ang = m.radians(a)
+            th = m.radians(max(-95, min(95, (a - T["lean"]) * 1.5)))
+            rt = (24 + 11.0 * m.sin(th), 20.6 - 7.0 * m.cos(th) + depth * 0.8)
+            hlo, hhi = heights[depth]
+            centre = 1.0 - abs(u - 0.5) * 2 * 0.4          # taller towards the middle
+            ty = hhi - (hhi - hlo) * centre * rng.choice((0.25, 0.45, 0.6, 0.8, 1.0, 1.0)) * rng.uniform(0.9, 1.0) - (flare - 1.0) * 14
+            ty = max(ty, 0.9)
+            dy = -m.cos(ang)
+            ln = (rt[1] - ty) / max(-dy, 0.35)
+            ln = min(ln, L0 * 1.25) * flare ** 0.5
+            dx = m.sin(ang)
+            tx = rt[0] + dx * ln
+            if tx < 1.0:
+                ln *= (rt[0] - 1.0) / max(rt[0] - tx, 1e-3)
+            elif tx > 47.0:
+                ln *= (47.0 - rt[0]) / max(tx - rt[0], 1e-3)
+            tip = (rt[0] + dx * ln, max(0.9, rt[1] + dy * ln))
+            w = (8.0 - 1.2 * depth) * rng.uniform(0.85, 1.1)
+            bend = rng.uniform(-1.8, 1.8)
+            layer.append((rt, tip, w, bend, a))
+        out.append(layer)
+    return out
+
+
+def bt_bangs(take, s):
+    """Spikes down over the forehead: a thin one between the eyes, two over the temples, short ones either side."""
+    n = BT_TAKES[take]["bang"]
+    sets = [((24.0, 19.0), (24.3, 25.6), 3.8), ((19.8, 19.0), (17.6, 23.4), 5.0), ((28.4, 19.0), (30.2, 23.0), 5.0),
+            ((15.5, 19.5), (13.4, 24.0), 4.4)]
+    return sets[:n]
 BT_CFG = dict(BT_BASE)
 
 
 # ---------------------------------------------------------------- torso
-BT_LCOLLAR = [(14.0, 44.6), (17.4, 39.6), (19.6, 40.0), (23.6, 48.0), (19.4, 46.0)]
-BT_RCOLLAR = [(34.0, 44.6), (30.6, 39.6), (28.4, 40.0), (24.4, 48.0), (28.6, 46.0)]
+BT_LCOLLAR = [(14.0, 45.2), (18.2, 42.6), (20.2, 43.2), (23.6, 49.0), (19.6, 47.0)]
+BT_RCOLLAR = [(34.0, 45.2), (29.8, 42.6), (27.8, 43.2), (24.4, 49.0), (28.4, 47.0)]
 BT_BOLT = [(11.0, 52.2), (16.0, 51.4), (14.6, 54.6), (17.6, 54.2), (11.8, 61.0), (13.2, 56.6), (10.2, 56.8)]
 
 
@@ -86,12 +124,14 @@ def bt_torso(img, d):
     d.line([P(24.7, 47.6), P(24.7, 64.5)], fill=BT_STEEL, width=4)
     poly(d, BT_BOLT, YELLOW)
     d.line([P(*p) for p in (BT_BOLT[0], BT_BOLT[1], BT_BOLT[2])], fill=BT_HY_L, width=3)
-    # collar: stand-up, lit left, gold piping
-    shape(d, BT_LCOLLAR, BT_STEEL_L, col=BT_SUIT_D)
-    shape(d, BT_RCOLLAR, BT_STEEL, col=BT_SUIT_D)
-    d.line([P(*p) for p in (BT_LCOLLAR[0], BT_LCOLLAR[1], BT_LCOLLAR[2])], fill=WHITE, width=4)
-    d.line([P(*p) for p in (BT_RCOLLAR[0], BT_RCOLLAR[1], BT_RCOLLAR[2])], fill=BT_STEEL_L, width=4)
-    paste_mask(img, SK_S, both(neckm, box_mask(0, 41.5, 48, 80)))
+    paste_mask(img, SK_L, both(neckm, box_mask(0, 0, 21.4, 80)))
+    paste_mask(img, SK_S, both(neckm, box_mask(26.6, 0, 48, 80)))
+    d = ImageDraw.Draw(img)
+    # collar
+    shape(d, BT_LCOLLAR, BT_SUIT_L, col=BT_SUIT_D)
+    shape(d, BT_RCOLLAR, BT_SUIT, col=BT_SUIT_D)
+    d.line([P(*p) for p in (BT_LCOLLAR[0], BT_LCOLLAR[1], BT_LCOLLAR[2])], fill=BT_STEEL_L, width=4)
+    d.line([P(*p) for p in (BT_RCOLLAR[0], BT_RCOLLAR[1], BT_RCOLLAR[2])], fill=BT_STEEL, width=4)
     YOFF[0] = 0.0
     return neckm, torm
 
@@ -137,10 +177,7 @@ def bt_eye(img, d, cx, cy, side, o, kind, wide=1.0):
 def bt_mouth(d, kind, expr):
     YOFF[0] = -2.7
     if expr == "shout":
-        pts = [(20.4, 37.6), (28.4, 37.4), (27.6, 41.2), (24.4, 42.8), (21.2, 41.2)]
-        poly(d, pts, INK)
-        rect(d, 21.0, 37.9, 27.8, 39.7, WHITE)
-        outline(d, pts, 5, col=MAROON)
+        pass   # exact pixels after the pixel art (bt_shout)
     elif expr == "determined":
         d.line([P(22.0, 39.2), P(24.4, 39.3), P(26.8, 38.7)], fill=MAROON, width=8, joint="curve")
     elif kind == "grin":
@@ -175,6 +212,7 @@ def bt_face(img, neckm, torm, expr):
     paste_mask(img, SK_D, both(both(facem, inv(shift(facem, int(-9 * F), 0))), box_mask(0, 25, 48, 40)))
     paste_mask(img, BT_RIM, both(both(facem, inv(shift(facem, int(-4 * F), 0))), box_mask(0, 26, 48, 36)))
     d = ImageDraw.Draw(img)
+    d = ImageDraw.Draw(img)
     d.line([P(24.0, 25.4), P(24.0, 30.0)], fill=SK_L, width=7)
     d.line([P(25.0, 31.4), P(25.5, 33.0)], fill=SK_D, width=7)
     bt_mouth(d, BT_CFG["mouth"], expr)
@@ -206,26 +244,38 @@ def bt_hair_col(t):
     return BT_HY_L
 
 
-def bt_spike(hd, root, tip, w, bend, sway, ph, shade=1, n=24):
-    # tongues with cols: deep orange edge, lit band on the left, orange shade band on the right
+def bt_spike(hd, root, tip, w, bend, sway, ph, shade=1, n=24, depth=1):
+    # tongues with cols: orange edge, no ink; back layer deep orange, mid yellow, front lighter
+    fn = {0: lambda t: BT_HY_D if t < 0.62 else BT_HY, 1: bt_hair_col, 2: lambda t: BT_HY if t < 0.5 else BT_HY_L}[depth]
+    shade_c = BT_HY_E if depth == 0 else BT_HY_D
+    lit_c = BT_HY if depth == 0 else BT_HY_L
     return tongue(hd, root, tip, w, bend, sway=sway, shade_side=shade, ph=ph, wave=0.05, n=n, ow=6,
-                  cols=(BT_EDGE, bt_hair_col, BT_HY_D, BT_HY_L),
-                  bands=[(shade, 0.3, 1.0, 0.1, 0.7, BT_HY_D), (-shade, 0.4, 1.0, 0.3, 0.85, BT_HY_L)])
+                  cols=(BT_EDGE, fn, shade_c, lit_c),
+                  bands=[(shade, 0.3, 1.0, 0.1, 0.75, shade_c), (-shade, 0.4, 1.0, 0.25, 0.9, lit_c)])
 
 
-def bt_hair(img, facem, s):
+def bt_hair(img, facem, s, expr="calm"):
+    global BT_TIPS
+    BT_TIPS = []
     hl = Image.new("RGBA", img.size, (0, 0, 0, 0))
     hd = ImageDraw.Draw(hl)
     cap_pts = BT_CAP + BT_HAIRLINE[::-1]
-    poly(hd, cap_pts, BT_HY)
     cap = poly_mask(cap_pts)
-    sp = BT_SPIKES[BT_CFG["spikes"]]
-    for i, (r, t, w, b) in enumerate(sp):
-        sw = s * (3.0 + 1.0 * (i % 2)) * (-1 if r[0] > 24 else 1) * (-1 if i % 3 == 0 else 1)
-        bt_spike(hd, r, t, w, b, sw, i * 0.37 + s * 0.3, shade=1 if r[0] < 24 else -1)
+    flare = 1.14 if expr == "shout" else 1.0
+    layers = bt_layers(BT_CFG["take"], flare)
+    for depth, layer in enumerate(layers):
+        if depth == 2:
+            poly(hd, cap_pts, BT_HY)
+        for i, (r, t, w, b, a) in enumerate(layer):
+            h = ((i * 7 + depth * 3) % 5 - 2) / 2.0           # -1 .. 1, fixed per spike
+            sw = s * 3.2 * h + (0.8 * flare if expr == "shout" else 0) * h
+            cs, _ = bt_spike(hd, r, t, w * (1.06 if expr == "shout" else 1.0), b, sw, i * 0.37 + s * 0.3 + depth,
+                             shade=1 if a < 0 else -1, depth=depth)
+            if depth < 2 or i % 2 == 0:
+                BT_TIPS.append((cs[-1][0] * 2, cs[-1][1] * 2, depth))
     # side locks over the top of each ear
-    for side, (r, t) in ((-1, ((13.4, 21.0), (10.4, 30.0))), (1, ((34.6, 21.0), (37.6, 30.0)))):
-        bt_spike(hd, r, t, 4.4, 0.8 * side, s * 0.5 * -side, 0.5 + s * 0.2, shade=-side, n=18)
+    for side, (r, t) in ((-1, ((13.4, 21.0), (9.6, 32.0))), (1, ((34.6, 21.0), (38.4, 32.0)))):
+        bt_spike(hd, r, t, 4.8, 1.0 * side, s * 0.5 * -side, 0.5 + s * 0.2, shade=-side, n=18, depth=2)
     # crown gloss (lit, top left) and a shade band along the hairline
     gl = both(both(cap, inv(shift(cap, int(4 * F), int(5 * F)))), box_mask(0, 12, 28, 21))
     hl.paste(BT_HY_L + (255,), (0, 0), gl)
@@ -235,8 +285,8 @@ def bt_hair(img, facem, s):
     img.paste(SK_S, (0, 0), shd)
     shd2 = both(both(shift(cap, 0, int(6 * F)), facem), inv(cap))
     img.paste(SK_D, (0, 0), shd2)
-    for i, (r, t, w) in enumerate(BT_BANGS[BT_CFG["spikes"]]):
-        bt_spike(hd, r, t, w, 0.6 * (1 if i % 2 else -1), s * 0.5, i + s * 0.3, shade=1 if i % 2 == 0 else -1, n=14)
+    for i, (r, t, w) in enumerate(bt_bangs(BT_CFG["take"], s)):
+        bt_spike(hd, r, t, w, 0.6 * (1 if i % 2 else -1), s * 0.5, i + s * 0.3, shade=1 if i % 2 == 0 else -1, n=14, depth=2)
     img.paste(hl, (0, 0), hl.split()[3])
     d = ImageDraw.Draw(img)
     d.line([P(*p) for p in BT_HAIRLINE], fill=SK_D, width=4, joint="curve")
@@ -271,7 +321,7 @@ def bt_draw_frame(sway=0.0, expr="calm"):
     d = ImageDraw.Draw(img)
     neckm, torm = bt_torso(img, d)
     facem = bt_face(img, neckm, torm, expr)
-    bt_hair(img, facem, sway)
+    bt_hair(img, facem, sway, expr)
     bt_accessory(img)
     return img
 
@@ -322,26 +372,79 @@ def bt_line(px, w, h, a, b, col):
 
 
 # arcs crackling off the head: start pixel, then zig-zag offsets; the two phases alternate with the frame
-BT_ARCS = [((5, 14), [(-3, -1), (2, -3), (-3, -1), (2, -3)]), ((90, 12), [(3, -1), (-2, -3), (3, -1), (-2, -3)]),
-           ((3, 38), [(-1, 3), (3, 2), (-3, 3), (3, 2), (-3, 3)]), ((93, 42), [(1, 3), (-3, 2), (3, 3), (-3, 2), (3, 3)])]
+BT_PLUM = (58, 24, 44)
 
 
-def bt_arcs(out, sway):
-    """Lightning forks jumping off the head: 2 px bolts (dark teal under, light teal / white over), re-jittered per frame."""
+def bt_zig(px, w, h, a, b, ph, amp=2):
+    """Zig-zag bolt from a to b: dark teal under, light teal / white over, only on empty pixels."""
+    import math as m
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    L = max(m.hypot(dx, dy), 1)
+    nx, ny = -dy / L, dx / L
+    n = max(3, int(L / 3.5))
+    pts = [a]
+    for k in range(1, n):
+        t = k / n
+        o = amp * (1 if (k + ph) % 2 else -1)
+        pts.append((round(a[0] + dx * t + nx * o), round(a[1] + dy * t + ny * o)))
+    pts.append(b)
+    for j in range(len(pts) - 1):
+        bt_line(px, w, h, (pts[j][0] + 1, pts[j][1]), (pts[j + 1][0] + 1, pts[j + 1][1]), BT_TEAL_D)
+    for j in range(len(pts) - 1):
+        bt_line(px, w, h, pts[j], pts[j + 1], BT_TEAL_L if j % 2 == 0 else WHITE)
+
+
+def bt_arcs(out, sway, frame):
+    """Electric rim on some spike tips, bolts jumping between tips and off the outer ones."""
     px = out.load()
-    ph = 1 if sway >= 0 else 0
-    for k, ((x, y), steps) in enumerate(BT_ARCS):
-        x += ph * (1 if k % 2 else -1)
-        y += ph * (k % 2)
-        pts = [(x, y)]
-        for j, (dx, dy) in enumerate(steps):
-            sgn = -1 if ph else 1
-            pts.append((pts[-1][0] + dx * sgn, pts[-1][1] + dy))
-        for j in range(len(pts) - 1):
-            a, b = pts[j], pts[j + 1]
-            bt_line(px, out.width, out.height, (a[0] + 1, a[1]), (b[0] + 1, b[1]), BT_TEAL_D)
-        for j in range(len(pts) - 1):
-            bt_line(px, out.width, out.height, pts[j], pts[j + 1], BT_TEAL_L if j % 2 == 0 else WHITE)
+    tips = sorted(((round(x), round(y), d) for x, y, d in BT_TIPS), key=lambda t: t[0])
+    W_, H_ = out.width, out.height
+    # rim: tip pixel white, the 2 px below it light teal when hair is there
+    for k, (x, y, d) in enumerate(tips):
+        if (k + frame) % 3 == 0:
+            for j, col in enumerate((WHITE, BT_TEAL_L, BT_TEAL_L)):
+                yy = y + j
+                if 0 <= x < W_ and 0 <= yy < H_ and (px[x, yy][3] > 0 or j == 0):
+                    px[x, yy] = col + (255,)
+    top = [t for t in tips if t[1] < 26]
+    pairs = []
+    for k in range(len(top) - 1):
+        a, b = top[k], top[k + 1]
+        dist = abs(a[0] - b[0]) + abs(a[1] - b[1])
+        if 8 <= dist <= 26:
+            pairs.append((a, b))
+    for k, (a, b) in enumerate(pairs):
+        if (k + frame) % 3 == 1:
+            bt_zig(px, W_, H_, (a[0], a[1]), (b[0], b[1]), frame)
+    if top:   # off the outermost tips
+        l, r = top[0], top[-1]
+        bt_zig(px, W_, H_, (l[0], l[1]), (max(1, l[0] - 6 - frame % 2), max(1, l[1] - 7 + frame % 2)), frame, 1)
+        bt_zig(px, W_, H_, (r[0], r[1]), (min(W_ - 2, r[0] + 6 + frame % 2), max(1, r[1] - 7 + frame % 2)), frame + 1, 1)
+
+
+def bt_cheek_rim(out):
+    """Electric teal rim on the right cheek: the pixel just inside the ink outline, jaw rows only."""
+    px = out.load()
+    for y in range(67, 80):
+        xs = [x for x in range(out.width - 1, 40, -1) if px[x, y][3] > 0]
+        if not xs:
+            continue
+        xr = xs[0]
+        for k in (1, 2) if y < 76 else (1,):
+            if px[xr - k, y][:3] in (SK, SK_S, SK_D, SK_L):
+                px[xr - k, y] = BT_TEAL_L + (255,)
+
+
+def bt_shout(out):
+    """Small rounded-D mouth: flat top with a 1 px teeth row, dark plum inside, a tongue hint, no ink."""
+    px = out.load()
+    x0, y0 = 44, 71
+    rows = ["OOOOOOOO", "OWWWWWWO", "OPPPPPPO", "OPTTTTPO", ".OTTTTO.", "..OOOO.."]
+    cols = {"O": BT_SUIT_D, "W": WHITE, "P": BT_PLUM, "T": RED}
+    for j, row in enumerate(rows):
+        for i, c in enumerate(row):
+            if c != ".":
+                px[x0 + i, y0 + j] = cols[c] + (255,)
 
 
 def bt_brows(out, expr):
@@ -366,7 +469,7 @@ def bt_brows(out, expr):
         px[x_in, y0 + 1 + tilt] = BT_BROW + (255,)
 
 
-def bt_frame(sway, expr, cfg=None):
+def bt_frame(sway, expr, cfg=None, frame=0):
     global BT_CFG
     BT_CFG = dict(BT_BASE, **(cfg or {}))
     src = bt_draw_frame(sway, expr)
@@ -385,23 +488,26 @@ def bt_frame(sway, expr, cfg=None):
     out = cleanup(out, prot)
     out = bt_recolor_interior(out, (38, 66, 60, 82) if expr == "shout" else None)
     bt_brows(out, expr)
-    bt_arcs(out, sway)
+    if expr == "shout":
+        bt_shout(out)
+    bt_cheek_rim(out)
+    bt_arcs(out, sway, frame)
     return out
 
 
 BT_FRAMES = [(-1, "calm"), (1, "calm"), (0.3, "determined"), (0.5, "shout")]
 
 BT_VARIANTS = [
-    ("A", dict(spikes="up", eyes="narrow", acc="none", mouth="smirk"),
-     "Godspeed crown: seven upright lightning spikes, narrow Flint-style teal eyes, smirk"),
-    ("B", dict(spikes="swept", eyes="sharp", acc="goggles", mouth="smirk"),
-     "Wind-swept back spikes, sharp slanted eyes, goggles strapped on the crown"),
-    ("C", dict(spikes="fringe", eyes="round", acc="plaster", mouth="grin"),
-     "Short spiky fringe, big round cheerful eyes, plaster on the nose, open grin"),
-    ("D", dict(spikes="mohawk", eyes="narrow", acc="headband", mouth="smirk"),
-     "Tall central mohawk of spikes, maroon bolt headband, narrow eyes, smirk"),
+    ("A", dict(take="explode", eyes="narrow", acc="none", mouth="smirk"),
+     "Explosive crown: big symmetric-ish fan of ~23 spikes in 3 layers, narrow teal eyes, smirk"),
+    ("B", dict(take="swept", eyes="narrow", acc="none", mouth="smirk"),
+     "Blast-back: the whole crown blown up and to the left, long streaking spikes"),
+    ("C", dict(take="clumps", eyes="narrow", acc="none", mouth="smirk"),
+     "Wild clumps: spikes in clusters of 3 with uneven gaps, tallest leaning both ways"),
+    ("D", dict(take="pomp", eyes="narrow", acc="none", mouth="smirk"),
+     "Mega pompadour: tall forward-leaning central mass with shorter flanks"),
 ]
-BT_SHIP = "A"
+BT_SHIP = "C"
 
 
 def bt_variants_sheet(review, flint):
@@ -436,7 +542,7 @@ def bolt_main():
     anime = os.path.join(root, "assets", "title", "anime")
     flint = Image.open(os.path.join(anime, "flint_bust.png")).convert("RGBA").crop((0, 0, W, H))
     cfg = dict(next(c for k, c, _ in BT_VARIANTS if k == BT_SHIP))
-    frames = [bt_frame(s, e, cfg) for s, e in BT_FRAMES]
+    frames = [bt_frame(s, e, cfg, k) for k, (s, e) in enumerate(BT_FRAMES)]
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
     for i, f in enumerate(frames):
         strip.paste(f, (i * W, 0))
