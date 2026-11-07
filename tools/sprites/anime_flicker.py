@@ -31,12 +31,13 @@ FIRIS = {"ember": ((226, 128, 52), (136, 58, 44), (250, 196, 98)),
          "flash": ((252, 232, 130), (244, 176, 72), (255, 255, 255))}
 
 # rebind Sakura's colour roles (this process only): hair H_*, cloth KIM*, iris
-ab.H_EDGE, ab.HR, ab.H_D, ab.H_L, ab.H_HI = FH_EDGE, FHR, FH_D, FH_L, FH_HI
-ab.KIM, ab.KIM_S, ab.KIM_D = FKIM, FKIM_S, FKIM_D
-ab.KIMS = {FKIM, FKIM_S, FKIM_D, FKIM_L}
-ab.HAIRS = {FH_EDGE, FHR, FH_D, FH_L, FH_HI}
-ab.IRISES.update(FIRIS)
-ab.LOCK_BANDS = [(-1, 0.2, 1.0, 0.1, 0.97, FH_D), (1, 0.1, 0.95, 0.04, 0.75, FH_L), (1, 0.5, 0.9, 0.06, 0.4, FH_HI)]
+if not os.environ.get("F_PLAIN"):          # F_PLAIN=1: leave Sakura's colours alone (chin sheet renders her in a subprocess)
+    ab.H_EDGE, ab.HR, ab.H_D, ab.H_L, ab.H_HI = FH_EDGE, FHR, FH_D, FH_L, FH_HI
+    ab.KIM, ab.KIM_S, ab.KIM_D = FKIM, FKIM_S, FKIM_D
+    ab.KIMS = {FKIM, FKIM_S, FKIM_D, FKIM_L}
+    ab.HAIRS = {FH_EDGE, FHR, FH_D, FH_L, FH_HI}
+    ab.IRISES.update(FIRIS)
+    ab.LOCK_BANDS = [(-1, 0.2, 1.0, 0.1, 0.97, FH_D), (1, 0.1, 0.95, 0.04, 0.75, FH_L), (1, 0.5, 0.9, 0.06, 0.4, FH_HI)]
 
 F_PAL = [INK, MAROON, LIP, SK, SK_L, SK_S, SK_D, BLUSH, CREAM, WHITE, FH_EDGE, FHR, FH_D, FH_L, FH_HI, FKIM, FKIM_S, FKIM_D,
          FKIM_L, FSC, FSC_L, FSC_D, ORANGE, LIGHT_OR, FOR_D, RED, DEEP_RED, YELLOW, FSM_L, FSM, FSM_D]
@@ -49,6 +50,30 @@ F_MASK = {CREAM, FSM, FSM_L}
 FBASE = dict(mouth="smirk", hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
              lift=0.0, wind=0.0, iris="ember", mode="open", sidelock=False)
 
+
+
+# ---------------------------------------------------------------- female face shape (explicit, per character)
+# chin_w: full width of the chin (units), chin_drop: how far the chin tip sits below Sakura's (43.0), taper: jaw curve exponent
+# (2 = round cheek-to-chin like Sakura, 1 = a straight V), cheek: change of the cheekbone half width (11.6) on the base cheek
+F_FACE_STEPS = [(8.0, 0.0, 2.0, 0.0), (6.6, 0.7, 1.7, -0.01), (5.4, 1.4, 1.4, -0.02), (4.2, 2.3, 1.1, -0.04)]
+F_FACE_SHIP = (5.8, 1.1, 1.55, -0.02)          # "a tad pointier": between B and C
+F_FACE = {"p": F_FACE_SHIP, "cheek0": -0.03}
+
+
+def f_face_pts():
+    chin_w, drop, taper, dch = (tuple(F_FACE["p"]) + (0.0,))[:4]
+    hw0 = 11.6 * (1 + F_FACE["cheek0"] + dch)
+    cy = 43.0 + drop
+    R = [(24 + hw0, 27.5), (24 + hw0, 31.5)]
+    for t in (0.3, 0.55, 0.78):
+        y = 31.5 + t * (cy - 31.5)
+        R.append((24 + chin_w / 2 + (hw0 - chin_w / 2) * (1 - t ** taper), y))
+    R += [(24 + chin_w / 2 * 0.8, cy - 0.7), (24, cy)]
+    Lf = [(48 - x, y) for x, y in R[::-1]][1:]
+    return [(13.4, 17), (34.6, 17)] + R + Lf + [(24 - hw0, 27.5)]
+
+
+ab.s_face_pts = f_face_pts
 
 # ---------------------------------------------------------------- torso: gi, scarf, belt
 F_NECK = [(20.2, 35), (27.8, 35), (28.6, 45), (19.4, 45)]
@@ -431,6 +456,8 @@ def make_frame(sway, expr, cfg=None, extra=None):
     ab.SCFG = dict(ab.SDEFAULT, eyes=cfg["eyes"], iris=cfg["iris"] if cfg["mode"] != "flash" else "flash", hair="long",
                    cheeks=cfg["cheeks"], shade=1)
     F_MOUTH[0] = cfg["mouth"]
+    F_FACE["cheek0"] = cfg["cheeks"]
+    F_FACE["p"] = cfg.get("face", F_FACE_SHIP)
     src = f_draw_frame(sway, expr, cfg)
     diff = ImageChops.difference(src, Image.new("RGB", src.size, BG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
@@ -600,13 +627,61 @@ def f_save_rise(frames, review):
     sheet.save(os.path.join(review, "flicker_rise_sheet.png"))
 
 
+
+def f_chin_sheet(review):
+    """Four chin steps A (current) .. D (clear V) on Shade (top row) and on Sakura's face (second row, review only)."""
+    import subprocess
+    import tempfile
+    from PIL import ImageFont
+    tmp = tempfile.mkdtemp(prefix="sakura_chins_")
+    env = dict(os.environ, F_PLAIN="1")
+    subprocess.run([sys.executable, os.path.abspath(__file__), "--sakura-chins", tmp], check=True, env=env)
+    rows = [[make_frame(-1, "calm", dict(F_SHIP, face=st[:3], cheeks=-0.03 + st[3])) for st in F_FACE_STEPS],
+            [Image.open(os.path.join(tmp, "s%d.png" % i)).convert("RGBA") for i in range(4)]]
+    S = 4
+    bg = (92, 112, 134, 255)
+    cw = W * S + 8
+    rh = H * S + 8
+    sheet = Image.new("RGBA", (cw * 4 + 8, rh * 2 + 70 + (H + 8) * 2), bg)
+    try:
+        font = ImageFont.load_default(size=44)
+    except TypeError:
+        font = ImageFont.load_default()
+    d = ImageDraw.Draw(sheet)
+    for r, row in enumerate(rows):
+        for i, f in enumerate(row):
+            big = f.resize((W * S, H * S), Image.NEAREST)
+            sheet.paste(big, (8 + i * cw, 8 + r * rh), big)
+            sheet.alpha_composite(f, (8 + i * cw + (W * S - W) // 2, rh * 2 + 70 + r * (H + 8)))
+    for i, lab in enumerate("ABCD"):
+        tw = d.textlength(lab, font=font)
+        d.text((8 + i * cw + (W * S - tw) / 2, rh * 2 + 8), lab, fill=(255, 255, 255, 255), font=font)
+    sheet.convert("RGB").save(os.path.join(review, "female_chins.png"))
+    with open(os.path.join(review, "female_chins_key.txt"), "w") as fh:
+        fh.write("Top row Shade, second row Sakura (same chin steps, review only). (chin width, tip drop, jaw taper exponent, cheek delta)\n")
+        for lab, st in zip("ABCD", F_FACE_STEPS):
+            fh.write("%s: %s\n" % (lab, st))
+        fh.write("shipped for Shade: %s (between B and C)\n" % (F_FACE_SHIP,))
+
+
+def f_sakura_chins(out_dir):
+    """Subprocess (F_PLAIN=1, her own colours): Sakura's calm frame with each chin step."""
+    for i, st in enumerate(F_FACE_STEPS):
+        F_FACE["p"] = st
+        F_FACE["cheek0"] = 0.03
+        ab.make_sakura_frame(-1, "calm").save(os.path.join(out_dir, "s%d.png" % i))
+
+
 def main():
+    if len(sys.argv) > 2 and sys.argv[1] == "--sakura-chins":
+        return f_sakura_chins(sys.argv[2])
     root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     review = sys.argv[1] if len(sys.argv) > 1 else None
     flint = Image.open(os.path.join(root, "assets", "title", "anime", "flint_bust.png")).convert("RGBA").crop((0, 0, W, H))
     if review:
         os.makedirs(review, exist_ok=True)
         f_variants_sheet(review, flint)
+        f_chin_sheet(review)
         f_variants_sheet(review, flint, "flicker_mouths", [(l, dict(F_SHIP, mouth=k), t) for l, k, t in F_MOUTHS])
     frames = f_bust_frames()
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
