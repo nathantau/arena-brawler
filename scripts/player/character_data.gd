@@ -26,8 +26,13 @@ extends Resource
 @export var godspeed_sheet: Texture2D
 ## The in-between looks of the power-up (stages 1..POWER_STAGES - 1), same layout: hair brightening and rising, glow growing.
 @export var power_sheets: Array[Texture2D] = []
+## Optional anime bust for the character select (strip of Constants.BUST_SIZE frames: 2 calm, determined, shout) and
+## its power-up (strip, last frame = the held look). No bust = the normal sprite is shown.
+@export var bust_sheet: Texture2D
+@export var rise_sheet: Texture2D
 
 
+var _bust_frames: SpriteFrames
 var _portraits: Array[AtlasTexture] = []
 var _sprite_frames: SpriteFrames
 var _godspeed_frames: SpriteFrames
@@ -74,6 +79,32 @@ func sprite_frames() -> SpriteFrames:
 	if _sprite_frames == null:
 		_sprite_frames = frames_from_sheet(sprite_sheet)
 	return _sprite_frames
+
+
+func has_bust() -> bool:
+	return bust_sheet != null and rise_sheet != null
+
+
+## "idle" (loops the two calm frames slowly) and "rise" (plays once, then stays on its last frame); built once, shared.
+func bust_frames() -> SpriteFrames:
+	if _bust_frames == null:
+		_bust_frames = SpriteFrames.new()
+		_bust_frames.remove_animation(&"default")
+		_add_bust_animation(&"idle", bust_sheet, Constants.BUST_IDLE_FRAMES, 1.0 / Constants.BUST_IDLE_SECS, true)
+		_add_bust_animation(&"rise", rise_sheet, rise_sheet.get_width() / Constants.BUST_SIZE.x,
+			Constants.BUST_RISE_FPS, false)
+	return _bust_frames
+
+
+func _add_bust_animation(anim: StringName, sheet: Texture2D, count: int, fps: float, loop: bool) -> void:
+	_bust_frames.add_animation(anim)
+	_bust_frames.set_animation_speed(anim, fps)
+	_bust_frames.set_animation_loop(anim, loop)
+	for i: int in count:
+		var frame := AtlasTexture.new()
+		frame.atlas = sheet
+		frame.region = Rect2(Vector2(i * Constants.BUST_SIZE.x, 0), Vector2(Constants.BUST_SIZE))
+		_bust_frames.add_frame(anim, frame)
 
 
 func has_godspeed() -> bool:

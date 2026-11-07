@@ -84,6 +84,9 @@ const SLIDE_TIME: float = 0.25
 const SHEET_FRACTION: float = 0.58
 const SCRIM_ALPHA: float = 0.6
 ## Seconds between the preview's idle and a short walk / attack loop.
+## The anime bust (CharacterData.bust_sheet) fills this much of the stage height at a whole scale, bleeding off the bottom.
+const BUST_FILL: float = 0.92
+const BUST_MAX_SCALE: int = 8
 const FLAIR_GAP: Vector2 = Vector2(2.5, 4.5)
 const FLAIR_WALK_LOOPS: int = 2
 
@@ -160,6 +163,7 @@ var _pivot: Node2D
 var _backdrop: StageBackdrop
 var _floor_fx: Control
 var _sprite: AnimatedSprite2D
+var _bust: AnimatedSprite2D
 var _preview_id: StringName = &""
 var _preview_tween: Tween
 var _info: VBoxContainer
@@ -412,6 +416,12 @@ func _build_stage(body: BoxContainer) -> void:
 	_sprite = AnimatedSprite2D.new()
 	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_pivot.add_child(_sprite)
+	_bust = AnimatedSprite2D.new()  # replaces the sprite for a fighter with an anime bust
+	_bust.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_bust.centered = false
+	_bust.offset = Vector2(-Constants.BUST_SIZE.x * 0.5, -Constants.BUST_SIZE.y)  # origin = bottom middle
+	_bust.visible = false
+	_pivot.add_child(_bust)
 
 	var tap := Button.new()  # the whole showcase is a button to the loadout
 	tap.flat = true
@@ -789,6 +799,11 @@ static func preview_scale(stage: Vector2) -> int:
 	return clampi(floori(fit), 2, PREVIEW_MAX_SCALE)
 
 
+## Integer scale that makes the bust fill BUST_FILL of a stage this tall.
+static func bust_scale(stage: Vector2) -> int:
+	return clampi(floori(stage.y * BUST_FILL / Constants.BUST_SIZE.y), 1, BUST_MAX_SCALE)
+
+
 func _layout_stage() -> void:
 	var s: int = preview_scale(_stage.size)
 	_sprite.scale = Vector2.ONE * s
@@ -802,6 +817,11 @@ func _layout_stage() -> void:
 		x = maxf(_stage.size.x * 0.5, _stage.size.x - half)
 	var feet_y: float = _stage.size.y * FLOOR_LINE
 	_pivot.position = Vector2(x, feet_y - 22.0 * s)
+	var bs: int = bust_scale(_stage.size)
+	_bust.scale = Vector2.ONE * bs
+	_bust.position.y = _stage.size.y - _pivot.position.y  # bottom edge on the stage's bottom edge
+	if _bust.visible:  # wider than the body: still clear of the name block
+		_pivot.position.x = maxf(x, 18.0 + INFO_W + Constants.BUST_SIZE.x * 0.5 * bs)
 	for i: int in MATE_SLOTS:  # first teammate on your left, second on your right
 		var sign: float = -1.0 if i == 0 else 1.0
 		var mate_feet: float = feet_y - _stage.size.y * MATE_RAISE
@@ -834,7 +854,8 @@ func _draw_floor_fx() -> void:
 			var a: float = TAU * i / steps
 			var at: Vector2 = centre + Vector2(cos(a) * radii.x * 1.04, sin(a) * radii.y * 1.04)
 			_floor_fx.draw_rect(Rect2((at / s).floor() * s, Vector2(s, s)), SPOT_COLOR)
-	_draw_shadow(feet, s)
+	if not _bust.visible:
+		_draw_shadow(feet, s)
 	for i: int in MATE_SLOTS:
 		if _mate_pivots[i].visible:
 			var ms: float = _mate_sprites[i].scale.x
@@ -857,6 +878,11 @@ func _show_preview(c: CharacterData) -> void:
 		_preview_tween = null
 	_sprite.sprite_frames = c.sprite_frames()
 	_sprite.play(&"idle")
+	_sprite.visible = not c.has_bust()
+	_bust.visible = c.has_bust()
+	if c.has_bust():
+		_bust.sprite_frames = c.bust_frames()
+		_bust.play(&"rise")  # plays once and stays on the last frame (the held look)
 	_backdrop.show_theme(StageBackdrop.texture_for(c.id))
 	_in_flair = false
 	_flair_left = FLAIR_GAP.x
@@ -877,17 +903,19 @@ func _show_preview(c: CharacterData) -> void:
 	_pivot.scale = Vector2.ONE * ZOOM_FROM
 	_pivot.modulate.a = 0.0
 	_sprite.position.x = SLIDE_FROM
+	_bust.position.x = SLIDE_FROM
 	_info.modulate.a = 0.0
 	_preview_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_preview_tween.tween_property(_pivot, "scale", Vector2.ONE, ZOOM_TIME)
 	_preview_tween.tween_property(_pivot, "modulate:a", 1.0, ZOOM_TIME * 0.8)
 	_preview_tween.tween_property(_sprite, "position:x", 0.0, ZOOM_TIME)
+	_preview_tween.tween_property(_bust, "position:x", 0.0, ZOOM_TIME)
 	_preview_tween.tween_property(_info, "modulate:a", 1.0, ZOOM_TIME)
 
 
 ## Now and then the preview runs or swings before settling back to idle.
 func _tick_flair(delta: float) -> void:
-	if _sprite.sprite_frames == null:
+	if _sprite.sprite_frames == null or _bust.visible:
 		return
 	_flair_left -= delta
 	if _flair_left > 0.0:
