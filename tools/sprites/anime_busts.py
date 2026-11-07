@@ -734,11 +734,14 @@ def s_brow(d, cx, cy, side, lift=0.0, tilt=1.0):
     if E.get("anime"):
         """Thin, soft, high and slightly arched, in a hair-dark tone (not ink)."""
         base = cy - 4.1 - lift
-        dn = (tilt - 1) * 1.2
+        dn = (tilt - 1) * 2.4
         inner = (cx - side * 2.4, base + 0.3 + dn)
-        mid = (cx + side * 0.4, base - 0.55)
-        outer = (cx + side * 3.3, base + 0.1 - dn * 0.6)
-        d.line([P(*p) for p in smooth([inner, mid, outer], 6)], fill=lc(H_D), width=6, joint="curve")
+        mid = (cx + side * 0.4, base - 0.55 + dn * 0.25)
+        outer = (cx + side * 3.3, base + 0.1 - dn * 0.5)
+        sm = smooth([inner, mid, outer], 6)
+        col = lc(H_EDGE)
+        d.line([P(*p) for p in sm], fill=col, width=7, joint="curve")
+        d.line([P(*p) for p in sm[:len(sm) // 2]], fill=col, width=11, joint="curve")      # 1 px thicker at the inner end
         return
     lift += E["brow"]
     outer = (cx + side * 4.0, cy - 3.6 - lift - 0.5 * (tilt - 1))
@@ -748,19 +751,22 @@ def s_brow(d, cx, cy, side, lift=0.0, tilt=1.0):
 
 
 def s_mouth(d, kind):
-    """Small and cute: a short soft line in a dark-pink tone with the corners lifted, a tiny lighter lower lip;
-    shout = a small rounded open mouth with a hint of tongue."""
+    """A soft curved smile (dark-pink line, corners lifted, a lighter lower-lip tint); determined = the same width as a
+    one-sided smirk; shout = a rounded-D open mouth (flat top, round bottom) with a white teeth sliver and tongue."""
     YOFF[0] = -2.7
     if kind == "shout":
-        pts = ellipse_pts(24.0, 39.7, 1.2, 1.45, 16)
+        arc = [(24 + 1.75 * math.cos(a * math.pi / 14), 38.2 + 2.3 * math.sin(a * math.pi / 14)) for a in range(15)]
+        pts = [(22.25, 38.2), (25.75, 38.2)] + arc
         poly(d, pts, H_EDGE)
-        d.ellipse((23.2 * K, 40.2 * K, 24.8 * K, 41.0 * K), fill=LIP)
+        d.ellipse((22.9 * K, 36.9 * K, 25.1 * K, 37.8 * K), fill=RED_L)       # (raw coordinates: no YOFF)
+        rect(d, 22.7, 35.6, 25.3, 36.15, CREAM)
         outline(d, pts, 4, col=lc(LIP))
     elif kind == "determined":
-        d.line([P(*p) for p in smooth([(22.9, 39.5), (23.8, 39.6), (24.7, 39.4), (25.4, 38.9)], 6)], fill=lc(LIP), width=7, joint="curve")
+        d.line([P(*p) for p in smooth([(21.9, 39.5), (23.2, 39.9), (24.7, 39.7), (25.8, 39.0), (26.3, 38.5)], 6)], fill=lc(LIP), width=8, joint="curve")
+        d.line([P(23.2, 40.9), P(25.0, 40.8)], fill=BLUSH, width=6)
     else:
-        d.line([P(*p) for p in smooth([(22.8, 39.0), (23.6, 39.5), (24.5, 39.5), (25.3, 39.0)], 6)], fill=lc(LIP), width=7, joint="curve")
-        d.line([P(23.7, 40.3), P(24.4, 40.3)], fill=SK_L, width=4)
+        d.line([P(*p) for p in smooth([(21.9, 38.9), (22.8, 39.6), (24.0, 39.9), (25.2, 39.6), (26.1, 38.9)], 6)], fill=lc(LIP), width=8, joint="curve")
+        d.line([P(23.0, 40.8), P(25.0, 40.8)], fill=BLUSH, width=6)
     YOFF[0] = 0.0
 
 
@@ -818,10 +824,9 @@ def s_draw_face(img, neckm, torm, expr):
     paste_mask(img, SK_L, both(facem, poly_mask([(15.0, 29.0), (21.0, 30.0), (20.2, 34.0), (17.6, 34.2), (15.4, 32.5)])))
     paste_mask(img, SK_L, both(facem, poly_mask([(15.4, 22.5), (21, 22.5), (20.5, 24.5), (15.2, 25)])))
     paste_mask(img, SK_S, both(facem, inv(shift(facem, int((-22 if strong else -12) * F), 0))))
-    if strong:
-        paste_mask(img, SK_S, both(facem, poly_mask([(26.0, 34.0), (35.8, 30.5), (34.4, 36.5), (28.6, 42.2), (24.5, 41.8)])))
-        chin = both(facem, inv(shift(facem, 0, int(-14 * F))))
-        paste_mask(img, SK_S, both(chin, shift(facem, int(-30 * F), 0)))
+    if strong:     # a band 3 px wide along the right jaw and under the chin, not a plane
+        band = both(both(facem, inv(shift(facem, int(-1.5 * K), int(-1.4 * K)))), box_mask(0, 29, 48, 48))
+        paste_mask(img, SK_S, band)
     paste_mask(img, SK_D, both(both(facem, inv(shift(facem, int(-9 * F), 0))), box_mask(0, 25, 48, 40)))
     paste_mask(img, SK_L, both(both(facem, inv(shift(facem, int(-4 * F), 0))), box_mask(0, 26, 48, 36)))
     d = ImageDraw.Draw(img)
@@ -851,12 +856,12 @@ SHAIRLINE = [(13.4, 23.5), (14.5, 21.8), (17, 20.4), (20.5, 20.8), (24, 20.2), (
              (34.6, 23.5)]
 # bangs: short wide tongues across the forehead ending above the brows (root, tip, width, bend)
 SBANG_SETS = {
-    "blunt": [((15.0, 17.5), (14.4, 22.7), 7.0, 0.8), ((18.4, 17.0), (17.6, 23.2), 7.0, 0.7),
-              ((21.8, 16.8), (21.4, 23.4), 7.0, 0.5), ((25.4, 16.8), (26.0, 23.2), 7.0, -0.5),
-              ((28.9, 17.0), (30.0, 23.0), 7.0, -0.7), ((32.4, 17.5), (33.6, 22.6), 7.0, -0.8)],
-    "side": [((14.6, 17.5), (12.8, 25.2), 7.0, 1.0), ((18.0, 17.0), (15.8, 25.4), 7.0, 1.0),
-             ((21.6, 16.6), (19.4, 25.0), 7.0, 0.9), ((25.4, 16.6), (23.6, 24.2), 7.0, 0.8),
-             ((29.0, 17.0), (27.8, 23.4), 7.0, 0.6), ((32.4, 17.5), (31.8, 22.6), 6.5, 0.5)],
+    "blunt": [((15.0, 17.5), (14.4, 21.5), 7.0, 0.8), ((18.4, 17.0), (17.6, 22.0), 7.0, 0.7),
+              ((21.8, 16.8), (21.4, 22.2), 7.0, 0.5), ((25.4, 16.8), (26.0, 22.0), 7.0, -0.5),
+              ((28.9, 17.0), (30.0, 21.8), 7.0, -0.7), ((32.4, 17.5), (33.6, 21.4), 7.0, -0.8)],
+    "side": [((14.6, 17.5), (12.8, 24.0), 7.0, 1.0), ((18.0, 17.0), (15.8, 24.2), 7.0, 1.0),
+             ((21.6, 16.6), (19.4, 23.8), 7.0, 0.9), ((25.4, 16.6), (23.6, 23.0), 7.0, 0.8),
+             ((29.0, 17.0), (27.8, 22.2), 7.0, 0.6), ((32.4, 17.5), (31.8, 21.4), 6.5, 0.5)],
 }
 
 
@@ -1017,8 +1022,9 @@ def s_draw_frame(sway=0.0, expr="calm"):
     d = ImageDraw.Draw(img)
     E = EYES[SCFG["eyes"]]
     lift, tilt = BROW_ARGS
-    s_brow(d, 24 - E["gap"] / 2, E["cy"] + 0.2, -1, lift, tilt)
-    s_brow(d, 24 + E["gap"] / 2, E["cy"] + 0.2, 1, lift, tilt)
+    if not E.get("anime"):
+        s_brow(d, 24 - E["gap"] / 2, E["cy"] + 0.2, -1, lift, tilt)
+        s_brow(d, 24 + E["gap"] / 2, E["cy"] + 0.2, 1, lift, tilt)
     return img
 
 
@@ -1081,6 +1087,33 @@ def add_obi_motif(out):
                 px[x + dx, 124] = DEEP_RED + (255,)
 
 
+def add_brows(out):
+    """Thin high soft brows in plum, 1 px, 2 px at the inner end, angled down-in when determined (exact pixels)."""
+    E = EYES[SCFG["eyes"]]
+    if not E.get("anime"):
+        return
+    lift, tilt = BROW_ARGS
+    px = out.load()
+    for side in (-1, 1):
+        cx, cy = 24 + side * E["gap"] / 2, E["cy"] + 0.2
+        base = cy - 3.9 - lift
+        dn = (tilt - 1) * 1.1
+        inner = (cx - side * 2.4, base + 0.3 + dn)
+        mid = (cx + side * 0.4, base - 0.55 + dn * 0.25)
+        outer = (cx + side * 3.3, base + 0.1 - dn * 0.5)
+        sm = [(x * 2, y * 2) for x, y in smooth([inner, mid, outer], 8)]
+        n_in = len(sm) // 2
+        for i in range(len(sm) - 1):
+            (x0, y0), (x1, y1) = sm[i], sm[i + 1]
+            steps = max(1, int(max(abs(x1 - x0), abs(y1 - y0)) * 3))
+            for k in range(steps + 1):
+                x = int(x0 + (x1 - x0) * k / steps)
+                y = int(y0 + (y1 - y0) * k / steps)
+                for yy in ((y, y + 1) if i < n_in * 0.6 else (y,)):
+                    if 0 <= x < out.width and 0 <= yy < out.height and px[x, yy][3] and px[x, yy][:3] != INK:
+                        px[x, yy] = H_EDGE + (255,)
+
+
 def make_sakura_frame(sway, expr, cfg=None):
     global SCFG
     SCFG = dict(SDEFAULT, **(cfg or {}))
@@ -1101,6 +1134,7 @@ def make_sakura_frame(sway, expr, cfg=None):
     prot = {(x, y) for y in range(44, 66) for x in range(26, 72) if px[x, y] == WHITE + (255,)}
     out = cleanup(out, prot)
     out = s_recolor_interior(out, (40, 68, 56, 80) if expr == "shout" else None)
+    add_brows(out)
     add_obi_motif(out)
     add_petals(out, sway)
     return out
