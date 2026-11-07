@@ -53,28 +53,22 @@ FBASE = dict(mouth="smirk", hair="long", eyes="animeB", mask="side", scarf="tail
 
 
 # ---------------------------------------------------------------- female face shape (explicit, per character)
-# Cheek width and chin are SEPARATE: cheek0 scales the face width below y 27 exactly as Sakura's does (Shade -0.03) and the
-# cheek points never move. The jaw is the bottom of a HEART: from the widest cheek point (y 31.5) each side runs down and inward as a
-# gently convex curve (x = hw * (1 - t^p), p > 1 bulges outward like a lower lobe) and the two meet at ONE point at the chin centre
-# (tip_y). p 2.0 is a round chin, ~1.5 a heart, ~1.15 nearly a straight V; tip_y 43.0 is Sakura's chin level.
-F_CHIN_STEPS = [(43.0, 2.0), (43.8, 1.75), (44.6, 1.5), (45.4, 1.25)]      # (tip_y, p): A round .. D sharp
-F_CHIN_SHIP = (44.6, 1.5)                                                  # heart bottom
+# Cheek width and chin are SEPARATE: cheek0 scales the face width below y 27 exactly as Sakura's does (Shade -0.03). Approved female
+# chin: Sakura's rounded jaw (SFACE0 down to the jaw corner (31.8, 39.4), then one soft point at (26.95, 42.34)) that ends in a small
+# POINTED CORNER: the two jaw curves meet at a single tip (24, tip_y), no flat or U-shaped chin. cw sets the lower jaw point's width
+# (8.0 = Sakura's 28.0 at 42.2), tip_y the tip level (43.0 = Sakura's chin level).
+F_CHIN_STEPS = [(8.0, 43.0), (6.5, 43.8), (6.5, 44.4), (6.5, 45.0)]      # (cw, tip_y): A round .. D sharper
+F_CHIN_SHIP = (6.5, 44.4)
 F_FACE = {"chin": F_CHIN_SHIP, "cheek0": -0.03}
 
 
 def f_face_pts():
-    tip_y, p = F_FACE["chin"]
+    cw, tip_y = F_FACE["chin"]
     f = F_FACE["cheek0"]
-    top = ab.SFACE0[:4]                       # ... (35.6, 31.5): the cheek points, unchanged
-    hw = 35.6 - 24
-    right = []
-    for k in range(1, 12):
-        t = k / 11.0
-        right.append((24 + hw * (1 - t ** p), 31.5 + t * (tip_y - 31.5)))
-    right[-1] = (24.0, tip_y)                 # a single point at the chin centre
-    left = [(48 - x, y) for x, y in right[::-1]][1:]
-    left_hi = [(12.4, 31.5), (12.4, 27.5)]
-    pts = top + right + left + left_hi
+    base = ab.SFACE0[:6]                      # ... (31.8, 39.4): cheeks and jaw unchanged
+    right_low = [(28.0 + (cw - 8.0) * 0.5 - 0.3, 42.34), (24.0, tip_y)]
+    left_low = [(48 - x, y) for x, y in right_low[::-1]][1:]
+    pts = base + right_low + left_low + ab.SFACE0[9:]
     return [(24 + (x - 24) * (1 + f), y) if y > 27 else (x, y) for x, y in pts]
 
 
@@ -663,10 +657,10 @@ def f_chin_sheet(review):
         d.text((8 + i * cw + (W * S - tw) / 2, rh * 2 + 8), lab, fill=(255, 255, 255, 255), font=font)
     sheet.convert("RGB").save(os.path.join(review, "female_chins.png"))
     with open(os.path.join(review, "female_chins_key.txt"), "w") as fh:
-        fh.write("Top row Shade, second row Sakura (same chin steps, review only). (chin tip y, jaw curve exponent p); cheeks never change\n")
+        fh.write("Top row Shade, second row Sakura (same chin steps, review only). (chin width, tip y); cheeks never change\n")
         for lab, st in zip("ABCD", F_CHIN_STEPS):
             fh.write("%s: %s\n" % (lab, st))
-        fh.write("shipped for Shade: %s (heart-bottom chin)\n" % (F_CHIN_SHIP,))
+        fh.write("shipped for Shade: %s (rounded jaw, pointed corner)\n" % (F_CHIN_SHIP,))
 
 
 def f_sakura_chins(out_dir):

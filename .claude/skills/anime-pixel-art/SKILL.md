@@ -84,17 +84,17 @@ Reference: `assets/title/anime/sakura_bust.png`, code = the Sakura section of `t
 (-1.5, -1.4) units, only below y 29) in SK_S, never a diagonal cheek plane. Keep ink outline, lit left, deep strip + rim right,
 chin shadow on the neck. Neck short (`STOFF` 0.8 vs Flint's 3.5), shoulders softly sloped.
 
-**Chin = the bottom of a heart; cheeks are separate (2026-11-06, Shade feedback)**: "a tad pointier" / "revise how we draw females" means
-the CHIN only ("dont change cheek size"), and the final answer was "make it like the bottom of a heart". Cheek width is its own number
-(`cheek0`: Sakura +0.03, Shade -0.03, scales x of every point below y 27 as `s_face_pts` does) and the cheek points (`SFACE0` down to
-(35.6, 31.5)) never move. From the widest cheek point (y 31.5) each side runs down and inward as a gently CONVEX curve (bulging outward,
-a lower lobe of a heart) and both meet at ONE defined point at the chin centre: no flat chin, no rounded U bottom. Formula
-(`f_face_pts` in `tools/sprites/anime_flicker.py`, patched over `ab.s_face_pts` at runtime, anime_busts.py untouched): 11 points
-`x = 24 + 11.6 * (1 - t^p)`, `y = 31.5 + t * (tip_y - 31.5)`, t = 1/11 .. 1, last point = (24, tip_y), then the cheek scale. Shade ships
-**tip_y 44.6, p 1.5** (a 1-2 px tip at x1, the jaw band follows it, ears stay hidden). Steps `F_CHIN_STEPS` (tip_y, p): A (43.0, 2.0)
-round like Sakura, B (43.8, 1.75), C (44.6, 1.5) heart, D (45.4, 1.25) nearly a straight V (too sharp). p ~2 reads round, p ~1.1 a straight
-wedge; always keep the lobes convex. Young / cute faces may use A-B, adult / cool faces C. Narrowing the cheeks exposes dark ear
-notches, so don't. Render `female_chins.png` (Shade + Sakura at the four steps) to compare before changing a face.
+**Female chin: rounded jaw ending in a small pointed corner; cheeks are separate (APPROVED 2026-11-06, Shade)**: user feedback went "a tad
+pointier" -> "dont change cheek size" -> "like the bottom of a heart" -> "I want the left side [the fuller, rounder lower cheeks / jaw],
+but the chin a corner like the right side". So: keep Sakura's rounded jaw exactly, and only the very bottom changes: the two jaw curves
+meet in ONE defined point at the chin centre (no flat chin, no rounded U bottom). Cheek width is its own number (`cheek0`: Sakura
++0.03, Shade -0.03, scales x of every point below y 27 as `s_face_pts` does); narrowing the cheeks exposes dark ear notches, don't. Points
+(`f_face_pts` in `tools/sprites/anime_flicker.py`, patched over `ab.s_face_pts` at runtime, anime_busts.py untouched): `SFACE0` down to
+(31.8, 39.4) unchanged, then (28.0 + (cw - 8) * 0.5 - 0.3, 42.34), then the tip (24, tip_y), mirrored. Shade ships **cw 6.5, tip_y 44.4**
+(tip about 1.4 below Sakura's chin level 43.0; a 1-2 px point at x1; the jaw shadow band follows it). Steps `F_CHIN_STEPS` (cw, tip_y): A
+(8.0, 43.0) round like Sakura, B (6.5, 43.8), C (6.5, 44.4) shipped, D (6.5, 45.0) sharper. A pure heart-shaped taper (jaw curves
+convex from the cheek point down to the tip, `x = 24 + 11.6 * (1 - t^1.5)`) was tried and rejected: too narrow in the lower cheeks. Render
+`female_chins.png` (Shade + Sakura at the steps) to compare before changing a face.
 
 **Eyes** (option B = `EYES["animeB"]`, drawn by `s_eye_anime`): ~6.6 wide x 5.2 tall (never bigger; chibi / hearts / "alien"
 came from big dark irises and a V lower lid), centres 24 +- 4.8, cy 27.8. Upper lash = thick ARCH peaking at t 0.62 (outward of
