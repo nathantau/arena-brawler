@@ -22,11 +22,10 @@ func test_bust_frames_are_whole_cells() -> void:
 
 
 func test_bust_scale_is_whole_and_fits() -> void:
-	var stage := Vector2(2480.0, 820.0)
-	var s: int = LobbyPanel.bust_scale(stage)
-	assert_eq(s, 5)
-	assert_lte(s * Constants.BUST_SIZE.y, stage.y)
-	assert_eq(LobbyPanel.bust_scale(Vector2(100.0, 100.0)), 1, "never below x1")
+	var s: int = LobbyPanel.bust_scale(1100.0, 1000.0)
+	assert_eq(s, 6)
+	assert_lte(s * Constants.BUST_SIZE.y, 1100.0)
+	assert_eq(LobbyPanel.bust_scale(100.0, 100.0), 1, "never below x1")
 
 
 func test_rise_plays_then_holds_the_last_frame() -> void:
@@ -35,6 +34,10 @@ func test_rise_plays_then_holds_the_last_frame() -> void:
 	sprite.sprite_frames = WUKONG.bust_frames()
 	sprite.play(&"rise")
 	assert_eq(sprite.frame, 0)
-	await get_tree().create_timer(8.0 / Constants.BUST_RISE_FPS + 0.4).timeout
+	var rise: float = 8.0 / Constants.BUST_RISE_FPS
+	await get_tree().create_timer(rise + Constants.BUST_RISE_HOLD * 0.5).timeout
+	assert_eq(sprite.frame, 7)
+	assert_true(sprite.is_playing(), "still lingering on the held look")
+	await get_tree().create_timer(Constants.BUST_RISE_HOLD).timeout
 	assert_eq(sprite.frame, 7, "stays on look C")
 	assert_false(sprite.is_playing())

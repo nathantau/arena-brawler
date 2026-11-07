@@ -104,7 +104,8 @@ func _add_bust_animation(anim: StringName, sheet: Texture2D, count: int, fps: fl
 		var frame := AtlasTexture.new()
 		frame.atlas = sheet
 		frame.region = Rect2(Vector2(i * Constants.BUST_SIZE.x, 0), Vector2(Constants.BUST_SIZE))
-		_bust_frames.add_frame(anim, frame)
+		var hold: bool = not loop and i == count - 1  # the held look lingers a beat before the animation ends
+		_bust_frames.add_frame(anim, frame, 1.0 + (Constants.BUST_RISE_HOLD * fps if hold else 0.0))
 
 
 func has_godspeed() -> bool:
