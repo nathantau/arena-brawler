@@ -6,9 +6,14 @@
 [ext_resource type="Resource" path="res://data/skills/shadow_step.tres" id="5_skill"]
 [ext_resource type="Resource" path="res://data/skills/eclipse.tres" id="9_ult"]
 
+[ext_resource type="Texture2D" path="res://assets/title/anime/shadow_bust.png" id="10_bust"]
+[ext_resource type="Texture2D" path="res://assets/title/anime/shadow_rise.png" id="11_rise"]
+
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
+bust_sheet = ExtResource("10_bust")
+rise_sheet = ExtResource("11_rise")
 signature_weapon = ExtResource("3_sig")
 signature_skill = ExtResource("5_skill")
 ultimate = ExtResource("9_ult")

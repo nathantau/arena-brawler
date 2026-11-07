@@ -1,15 +1,17 @@
 extends GutTest
-## Anime bust art in the character select: optional per fighter (Apex, Flint, Sakura and Bolt have it).
+## Anime bust art in the character select: optional per fighter (Apex, Flint, Sakura, Bolt, Shade and Shadow have it).
 
 const WUKONG: CharacterData = preload("res://data/characters/wukong.tres")
 const FLINT: CharacterData = preload("res://data/characters/flint.tres")
 const SAKURA: CharacterData = preload("res://data/characters/sakura.tres")
 const BOLT: CharacterData = preload("res://data/characters/bolt.tres")
+const SHADE: CharacterData = preload("res://data/characters/flicker.tres")
+const SHADOW: CharacterData = preload("res://data/characters/shadow.tres")
 const EDEN: CharacterData = preload("res://data/characters/eden.tres")
 
 
-func test_four_fighters_have_a_bust() -> void:
-	for c: CharacterData in [WUKONG, FLINT, SAKURA, BOLT]:
+func test_six_fighters_have_a_bust() -> void:
+	for c: CharacterData in [WUKONG, FLINT, SAKURA, BOLT, SHADE, SHADOW]:
 		assert_true(c.has_bust(), "%s has a bust" % c.id)
 		var f: SpriteFrames = c.bust_frames()
 		assert_eq(f.get_frame_count(&"idle"), Constants.BUST_IDLE_FRAMES)
