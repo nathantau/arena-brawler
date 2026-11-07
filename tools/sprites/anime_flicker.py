@@ -46,7 +46,7 @@ F_KIM = {FKIM, FKIM_S, FKIM_D, FKIM_L}
 F_ORANGE = {ORANGE, LIGHT_OR, FOR_D}
 F_MASK = {CREAM, FSM, FSM_L}
 
-FBASE = dict(hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
+FBASE = dict(mouth="smirk", hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
              lift=0.0, wind=0.0, iris="ember", mode="open", sidelock=False)
 
 
@@ -321,6 +321,45 @@ def f_eye_closed(img, d, cx, cy, side, o, wide=1.0):
     return d
 
 
+
+# ---------------------------------------------------------------- her own mouth (patched over Sakura's s_mouth while drawing)
+F_MOUTH = ["smirk"]
+F_ORIG_MOUTH = ab.s_mouth
+
+
+def f_mouth(d, kind):
+    if kind == "shout":
+        return F_ORIG_MOUTH(d, kind)
+    m = F_MOUTH[0]
+    det = 0.5 if kind == "determined" else 0.0
+    ab.YOFF[0] = -2.7
+    col = lc(LIP)
+
+    def line(pts, w=12):
+        d.line([P(*p) for p in smooth(pts, 6)], fill=col, width=w, joint="curve")
+    if m == "smirk":        # A: cool one-sided smirk, right corner high, tiny dimple tick
+        line([(21.9, 39.9), (23.4, 40.0), (25.0, 39.5), (26.2, 38.6), (26.7, 38.0 - det)])
+        d.line([P(23.4, 41.0), P(25.2, 40.8)], fill=BLUSH, width=6)
+        d.rectangle((26.9 * K, (38.9 - det) * K - 2, 27.3 * K, (39.5 - det) * K), fill=SK_S)
+    elif m == "serious":    # B: short neutral line, one corner turned down
+        line([(21.9, 39.7), (23.2, 39.9), (24.8, 39.9), (25.9, 40.1), (26.3, 40.7 - det)])
+        d.line([P(23.0, 40.9), P(24.6, 40.9)], fill=BLUSH, width=5)
+    elif m == "full":       # C: fuller lips, upper line + a soft lower lip with a highlight
+        line([(21.9, 39.3), (23.0, 39.6), (24.0, 39.3), (25.0, 39.6), (26.1, 39.2 - det)])
+        d.ellipse((22.6 * K, 40.0 * K, 25.6 * K, 41.3 * K), fill=BLUSH)
+        d.line([P(23.4, 40.35), P(24.4, 40.35)], fill=SK_L, width=5)
+    else:                   # D: playful small smile with a tiny fang
+        line([(22.2, 39.2), (23.2, 39.9), (24.4, 40.0), (25.4, 39.6), (26.0, 38.8 - det)])
+        d.rectangle((22.95 * K, 39.45 * K, 23.45 * K, 40.5 * K), fill=CREAM)
+        d.line([P(23.4, 41.0), P(25.0, 40.9)], fill=BLUSH, width=5)
+    ab.YOFF[0] = 0.0
+
+
+F_MOUTHS = [("A", "smirk", "A: cool one-sided smirk (mysterious)"), ("B", "serious", "B: small neutral line, one corner turned down (serious)"),
+            ("C", "full", "C: fuller lips with a soft lower-lip highlight (calm, attractive)"),
+            ("D", "fang", "D: playful small smile with a tiny fang")]
+
+
 def f_draw_frame(sway, expr, cfg):
     img = Image.new("RGB", (SW, SH), BG)
     f_back_hair(img, sway, cfg)
@@ -328,12 +367,14 @@ def f_draw_frame(sway, expr, cfg):
     neckm, torm = f_draw_torso(img, d, sway, cfg)
     f_hair_under(img, sway, cfg)
     orig = ab.s_eye
+    ab.s_mouth = f_mouth
     if cfg["mode"] == "closed":
         ab.s_eye = f_eye_closed
     try:
         facem = ab.s_draw_face(img, neckm, torm, expr)
     finally:
         ab.s_eye = orig
+        ab.s_mouth = F_ORIG_MOUTH
     f_hair_front(img, facem, sway, cfg)
     f_mask(img, cfg, sway)
     return img
@@ -389,6 +430,7 @@ def make_frame(sway, expr, cfg=None, extra=None):
     cfg = dict(FBASE, **(cfg or {}))
     ab.SCFG = dict(ab.SDEFAULT, eyes=cfg["eyes"], iris=cfg["iris"] if cfg["mode"] != "flash" else "flash", hair="long",
                    cheeks=cfg["cheeks"], shade=1)
+    F_MOUTH[0] = cfg["mouth"]
     src = f_draw_frame(sway, expr, cfg)
     diff = ImageChops.difference(src, Image.new("RGB", src.size, BG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
@@ -474,7 +516,7 @@ F_VARIANTS = [
 ]
 
 
-def f_variants_sheet(review, flint_frame):
+def f_variants_sheet(review, flint_frame, name="flicker_variants", items=None):
     from PIL import ImageFont
     S = 4
     bg = (92, 112, 134, 255)
@@ -485,17 +527,18 @@ def f_variants_sheet(review, flint_frame):
     except TypeError:
         font = ImageFont.load_default()
     d = ImageDraw.Draw(sheet)
-    tiles = [("Flint", flint_frame)] + [(lab, make_frame(-1, "calm", cfg)) for lab, cfg, _ in F_VARIANTS]
+    items = items or F_VARIANTS
+    tiles = [("Flint", flint_frame)] + [(lab, make_frame(-1, "calm", cfg)) for lab, cfg, _ in items]
     for i, (label, f) in enumerate(tiles):
         big = f.resize((W * S, H * S), Image.NEAREST)
         sheet.paste(big, (8 + i * cw, 8), big)
         tw = d.textlength(label, font=font)
         d.text((8 + i * cw + (W * S - tw) / 2, H * S + 20), label, fill=(255, 255, 255, 255), font=font)
         sheet.alpha_composite(f, (8 + i * cw + (W * S - W) // 2, H * S + 90 + 8))
-    sheet.convert("RGB").save(os.path.join(review, "flicker_variants.png"))
-    with open(os.path.join(review, "flicker_variants_key.txt"), "w") as fh:
+    sheet.convert("RGB").save(os.path.join(review, name + ".png"))
+    with open(os.path.join(review, name + "_key.txt"), "w") as fh:
         fh.write("Flint = reference (far left)\n")
-        for lab, cfg, text in F_VARIANTS:
+        for lab, cfg, text in items:
             fh.write(text + "\n")
 
 
@@ -564,6 +607,7 @@ def main():
     if review:
         os.makedirs(review, exist_ok=True)
         f_variants_sheet(review, flint)
+        f_variants_sheet(review, flint, "flicker_mouths", [(l, dict(F_SHIP, mouth=k), t) for l, k, t in F_MOUTHS])
     frames = f_bust_frames()
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
     for i, f in enumerate(frames):
