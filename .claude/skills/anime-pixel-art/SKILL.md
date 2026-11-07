@@ -106,14 +106,14 @@ Same session, for the record: eyes are 12% lower and 1.0 unit wider apart than S
 2.5 x (1 - eye_h) units; the squash is applied to the finished eye in source space, `f_squash_eyes`), the mouth is her own one-sided smirk
 (`f_mouth`), and closed eyes keep ink lids (recolor keep box) with brows 1 px higher.
 
-**Approved mouth (Shade, 2026-11-06)**: a long diagonal drawn stroke (her first smirk, 8-10 px, climbing across the face) was rejected as too long, too
-slanted, off-centre under the new nose and low contrast; the next centred 6 px version was then "wider smile". Mouths are small exact pixels
-AFTER the pixel art (`f_mouth_px`, `F_MOUTHS2` in `tools/sprites/anime_flicker.py`; the drawn source mouth is skipped for these, the open shout
-mouth is still Sakura's): CENTRED under the nose (nose tip (49, 66)), line tone `F_LIPD` (186, 102, 106) (between `LIP` and the nose shadow, darker
-than Sakura's so it reads at x1), a lighter `BLUSH` tint under the centre at y 76. Shipped **`m_w10`, 10 px wide**: x 44..53 at y 73 74 74 74 74 74 74
-73 73 72 (centre 1 px lower than the corners, both corners lifted, right corner 1 px higher than the left = the smirk), tint (47, 76) (48, 76) (49, 76).
-`m_w8` (8 px: x 45..52) is the narrower alternative, `m_b` (6 px) was too small. Determined = the same width, flatter: all y 74 except the last
-pixel (53, 73). Keep it >= 8 px for a smile; don't let it drift left or climb more than ~2 px.
+**Approved mouth (Shade, 2026-11-06)**: feedback chain: a long diagonal drawn stroke (8-10 px, climbing across the face) was too long, too slanted,
+off-centre under the nose and faint; a centred 6 px smirk was too small ("wider smile"); a 10 px smirk (right corner 1 px higher) was "more symmetrical,
+wider, less vertical". Mouths are small exact pixels AFTER the pixel art (`f_mouth_px`, `F_MOUTHS2` in `tools/sprites/anime_flicker.py`; the drawn source
+mouth is skipped for these, the open shout mouth is still Sakura's): SYMMETRIC, centred under the nose (nose tip (49, 66)), line tone `F_LIPD`
+(186, 102, 106) (between `LIP` and the nose shadow, darker than Sakura's so it reads at x1), a lighter `BLUSH` tint under the centre at y 76. Shipped
+**`m_s12`, 12 px wide**: x 43..54, the outer 2 px each side on y 73 and the middle 8 px (x 45..52) on y 74 (a wide gentle smile that drops at most 1 px, not a
+"v"), tint (47, 76) (48, 76) (49, 76) (50, 76). Alternatives `m_s11` (x 43..53, tint 3 px) and `m_s13` (x 42..54). Determined = the same width fully flat
+(all y 74); shout unchanged. Rules: symmetric, >= 11 px for a smile, never more than 1 px of curve, centred under the nose.
 
 **Eyes** (option B = `EYES["animeB"]`, drawn by `s_eye_anime`): ~6.6 wide x 5.2 tall (never bigger; chibi / hearts / "alien"
 came from big dark irises and a V lower lid), centres 24 +- 4.8, cy 27.8. Upper lash = thick ARCH peaking at t 0.62 (outward of

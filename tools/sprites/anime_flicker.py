@@ -48,7 +48,7 @@ F_ORANGE = {ORANGE, LIGHT_OR, FOR_D}
 F_MASK = {CREAM, FSM, FSM_L}
 
 F_EYE_GAP = {k: v["gap"] for k, v in ab.EYES.items()}      # Sakura's eye-centre spacing per eye shape (9.6 for animeB)
-FBASE = dict(mouth="m_w10", hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
+FBASE = dict(mouth="m_s12", hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
              eye_h=1.0, eye_gap=0.0, lift=0.0, wind=0.0, nose="tick", iris="ember", mode="open", sidelock=False)
 
 
@@ -838,6 +838,16 @@ F_MOUTHS2_DET["m_w8"] = [(45, 74), (46, 74), (47, 74), (48, 74), (49, 74), (50, 
 F_MOUTHS2_DET["m_w10"] = [(44, 74), (45, 74), (46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 74), (52, 74), (53, 73)]
 F_MOUTH_KEYS3 = [("A", "m_b", "A: previous B, 6 px"), ("B", "m_w8", "B: 8 px, centre 1 px lower than the corners, right corner 1 px higher than the left"),
                  ("C", "m_w10", "C: 10 px, same curve, 3 px lower-lip tint (shipped)")]
+
+# symmetric wide gentle smile: outer 2 px each side one row up, the middle on one row (flat), tint under the centre
+F_MOUTHS2["m_s11"] = ([(43, 73), (44, 73), (45, 74), (46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 74), (52, 73), (53, 73)], [(47, 76), (48, 76), (49, 76)], [], [])
+F_MOUTHS2["m_s12"] = ([(43, 73), (44, 73), (45, 74), (46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 74), (52, 74), (53, 73), (54, 73)], [(47, 76), (48, 76), (49, 76), (50, 76)], [], [])
+F_MOUTHS2["m_s13"] = ([(42, 73), (43, 73), (44, 74), (45, 74), (46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 74), (52, 74), (53, 73), (54, 73)], [(47, 76), (48, 76), (49, 76)], [], [])
+F_MOUTHS2_DET["m_s11"] = [(43, 74), (44, 74), (45, 74), (46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 74), (52, 74), (53, 74)]
+F_MOUTHS2_DET["m_s12"] = [(43, 74), (44, 74), (45, 74), (46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 74), (52, 74), (53, 74), (54, 74)]
+F_MOUTHS2_DET["m_s13"] = [(42, 74), (43, 74), (44, 74), (45, 74), (46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 74), (52, 74), (53, 74), (54, 74)]
+F_MOUTH_KEYS4 = [("A", "m_w10", "A: current 10 px smirk"), ("B", "m_s11", "B: symmetric 11 px, corners 2 px up one row, middle flat"),
+                 ("C", "m_s12", "C: symmetric 12 px, same shape, 4 px tint (shipped)"), ("D", "m_s13", "D: symmetric 13 px")]
 F_MOUTH_KEYS2 = [("A", "m_a", "A: centred soft closed smile, 6 px, both corners up 1 px, tint under"),
                  ("B", "m_b", "B: A with the right corner up 1 px extra (subtle smirk, mostly horizontal) (shipped)"),
                  ("C", "m_c", "C: shorter 5 px smile with a tiny lower-lip highlight (cute)"),
@@ -883,6 +893,7 @@ def main():
         f_noses_sheet(review, flint, F_NOSE_KEYS3, "flicker_noses3")
         f_noses_sheet(review, flint, F_MOUTH_KEYS2, "flicker_mouths2", "mouth")
         f_noses_sheet(review, flint, F_MOUTH_KEYS3, "flicker_mouths3", "mouth")
+        f_noses_sheet(review, flint, F_MOUTH_KEYS4, "flicker_mouths4", "mouth")
         f_variants_sheet(review, flint, "flicker_mouths", [(l, dict(F_SHIP, mouth=k), t) for l, k, t in F_MOUTHS])
     frames = f_bust_frames()
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
