@@ -10,9 +10,14 @@
 [ext_resource type="Resource" path="res://data/skills/overdrive.tres" id="5_skill"]
 [ext_resource type="Resource" path="res://data/skills/thunderstorm.tres" id="9_ult"]
 
+[ext_resource type="Texture2D" path="res://assets/title/anime/bolt_bust.png" id="10_bust"]
+[ext_resource type="Texture2D" path="res://assets/title/anime/bolt_charge.png" id="11_rise"]
+
 [resource]
 script = ExtResource("1_cd")
 sprite_sheet = ExtResource("2_sheet")
+bust_sheet = ExtResource("10_bust")
+rise_sheet = ExtResource("11_rise")
 godspeed_sheet = ExtResource("2_god")
 power_sheets = Array[Texture2D]([ExtResource("2_p1"), ExtResource("2_p2"), ExtResource("2_p3")])
 signature_weapon = ExtResource("3_sig")

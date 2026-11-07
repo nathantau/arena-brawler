@@ -89,13 +89,22 @@ def w_feather(d, root, tip, w0, bend, sway=0.0, ph=0.0):
 W_NECK = [(20.4, 35), (27.6, 35), (28.2, 46), (19.8, 46)]
 W_TORSO = [(0, 64), (0, 54), (3.5, 49.2), (9, 46.4), (15, 44.8), (20, 43.8), (24, 50), (28, 43.8), (33, 44.8), (39, 46.4),
            (44.5, 49.2), (48, 54), (48, 64)]
-# fur lobes (cx, cy, rx, ry) for the left shoulder, mirrored on the right
-# fur lobes (cx, cy, rx, ry) for the left shoulder, mirrored on the right; drawn back to front so each clump keeps its own shade
-W_LOBES = [(7.8, 62.0, 7.0, 6.0), (4.6, 57.5, 8.0, 9.4), (11.4, 51.6, 7.0, 6.4), (1.4, 52.6, 3.6, 3.4), (7.4, 47.6, 4.0, 3.4),
-           (16.8, 47.6, 5.0, 4.2), (13.0, 45.2, 3.8, 3.0)]
-# pointed fur tufts along the top edge and the inner edge (left side; mirrored)
-W_TUFTS = [[(0.2, 51.0), (-0.6, 46.4), (4.0, 48.6)], [(4.4, 48.0), (4.6, 43.8), (8.6, 46.2)], [(9.6, 46.2), (10.6, 42.4), (13.6, 45.4)],
-           [(14.4, 45.8), (15.8, 42.6), (18.6, 45.6)]]
+# fur tufts (cx, cy, rx, ry) for the left shoulder, mirrored on the right: a few BIG rounded clumps, no pointed bits.
+# Drawn lowest first, so every tuft's form shadow (its lower right rim) falls on the clump below it.
+W_LOBES = [(6.4, 61.0, 7.6, 6.6), (3.2, 53.6, 6.2, 6.8), (12.2, 56.8, 6.2, 5.6), (9.6, 48.8, 6.6, 5.6), (16.6, 47.4, 5.2, 4.4),
+            (0.6, 46.6, 3.2, 3.0), (6.0, 43.6, 3.4, 2.8), (12.6, 42.6, 3.4, 2.6)]     # small bumps keep the rim fluffy
+W_TUFTS = []
+
+
+# The previous mantle (many small cells). pixelize() quantises the WHOLE frame to 40 colours, so changing the fur shifts a few
+# hundred hair / feather pixels elsewhere. Every frame is therefore also rendered with this old mantle (WK_REF) and
+# everything above W_SEAM is taken from that render: only the fur rows change.
+W_OLD_LOBES = [(7.8, 62.0, 7.0, 6.0), (4.6, 57.5, 8.0, 9.4), (11.4, 51.6, 7.0, 6.4), (1.4, 52.6, 3.6, 3.4), (7.4, 47.6, 4.0, 3.4),
+               (16.8, 47.6, 5.0, 4.2), (13.0, 45.2, 3.8, 3.0)]
+W_OLD_TUFTS = [[(0.2, 51.0), (-0.6, 46.4), (4.0, 48.6)], [(4.4, 48.0), (4.6, 43.8), (8.6, 46.2)],
+               [(9.6, 46.2), (10.6, 42.4), (13.6, 45.4)], [(14.4, 45.8), (15.8, 42.6), (18.6, 45.6)]]
+WK_REF = [False]
+W_SEAM = 83                  # first pixel row that belongs to the new fur
 
 
 def w_lobe_mask(cx, cy, rx, ry, grow=0.0):
@@ -122,6 +131,43 @@ def w_mantle_mask():
     return m
 
 
+def w_new_fur(img):
+    """Fur mantle: one ink outline round the whole mass, then a few big rounded tufts, lowest first; each has a soft grey-blue
+    form shadow along its lower right and a lit top-left rim, no lines between clumps."""
+    outl = Image.new("L", (SW, SH), 0)
+    for lobe in W_LOBES:
+        outl = ImageChops.lighter(outl, w_lobe_mask(*lobe, grow=0.45))
+    for t in W_TUFTS:
+        outl = ImageChops.lighter(outl, w_tuft_mask(t, grow=0.45))
+    paste_mask(img, INK, outl)
+    for lb in sorted(W_LOBES, key=lambda l: -l[1]):
+        cm = w_lobe_mask(*lb)
+        paste_mask(img, CREAM, cm)
+        paste_mask(img, FUR_S, both(cm, inv(shift(cm, int(-1.0 * K), int(-2.0 * K)))))     # soft form shadow under the tuft
+        paste_mask(img, WHITE, both(cm, inv(shift(cm, int(0.9 * K), int(0.9 * K)))))       # lit top-left rim
+
+
+def w_old_fur(img):
+    """The previous mantle, kept only as the quantiser reference (see W_OLD_LOBES)."""
+    # fur mantle: one ink outline round the whole mass, then clumps back to front, each with its own shade crescent
+    outl = Image.new("L", (SW, SH), 0)
+    for lobe in W_OLD_LOBES:
+        outl = ImageChops.lighter(outl, w_lobe_mask(*lobe, grow=0.45))
+    for t in W_OLD_TUFTS:
+        outl = ImageChops.lighter(outl, w_tuft_mask(t, grow=0.45))
+    paste_mask(img, INK, outl)
+    clumps = [w_lobe_mask(*lb) for lb in W_OLD_LOBES] + [w_tuft_mask(t) for t in W_OLD_TUFTS]
+    for cm in clumps:
+        paste_mask(img, CREAM, cm)
+        paste_mask(img, FUR_S, both(cm, inv(shift(cm, int(-1.3 * K), int(-1.1 * K)))))
+        paste_mask(img, WHITE, both(cm, inv(shift(cm, int(0.8 * K), int(0.8 * K)))))
+    d = ImageDraw.Draw(img)
+    for (a, b, c) in [((4.0, 55.0), (5.4, 58.0), (3.4, 62.0)), ((10.4, 49.6), (11.4, 53.0), (9.8, 57.0)),
+                      ((15.8, 46.8), (16.6, 49.6), (15.4, 52.4)), ((8.6, 60.0), (9.2, 62.6), (8.2, 64.5))]:
+        d.line([P(*a), P(*b), P(*c)], fill=(190, 200, 232), width=8, joint="curve")
+        d.line([P(48 - a[0], a[1]), P(48 - b[0], b[1]), P(48 - c[0], c[1])], fill=(190, 200, 232), width=8, joint="curve")
+
+
 def w_draw_torso(img, d):
     ab.YOFF[0] = WK_OFF
     shape(d, W_NECK, SK)
@@ -146,23 +192,7 @@ def w_draw_torso(img, d):
     d.line([P(*p) for p in neckline], fill=lc(GOLD_D), width=14, joint="curve")
     d.line([P(x, y + 0.1) for x, y in neckline], fill=YELLOW, width=8, joint="curve")
     d.line([P(x - 0.2, y - 0.1) for x, y in neckline[: len(neckline) // 2]], fill=CREAM, width=3, joint="curve")
-    # fur mantle: one ink outline round the whole mass, then clumps back to front, each with its own shade crescent
-    outl = Image.new("L", (SW, SH), 0)
-    for lobe in W_LOBES:
-        outl = ImageChops.lighter(outl, w_lobe_mask(*lobe, grow=0.45))
-    for t in W_TUFTS:
-        outl = ImageChops.lighter(outl, w_tuft_mask(t, grow=0.45))
-    paste_mask(img, INK, outl)
-    clumps = [w_lobe_mask(*lb) for lb in W_LOBES] + [w_tuft_mask(t) for t in W_TUFTS]
-    for cm in clumps:
-        paste_mask(img, CREAM, cm)
-        paste_mask(img, FUR_S, both(cm, inv(shift(cm, int(-1.3 * K), int(-1.1 * K)))))
-        paste_mask(img, WHITE, both(cm, inv(shift(cm, int(0.8 * K), int(0.8 * K)))))
-    d = ImageDraw.Draw(img)
-    for (a, b, c) in [((4.0, 55.0), (5.4, 58.0), (3.4, 62.0)), ((10.4, 49.6), (11.4, 53.0), (9.8, 57.0)),
-                      ((15.8, 46.8), (16.6, 49.6), (15.4, 52.4)), ((8.6, 60.0), (9.2, 62.6), (8.2, 64.5))]:
-        d.line([P(*a), P(*b), P(*c)], fill=(190, 200, 232), width=8, joint="curve")
-        d.line([P(48 - a[0], a[1]), P(48 - b[0], b[1]), P(48 - c[0], c[1])], fill=(190, 200, 232), width=8, joint="curve")
+    (w_old_fur if WK_REF[0] else w_new_fur)(img)
     ab.YOFF[0] = 0.0
     return neckm, torm
 
@@ -541,6 +571,18 @@ def w_recolor_interior(im, keeps):
     return im
 
 
+def w_fur_specks(out):
+    """Anti-aliased ink on the fur rim snaps to brown hair tones: make those pixels ink (rim) or fur shade (inside)."""
+    px = out.load()
+    w, h = out.size
+    for y in range(86, h):
+        for x in range(w):
+            if px[x, y][3] and px[x, y][:3] in WK_HAIR:
+                edge = any(not (0 <= x + dx < w and 0 <= y + dy < h) or px[x + dx, y + dy][3] == 0
+                           for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+                px[x, y] = (INK if edge else FUR_S) + (255,)
+
+
 def w_star(out, x, y, size, col=YELLOW):
     """A small sparkle on the finished pixel art: cream core, gold arms, light-orange diagonal tips."""
     px = out.load()
@@ -558,7 +600,17 @@ def w_star(out, x, y, size, col=YELLOW):
 
 
 def w_make_frame(sway, expr, cfg=None, morph=None):
+    """New fur below W_SEAM, everything above it from the old-mantle render (identical to the shipped head / hair / feathers)."""
+    new = w_render(sway, expr, cfg, morph, False)
+    ref = w_render(sway, expr, cfg, morph, True)
+    out = ref.copy()
+    out.paste(new.crop((0, W_SEAM, new.width, new.height)), (0, W_SEAM))
+    return out
+
+
+def w_render(sway, expr, cfg, morph, ref):
     global WCFG, WM
+    WK_REF[0] = ref
     WCFG = dict(WK_BASE, **(cfg or {}))
     WM = dict(morph or {})
     src = w_draw_frame(sway, expr)
@@ -577,6 +629,8 @@ def w_make_frame(sway, expr, cfg=None, morph=None):
     out = cleanup(out, prot)
     keeps = [(28, 46, 68, 64)] + ([(38, 66, 60, 82)] if expr == "shout" else [])
     out = w_recolor_interior(out, keeps)
+    if not ref:
+        w_fur_specks(out)
     if WM:
         if WM["st"] > 0.05:                      # gold glint riding the staff tip
             tx, ty = w_staff_tip(WM["st"])

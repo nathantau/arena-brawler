@@ -1,12 +1,21 @@
 extends GutTest
-## Anime bust art in the character select: optional per fighter (only Apex has it so far).
+## Anime bust art in the character select: optional per fighter (Apex, Flint, Sakura and Bolt have it).
 
 const WUKONG: CharacterData = preload("res://data/characters/wukong.tres")
+const FLINT: CharacterData = preload("res://data/characters/flint.tres")
+const SAKURA: CharacterData = preload("res://data/characters/sakura.tres")
+const BOLT: CharacterData = preload("res://data/characters/bolt.tres")
 const EDEN: CharacterData = preload("res://data/characters/eden.tres")
 
 
-func test_only_apex_has_a_bust() -> void:
-	assert_true(WUKONG.has_bust())
+func test_four_fighters_have_a_bust() -> void:
+	for c: CharacterData in [WUKONG, FLINT, SAKURA, BOLT]:
+		assert_true(c.has_bust(), "%s has a bust" % c.id)
+		var f: SpriteFrames = c.bust_frames()
+		assert_eq(f.get_frame_count(&"idle"), Constants.BUST_IDLE_FRAMES)
+		assert_gte(f.get_frame_count(&"rise"), 8, "%s rise strip" % c.id)
+		var last: AtlasTexture = f.get_frame_texture(&"rise", f.get_frame_count(&"rise") - 1)
+		assert_eq(last.region.size, Vector2(Constants.BUST_SIZE))
 	assert_false(EDEN.has_bust(), "no bust: the old presentation")
 
 
