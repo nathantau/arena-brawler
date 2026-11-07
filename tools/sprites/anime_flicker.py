@@ -47,8 +47,9 @@ F_KIM = {FKIM, FKIM_S, FKIM_D, FKIM_L}
 F_ORANGE = {ORANGE, LIGHT_OR, FOR_D}
 F_MASK = {CREAM, FSM, FSM_L}
 
+F_EYE_GAP = {k: v["gap"] for k, v in ab.EYES.items()}      # Sakura's eye-centre spacing per eye shape (9.6 for animeB)
 FBASE = dict(mouth="smirk", hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
-             lift=0.0, wind=0.0, iris="ember", mode="open", sidelock=False)
+             eye_h=1.0, eye_gap=0.0, lift=0.0, wind=0.0, iris="ember", mode="open", sidelock=False)
 
 
 
@@ -384,6 +385,30 @@ F_MOUTHS = [("A", "smirk", "A: cool one-sided smirk (mysterious)"), ("B", "serio
             ("D", "fang", "D: playful small smile with a tiny fang")]
 
 
+
+def f_squash_eyes(img, cfg):
+    """Scale each finished eye vertically about its centre line (lash arch, whites, iris, highlights together); the strips this
+    frees are filled with the skin rows above / below, so width and the iris-under-the-lid look stay."""
+    h = cfg["eye_h"]
+    if h >= 0.999:
+        return
+    E = ab.EYES[cfg["eyes"]]
+    cy = E["cy"]
+    for sgn in (-1, 1):
+        cx = 24 + sgn * E["gap"] / 2
+        x0, x1 = int((cx - 5.0) * K), int((cx + 5.0) * K)
+        y0, y1 = int((cy - 3.9) * K), int((cy + 3.9) * K)
+        w, hh = x1 - x0, y1 - y0
+        crop = img.crop((x0, y0, x1, y1))
+        nh = max(1, int(hh * h))
+        top = (hh - nh) // 2
+        out = Image.new("RGB", crop.size)
+        out.paste(crop.crop((0, 0, w, 1)).resize((w, top + 1)), (0, 0))
+        out.paste(crop.crop((0, hh - 1, w, hh)).resize((w, hh - top - nh + 1)), (0, top + nh))
+        out.paste(crop.resize((w, nh), Image.BILINEAR), (0, top))
+        img.paste(out, (x0, y0))
+
+
 def f_draw_frame(sway, expr, cfg):
     img = Image.new("RGB", (SW, SH), BG)
     f_back_hair(img, sway, cfg)
@@ -399,6 +424,7 @@ def f_draw_frame(sway, expr, cfg):
     finally:
         ab.s_eye = orig
         ab.s_mouth = F_ORIG_MOUTH
+    f_squash_eyes(img, cfg)
     f_hair_front(img, facem, sway, cfg)
     f_mask(img, cfg, sway)
     return img
@@ -455,6 +481,7 @@ def make_frame(sway, expr, cfg=None, extra=None):
     ab.SCFG = dict(ab.SDEFAULT, eyes=cfg["eyes"], iris=cfg["iris"] if cfg["mode"] != "flash" else "flash", hair="long",
                    cheeks=cfg["cheeks"], shade=1)
     F_MOUTH[0] = cfg["mouth"]
+    ab.EYES[cfg["eyes"]]["gap"] = F_EYE_GAP[cfg["eyes"]] + cfg["eye_gap"]
     F_FACE["cheek0"] = cfg["cheeks"]
     F_FACE["chin"] = cfg.get("chin", F_CHIN_SHIP)
     src = f_draw_frame(sway, expr, cfg)
@@ -663,6 +690,46 @@ def f_chin_sheet(review):
         fh.write("shipped for Shade: %s (rounded jaw, pointed corner)\n" % (F_CHIN_SHIP,))
 
 
+F_EYE_HEIGHTS = [1.0, 0.88, 0.78, 0.68]          # H1 current, H2 -12%, H3 -22%, H4 -32%
+F_EYE_SPACINGS = [-1.0, 0.0, 1.0, 2.0]           # S1 closer, S2 current, S3 wider, S4 widest (units between eye centres)
+
+
+def f_eyes_grid(review, flint_frame):
+    """Eye height (rows) x eye-centre spacing (columns) on her calm face; x4 head crops with x1 strips under each row."""
+    from PIL import ImageFont
+    S = 4
+    bg = (92, 112, 134, 255)
+    box = (10, 14, 86, 100)                       # crop of the frame at x1: head and hair top
+    cwid, chei = (box[2] - box[0]), (box[3] - box[1])
+    cw, rh = cwid * S + 8, chei * S + 56 + chei + 16
+    sheet = Image.new("RGBA", (cw * 5 + 8, rh * 4 + 8), bg)
+    try:
+        font = ImageFont.load_default(size=34)
+    except TypeError:
+        font = ImageFont.load_default()
+    d = ImageDraw.Draw(sheet)
+    key = []
+    for r, hf in enumerate(F_EYE_HEIGHTS):
+        y = 8 + r * rh
+        if r == 0:
+            fl = flint_frame.crop(box)
+            sheet.alpha_composite(fl.resize((cwid * S, chei * S), Image.NEAREST), (8, y))
+            sheet.alpha_composite(fl, (8, y + chei * S + 56))
+            d.text((8, y + chei * S + 8), "Flint", fill=(255, 255, 255, 255), font=font)
+        for c, sp in enumerate(F_EYE_SPACINGS):
+            f = make_frame(-1, "calm", dict(F_SHIP, eye_h=hf, eye_gap=sp)).crop(box)
+            x = 8 + (c + 1) * cw
+            sheet.alpha_composite(f.resize((cwid * S, chei * S), Image.NEAREST), (x, y))
+            sheet.alpha_composite(f, (x, y + chei * S + 56))
+            lab = "H%d/S%d" % (r + 1, c + 1)
+            d.text((x, y + chei * S + 8), lab, fill=(255, 255, 255, 255), font=font)
+            key.append("%s: eye height x%.2f, eye-centre spacing %+.1f units (gap %.1f)" % (lab, hf, sp, 9.6 + sp))
+    sheet.convert("RGB").save(os.path.join(review, "flicker_eyes_grid.png"))
+    with open(os.path.join(review, "flicker_eyes_grid_key.txt"), "w") as fh:
+        fh.write("Rows H1..H4 = eye height (current, -12%, -22%, -32%); columns S1..S4 = spacing (-1.0 closer, current, +1.0, +2.0 wider)\n")
+        fh.write("\n".join(key) + "\n")
+
+
 def f_sakura_chins(out_dir):
     """Subprocess (F_PLAIN=1, her own colours): Sakura's calm frame with each chin step."""
     for i, st in enumerate(F_CHIN_STEPS):
@@ -681,6 +748,7 @@ def main():
         os.makedirs(review, exist_ok=True)
         f_variants_sheet(review, flint)
         f_chin_sheet(review)
+        f_eyes_grid(review, flint)
         f_variants_sheet(review, flint, "flicker_mouths", [(l, dict(F_SHIP, mouth=k), t) for l, k, t in F_MOUTHS])
     frames = f_bust_frames()
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
