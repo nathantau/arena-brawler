@@ -55,8 +55,55 @@ pixelizing someone else's character for shipped art (study only, never commit re
 
 ## Adding a fighter
 
-Copy Flint's section of `anime_busts.py` into `<id>` functions: reuse `FACE`/`NECK`/`TORSO` as
-the starting proportions (female / cute faces: rounder cheeks, bigger eyes ~1/3 face height with
-2 highlights, blush, tiny mouth, bangs ending at the eyes), swap the hair for the fighter's own
-(hair that is not elemental keeps a thin dark outline but in a dark hair tone), sample the
-palette from the gameplay sheet, and write `assets/title/anime/<id>_bust.png`.
+Build on Flint's functions in `anime_busts.py` (see the Sakura section below for how: `cols=`/`bands=`,
+`snap(palette)`, a config dict, prefixed globals): reuse `FACE`/`NECK`/`TORSO` as the starting
+proportions, swap the hair for the fighter's own (hair that is not elemental keeps a thin dark outline
+but in a dark hair tone), sample the palette from the gameplay sheet, and write
+`assets/title/anime/<id>_bust.png`. Female / cute faces: follow "Female characters" below.
+
+## Female characters (Sakura, approved 2026-11-06)
+
+Reference: `assets/title/anime/sakura_bust.png`, code = the Sakura section of `tools/sprites/anime_busts.py`
+(`SCFG` / `SDEFAULT`, `s_*` functions, `FACE_OPTIONS`). She is Flint's pipeline with her palette mapped role for role
+(skin ORANGE/LIGHT_OR/RED/DEEP_RED -> SK/SK_L/SK_S/SK_D, cloth NAVY -> KIM...), ~22 colours.
+
+**Rules of the build**
+- Derive from Flint's functions, never fork: `tongue(..., cols=(edge, colour_fn, shade, lit), bands=[...])` restyles hair
+  (defaults keep Flint identical), `snap(art, mask, palette)`, `cleanup`, own `s_recolor_interior`. Look = one dict
+  (`SCFG`: eyes, iris, hair, cheeks, shade); variants are dict edits, not copies.
+- NEVER add a global that Flint uses (`H`, `W`, `CAP_TOP`, `BANGS`, `F`, `K`...): it silently changes Flint. Prefix hers
+  (`S`, `SK_`, `HR`, `SBANG_SETS`) and run `cmp assets/title/anime/flint_bust.png <copy before>` on EVERY run.
+- `pixelize` darkens line pixels ~0.6x before snapping: draw hair edges / brows / lips as `lc(colour)` (= colour / 0.6) so they snap
+  to the intended tone, not INK. Thin lines (<8 source px) vanish: lashes >= 8, brows / small features go on AFTER pixelize.
+- `rect()` / `ellipse()` ignore `YOFF` (the mouth offset -2.7): subtract it by hand when mixing with `poly()`.
+- Draw order: back hair mass -> torso -> long locks / ponytail / buns / braid (BEHIND the face, so they never cross it) -> face
+  -> cap, gloss band, bangs, side locks, clip. Hair: two passes (all outlines, then all fills) = line round the mass, none between locks.
+
+**Face** (design units, 48 x 64 grid): `SFACE0` = Flint's polygon rounded: cheeks 35.6 at y 31.5, jaw soft, chin 8 wide at y 43,
+`cheeks` 0.03 scales it. Flint's shading with one change: a jaw-following band (~3 px: `facem` minus itself shifted
+(-1.5, -1.4) units, only below y 29) in SK_S, never a diagonal cheek plane. Keep ink outline, lit left, deep strip + rim right,
+chin shadow on the neck. Neck short (`STOFF` 0.8 vs Flint's 3.5), shoulders softly sloped.
+
+**Eyes** (option B = `EYES["animeB"]`, drawn by `s_eye_anime`): ~6.6 wide x 5.2 tall (never bigger; chibi / hearts / "alien"
+came from big dark irises and a V lower lid), centres 24 +- 4.8, cy 27.8. Upper lash = thick ARCH peaking at t 0.62 (outward of
+centre), 8 -> 12 source px, with a small wing at the outer corner; lower lid nearly flat, a thin light line on the OUTER third only.
+Iris = TALL oval (irx 2.0, iry 2.55, ~60% of width, shifted 0.3 outward so the whites are mostly inner), top tucked under the lid;
+bands: dark top (to cy - 0.2 iry), amber, light amber glow at the bottom; small dark pupil; big white highlight top-outer (r 1.0)
++ tiny one lower-inner. **Sample the eye boxes with `resize(NEAREST)` + snap, not the box-blended pixelize** (blending made brown
+rings and stray colours). Iris colours via `IRISES` (mid, dark, light); amber / teal contrast with pink hair, rose does not.
+
+**Brows**: `add_brows()` draws exact pixels after the pixel art: plum (`H_EDGE`), 1 px, 2 px at the inner end, high soft arch
+(base cy - 3.9); determined tilts ~1 px down-in. Bangs are raised (tips y ~21.5 - 22.2) so brows sit on skin, not plum-on-pink.
+
+**Nose / mouth / blush**: no drawn nose, a tiny `SK_S` tick (1.0 x 0.5 units) at (24.6, 33). Mouth (`s_mouth`, `LIP` tone via `lc`):
+calm = curved smile 4.2 units wide, corners lifted, 1-2 px lighter lower-lip tint (`BLUSH`) under it; determined = same width,
+right-lifted smirk; shout = rounded-D (flat top, round bottom, 3.5 x 2.3), dark plum inside, 1 px cream teeth, pink tongue.
+Blush = flat pink ellipse under each eye (no dither). Too-small mouths were rejected: keep it >= 6 px wide at x1.
+
+**Hair** (bob shipped): rounded bounce silhouette (`BACKS["bob"]` curves in under the jaw), 3 locks a side
+(`locks()` + `LOCK_BANDS`: broad lit left band, shade right band, wavy edges, tips swaying 2-3 px), one dark back mass, gloss band
+across the crown (H_L with an H_HI core), rounded bang tips, blossom `clip()`, 4 petals instead of sparks, tiny blossoms on the obi.
+Other styles exist as `SCFG["hair"]`: long, pony, buns, halfup, braid.
+
+**Workflow**: the user picks by eye, so render a variant sheet: 4 options on the SAME head (`face_variants_sheet`: x4 on top, x1
+below, Flint calm at the left, labelled A-D) before refining; iterate in small steps and LOOK at x4, x1 and a x10 face zoom.
