@@ -107,13 +107,13 @@ Same session, for the record: eyes are 12% lower and 1.0 unit wider apart than S
 (`f_mouth`), and closed eyes keep ink lids (recolor keep box) with brows 1 px higher.
 
 **Approved mouth (Shade, 2026-11-06)**: a long diagonal drawn stroke (her first smirk, 8-10 px, climbing across the face) was rejected as too long, too
-slanted, off-centre under the new nose and low contrast. Mouths are now small exact pixels AFTER the pixel art (`f_mouth_px`, `F_MOUTHS2`
-in `tools/sprites/anime_flicker.py`; the drawn source mouth is skipped for these, the open shout mouth is still Sakura's): CENTRED under the nose
-(mouth centre x 48-49 output px, line at y 72-74, the lids at ~56, the nose tip at (49, 66)), 6 px wide, line tone `F_LIPD` (186, 102, 106)
-(between `LIP` and the nose shadow, darker than Sakura's so it reads at x1), a 1-2 px lighter `BLUSH` tint under it at y 76. Shipped **B** (subtle smirk,
-still mostly horizontal): (46, 73) (47, 74) (48, 74) (49, 74) (50, 73) (51, 72), tint (48, 76) (49, 76). Others: A both corners up 1 px, C 5 px
-with a `SK_L` highlight under the centre, D = A + a darker dimple pixel at (52, 72). Determined = the same mouth with the corners flatter
-(left half set to y 74, right corner (51, 73)). Keep >= 5-6 px wide; don't let it drift left or climb more than ~2 px.
+slanted, off-centre under the new nose and low contrast; the next centred 6 px version was then "wider smile". Mouths are small exact pixels
+AFTER the pixel art (`f_mouth_px`, `F_MOUTHS2` in `tools/sprites/anime_flicker.py`; the drawn source mouth is skipped for these, the open shout
+mouth is still Sakura's): CENTRED under the nose (nose tip (49, 66)), line tone `F_LIPD` (186, 102, 106) (between `LIP` and the nose shadow, darker
+than Sakura's so it reads at x1), a lighter `BLUSH` tint under the centre at y 76. Shipped **`m_w10`, 10 px wide**: x 44..53 at y 73 74 74 74 74 74 74
+73 73 72 (centre 1 px lower than the corners, both corners lifted, right corner 1 px higher than the left = the smirk), tint (47, 76) (48, 76) (49, 76).
+`m_w8` (8 px: x 45..52) is the narrower alternative, `m_b` (6 px) was too small. Determined = the same width, flatter: all y 74 except the last
+pixel (53, 73). Keep it >= 8 px for a smile; don't let it drift left or climb more than ~2 px.
 
 **Eyes** (option B = `EYES["animeB"]`, drawn by `s_eye_anime`): ~6.6 wide x 5.2 tall (never bigger; chibi / hearts / "alien"
 came from big dark irises and a V lower lid), centres 24 +- 4.8, cy 27.8. Upper lash = thick ARCH peaking at t 0.62 (outward of
