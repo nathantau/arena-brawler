@@ -488,7 +488,7 @@ def make_frame(sway, expr, cfg=None, extra=None):
     diff = ImageChops.difference(src, Image.new("RGB", src.size, BG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
     lft, tlt = ab.BROW_ARGS
-    ab.BROW_ARGS = (lft - 2.5 * (1 - cfg["eye_h"]), tlt)       # lower the brows with the lid: keep the brow-to-lid gap
+    ab.BROW_ARGS = (lft - 2.5 * (1 - cfg["eye_h"]) + (0.5 if cfg["mode"] == "closed" else 0.0), tlt)       # lower the brows with the lid: keep the brow-to-lid gap
     art = pixelize(src, W, 40)
     pal = F_PAL + list(ab.IRISES[ab.SCFG["iris"]])
     out = snap(art, mask, pal)
@@ -502,7 +502,7 @@ def make_frame(sway, expr, cfg=None, extra=None):
     px = out.load()
     prot = {(x, y) for y in range(44, 66) for x in range(26, 72) if px[x, y] == WHITE + (255,)}
     out = cleanup(out, prot)
-    out = f_recolor_interior(out, (40, 68, 56, 80) if expr == "shout" else None)
+    out = f_recolor_interior(out, (40, 68, 56, 80) if expr == "shout" else (30, 52, 66, 63) if cfg["mode"] == "closed" else None)   # closed lids stay ink
     if cfg["mode"] != "closed":
         ab.add_brows(out)
     else:
@@ -599,7 +599,7 @@ def f_variants_sheet(review, flint_frame, name="flicker_variants", items=None):
 
 
 # ---------------------------------------------------------------- shipped look
-F_SHIP = dict(F_VARIANTS[0][1], eye_h=0.88, eye_gap=1.0)       # eyes H2/S3: 12% lower, 1.0 unit wider apart
+F_SHIP = dict(F_VARIANTS[0][1], eye_h=0.88, eye_gap=1.0, nose="vhook")       # eyes H2/S3: 12% lower, 1.0 unit wider apart
 F_SHIP_NAME = "A"
 
 
@@ -750,6 +750,20 @@ F_NOSE_KEYS = [("A", "tick", "A: current tick (Sakura's)"), ("B", "tip", "B: sma
                ("F", "nostril", "F: nostril hint (two dots) + tip highlight")]
 
 
+# vertical-ish line noses on the shadow side (right of the centre line), in a deeper skin-shadow tone ("N") so they read at x1
+F_NOSE_TONE = (200, 122, 112)
+F_NOSES.update({
+    "vline": [(49, 63, "N"), (49, 64, "N"), (49, 65, "N"), (49, 66, "N")],
+    "vhook": [(49, 62, "N"), (49, 63, "N"), (49, 64, "N"), (49, 65, "N"), (48, 66, "N")],
+    "vdiag": [(50, 63, "N"), (50, 64, "N"), (49, 65, "N"), (49, 66, "N")],
+    "vdot": [(49, 62, "N"), (49, 63, "N"), (49, 64, "N"), (49, 66, "N")],
+})
+F_NOSE_KEYS2 = [("A", "vline", "A: 4 px straight vertical line ending at the tip"),
+                ("B", "vhook", "B: 5 px line with a 1 px slant toward the centre at the tip (shipped)"),
+                ("C", "vdiag", "C: 4 px line slightly diagonal, top toward the eye, bottom at the tip"),
+                ("D", "vdot", "D: 3 px line + a separate 1 px tip dot below")]
+
+
 def f_nose(out, kind):
     pts = F_NOSES.get(kind)
     if not pts:
@@ -762,17 +776,18 @@ def f_nose(out, kind):
             px[x, 66] = (above if above in skin and above != SK_S else SK) + (255,)
     for x, y, c in pts:
         if px[x, y][3] and px[x, y][:3] in skin:
-            px[x, y] = (SK_S if c == "S" else SK_L) + (255,)
+            px[x, y] = {"S": SK_S, "L": SK_L, "N": F_NOSE_TONE}[c] + (255,)
 
 
-def f_noses_sheet(review, flint_frame):
+def f_noses_sheet(review, flint_frame, keys=None, name="flicker_noses"):
+    keys = keys or F_NOSE_KEYS
     from PIL import ImageFont
     S = 4
     bg = (92, 112, 134, 255)
     box = (22, 44, 74, 86)                          # eyes to mouth
     cwid, chei = box[2] - box[0], box[3] - box[1]
     cw = cwid * S + 8
-    tiles = [("Flint", flint_frame.crop(box))] + [(lab, make_frame(-1, "calm", dict(F_SHIP, nose=k)).crop(box)) for lab, k, _ in F_NOSE_KEYS]
+    tiles = [("Flint", flint_frame.crop(box))] + [(lab, make_frame(-1, "calm", dict(F_SHIP, nose=k)).crop(box)) for lab, k, _ in keys]
     sheet = Image.new("RGBA", (cw * len(tiles) + 8, chei * S + 50 + chei + 16), bg)
     try:
         font = ImageFont.load_default(size=34)
@@ -783,9 +798,9 @@ def f_noses_sheet(review, flint_frame):
         sheet.alpha_composite(f.resize((cwid * S, chei * S), Image.NEAREST), (8 + i * cw, 8))
         d.text((8 + i * cw + 6, chei * S + 14), lab, fill=(255, 255, 255, 255), font=font)
         sheet.alpha_composite(f, (8 + i * cw, chei * S + 56))
-    sheet.convert("RGB").save(os.path.join(review, "flicker_noses.png"))
-    with open(os.path.join(review, "flicker_noses_key.txt"), "w") as fh:
-        for lab, k, text in F_NOSE_KEYS:
+    sheet.convert("RGB").save(os.path.join(review, name + ".png"))
+    with open(os.path.join(review, name + "_key.txt"), "w") as fh:
+        for lab, k, text in keys:
             fh.write(text + "\n")
 
 
@@ -809,6 +824,7 @@ def main():
         f_chin_sheet(review)
         f_eyes_grid(review, flint)
         f_noses_sheet(review, flint)
+        f_noses_sheet(review, flint, F_NOSE_KEYS2, "flicker_noses2")
         f_variants_sheet(review, flint, "flicker_mouths", [(l, dict(F_SHIP, mouth=k), t) for l, k, t in F_MOUTHS])
     frames = f_bust_frames()
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
