@@ -84,6 +84,37 @@ Reference: `assets/title/anime/sakura_bust.png`, code = the Sakura section of `t
 (-1.5, -1.4) units, only below y 29) in SK_S, never a diagonal cheek plane. Keep ink outline, lit left, deep strip + rim right,
 chin shadow on the neck. Neck short (`STOFF` 0.8 vs Flint's 3.5), shoulders softly sloped.
 
+**Female chin: rounded jaw ending in a softly rounded point; cheeks are separate (APPROVED 2026-11-06, Shade)**: user feedback went "a tad
+pointier" -> "dont change cheek size" -> "like the bottom of a heart" -> "I want the left side [the fuller, rounder lower cheeks / jaw],
+but the chin a corner like the right side", then "point is too sharp, round it out a bit". So: keep Sakura's rounded jaw exactly, and only the very bottom changes: the two jaw curves
+meet in ONE small, softly rounded point at the chin centre (a tiny arc, no sharp corner, no flat chin, no rounded U bottom). Cheek width is its own number (`cheek0`: Sakura
++0.03, Shade -0.03, scales x of every point below y 27 as `s_face_pts` does); narrowing the cheeks exposes dark ear notches, don't. Points
+(`f_face_pts` in `tools/sprites/anime_flicker.py`, patched over `ab.s_face_pts` at runtime, anime_busts.py untouched): `SFACE0` down to
+(31.8, 39.4) unchanged, then (28.0 + (cw - 8) * 0.5 - 0.3, 42.34), then a 3-point arc (24.75, tip_y - 0.35), (24, tip_y), mirrored (1.5 units wide). Shade ships **cw 6.5, tip_y 44.0**
+(tip 1.0 below Sakura's chin level 43.0; a small soft point at x1; the jaw shadow band follows it; tip_y 44.4 with a single corner was too sharp). Steps `F_CHIN_STEPS` (cw, tip_y): A
+(8.0, 43.0) round like Sakura, B (6.5, 43.6), C (6.5, 44.0) shipped, D (6.5, 44.4) sharper. A pure heart-shaped taper (jaw curves
+convex from the cheek point down to the tip, `x = 24 + 11.6 * (1 - t^1.5)`) was tried and rejected: too narrow in the lower cheeks. Render
+`female_chins.png` (Shade + Sakura at the steps) to compare before changing a face.
+
+**Approved nose (Shade, 2026-11-06; Sakura's tiny tick was replaced because the user wanted a visible vertical-ish line)**: a short slightly
+diagonal line plus a separate tip dot, drawn as exact pixels AFTER the pixel art (`f_nose`, `F_NOSES["cd1"]` in `tools/sprites/anime_flicker.py`),
+in a deeper skin-shadow tone `F_NOSE_TONE` (200, 122, 112) so it reads at x1, on the shadow side (right of the centre line x 48, light from the
+top left), no ink. Output-pixel offsets (x, y): line (50, 62), (50, 63), (49, 64) = top a touch toward the eye; 1 px gap at y 65; tip dot (49, 66)
+(the mouth is at y ~74, the lids at ~56). Sakura's own tick (x 48-52, y 66) is erased first. History: single tick (too faint) -> 3 px
+shadows (B-F, too faint) -> vertical lines (A straight 4 px, B 5 px with a slant, C 4 px diagonal, D 3 px + dot) -> "between C and D" = this one.
+Same session, for the record: eyes are 12% lower and 1.0 unit wider apart than Sakura's (`eye_h` 0.88, `eye_gap` +1.0, brows lowered
+2.5 x (1 - eye_h) units; the squash is applied to the finished eye in source space, `f_squash_eyes`), the mouth is her own one-sided smirk
+(`f_mouth`), and closed eyes keep ink lids (recolor keep box) with brows 1 px higher.
+
+**Approved mouth (Shade, 2026-11-06)**: feedback chain: a long diagonal drawn stroke (8-10 px, climbing across the face) was too long, too slanted,
+off-centre under the nose and faint; a centred 6 px smirk was too small ("wider smile"); a 10 px smirk (right corner 1 px higher) was "more symmetrical,
+wider, less vertical". Mouths are small exact pixels AFTER the pixel art (`f_mouth_px`, `F_MOUTHS2` in `tools/sprites/anime_flicker.py`; the drawn source
+mouth is skipped for these, the open shout mouth is still Sakura's): SYMMETRIC, centred under the nose (nose tip (49, 66)), line tone `F_LIPD`
+(186, 102, 106) (between `LIP` and the nose shadow, darker than Sakura's so it reads at x1), a lighter `BLUSH` tint under the centre at y 76. Shipped
+**`m_s12`, 12 px wide**: x 43..54, the outer 2 px each side on y 73 and the middle 8 px (x 45..52) on y 74 (a wide gentle smile that drops at most 1 px, not a
+"v"), tint (47, 76) (48, 76) (49, 76) (50, 76). Alternatives `m_s11` (x 43..53, tint 3 px) and `m_s13` (x 42..54). Determined = the same width fully flat
+(all y 74); shout unchanged. Rules: symmetric, >= 11 px for a smile, never more than 1 px of curve, centred under the nose.
+
 **Eyes** (option B = `EYES["animeB"]`, drawn by `s_eye_anime`): ~6.6 wide x 5.2 tall (never bigger; chibi / hearts / "alien"
 came from big dark irises and a V lower lid), centres 24 +- 4.8, cy 27.8. Upper lash = thick ARCH peaking at t 0.62 (outward of
 centre), 8 -> 12 source px, with a small wing at the outer corner; lower lid nearly flat, a thin light line on the OUTER third only.
