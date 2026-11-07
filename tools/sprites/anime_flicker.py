@@ -48,7 +48,7 @@ F_ORANGE = {ORANGE, LIGHT_OR, FOR_D}
 F_MASK = {CREAM, FSM, FSM_L}
 
 F_EYE_GAP = {k: v["gap"] for k, v in ab.EYES.items()}      # Sakura's eye-centre spacing per eye shape (9.6 for animeB)
-FBASE = dict(mouth="smirk", hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
+FBASE = dict(mouth="m_b", hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
              eye_h=1.0, eye_gap=0.0, lift=0.0, wind=0.0, nose="tick", iris="ember", mode="open", sidelock=False)
 
 
@@ -356,6 +356,8 @@ def f_mouth(d, kind):
     if kind == "shout":
         return F_ORIG_MOUTH(d, kind)
     m = F_MOUTH[0]
+    if m.startswith("m_"):
+        return                  # drawn as exact pixels after the pixel art (f_mouth_px)
     det = 0.5 if kind == "determined" else 0.0
     ab.YOFF[0] = -2.7
     col = lc(LIP)
@@ -508,6 +510,7 @@ def make_frame(sway, expr, cfg=None, extra=None):
     else:
         ab.add_brows(out)
     f_nose(out, cfg["nose"])
+    f_mouth_px(out, cfg["mouth"], expr)
     if cfg["mode"] == "flash":
         f_flash(out)
     return out
@@ -787,7 +790,7 @@ def f_nose(out, kind):
             px[x, y] = {"S": SK_S, "L": SK_L, "N": F_NOSE_TONE}[c] + (255,)
 
 
-def f_noses_sheet(review, flint_frame, keys=None, name="flicker_noses"):
+def f_noses_sheet(review, flint_frame, keys=None, name="flicker_noses", field="nose"):
     keys = keys or F_NOSE_KEYS
     from PIL import ImageFont
     S = 4
@@ -795,7 +798,7 @@ def f_noses_sheet(review, flint_frame, keys=None, name="flicker_noses"):
     box = (22, 44, 74, 86)                          # eyes to mouth
     cwid, chei = box[2] - box[0], box[3] - box[1]
     cw = cwid * S + 8
-    tiles = [("Flint", flint_frame.crop(box))] + [(lab, make_frame(-1, "calm", dict(F_SHIP, nose=k)).crop(box)) for lab, k, _ in keys]
+    tiles = [("Flint", flint_frame.crop(box))] + [(lab, make_frame(-1, "calm", dict(F_SHIP, **{field: k})).crop(box)) for lab, k, _ in keys]
     sheet = Image.new("RGBA", (cw * len(tiles) + 8, chei * S + 50 + chei + 16), bg)
     try:
         font = ImageFont.load_default(size=34)
@@ -810,6 +813,43 @@ def f_noses_sheet(review, flint_frame, keys=None, name="flicker_noses"):
     with open(os.path.join(review, name + "_key.txt"), "w") as fh:
         for lab, k, text in keys:
             fh.write(text + "\n")
+
+
+# ---------------------------------------------------------------- mouth v2: centred under the nose, exact pixels (calm / determined; shout keeps Sakura's open mouth)
+F_LIPD = (186, 102, 106)            # line tone between LIP and the nose shadow
+F_FANG_D = (150, 72, 86)
+# output-px (x, y, tone): L = line, T = lower-lip tint, H = lower-lip highlight, D = darker dimple
+F_MOUTHS2 = {
+    "m_a": ([(46, 73), (47, 74), (48, 74), (49, 74), (50, 74), (51, 73)], [(48, 76), (49, 76)], [], []),
+    "m_b": ([(46, 73), (47, 74), (48, 74), (49, 74), (50, 73), (51, 72)], [(48, 76), (49, 76)], [], []),
+    "m_c": ([(47, 73), (48, 74), (49, 74), (50, 74), (51, 73)], [(48, 76), (50, 76)], [(49, 76)], []),
+    "m_d": ([(46, 73), (47, 74), (48, 74), (49, 74), (50, 74), (51, 73)], [(48, 76), (49, 76)], [], [(52, 72)]),
+}
+F_MOUTHS2_DET = {          # determined: the same mouth with the corners set flatter
+    "m_a": [(46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 73)],
+    "m_b": [(46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 73)],
+    "m_c": [(47, 74), (48, 74), (49, 74), (50, 74), (51, 73)],
+    "m_d": [(46, 74), (47, 74), (48, 74), (49, 74), (50, 74), (51, 73)],
+}
+F_MOUTH_KEYS2 = [("A", "m_a", "A: centred soft closed smile, 6 px, both corners up 1 px, tint under"),
+                 ("B", "m_b", "B: A with the right corner up 1 px extra (subtle smirk, mostly horizontal) (shipped)"),
+                 ("C", "m_c", "C: shorter 5 px smile with a tiny lower-lip highlight (cute)"),
+                 ("D", "m_d", "D: A + a darker 1 px dimple at the right corner")]
+
+
+def f_mouth_px(out, kind, expr):
+    if expr == "shout" or kind not in F_MOUTHS2:
+        return
+    line, tint, hi, dim = F_MOUTHS2[kind]
+    if expr == "determined":
+        line = F_MOUTHS2_DET[kind]
+        dim = [(x, y + 1) for x, y in dim]
+    px = out.load()
+    skin = {SK, SK_L, SK_S, SK_D, BLUSH}
+    for pts, col in ((tint, BLUSH), (hi, SK_L), (line, F_LIPD), (dim, F_FANG_D)):
+        for x, y in pts:
+            if px[x, y][3] and px[x, y][:3] in skin | {F_LIPD}:
+                px[x, y] = col + (255,)
 
 
 def f_sakura_chins(out_dir):
@@ -834,6 +874,7 @@ def main():
         f_noses_sheet(review, flint)
         f_noses_sheet(review, flint, F_NOSE_KEYS2, "flicker_noses2")
         f_noses_sheet(review, flint, F_NOSE_KEYS3, "flicker_noses3")
+        f_noses_sheet(review, flint, F_MOUTH_KEYS2, "flicker_mouths2", "mouth")
         f_variants_sheet(review, flint, "flicker_mouths", [(l, dict(F_SHIP, mouth=k), t) for l, k, t in F_MOUTHS])
     frames = f_bust_frames()
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))

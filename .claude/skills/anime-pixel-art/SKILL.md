@@ -106,6 +106,15 @@ Same session, for the record: eyes are 12% lower and 1.0 unit wider apart than S
 2.5 x (1 - eye_h) units; the squash is applied to the finished eye in source space, `f_squash_eyes`), the mouth is her own one-sided smirk
 (`f_mouth`), and closed eyes keep ink lids (recolor keep box) with brows 1 px higher.
 
+**Approved mouth (Shade, 2026-11-06)**: a long diagonal drawn stroke (her first smirk, 8-10 px, climbing across the face) was rejected as too long, too
+slanted, off-centre under the new nose and low contrast. Mouths are now small exact pixels AFTER the pixel art (`f_mouth_px`, `F_MOUTHS2`
+in `tools/sprites/anime_flicker.py`; the drawn source mouth is skipped for these, the open shout mouth is still Sakura's): CENTRED under the nose
+(mouth centre x 48-49 output px, line at y 72-74, the lids at ~56, the nose tip at (49, 66)), 6 px wide, line tone `F_LIPD` (186, 102, 106)
+(between `LIP` and the nose shadow, darker than Sakura's so it reads at x1), a 1-2 px lighter `BLUSH` tint under it at y 76. Shipped **B** (subtle smirk,
+still mostly horizontal): (46, 73) (47, 74) (48, 74) (49, 74) (50, 73) (51, 72), tint (48, 76) (49, 76). Others: A both corners up 1 px, C 5 px
+with a `SK_L` highlight under the centre, D = A + a darker dimple pixel at (52, 72). Determined = the same mouth with the corners flatter
+(left half set to y 74, right corner (51, 73)). Keep >= 5-6 px wide; don't let it drift left or climb more than ~2 px.
+
 **Eyes** (option B = `EYES["animeB"]`, drawn by `s_eye_anime`): ~6.6 wide x 5.2 tall (never bigger; chibi / hearts / "alien"
 came from big dark irises and a V lower lid), centres 24 +- 4.8, cy 27.8. Upper lash = thick ARCH peaking at t 0.62 (outward of
 centre), 8 -> 12 source px, with a small wing at the outer corner; lower lid nearly flat, a thin light line on the OUTER third only.
