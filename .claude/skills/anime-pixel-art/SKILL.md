@@ -96,6 +96,16 @@ meet in ONE small, softly rounded point at the chin centre (a tiny arc, no sharp
 convex from the cheek point down to the tip, `x = 24 + 11.6 * (1 - t^1.5)`) was tried and rejected: too narrow in the lower cheeks. Render
 `female_chins.png` (Shade + Sakura at the steps) to compare before changing a face.
 
+**Approved nose (Shade, 2026-11-06; Sakura's tiny tick was replaced because the user wanted a visible vertical-ish line)**: a short slightly
+diagonal line plus a separate tip dot, drawn as exact pixels AFTER the pixel art (`f_nose`, `F_NOSES["cd1"]` in `tools/sprites/anime_flicker.py`),
+in a deeper skin-shadow tone `F_NOSE_TONE` (200, 122, 112) so it reads at x1, on the shadow side (right of the centre line x 48, light from the
+top left), no ink. Output-pixel offsets (x, y): line (50, 62), (50, 63), (49, 64) = top a touch toward the eye; 1 px gap at y 65; tip dot (49, 66)
+(the mouth is at y ~74, the lids at ~56). Sakura's own tick (x 48-52, y 66) is erased first. History: single tick (too faint) -> 3 px
+shadows (B-F, too faint) -> vertical lines (A straight 4 px, B 5 px with a slant, C 4 px diagonal, D 3 px + dot) -> "between C and D" = this one.
+Same session, for the record: eyes are 12% lower and 1.0 unit wider apart than Sakura's (`eye_h` 0.88, `eye_gap` +1.0, brows lowered
+2.5 x (1 - eye_h) units; the squash is applied to the finished eye in source space, `f_squash_eyes`), the mouth is her own one-sided smirk
+(`f_mouth`), and closed eyes keep ink lids (recolor keep box) with brows 1 px higher.
+
 **Eyes** (option B = `EYES["animeB"]`, drawn by `s_eye_anime`): ~6.6 wide x 5.2 tall (never bigger; chibi / hearts / "alien"
 came from big dark irises and a V lower lid), centres 24 +- 4.8, cy 27.8. Upper lash = thick ARCH peaking at t 0.62 (outward of
 centre), 8 -> 12 source px, with a small wing at the outer corner; lower lid nearly flat, a thin light line on the OUTER third only.

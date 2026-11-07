@@ -599,7 +599,7 @@ def f_variants_sheet(review, flint_frame, name="flicker_variants", items=None):
 
 
 # ---------------------------------------------------------------- shipped look
-F_SHIP = dict(F_VARIANTS[0][1], eye_h=0.88, eye_gap=1.0, nose="vhook")       # eyes H2/S3: 12% lower, 1.0 unit wider apart
+F_SHIP = dict(F_VARIANTS[0][1], eye_h=0.88, eye_gap=1.0, nose="cd1")       # eyes H2/S3: 12% lower, 1.0 unit wider apart
 F_SHIP_NAME = "A"
 
 
@@ -758,6 +758,14 @@ F_NOSES.update({
     "vdiag": [(50, 63, "N"), (50, 64, "N"), (49, 65, "N"), (49, 66, "N")],
     "vdot": [(49, 62, "N"), (49, 63, "N"), (49, 64, "N"), (49, 66, "N")],
 })
+F_NOSES.update({
+    "cd1": [(50, 62, "N"), (50, 63, "N"), (49, 64, "N"), (49, 66, "N")],      # 3 px slight slant, 1 px gap, tip dot (shipped)
+    "cd2": [(50, 62, "N"), (50, 63, "N"), (49, 64, "N"), (48, 65, "N")],      # no gap: the dot continues the slant toward the centre
+    "cd3": [(51, 62, "N"), (50, 63, "N"), (49, 64, "N"), (49, 66, "N")],      # steeper slant, 1 px gap, tip dot
+})
+F_NOSE_KEYS3 = [("A", "cd1", "A: 3 px line, top a touch toward the eye, 1 px gap, tip dot (shipped: even C/D mix)"),
+                ("B", "cd2", "B: same line, no gap: the tip dot steps on toward the centre"),
+                ("C", "cd3", "C: steeper diagonal 3 px line, 1 px gap, tip dot")]
 F_NOSE_KEYS2 = [("A", "vline", "A: 4 px straight vertical line ending at the tip"),
                 ("B", "vhook", "B: 5 px line with a 1 px slant toward the centre at the tip (shipped)"),
                 ("C", "vdiag", "C: 4 px line slightly diagonal, top toward the eye, bottom at the tip"),
@@ -825,6 +833,7 @@ def main():
         f_eyes_grid(review, flint)
         f_noses_sheet(review, flint)
         f_noses_sheet(review, flint, F_NOSE_KEYS2, "flicker_noses2")
+        f_noses_sheet(review, flint, F_NOSE_KEYS3, "flicker_noses3")
         f_variants_sheet(review, flint, "flicker_mouths", [(l, dict(F_SHIP, mouth=k), t) for l, k, t in F_MOUTHS])
     frames = f_bust_frames()
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
