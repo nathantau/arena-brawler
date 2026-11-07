@@ -49,7 +49,7 @@ F_MASK = {CREAM, FSM, FSM_L}
 
 F_EYE_GAP = {k: v["gap"] for k, v in ab.EYES.items()}      # Sakura's eye-centre spacing per eye shape (9.6 for animeB)
 FBASE = dict(mouth="smirk", hair="long", eyes="animeB", mask="side", scarf="tail", outfit="cross", bangs="curtain", cheeks=-0.03,
-             eye_h=1.0, eye_gap=0.0, lift=0.0, wind=0.0, iris="ember", mode="open", sidelock=False)
+             eye_h=1.0, eye_gap=0.0, lift=0.0, wind=0.0, nose="tick", iris="ember", mode="open", sidelock=False)
 
 
 
@@ -487,6 +487,8 @@ def make_frame(sway, expr, cfg=None, extra=None):
     src = f_draw_frame(sway, expr, cfg)
     diff = ImageChops.difference(src, Image.new("RGB", src.size, BG)).convert("L").point(lambda v: 255 if v > 0 else 0)
     mask = diff.resize((W, H), Image.BOX).point(lambda v: 255 if v > 110 else 0)
+    lft, tlt = ab.BROW_ARGS
+    ab.BROW_ARGS = (lft - 2.5 * (1 - cfg["eye_h"]), tlt)       # lower the brows with the lid: keep the brow-to-lid gap
     art = pixelize(src, W, 40)
     pal = F_PAL + list(ab.IRISES[ab.SCFG["iris"]])
     out = snap(art, mask, pal)
@@ -505,6 +507,7 @@ def make_frame(sway, expr, cfg=None, extra=None):
         ab.add_brows(out)
     else:
         ab.add_brows(out)
+    f_nose(out, cfg["nose"])
     if cfg["mode"] == "flash":
         f_flash(out)
     return out
@@ -596,7 +599,7 @@ def f_variants_sheet(review, flint_frame, name="flicker_variants", items=None):
 
 
 # ---------------------------------------------------------------- shipped look
-F_SHIP = dict(F_VARIANTS[0][1])
+F_SHIP = dict(F_VARIANTS[0][1], eye_h=0.88, eye_gap=1.0)       # eyes H2/S3: 12% lower, 1.0 unit wider apart
 F_SHIP_NAME = "A"
 
 
@@ -730,6 +733,62 @@ def f_eyes_grid(review, flint_frame):
         fh.write("\n".join(key) + "\n")
 
 
+# ---------------------------------------------------------------- nose options (exact pixels after the pixel art; light top-left, so shadow right / below)
+# pixel offsets from the face centre line x 48; y in output px (the mouth is at y ~74, the lids at ~56)
+F_NOSES = {
+    "tick": None,                                                          # Sakura's tiny skin-shadow tick (left as drawn)
+    "tip": [(49, 66, "S"), (50, 66, "S"), (50, 67, "S")],                  # small angled shadow under the tip
+    "bridge": [(47, 58, "L"), (47, 59, "L"), (47, 60, "L"), (49, 66, "S"), (50, 66, "S"), (50, 67, "S")],   # lit bridge line + tip shadow
+    "hook": [(49, 62, "S"), (49, 63, "S"), (49, 64, "S"), (49, 65, "S"), (50, 66, "S"), (51, 66, "S")],     # 3/4 L: bridge on the shadow side + tip
+    "tri": [(48, 65, "L"), (49, 67, "S"), (50, 67, "S"), (51, 67, "S"), (50, 68, "S")],                     # triangle shadow under the tip + a tip highlight
+    "nostril": [(49, 65, "L"), (48, 67, "S"), (51, 67, "S"), (49, 66, "S")],                                 # soft nostril hint + tip
+}
+F_NOSE_KEYS = [("A", "tick", "A: current tick (Sakura's)"), ("B", "tip", "B: small angled shadow under the tip, 3 px"),
+               ("C", "bridge", "C: 3 px lit bridge line between the eyes + tip shadow"),
+               ("D", "hook", "D: small 3/4 L: 4 px bridge on the shadow side + tip foot"),
+               ("E", "tri", "E: tiny triangle shadow under the tip + 1 px tip highlight"),
+               ("F", "nostril", "F: nostril hint (two dots) + tip highlight")]
+
+
+def f_nose(out, kind):
+    pts = F_NOSES.get(kind)
+    if not pts:
+        return
+    px = out.load()
+    skin = {SK, SK_L, SK_S, SK_D}
+    for x in range(48, 53):                       # erase Sakura's tick first
+        if px[x, 66][:3] == SK_S:
+            above = px[x, 64][:3]
+            px[x, 66] = (above if above in skin and above != SK_S else SK) + (255,)
+    for x, y, c in pts:
+        if px[x, y][3] and px[x, y][:3] in skin:
+            px[x, y] = (SK_S if c == "S" else SK_L) + (255,)
+
+
+def f_noses_sheet(review, flint_frame):
+    from PIL import ImageFont
+    S = 4
+    bg = (92, 112, 134, 255)
+    box = (22, 44, 74, 86)                          # eyes to mouth
+    cwid, chei = box[2] - box[0], box[3] - box[1]
+    cw = cwid * S + 8
+    tiles = [("Flint", flint_frame.crop(box))] + [(lab, make_frame(-1, "calm", dict(F_SHIP, nose=k)).crop(box)) for lab, k, _ in F_NOSE_KEYS]
+    sheet = Image.new("RGBA", (cw * len(tiles) + 8, chei * S + 50 + chei + 16), bg)
+    try:
+        font = ImageFont.load_default(size=34)
+    except TypeError:
+        font = ImageFont.load_default()
+    d = ImageDraw.Draw(sheet)
+    for i, (lab, f) in enumerate(tiles):
+        sheet.alpha_composite(f.resize((cwid * S, chei * S), Image.NEAREST), (8 + i * cw, 8))
+        d.text((8 + i * cw + 6, chei * S + 14), lab, fill=(255, 255, 255, 255), font=font)
+        sheet.alpha_composite(f, (8 + i * cw, chei * S + 56))
+    sheet.convert("RGB").save(os.path.join(review, "flicker_noses.png"))
+    with open(os.path.join(review, "flicker_noses_key.txt"), "w") as fh:
+        for lab, k, text in F_NOSE_KEYS:
+            fh.write(text + "\n")
+
+
 def f_sakura_chins(out_dir):
     """Subprocess (F_PLAIN=1, her own colours): Sakura's calm frame with each chin step."""
     for i, st in enumerate(F_CHIN_STEPS):
@@ -749,6 +808,7 @@ def main():
         f_variants_sheet(review, flint)
         f_chin_sheet(review)
         f_eyes_grid(review, flint)
+        f_noses_sheet(review, flint)
         f_variants_sheet(review, flint, "flicker_mouths", [(l, dict(F_SHIP, mouth=k), t) for l, k, t in F_MOUTHS])
     frames = f_bust_frames()
     strip = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
